@@ -1,0 +1,125 @@
+@using System.Net.Http.Json
+@using FastCom.Client.Models
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+@* ─────────────────────────────────────────────────────────────────────────
+   🔍 البحث العام — الشريط العلوي
+   بيبحث في: عملاء · حجوزات · عمليات · فواتير · رحلات · حاويات · سيارات
+   ──────────────────────────────────────────────────────────────────────── *@
+<div class="fc-search">
+    @* 🔴 Value + ValueChanged (مش @bind-Value) — لأن @bind-Value
+       بيولّد ValueChanged تلقائيًا، فلو كتبناها كمان بيطلع RZ10010 *@
+    <MudAutocomplete T="SearchResult"
+                     Value="_selected"
+                     ValueChanged="OnSelected"
+                     SearchFunc="SearchAsync"
+                     Placeholder="ابحث عن عميل، حجز، عملية، فاتورة، رحلة، حاوية..."
+                     AdornmentIcon="@Icons.Material.Filled.Search"
+                     AdornmentColor="Color.Inherit"
+                     MinLength="2"
+                     DebounceInterval="350"
+                     CoerceValue="false"
+                     ResetValueOnEmptyText="true"
+                     Clearable="true"
+                     Dense="true"
+                     Variant="Variant.Outlined"
+                     Class="fc-search-input">
+
+        <ItemTemplate Context="hit">
+            <div class="fc-search-item">
+                <span class="fc-search-badge">@hit.Entity</span>
+                <span class="fc-search-main">
+                    <strong>@hit.Code</strong>
+                    <span>@hit.Title</span>
+                </span>
+                @if (!string.IsNullOrWhiteSpace(hit.Subtitle))
+                {
+                    <span class="fc-search-sub">@hit.Subtitle</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(hit.Badge))
+                {
+                    <span class="fc-search-tag">@hit.Badge</span>
+                }
+            </div>
+        </ItemTemplate>
+
+        <NoItemsTemplate>
+            <div class="fc-search-empty">
+                <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Small" />
+                <span>مفيش نتائج مطابقة</span>
+            </div>
+        </NoItemsTemplate>
+
+        <ProgressIndicatorTemplate>
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="fc-search-progress" />
+        </ProgressIndicatorTemplate>
+
+    </MudAutocomplete>
+</div>
+
+@code {
+    private SearchResult? _selected;
+    private string? _lastError;
+
+    /// <summary>الصفحة اللي كل وحدة بتفتح عليها — ⏳ هتتوصّل في Steps 5–9.</summary>
+    private static readonly Dictionary<string, string> Routes = new(StringComparer.Ordinal)
+    {
+        ["عميل"]   = "/customers/{0}",
+        ["حجز"]    = "/bookings/{0}",
+        ["عملية"]  = "/operations/{0}",
+        ["فاتورة"] = "/invoices/{0}",
+        ["رحلة"]   = "/trips/{0}",
+        ["حاوية"]  = "/containers/{0}",
+        ["سيارة"]  = "/fleet/vehicles/{0}"
+    };
+
+    private async Task<IEnumerable<SearchResult>> SearchAsync(string term, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(term) || term.Trim().Length < 2)
+            return Enumerable.Empty<SearchResult>();
+
+        try
+        {
+            var url = $"api/search?q={Uri.EscapeDataString(term.Trim())}&take=25";
+            var res = await Http.GetFromJsonAsync<SearchResponse>(url, ct);
+
+            if (res is null) return Enumerable.Empty<SearchResult>();
+
+            if (!string.IsNullOrEmpty(res.Error))
+            {
+                _lastError = res.Error;
+                return Enumerable.Empty<SearchResult>();
+            }
+
+            _lastError = null;
+            return res.Results;
+        }
+        catch (Exception ex)
+        {
+            _lastError = ex.Message;
+            return Enumerable.Empty<SearchResult>();
+        }
+    }
+
+    private void OnSelected(SearchResult? hit)
+    {
+        if (hit is null) return;
+
+        if (_lastError is not null)
+        {
+            Snackbar.Add($"البحث فشل: {_lastError}", Severity.Error);
+            _lastError = null;
+        }
+
+        // ⏳ لحد ما الوحدات تتبني، بنفتح صفحة البحث
+        var route = Routes.TryGetValue(hit.Entity, out var r)
+            ? string.Format(r, hit.Id)
+            : $"/search?q={Uri.EscapeDataString(hit.Code)}";
+
+        Nav.NavigateTo($"/search?entity={Uri.EscapeDataString(hit.Entity)}&id={hit.Id}&from={Uri.EscapeDataString(route)}");
+
+        _selected = null;   // نفضّي الـ input بعد الاختيار
+    }
+}

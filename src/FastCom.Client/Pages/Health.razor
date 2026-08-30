@@ -1,0 +1,90 @@
+@inherits LayoutComponentBase
+@inject CompanyService Company
+
+<MudLayout>
+
+    @* ── الـ Header ───────────────────────────────────────────────────── *@
+    <MudAppBar Elevation="1" Fixed="true" Dense="false">
+
+        <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                       Color="Color.Inherit"
+                       Edge="Edge.Start"
+                       OnClick="@(() => _drawerOpen = !_drawerOpen)" />
+
+        @* الشعار + اسم الشركة (من جدول CompanyProfile) *@
+        <div class="brand-block">
+            <div class="brand-mark">FC</div>
+            <div class="brand-text">
+                <span class="brand-name">@_company.DisplayName</span>
+                <span class="brand-sub">نظام إدارة نقل الحاويات</span>
+            </div>
+        </div>
+
+        @* 🔍 البحث العام *@
+        <GlobalSearch />
+
+        <MudSpacer />
+
+        @* حالة الاتصال بقاعدة البيانات *@
+        <MudTooltip Text="@(_dbOk ? "متصل بقاعدة البيانات" : "مش متصل — راجع الإعدادات")">
+            <MudChip T="string"
+                     Size="Size.Small"
+                     Color="@(_dbOk ? Color.Success : Color.Error)"
+                     Variant="Variant.Outlined"
+                     Icon="@(_dbOk ? Icons.Material.Filled.CloudDone : Icons.Material.Filled.CloudOff)">
+                @(_dbOk ? "متصل" : "غير متصل")
+            </MudChip>
+        </MudTooltip>
+
+        @* ⏳ Step 3.3: هنا هيبقى اسم المستخدم + تسجيل الخروج *@
+        <MudIconButton Icon="@Icons.Material.Filled.PersonOutline" Color="Color.Inherit" />
+
+    </MudAppBar>
+
+    @* ── الـ Sidebar ──────────────────────────────────────────────────── *@
+    <MudDrawer @bind-Open="_drawerOpen"
+               Elevation="2"
+               Variant="@DrawerVariant.Mini"
+               OpenMiniOnHover="false"
+               ClipMode="DrawerClipMode.Always">
+        <NavMenu />
+    </MudDrawer>
+
+    @* ── المحتوى ──────────────────────────────────────────────────────── *@
+    <MudMainContent Class="fastcom-main">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-6">
+            @Body
+        </MudContainer>
+
+        @* ── الـ Footer ─────────────────────────────────────────────── *@
+        <footer class="fastcom-footer">
+            <div>
+                <strong>@_company.DisplayName</strong>
+                @if (!string.IsNullOrWhiteSpace(_company.TaxNumber) && _company.TaxNumber != "000000000")
+                {
+                    <span> · الرقم الضريبي: @_company.TaxNumber</span>
+                }
+            </div>
+            <div class="footer-meta">
+                @if (!string.IsNullOrWhiteSpace(_company.Phone))
+                {
+                    <span>@_company.Phone</span>
+                }
+                <span>© @DateTime.Now.Year</span>
+            </div>
+        </footer>
+    </MudMainContent>
+
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+    private bool _dbOk;
+    private CompanyInfo _company = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _company = await Company.GetAsync();
+        _dbOk = true;   // ⏳ Step 3.5: هتبقى من /api/health
+    }
+}

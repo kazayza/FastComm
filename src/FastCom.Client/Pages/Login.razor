@@ -1,0 +1,270 @@
+@page "/login"
+@layout BlankLayout
+@using FastCom.Client.Auth
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthState
+@inject CompanyService Company
+@inject ISnackbar Snackbar
+@inject HttpClient Http
+
+<PageTitle>تسجيل الدخول — @_company.DisplayName</PageTitle>
+
+<div class="fc-login-page">
+
+    @* ── الشمال: البراند ─────────────────────────────────────────── *@
+    <div class="fc-login-brand">
+        <div class="fc-login-logo">FC</div>
+        <h1>@_company.DisplayName</h1>
+        <p>نظام إدارة مكتب نقل الحاويات والموانئ</p>
+
+        <ul>
+            <li>حجوزات وعمليات نقل متكاملة</li>
+            <li>رحلات وسائقين وعهد ومصروفات</li>
+            <li>فواتير وتحصيل وخزينة</li>
+            <li>تقارير ربحية لكل عملية وعميل</li>
+        </ul>
+    </div>
+
+    @* ── اليمين: الفورم ──────────────────────────────────────────── *@
+    <div class="fc-login-form">
+
+        <MudText Typo="Typo.h4" Class="mb-1">تسجيل الدخول</MudText>
+        <MudText Typo="Typo.body2" Class="muted mb-6">
+            أدخل اسم المستخدم وكلمة المرور للمتابعة
+        </MudText>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="mb-4">
+                @_error
+            </MudAlert>
+        }
+
+        <EditForm Model="_model" OnValidSubmit="SubmitAsync">
+            <DataAnnotationsValidator />
+
+            <MudTextField T="string"
+                          @bind-Value="_model.UserName"
+                          Label="اسم المستخدم"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.PersonOutline"
+                          For="@(() => _model.UserName)"
+                          AutoFocus="true"
+                          Immediate="true"
+                          Class="mb-4" />
+
+            <MudTextField T="string"
+                          @bind-Value="_model.Password"
+                          Label="كلمة المرور"
+                          Variant="Variant.Outlined"
+                          InputType="@_pwdType"
+                          Adornment="Adornment.End"
+                          AdornmentIcon="@_pwdIcon"
+                          OnAdornmentClick="TogglePassword"
+                          For="@(() => _model.Password)"
+                          Immediate="true"
+                          Class="mb-2" />
+
+            <div class="fc-login-row">
+                <MudCheckBox T="bool" @bind-Value="_model.RememberMe"
+                             Label="تذكّرني" Color="Color.Primary" Dense="true" />
+
+                <span class="muted fc-login-hint">
+                    "تذكّرني" بتمدّد مدة الجلسة ×3
+                </span>
+            </div>
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Size="Size.Large"
+                       FullWidth="true"
+                       Disabled="_busy"
+                       Class="fc-login-btn mt-4">
+                @if (_busy)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                    <span>جارٍ التحقق...</span>
+                }
+                else
+                {
+                    <span>دخول</span>
+                }
+            </MudButton>
+        </EditForm>
+
+        @* ── 🔧 Development: إنشاء أول مستخدم مدير ──────────────── *@
+        @* 🔧 Development: إنشاء أول مستخدم مدير.
+           بيظهر دايمًا على localhost — مش بعد فشل الدخول. *@
+        @if (_envIsDev)
+        {
+            <MudDivider Class="my-6" />
+
+            <MudText Typo="Typo.h6" Class="mb-2">🔧 أول مرة؟ اعمل مستخدم مدير</MudText>
+            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-3">
+                قاعدة البيانات مافيهاش مستخدمين لسه.
+                اعمل أول مستخدم مدير (<b>admin</b>) وربط بدور "مدير النظام" اللي عنده كل الصلاحيات.
+            </MudAlert>
+
+            @if (_seedDone)
+            {
+                <MudAlert Severity="Severity.Success" Variant="Variant.Filled">
+                    @_seedMessage
+                </MudAlert>
+            }
+            else
+            {
+                <MudTextField T="string" @bind-Value="_seedPassword"
+                              Label="كلمة مرور المدير (8 حروف على الأقل)"
+                              Variant="Variant.Outlined" InputType="InputType.Password"
+                              Class="mb-3" />
+
+                <MudButton Variant="Variant.Filled" Color="Color.Warning"
+                           OnClick="SeedAdminAsync" Disabled="_busy"
+                           StartIcon="@Icons.Material.Filled.Add">
+                    إنشاء مستخدم مدير (admin)
+                </MudButton>
+            }
+        }
+
+        <div class="fc-login-foot">
+            <span>© @DateTime.Now.Year @_company.DisplayName</span>
+            @if (!string.IsNullOrWhiteSpace(_company.Phone))
+            {
+                <span>@_company.Phone</span>
+            }
+        </div>
+
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
+
+    private LoginModel _model = new();
+    private CompanyInfo _company = new();
+
+    private string? _error;
+    private bool _busy;
+
+    private bool _pwdVisible;
+    private InputType _pwdType = InputType.Password;
+    private string _pwdIcon = Icons.Material.Filled.Lock;
+
+    // 🔧 Development
+    private bool _envIsDev;
+    private bool _seedDone;
+    private string _seedMessage = "";
+    private string _seedPassword = "Admin@2026!";
+
+    public class LoginModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "اسم المستخدم مطلوب")]
+        public string UserName { get; set; } = "";
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "كلمة المرور مطلوبة")]
+        public string Password { get; set; } = "";
+
+        public bool RememberMe { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _company = await Company.GetAsync();
+
+        // ⚠️ الـ Development detection في WASM = من الـ URL
+        //    (NavigationManager مفيهوش BaseAddress — الموجود Uri)
+        _envIsDev = Nav.Uri.Contains("localhost", StringComparison.OrdinalIgnoreCase);
+
+        // لو مسجّل دخول بالفعل، حوّله على طول
+        var state = await AuthState.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated == true)
+            GoHome();
+    }
+
+    private void TogglePassword()
+    {
+        _pwdVisible = !_pwdVisible;
+        _pwdType = _pwdVisible ? InputType.Text : InputType.Password;
+        _pwdIcon = _pwdVisible
+            ? Icons.Material.Filled.LockOpen
+            : Icons.Material.Filled.Lock;
+    }
+
+    private async Task SubmitAsync()
+    {
+        _busy  = true;
+        _error = null;
+        StateHasChanged();
+
+        var (ok, msg) = await Auth.LoginAsync(
+            _model.UserName.Trim(), _model.Password, _model.RememberMe);
+
+        _busy = false;
+
+        if (ok)
+        {
+            Snackbar.Add($"أهلًا @_model.UserName", Severity.Success);
+            GoHome();
+        }
+        else
+        {
+            _error = msg;
+        }
+    }
+
+    private async Task SeedAdminAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_seedPassword) || _seedPassword.Length < 8)
+        {
+            _error = "كلمة المرور لازم تكون 8 حروف على الأقل";
+            return;
+        }
+
+        _busy  = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/auth/seed-admin", new
+            {
+                userName = "admin",
+                password = _seedPassword,
+                fullName = "مدير النظام",
+                email    = (string?)null
+            });
+
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (res.IsSuccessStatusCode)
+            {
+                _seedDone    = true;
+                _seedMessage = "✅ اتعمل المستخدم admin — سجّل دخول دلوقتي";
+                _model.UserName = "admin";
+                _model.Password = _seedPassword;
+            }
+            else
+            {
+                _error = $"فشل الإنشاء (HTTP {(int)res.StatusCode}): {body}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = "مش قادر أوصل للسيرفر: " + ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void GoHome()
+    {
+        var target = string.IsNullOrWhiteSpace(ReturnUrl) ? "/" : "/" + ReturnUrl;
+        Nav.NavigateTo(target, forceLoad: false);
+    }
+}
