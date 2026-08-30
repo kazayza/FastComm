@@ -1,90 +1,187 @@
-@inherits LayoutComponentBase
+@page "/health"
+@* ── صفحة تشخيص للمدير — بتظهر في القائمة لـ ADMIN بس (NavMenu) ── *@
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject HealthService HealthApi
 @inject CompanyService Company
 
-<MudLayout>
+<PageTitle>حالة النظام — @_company.DisplayName</PageTitle>
 
-    @* ── الـ Header ───────────────────────────────────────────────────── *@
-    <MudAppBar Elevation="1" Fixed="true" Dense="false">
+<div class="page-hero">
+    <div>
+        <MudText Typo="Typo.h4">
+            <MudIcon Icon="@Icons.Material.Filled.Info" Class="ml-1" />
+            حالة النظام
+        </MudText>
+        <MudText Typo="Typo.body1" Class="muted mt-1">
+            فحص مباشر للاتصال بقاعدة البيانات والمكوّنات — المصدر: <code>GET /api/health</code>
+        </MudText>
+    </div>
+    <div class="d-flex align-center" style="gap:8px">
+        @if (_ok)
+        {
+            <MudChip T="string" Color="Color.Success" Variant="Variant.Filled"
+                     Icon="@Icons.Material.Filled.CloudDone">النظام سليم</MudChip>
+        }
+        else
+        {
+            <MudChip T="string" Color="Color.Error" Variant="Variant.Filled"
+                     Icon="@Icons.Material.Filled.CloudOff">فيه مشكلة</MudChip>
+        }
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Refresh"
+                   Disabled="_busy" OnClick="LoadAsync">
+            تحديث
+        </MudButton>
+    </div>
+</div>
 
-        <MudIconButton Icon="@Icons.Material.Filled.Menu"
-                       Color="Color.Inherit"
-                       Edge="Edge.Start"
-                       OnClick="@(() => _drawerOpen = !_drawerOpen)" />
+@if (_busy)
+{
+    <div class="fc-authorizing">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        <MudText Typo="Typo.body2" Class="muted mt-3">جارٍ فحص النظام...</MudText>
+    </div>
+}
+else if (_info is null)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="mt-6">
+        مش قادر أوصل للسيرفر أصلًا — اتأكد إن الـ API شغال وجرّب "تحديث".
+    </MudAlert>
+}
+else
+{
+    @* ── كروت سريعة ────────────────────────────────────────────────────── *@
+    <MudGrid Class="mt-4">
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="kpi-card pa-5" Elevation="0">
+                <div class="kpi-icon" style="background:@(_ok ? "#E4F4EC" : "#FBE4E4")">
+                    <MudIcon Icon="@Icons.Material.Filled.Storage"
+                             Color="@(_ok ? Color.Success : Color.Error)" />
+                </div>
+                <MudText Typo="Typo.h5" Class="@(_ok ? "ok" : "bad")">
+                    @(_ok ? "متصل" : "غير متصل")
+                </MudText>
+                <MudText Typo="Typo.body2" Class="muted">قاعدة البيانات</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="kpi-card pa-5" Elevation="0">
+                <div class="kpi-icon" style="background:#E3EEF8">
+                    <MudIcon Icon="@Icons.Material.Filled.TableChart" Color="Color.Primary" />
+                </div>
+                <MudText Typo="Typo.h4" Class="kpi-value">@_info.TablesInDatabase</MudText>
+                <MudText Typo="Typo.body2" Class="muted">الجداول</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="kpi-card pa-5" Elevation="0">
+                <div class="kpi-icon" style="background:#E3EEF8">
+                    <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" Color="Color.Primary" />
+                </div>
+                <MudText Typo="Typo.h4" Class="kpi-value">@_info.Permissions</MudText>
+                <MudText Typo="Typo.body2" Class="muted">الصلاحيات</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="kpi-card pa-5" Elevation="0">
+                <div class="kpi-icon" style="background:#E3EEF8">
+                    <MudIcon Icon="@Icons.Material.Filled.Groups" Color="Color.Primary" />
+                </div>
+                <MudText Typo="Typo.h4" Class="kpi-value">@_info.Roles</MudText>
+                <MudText Typo="Typo.body2" Class="muted">الأدوار</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
 
-        @* الشعار + اسم الشركة (من جدول CompanyProfile) *@
-        <div class="brand-block">
-            <div class="brand-mark">FC</div>
-            <div class="brand-text">
-                <span class="brand-name">@_company.DisplayName</span>
-                <span class="brand-sub">نظام إدارة نقل الحاويات</span>
-            </div>
+    @* ── تفاصيل ────────────────────────────────────────────────────────── *@
+    <MudPaper Class="pa-6 mt-6" Elevation="0">
+        <div class="d-flex align-center" style="gap:8px">
+            <MudIcon Icon="@Icons.Material.Filled.FactCheck" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">التفاصيل</MudText>
+            @if (_fetchedAt is not null)
+            {
+                <MudText Typo="Typo.caption" Class="muted">
+                    (آخر فحص: @_fetchedAt.Value.ToString("HH:mm:ss"))
+                </MudText>
+            }
         </div>
 
-        @* 🔍 البحث العام *@
-        <GlobalSearch />
+        <table class="fc-table mt-4">
+            <tbody>
+                <tr><th>حالة قاعدة البيانات</th><td><strong class="@(_ok ? "ok" : "bad")">@(_info.Database ?? "—")</strong></td></tr>
+                <tr><th>الـ Views</th><td>@_info.Views</td></tr>
+                <tr><th>الـ Triggers</th><td>@_info.Triggers</td></tr>
+                <tr><th>الـ Procedures</th><td>@_info.Procedures</td></tr>
+                <tr><th>صفوف بيانات الشركة</th><td>@_info.CompanyRows @(string.IsNullOrWhiteSpace(_info.CompanyName) ? "" : "— " + _info.CompanyName)</td></tr>
+                <tr><th>وقت السيرفر (UTC)</th><td>@_info.ServerTime.ToString("yyyy-MM-dd HH:mm:ss")</td></tr>
+                <tr><th>وقت القاهرة</th><td>@_info.CairoTime.ToString("yyyy-MM-dd HH:mm:ss")</td></tr>
+            </tbody>
+        </table>
+    </MudPaper>
 
-        <MudSpacer />
-
-        @* حالة الاتصال بقاعدة البيانات *@
-        <MudTooltip Text="@(_dbOk ? "متصل بقاعدة البيانات" : "مش متصل — راجع الإعدادات")">
-            <MudChip T="string"
-                     Size="Size.Small"
-                     Color="@(_dbOk ? Color.Success : Color.Error)"
-                     Variant="Variant.Outlined"
-                     Icon="@(_dbOk ? Icons.Material.Filled.CloudDone : Icons.Material.Filled.CloudOff)">
-                @(_dbOk ? "متصل" : "غير متصل")
-            </MudChip>
-        </MudTooltip>
-
-        @* ⏳ Step 3.3: هنا هيبقى اسم المستخدم + تسجيل الخروج *@
-        <MudIconButton Icon="@Icons.Material.Filled.PersonOutline" Color="Color.Inherit" />
-
-    </MudAppBar>
-
-    @* ── الـ Sidebar ──────────────────────────────────────────────────── *@
-    <MudDrawer @bind-Open="_drawerOpen"
-               Elevation="2"
-               Variant="@DrawerVariant.Mini"
-               OpenMiniOnHover="false"
-               ClipMode="DrawerClipMode.Always">
-        <NavMenu />
-    </MudDrawer>
-
-    @* ── المحتوى ──────────────────────────────────────────────────────── *@
-    <MudMainContent Class="fastcom-main">
-        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-6">
-            @Body
-        </MudContainer>
-
-        @* ── الـ Footer ─────────────────────────────────────────────── *@
-        <footer class="fastcom-footer">
-            <div>
-                <strong>@_company.DisplayName</strong>
-                @if (!string.IsNullOrWhiteSpace(_company.TaxNumber) && _company.TaxNumber != "000000000")
+    @* ── الأخطاء (لو فيه) ──────────────────────────────────────────────── *@
+    @if (_errors.Count > 0)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled" Class="mt-6">
+            <MudText Typo="Typo.body2" Class="font-weight-bold mb-2">ملاحظات من الفحص:</MudText>
+            <ul class="mb-0">
+                @foreach (var e in _errors)
                 {
-                    <span> · الرقم الضريبي: @_company.TaxNumber</span>
+                    <li><span style="direction:ltr; unicode-bidi:embed">@e</span></li>
                 }
-            </div>
-            <div class="footer-meta">
-                @if (!string.IsNullOrWhiteSpace(_company.Phone))
-                {
-                    <span>@_company.Phone</span>
-                }
-                <span>© @DateTime.Now.Year</span>
-            </div>
-        </footer>
-    </MudMainContent>
-
-</MudLayout>
+            </ul>
+        </MudAlert>
+    }
+}
 
 @code {
-    private bool _drawerOpen = true;
-    private bool _dbOk;
     private CompanyInfo _company = new();
+    private HealthInfo? _info;
+    private bool _busy = true;
+    private DateTime? _fetchedAt;
+    private List<string> _errors = new();
+
+    private bool _ok => _info?.Database == "connected";
 
     protected override async Task OnInitializedAsync()
     {
         _company = await Company.GetAsync();
-        _dbOk = true;   // ⏳ Step 3.5: هتبقى من /api/health
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _busy = true;
+        StateHasChanged();
+
+        _info      = await HealthApi.GetAsync();
+        _fetchedAt = DateTime.Now;
+        _errors    = CollectErrors();
+        _busy      = false;
+    }
+
+    /// <summary>يجمع كل الملاحظات/الأخطاء اللي رجعت من الفحص في قايمة واحدة.</summary>
+    private List<string> CollectErrors()
+    {
+        var errs = new List<string>();
+        if (_info is null) return errs;
+
+        if (!string.IsNullOrWhiteSpace(_info.Error))
+            errs.Add(_info.Error + (string.IsNullOrWhiteSpace(_info.ErrorType) ? "" : $" ({_info.ErrorType})"));
+
+        if (!string.IsNullOrWhiteSpace(_info.ErrorInner))
+            errs.Add("تفاصيل: " + _info.ErrorInner);
+
+        if (_info.CompanyRows <= 0)
+            errs.Add("جدول CompanyProfile مفيهوش صفوف — راجع الـ Seed");
+
+        if (!string.IsNullOrWhiteSpace(_info.CompanyRowsError))
+            errs.Add("CompanyProfile: " + _info.CompanyRowsError);
+
+        if (!string.IsNullOrWhiteSpace(_info.CompanyNameError))
+            errs.Add("اسم الشركة: " + _info.CompanyNameError);
+
+        return errs;
     }
 }

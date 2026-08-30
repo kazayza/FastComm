@@ -1,41 +1,197 @@
-@*
-    ⏳ Step 3.5: النافبار ده هيبقى بيتفلتر حسب الصلاحيات (AppUserPermissions).
-    دلوقتي كل الأقسام ظاهرة عشان نبني الشكل الأول.
-*@
+﻿@* ============================================================================
+    ✅ Step 3.4: القائمة متفلترة حسب صلاحيات المستخدم (AppUserPermissions).
+    ── القواعد ──
+    • كل عنصر مرتبط بكود صلاحية من جدول AppPermissions (sql/FastCom-schema.sql).
+    • المدير (ADMIN) بيشوف كل حاجة — الـ bypass جاي من AuthUser.IsAdmin.
+    • الـ Section أو الـ Group بيختفي لو كل عناصره مخفيين.
+    • العناصر بتتحدّث فورًا عند تسجيل الدخول/الخروج (OnStateChanged).
+   ============================================================================ *@
+@implements IDisposable
+@using FastCom.Client.Auth
+@inject AuthService Auth
+
 <MudNavMenu Class="fastcom-nav">
 
-    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
-        الرئيسية
-    </MudNavLink>
+    @if (Can("DASHBOARD.VIEW"))
+    {
+        <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
+            الرئيسية
+        </MudNavLink>
+    }
 
-    <MudText Class="nav-section-title">التشغيل</MudText>
-    <MudNavGroup Title="الحجوزات" Icon="@Icons.Material.Filled.BookOnline" Expanded="false">
-        <MudNavLink Href="/bookings" Icon="@Icons.Material.Filled.List">كل الحجوزات</MudNavLink>
-        <MudNavLink Href="/bookings/new" Icon="@Icons.Material.Filled.Add">حجز جديد</MudNavLink>
-    </MudNavGroup>
-    <MudNavGroup Title="العمليات" Icon="@Icons.Material.Filled.LocalShipping" Expanded="false">
-        <MudNavLink Href="/operations" Icon="@Icons.Material.Filled.List">كل العمليات</MudNavLink>
-        <MudNavLink Href="/trips" Icon="@Icons.Material.Filled.AirportShuttle">الرحلات</MudNavLink>
-    </MudNavGroup>
+    @if (_showOpsSection)
+    {
+        <MudText Class="nav-section-title">التشغيل</MudText>
 
-    <MudText Class="nav-section-title">الماليات</MudText>
-    <MudNavLink Href="/invoices" Icon="@Icons.Material.Filled.ReceiptLong">الفواتير</MudNavLink>
-    <MudNavLink Href="/payments" Icon="@Icons.Material.Filled.Payments">التحصيلات</MudNavLink>
-    <MudNavLink Href="/expenses" Icon="@Icons.Material.Filled.AccountBalanceWallet">المصروفات</MudNavLink>
-    <MudNavLink Href="/treasury" Icon="@Icons.Material.Filled.AccountBalance">الخزينة</MudNavLink>
+        @if (_canBookView || _canBookCreate)
+        {
+            <MudNavGroup Title="الحجوزات" Icon="@Icons.Material.Filled.BookOnline" Expanded="false">
+                @if (_canBookView)
+                {
+                    <MudNavLink Href="/bookings" Icon="@Icons.Material.Filled.List">كل الحجوزات</MudNavLink>
+                }
+                @if (_canBookCreate)
+                {
+                    <MudNavLink Href="/bookings/new" Icon="@Icons.Material.Filled.Add">حجز جديد</MudNavLink>
+                }
+            </MudNavGroup>
+        }
 
-    <MudText Class="nav-section-title">الأسطول</MudText>
-    <MudNavLink Href="/drivers" Icon="@Icons.Material.Filled.Badge">السائقين</MudNavLink>
-    <MudNavLink Href="/vehicles" Icon="@Icons.Material.Filled.DirectionsCar">السيارات</MudNavLink>
-    <MudNavLink Href="/custodies" Icon="@Icons.Material.Filled.Savings">العهד</MudNavLink>
+        @if (_canOpsView || _canTripView)
+        {
+            <MudNavGroup Title="العمليات" Icon="@Icons.Material.Filled.LocalShipping" Expanded="false">
+                @if (_canOpsView)
+                {
+                    <MudNavLink Href="/operations" Icon="@Icons.Material.Filled.List">كل العمليات</MudNavLink>
+                }
+                @if (_canTripView)
+                {
+                    <MudNavLink Href="/trips" Icon="@Icons.Material.Filled.AirportShuttle">الرحلات</MudNavLink>
+                }
+            </MudNavGroup>
+        }
+    }
 
-    <MudText Class="nav-section-title">الإدارة</MudText>
-    <MudNavLink Href="/customers" Icon="@Icons.Material.Filled.Groups">العملاء</MudNavLink>
-    <MudNavLink Href="/suppliers" Icon="@Icons.Material.Filled.LocalOffer">الموردين</MudNavLink>
-    <MudNavLink Href="/reports" Icon="@Icons.Material.Filled.Assessment">التقارير</MudNavLink>
-    <MudNavLink Href="/settings" Icon="@Icons.Material.Filled.Settings">الإعدادات</MudNavLink>
+    @if (_showFinanceSection)
+    {
+        <MudText Class="nav-section-title">الماليات</MudText>
+        @if (_canInvoice)
+        {
+            <MudNavLink Href="/invoices" Icon="@Icons.Material.Filled.ReceiptLong">الفواتير</MudNavLink>
+        }
+        @if (_canPayments)
+        {
+            <MudNavLink Href="/payments" Icon="@Icons.Material.Filled.Payments">التحصيلات</MudNavLink>
+        }
+        @if (_canExpense)
+        {
+            <MudNavLink Href="/expenses" Icon="@Icons.Material.Filled.AccountBalanceWallet">المصروفات</MudNavLink>
+        }
+        @if (_canTreasury)
+        {
+            <MudNavLink Href="/treasury" Icon="@Icons.Material.Filled.AccountBalance">الخزينة</MudNavLink>
+        }
+    }
 
-    <MudDivider Class="my-3" />
-    <MudNavLink Href="/health" Icon="@Icons.Material.Filled.Info">حالة النظام</MudNavLink>
+    @if (_showFleetSection)
+    {
+        <MudText Class="nav-section-title">الأسطول</MudText>
+        @if (_canDrivers)
+        {
+            <MudNavLink Href="/drivers" Icon="@Icons.Material.Filled.Badge">السائقين</MudNavLink>
+        }
+        @if (_canFleet)
+        {
+            <MudNavLink Href="/vehicles" Icon="@Icons.Material.Filled.DirectionsCar">السيارات</MudNavLink>
+        }
+        @if (_canCustody)
+        {
+            <MudNavLink Href="/custodies" Icon="@Icons.Material.Filled.Savings">العهود</MudNavLink>
+        }
+    }
+
+    @if (_showAdminSection)
+    {
+        <MudText Class="nav-section-title">الإدارة</MudText>
+        @if (_canCustomers)
+        {
+            <MudNavLink Href="/customers" Icon="@Icons.Material.Filled.Groups">العملاء</MudNavLink>
+        }
+        @if (_canSuppliers)
+        {
+            <MudNavLink Href="/suppliers" Icon="@Icons.Material.Filled.LocalOffer">الموردين</MudNavLink>
+        }
+        @if (_canReports)
+        {
+            <MudNavLink Href="/reports" Icon="@Icons.Material.Filled.Assessment">التقارير</MudNavLink>
+        }
+        @if (_canUsers)
+        {
+            <MudNavLink Href="/users" Icon="@Icons.Material.Filled.ManageAccounts">المستخدمين</MudNavLink>
+        }
+        @if (_canSettings)
+        {
+            <MudNavLink Href="/settings" Icon="@Icons.Material.Filled.Settings">الإعدادات</MudNavLink>
+        }
+    }
+
+    @if (_isAdmin)
+    {
+        <MudDivider Class="my-3" />
+        <MudNavLink Href="/health" Icon="@Icons.Material.Filled.Info">حالة النظام</MudNavLink>
+    }
 
 </MudNavMenu>
+
+@code {
+    // ═══════════════════════════════════════════════════════════════════
+    //  ✅ Step 3.4 — حالة القائمة
+    //  المستخدم بيتجاب من AuthService (بيانات /api/auth/me المخزّنة)،
+    //  والأعلام بتتحسب مرة واحدة وتتحدّث عند أي تغيير حالة دخول.
+    //  ملاحظة: AuthUser.Can بتعمل bypass تلقائي لدور ADMIN.
+    // ═══════════════════════════════════════════════════════════════════
+    private AuthUser? _user;
+
+    // ── أعلام الصلاحيات (cache — بتتحدّث في RefreshFlags) ─────────────────
+    private bool _isAdmin;
+    private bool _canBookView, _canBookCreate;
+    private bool _canOpsView, _canTripView;
+    private bool _canInvoice, _canPayments, _canExpense, _canTreasury;
+    private bool _canDrivers, _canFleet, _canCustody;
+    private bool _canCustomers, _canSuppliers, _canReports, _canUsers, _canSettings;
+
+    // ── ظهور الأقسام (لو كل عناصره مخفيين القسم بيختفي) ───────────────────
+    private bool _showOpsSection     => _canBookView  || _canBookCreate || _canOpsView   || _canTripView;
+    private bool _showFinanceSection => _canInvoice   || _canPayments   || _canExpense   || _canTreasury;
+    private bool _showFleetSection   => _canDrivers   || _canFleet      || _canCustody;
+    private bool _showAdminSection   => _canCustomers || _canSuppliers  || _canReports || _canUsers || _canSettings;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        RefreshFlags();
+
+        // تحديث فوري عند الدخول/الخروج/تحديث بيانات المستخدم
+        Auth.OnStateChanged += OnAuthChanged;
+    }
+
+    private async void OnAuthChanged()
+    {
+        _user = await Auth.GetUserAsync();
+        RefreshFlags();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>إعادة حساب كل الأعلام من بيانات المستخدم الحالية.</summary>
+    private void RefreshFlags()
+    {
+        bool Can(string p) => _user?.Can(p) ?? false;
+
+        _isAdmin       = _user?.IsAdmin ?? false;
+
+        _canBookView   = Can("BOOKING.VIEW");
+        _canBookCreate = Can("BOOKING.CREATE");
+        _canOpsView    = Can("OPERATION.VIEW");
+        _canTripView   = Can("TRIP.VIEW");
+
+        _canInvoice    = Can("INVOICE.VIEW");
+        _canPayments   = Can("PAYMENT.VIEW");
+        _canExpense    = Can("EXPENSE.VIEW");
+        _canTreasury   = Can("TREASURY.VIEW");
+
+        _canDrivers    = Can("DRIVER.VIEW");
+        _canFleet      = Can("FLEET.VIEW");
+        _canCustody    = Can("CUSTODY.VIEW");
+
+        _canCustomers  = Can("CUSTOMER.VIEW");
+        _canSuppliers  = Can("SUPPLIER.VIEW");
+        _canReports    = Can("REPORT.OPERATIONS") || Can("REPORT.FINANCIAL") || Can("REPORT.FLEET");
+        _canUsers      = Can("USER.VIEW");
+        _canSettings   = Can("SETTINGS.VIEW");
+    }
+
+    /// <summary>فحص مباشر في الـ markup (لوحة التحكم).</summary>
+    private bool Can(string permission) => _user?.Can(permission) ?? false;
+
+    public void Dispose() => Auth.OnStateChanged -= OnAuthChanged;
+}
