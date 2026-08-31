@@ -333,6 +333,83 @@ public class AuthController : ControllerBase
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    //  POST /api/auth/reset-password   🔧 Development فقط
+    //  أداة مطورين: لو المدير نسى الباسورد — نعيّن واحد جديد من غير
+    //  محاولات تخمين (الحساب بيتقفل بعد 5 محاولات غلط).
+    //  ⚠️ في الـ Production الـ endpoint ده بيرجّع 404.
+    // ═══════════════════════════════════════════════════════════════════
+
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest req, CancellationToken ct)
+    {
+        if (!_env.IsDevelopment())
+            return NotFound();
+
+        if (!ModelState.IsValid)
+            return BadRequest(new AuthErrorResponse { Message = "بيانات ناقصة" });
+
+        if (req.NewPassword.Length < 8)
+            return BadRequest(new AuthErrorResponse
+            {
+                Message = "كلمة المرور لازم تكون 8 حروف على الأقل"
+            });
+
+        try
+        {
+            var userName = req.UserName.Trim();
+
+            var user = await _users.Users.FirstOrDefaultAsync(
+                u => u.UserName == userName || u.Email == userName, ct);
+
+            if (user is null)
+                return NotFound(new AuthErrorResponse
+                {
+                    Message = $"مفيش مستخدم باسم '{userName}'"
+                });
+
+            // ── نشيل الباسورد القديم ونحط الجديد (Identity بيتحقق من الـ Policy) ──
+            var remove = await _users.RemovePasswordAsync(user);
+            if (!remove.Succeeded)
+                return BadRequest(new AuthErrorResponse
+                {
+                    Message = "فشل إزالة كلمة المرور القديمة: " +
+                              string.Join(" · ", remove.Errors.Select(e => e.Description))
+                });
+
+            var add = await _users.AddPasswordAsync(user, req.NewPassword);
+            if (!add.Succeeded)
+                return BadRequest(new AuthErrorResponse
+                {
+                    Message = "كلمة المرور مرفوضة: " +
+                              string.Join(" · ", add.Errors.Select(e => e.Description))
+                });
+
+            // ── نفتح الحساب لو اتقفل من المحاولات الغلط ونصفر العدّاد ──
+            user.LockoutEnd = null;
+            await _users.UpdateAsync(user);
+            await _users.ResetAccessFailedCountAsync(user);
+
+            _logger.LogWarning("🔧 اتعاد تعيين كلمة مرور المستخدم {UserName} من أدوات المطور", userName);
+
+            return Ok(new
+            {
+                success = true,
+                message = $"اتعاد تعيين كلمة مرور '{userName}' واتفتح الحساب — سجّل دخول دلوقتي"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "فشل إعادة تعيين كلمة المرور");
+            return StatusCode(500, new AuthErrorResponse
+            {
+                Message   = "فشل إعادة التعيين",
+                ErrorType = ex.GetType().Name
+            });
+        }
+    }
+
     /// <summary>بيجيب دور مدير النظام (<c>ADMIN</c> / <c>SystemAdministrator</c>).</summary>
     private Task<ApplicationRole?> FindAdminRoleAsync(CancellationToken ct) =>
         _roles.Roles.FirstOrDefaultAsync(

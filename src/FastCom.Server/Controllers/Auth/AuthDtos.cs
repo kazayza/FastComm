@@ -76,3 +76,16 @@ public class SeedAdminRequest
     [Required] public string FullName { get; set; } = "مدير النظام";
     public string? Email { get; set; }
 }
+
+/// <summary>
+/// 🔧 طلب إعادة تعيين كلمة مرور مستخدم — <b>Development فقط</b>.
+/// <para>أداة مطورين: لما المدير ينسى الباسورد بدل ما يحاول غلط ويقفل الحساب.</para>
+/// </summary>
+public class ResetPasswordRequest
+{
+    [Required(ErrorMessage = "اسم المستخدم مطلوب")]
+    public string UserName { get; set; } = "admin";
+
+    [Required(ErrorMessage = "كلمة المرور الجديدة مطلوبة")]
+    public string NewPassword { get; set; } = "";
+}
