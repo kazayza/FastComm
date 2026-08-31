@@ -222,7 +222,7 @@ Search              SearchOff             Settings
 | `Controllers/HealthController.cs` | ✅ **ADO.NET** — 7 عدّادات، كل واحدة لوحدها |
 | `Controllers/BrandingController.cs` | ✅ **ADO.NET** — يرجّع `error`/`errorType`/`errorInner` |
 | `Controllers/SearchController.cs` | ✅ **ADO.NET + SqlParameter** — 7 وحدات |
-| `appsettings.json` | ✅ الباسورد الحقيقي موجود · ⚠️ `Jwt:Key` لسه placeholder |
+| `appsettings.json` | ✅ placeholders بس — **الأسرار الحقيقية في user-secrets** (`ConnectionStrings:DefaultConnection` + `Jwt:Key`) |
 
 ### Client — `src/FastCom.Client/`
 
