@@ -34,7 +34,7 @@
 | **3.3** | **Login + JWT** | ✅ شغال + شاشة الدخول اتعادت تصميمها — دخول مُختبر JWT ✅ |
 | 3.3b | الهوية البصرية الرسمية (أزرق `#0B56DF` + برتقالي `#FF8015`) | ✅ |
 | 3.4 | ربط القائمة بالصلاحيات | ✅ كود مكتوب — Build 0 errors (فلترة كاملة بـ `Can()`) |
-| 3.5 | حماية الـ Controllers | ⏳ |
+| 3.5 | حماية الـ Controllers | ✅ مُختبر — مصفوفة أمنية 10/10 (تفاصيل تحت) |
 
 ---
 
@@ -63,8 +63,18 @@
 الاستخراج معقد: CMYK/YCCK معكوس + SMask بـ TIFF Predictor 2 + الباتش مستطيل مش لوجو شفاف.
 السكربت محفوظ في `tools/extract-logo.ps1` لو حبنا نكمل. الشغّال حاليًا: ألوان الهوية + Favicon SVG "FC" بخلفية `#0B56DF`.
 
-### ✅ اللي بعده
-**Step 3.5: حماية الـ Controllers** (`[AllowAnonymous]` → `[Authorize]` + `[Authorize(Permission = "...")]` حسب الصلاحيات).
+### ✅ Step 3.5 اتعمل (2026-08-31 فجرًا) — حماية الـ API كلها
+- **ملف جديد `src/FastCom.Server/Auth/PermissionAuthorization.cs`:**
+  - `PermissionRequirement` + `PermissionAuthorizationHandler` (**fail-closed**: لو مفيهوش perm claim = رفض) + `PermissionPolicyProvider` (بينشئ policies ديناميكيًا من `[Authorize(Permission = "X.Y")]` من غير تسجيل مسبق).
+  - الـ handler بيقرا claim `"perm"` اللي بيبنيها `TokenService` وقت الـ login (من `GetPermissionsAsync`).
+- **الـ Controllers:** `SearchController` + `DiagController` كانوا **مفتوحين تمامًا** — اتقفلوا `[Authorize]`. `AuthController` المستوى: `[Authorize]` على الكلاس + `[AllowAnonymous]` لـ `login`/`seed-admin`/`reset-password` (الاثنين الأخيرين بيحرسهم فحص Development جوه الكود).
+- **مفتوحين بقصد** (محتاجينهم قبل الدخول): `HealthController` + `BrandingController`.
+- **Program.cs:** تسجيل الـ handler والـ policy provider في الـ DI (`AddSingleton`).
+- **مصفوفة الاختبار الأمنية (10/10 ✅):** بدون توكن → `health/branding` 200 (مقصود) + `me/logout/search/diag` **401**. بتوكن admin → كلها **200** + `/me` رجّعت الـ 107 صلاحية. واختبارات بوابة الـ Development على `seed-admin`/`reset-password` نجحت برسائل أمان واضحة وصفر side-effects.
+- 🔧 **درس معماري:** الصلاحيات **مش في الـ JWT** — الـ claims بتتقرا من `/api/auth/me` في الـ Client، لكن الـ **API بيتحقق من claim `perm` في الـ token نفسه** (اتبنى وقت الـ login) — فالحماية server-side حقيقية مش معتمدة على الواجهة.
+
+### 🚀 اللي بعده
+**Step 4: شاشة المستخدمين والأدوار** (CRUD + ربط صلاحيات) — أول شاشة بناء على نظام الصلاحيات الجاهز.
 
 ### ✅ Step 3.4 اتعمل (2026-08-30 مساءً)
 - **`NavMenu.razor`** اتكتب من جديد: كل عنصر قائمة مرتبط بكود صلاحية من `AppPermissions` (107 كود) — بيظهر بس لو `User.Can("X.Y")` صحيح، والمجموعات (`MudNavGroup`) بتظهر لو فيها أي عنصر متاح. ADMIN يشوف كل حاجة (bypass جاهز في `AuthUser`).

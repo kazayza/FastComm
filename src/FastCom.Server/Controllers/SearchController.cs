@@ -20,7 +20,7 @@ namespace FastCom.Server.Controllers;
 /// </remarks>
 [ApiController]
 [Route("api/[controller]")]
-[AllowAnonymous]          // ⏳ Step 3.3: هتبقى [Authorize] + فلترة بالصلاحيات
+[Authorize]   // 🔐 Step 3.5: البحث للمستخدمين المسجلين بس (كان مفتوح على العالم)
 public class SearchController : ControllerBase
 {
     /// <summary>أقصى عدد نتائج بنرجّعها.</summary>

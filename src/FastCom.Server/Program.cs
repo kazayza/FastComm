@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Authorization;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -93,6 +94,15 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+
+/* ==========================================================
+   4.5) 🔐 Step 3.5: Authorization بالصلاحيات من قاعدة البيانات
+        [Authorize(Policy = "PERM:BOOKING.VIEW")] → فحص حي من
+        AppUserPermissions مع كاش 60 ثانية — fail-closed عند أي خطأ
+   ========================================================== */
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
 // 🔐 Step 3.3: خدمة الـ JWT (توليد التوكن + جلب الصلاحيات)
 builder.Services.AddScoped<TokenService>();

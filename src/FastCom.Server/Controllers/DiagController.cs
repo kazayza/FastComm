@@ -17,6 +17,7 @@ namespace FastCom.Server.Controllers;
 /// </remarks>
 [ApiController]
 [Route("api/diag")]
+[Authorize]   // 🔐 Step 3.5: التشخيص محمي — (وفي الإنتاج بيرجع 404 أصلًا)
 public class DiagController : ControllerBase
 {
     private readonly IConfiguration _config;
@@ -30,9 +31,8 @@ public class DiagController : ControllerBase
         _logger = logger;
     }
 
-    /// <summary><c>GET /api/diag/connection</c></summary>
+    /// <summary><c>GET /api/diag/connection</c> — محمي (يأخذ [Authorize] من الكلاس).</summary>
     [HttpGet("connection")]
-    [AllowAnonymous]
     public async Task<IActionResult> Connection()
     {
         if (!_env.IsDevelopment()) return NotFound();

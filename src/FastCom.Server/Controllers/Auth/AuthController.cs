@@ -21,6 +21,7 @@ namespace FastCom.Server.Controllers;
 /// </remarks>
 [ApiController]
 [Route("api/auth")]
+[Authorize]   // 🔐 Step 3.5: الافتراضي محمي — login/seed-admin/reset-password مفتوحين صراحةً
 public class AuthController : ControllerBase
 {
     private readonly UserManager<ApplicationUser> _users;
