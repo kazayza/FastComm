@@ -1,0 +1,256 @@
+@page "/suppliers"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject ISnackbar Snackbar
+
+<PageTitle>الموردين — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">البيانات الأساسية · الأطراف</div>
+                <h1 class="fc-hero-title">الموردين</h1>
+                <p class="fc-hero-sub">شركات نقل ومحطات وقود وورش — مصادر المصروفات والالتزامات</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                @if (CanCreate)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="New">مورد جديد</MudButton>
+                }
+            </div>
+        </div>
+        @if (CanView)
+        {
+            <div class="fc-kpis fc-kpis-glass">
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.LocalShipping" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي الموردين</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(s => s.IsActive)</div><div class="fc-kpi-lb">نشط</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.AirportShuttle" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(s => s.SupplierType == "TransportCompany")</div><div class="fc-kpi-lb">شركات نقل</div></div></div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanView)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض الموردين.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+            <div class="fc-toolbar">
+                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
+                              Placeholder="ابحث بالاسم أو الكود..." Variant="Variant.Outlined" Dense="true"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Class="fc-search-box" Immediate="true" />
+                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+            </div>
+            @if (_loading)
+            {
+                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+            }
+            else
+            {
+                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
+                    <thead><tr><th>الكود</th><th>الاسم</th><th>النوع</th><th>التليفون</th><th>الحالة</th>
+                        @if (CanEdit) { <th style="width:170px; text-align:left">إجراءات</th> }</tr></thead>
+                    <tbody>
+                        @foreach (var s in Filtered)
+                        {
+                            <tr>
+                                <td><span class="fc-role-chip">@s.SupplierCode</span></td>
+                                <td><div class="fc-cell-main">@s.NameAr</div></td>
+                                <td><span class="fc-role-chip">@TypeName(s.SupplierType)</span></td>
+                                <td class="fc-cell-sub">@(s.Phone ?? "—")</td>
+                                <td>@(s.IsActive ? "نشط" : "موقوف")</td>
+                                @if (CanEdit)
+                                {
+                                    <td><div class="fc-row-actions">
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="() => Edit(s)" />
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Refresh"
+                                                       Color="@(s.IsActive ? Color.Error : Color.Success)"
+                                                       title="@(s.IsActive ? "إيقاف" : "تفعيل")"
+                                                       OnClick="() => ToggleActive(s)" />
+                                        @if (_confirmId == s.SupplierId)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" OnClick="() => Delete(s)">متأكد؟</MudButton>
+                                        }
+                                        else if (CanDelete)
+                                        {
+                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => _confirmId = s.SupplierId" />
+                                        }
+                                    </div></td>
+                                }
+                            </tr>
+                        }
+                        @if (!Filtered.Any())
+                        {
+                            <tr><td colspan="6"><div class="fc-empty"><div>لايوجد اى موردين — ضيف أول واحد</div></div></td></tr>
+                        }
+                    </tbody>
+                </table></div>
+            }
+        </div></div>
+    }
+
+    @if (_modalOpen && CanCreate)
+    {
+        <div class="fc-modal-backdrop" @onclick="Close">
+            <div class="fc-modal" @onclick:stopPropagation>
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">@(_editId is null ? "مورد جديد" : "تعديل مورد")</div>
+                        <div class="fc-modal-sub">الكود بيتولد تلقائيًا (SUP-)</div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="Close" />
+                </div>
+                <div class="fc-modal-body">
+                    @if (_msg is not null)
+                    {
+                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
+                    }
+                    <div class="fc-form-grid">
+                        <div><div class="fc-panel-sub" style="margin-bottom:6px">نوع المورد</div>
+                            <select class="fc-sel fc-sel-lg" @bind="_f.SupplierType">
+                                @foreach (var t in Types) { <option value="@t.Key">@t.Value</option> }
+                            </select></div>
+                        <MudTextField T="string" @bind-Value="_f.NameAr" Label="الاسم بالعربي *" Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_f.NameEn" Label="الاسم بالإنجليزي" Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_f.TaxNumber" Label="الرقم الضريبي" Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_f.Phone" Label="التليفون" Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_f.Email" Label="البريد" Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_f.Address" Label="العنوان" Variant="Variant.Outlined" />
+                    </div>
+                </div>
+                <div class="fc-modal-foot">
+                    <MudButton Variant="Variant.Outlined" OnClick="Close">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveAsync">حفظ</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private AuthUser? _user;
+    private bool CanView => _user?.Can("SUPPLIER.VIEW") ?? false;
+    private bool CanCreate => _user?.Can("SUPPLIER.CREATE") ?? false;
+    private bool CanEdit => _user?.Can("SUPPLIER.EDIT") ?? false;
+    private bool CanDelete => _user?.Can("SUPPLIER.DELETE") ?? false;
+
+    private static readonly Dictionary<string, string> Types = new()
+    {
+        ["TransportCompany"] = "شركة نقل", ["FuelStation"] = "محطة وقود", ["Workshop"] = "ورشة",
+        ["PortServices"] = "خدمات ميناء", ["PartsSupplier"] = "مورد قطع غيار", ["Other"] = "أخرى"
+    };
+
+    private List<Item> _items = new();
+    private bool _loading; private string _search = ""; private int? _confirmId;
+    private bool _modalOpen; private int? _editId; private bool _saving; private string? _msg; private bool _ok;
+    private Form _f = new();
+
+    public class Item { public int SupplierId { get; set; } public string SupplierCode { get; set; } = "";
+        public string SupplierType { get; set; } = ""; public string NameAr { get; set; } = "";
+        public string? Phone { get; set; } public bool IsActive { get; set; } }
+
+    public class Detail { public string SupplierType { get; set; } = ""; public string NameAr { get; set; } = "";
+        public string? NameEn { get; set; } public string? TaxNumber { get; set; } public string? Phone { get; set; }
+        public string? Email { get; set; } public string? Address { get; set; } }
+
+    public class Form { public string SupplierType { get; set; } = "TransportCompany"; public string NameAr { get; set; } = "";
+        public string? NameEn { get; set; } public string? TaxNumber { get; set; } public string? Phone { get; set; }
+        public string? Email { get; set; } public string? Address { get; set; } }
+
+    private static string TypeName(string t) => Types.TryGetValue(t, out var v) ? v : t;
+
+    private IEnumerable<Item> Filtered => string.IsNullOrWhiteSpace(_search) ? _items :
+        _items.Where(s => s.NameAr.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                          s.SupplierCode.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    { _user = await Auth.GetUserAsync(); if (CanView) await LoadAsync(); }
+
+    private async Task Reload() { await LoadAsync(); }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/suppliers") ?? new(); }
+        catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
+        finally { _loading = false; }
+    }
+
+    private void New() { _editId = null; _f = new Form(); _msg = null; _modalOpen = true; }
+
+    private async Task Edit(Item s)
+    {
+        try
+        {
+            var d = await Http.GetFromJsonAsync<Detail>($"api/suppliers/{s.SupplierId}");
+            if (d is null) return;
+            _editId = s.SupplierId;
+            _f = new Form { SupplierType = d.SupplierType, NameAr = d.NameAr, NameEn = d.NameEn,
+                TaxNumber = d.TaxNumber, Phone = d.Phone, Email = d.Email, Address = d.Address };
+            _msg = null; _modalOpen = true;
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private void Close() { _modalOpen = false; }
+
+    private async Task SaveAsync()
+    {
+        _saving = true; _msg = null;
+        try
+        {
+            var res = _editId is null
+                ? await Http.PostAsJsonAsync("api/suppliers", _f)
+                : await Http.PutAsJsonAsync($"api/suppliers/{_editId}", _f);
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); Close(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task ToggleActive(Item s)
+    {
+        try
+        {
+            var res = await Http.PostAsync($"api/suppliers/{s.SupplierId}/toggle-active", null);
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private async Task Delete(Item s)
+    {
+        try
+        {
+            var res = await Http.DeleteAsync($"api/suppliers/{s.SupplierId}");
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            _confirmId = null;
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+    }
+}

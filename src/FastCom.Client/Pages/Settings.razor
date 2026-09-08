@@ -1,0 +1,772 @@
+@page "/settings"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>الإعدادات — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">النظام · الإعدادات</div>
+                <h1 class="fc-hero-title">الإعدادات</h1>
+                <p class="fc-hero-sub">بيانات الشركة اللي بتتطبع في الفواتير والمستندات · ومفاتيح النظام العامة</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
+                               OnClick="Reload" Style="color:#9FB4CC" />
+            </div>
+        </div>
+
+        <div class="fc-kpis fc-kpis-glass">
+            <div class="fc-kpi">
+                <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.Business" /></div>
+                <div><div class="fc-kpi-num" style="font-size:1rem">@CompanyName</div>
+                    <div class="fc-kpi-lb">الشركة</div></div>
+            </div>
+            <div class="fc-kpi">
+                <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.Tune" /></div>
+                <div><div class="fc-kpi-num">@(_settings?.Count ?? 0)</div>
+                    <div class="fc-kpi-lb">مفتاح في النظام</div></div>
+            </div>
+            <div class="fc-kpi">
+                <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.VerifiedUser" /></div>
+                <div><div class="fc-kpi-num">@SystemKeys</div>
+                    <div class="fc-kpi-lb">من أساسيات النظام</div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-overlap">
+    <div class="fc-card">
+
+        @if (_err is not null)
+        {
+            <div class="fc-alert fc-alert-bad">
+                <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.ErrorOutline" /></div>
+                <div class="fc-alert-body">
+                    <div class="fc-alert-title">تعذّر تحميل الإعدادات</div>
+                    <div>@_err</div>
+                </div>
+            </div>
+        }
+
+        <div class="fc-rtabs">
+            <button type="button" class="@TabClass(0)" @onclick="@(() => _tab = 0)">
+                <MudIcon Icon="@Icons.Material.Filled.Business" Size="Size.Small" />
+                بيانات الشركة
+            </button>
+            <button type="button" class="@TabClass(1)" @onclick="@(() => _tab = 1)">
+                <MudIcon Icon="@Icons.Material.Filled.Tune" Size="Size.Small" />
+                مفاتيح النظام
+                <span class="fc-rtab-n">@(_settings?.Count ?? 0)</span>
+            </button>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="fc-loading"><MudProgressCircular Indeterminate="true" Size="Size.Small" /> جارٍ التحميل…</div>
+        }
+
+        @* ══════════════════ بيانات الشركة ══════════════════ *@
+        @if (_tab == 0 && _pf is not null)
+        {
+            <div class="fc-rep-sec" style="margin-top:6px">
+                <div>
+                    <h3><MudIcon Icon="@Icons.Material.Filled.AccountBalance" /> البيانات القانونية</h3>
+                    <div class="fc-rep-sec-sub">دي اللي بتتطبع في الفواتير والمستندات الرسمية</div>
+                </div>
+                @if (!string.IsNullOrEmpty(_p?.UpdatedAt))
+                {
+                    <div class="fc-cell-sub">آخر تحديث @_p!.UpdatedAt</div>
+                }
+            </div>
+
+            <div class="fc-set-grid">
+                <div class="fc-field">
+                    <div class="fc-field-lb">الاسم القانوني (عربي) <b>*</b></div>
+                    <input class="fc-field-in" @bind="_pf.LegalNameAr" />
+                </div>
+                <div class="fc-field">
+                    <div class="fc-field-lb">الاسم القانوني (إنجليزي)</div>
+                    <input class="fc-field-in" @bind="_pf.LegalNameEn" />
+                </div>
+                <div class="fc-field">
+                    <div class="fc-field-lb">الاسم التجاري (عربي)</div>
+                    <input class="fc-field-in" @bind="_pf.TradeNameAr" />
+                </div>
+                <div class="fc-field">
+                    <div class="fc-field-lb">الاسم التجاري (إنجليزي)</div>
+                    <input class="fc-field-in" @bind="_pf.TradeNameEn" />
+                </div>
+                <div class="fc-field">
+                    <div class="fc-field-lb">الرقم الضريبي <b>*</b></div>
+                    <input class="fc-field-in" @bind="_pf.TaxNumber" placeholder="15 رقم" />
+                </div>
+                <div class="fc-field">
+                    <div class="fc-field-lb">رقم التسجيل في القيمة المضافة</div>
+                    <input class="fc-field-in" @bind="_pf.VatRegistrationNumber" />
+                </div>
+                <div class="fc-field">
+                    <div class="fc-field-lb">السجل التجاري</div>
+                    <input class="fc-field-in" @bind="_pf.CommercialRegister" />
+                </div>
+                <div class="fc-field">
+                    <div class="fc-field-lb">كود العملة</div>
+                    <input class="fc-field-in" maxlength="3" @bind="_pf.CurrencyCode" />
+                    <div class="fc-field-hint">3 حروف — زي EGP</div>
+                </div>
+            </div>
+
+            <div class="fc-rep-sec">
+                <div>
+                    <h3><MudIcon Icon="@Icons.Material.Filled.Place" /> العنوان والتواصل</h3>
+                </div>
+            </div>
+
+            <div class="fc-set-grid">
+                <div class="fc-field">
+                    <div class="fc-field-lb">العنوان (عربي) <b>*</b></div>
+                    <input class="fc-field-in" @bind="_pf.AddressAr" />
+                </div>
+                <div class="fc-field">
+                    <div class="fc-field-lb">العنوان (إنجليزي)</div>
+                    <input class="fc-field-in" @bind="_pf.AddressEn" />
+                </div>
+                <div class="fc-field">
+                    <div class="fc-field-lb">المدينة (عربي)</div>
+                    <input class="fc-field-in" @bind="_pf.CityAr" />
+                </div>
+                <div class="fc-field">
+                    <div class="fc-field-lb">المدينة (إنجليزي)</div>
+                    <input class="fc-field-in" @bind="_pf.CityEn" />
+                </div>
+                <div class="fc-field">
+                    <div class="fc-field-lb">التليفون</div>
+                    <input class="fc-field-in" @bind="_pf.Phone" />
+                </div>
+                <div class="fc-field">
+                    <div class="fc-field-lb">الموبايل</div>
+                    <input class="fc-field-in" @bind="_pf.Mobile" />
+                </div>
+                <div class="fc-field">
+                    <div class="fc-field-lb">البريد الإلكتروني</div>
+                    <input class="fc-field-in" type="email" @bind="_pf.Email" />
+                </div>
+                <div class="fc-field">
+                    <div class="fc-field-lb">الموقع</div>
+                    <input class="fc-field-in" @bind="_pf.Website" placeholder="https://" />
+                </div>
+            </div>
+
+            <div class="fc-rep-sec">
+                <div>
+                    <h3><MudIcon Icon="@Icons.Material.Filled.Description" /> إعدادات الفوترة</h3>
+                </div>
+            </div>
+
+            <div class="fc-set-grid">
+                <div class="fc-field">
+                    <div class="fc-field-lb">نسبة الضريبة الافتراضية</div>
+                    <select class="fc-field-in" @bind="_pf.DefaultTaxRateId">
+                        <option value="">— بدون —</option>
+                        @foreach (var t in _taxRates)
+                        {
+                            <option value="@t.TaxRateId">@t.NameAr (@t.Rate%)</option>
+                        }
+                    </select>
+                    <div class="fc-field-hint">بتتطبق على العميل اللي ملهوش نسبة معرّفة</div>
+                </div>
+                <div class="fc-field">
+                    <div class="fc-field-lb">شهر بداية السنة المالية</div>
+                    <select class="fc-field-in" @bind="_pf.FiscalYearStartMonth">
+                        @for (var m = 1; m <= 12; m++)
+                        {
+                            var mm = m;
+                            <option value="@mm">@MonthName(mm)</option>
+                        }
+                    </select>
+                </div>
+                <div class="fc-field span2">
+                    <div class="fc-field-lb">حاشية الفاتورة (عربي)</div>
+                    <input class="fc-field-in" @bind="_pf.InvoiceFooterNoteAr"
+                           placeholder="مثال: شكراً لتعاملكم معنا" />
+                </div>
+                <div class="fc-field span2">
+                    <div class="fc-field-lb">حاشية الفاتورة (إنجليزي)</div>
+                    <input class="fc-field-in" @bind="_pf.InvoiceFooterNoteEn" />
+                </div>
+            </div>
+
+            <div class="fc-rep-sec">
+                <div>
+                    <h3><MudIcon Icon="@Icons.Material.Filled.Image" /> الشعار والختم</h3>
+                    <div class="fc-rep-sec-sub">png · jpg · webp — 5 ميجا كحد أقصى</div>
+                </div>
+            </div>
+
+            <div class="fc-set-grid">
+                @foreach (var slot in Slots)
+                {
+                    <div class="fc-logo-slot">
+                        <div class="fc-logo-box">
+                            @if (!string.IsNullOrEmpty(slot.Path))
+                            {
+                                <img src="@slot.Path" alt="@slot.Label" />
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.ImageNotSupported" Style="color:#C3CCDA" />
+                            }
+                        </div>
+                        <div class="fc-logo-meta">
+                            <div class="fc-logo-name">@slot.Label</div>
+                            <div class="fc-logo-path">@(slot.Path ?? "مافيش")</div>
+                            @if (CanManage)
+                            {
+                                <div>
+                                    <label class="fc-mini-btn" style="cursor:pointer">
+                                        @(string.IsNullOrEmpty(slot.Path) ? "رفع" : "تغيير")
+                                        <InputFile OnChange="e => OnLogo(e, slot.Kind)" style="display:none"
+                                                   accept=".png,.jpg,.jpeg,.webp" />
+                                    </label>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="fc-set-actions">
+                @if (CanManage)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Save"
+                               Disabled="@_saving" OnClick="SaveProfile">
+                        @(_saving ? "بيحفظ…" : "حفظ بيانات الشركة")
+                    </MudButton>
+                    <span class="fc-note">الحقول اللي عليها <b style="color:#B3261E">*</b> مطلوبة</span>
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Lock" Style="color:#8896AC" />
+                    <span class="fc-note">معاك صلاحية عرض بس — التعديل محتاج <code>SETTINGS.MANAGE</code></span>
+                }
+            </div>
+        }
+
+        @* ══════════════════ مفاتيح النظام ══════════════════ *@
+        @if (_tab == 1)
+        {
+            <div class="fc-rep-sec" style="margin-top:6px">
+                <div>
+                    <h3><MudIcon Icon="@Icons.Material.Filled.Tune" /> مفاتيح النظام</h3>
+                    <div class="fc-rep-sec-sub">
+                        قيم عامة بيقرأها النظام — عدّل القيمة بعدين دوس «حفظ التعديلات»
+                    </div>
+                </div>
+                @if (CanManage)
+                {
+                    <div class="fc-rep-head-actions">
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Save"
+                                   Disabled="@_saving" OnClick="SaveBulk">حفظ التعديلات</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="OpenNew">مفتاح جديد</MudButton>
+                    </div>
+                }
+            </div>
+
+            <div class="fc-table-wrap" style="max-height:600px">
+                <table class="fc-table-pro2">
+                    <thead>
+                        <tr>
+                            <th style="min-width:230px">المفتاح</th>
+                            <th style="min-width:200px">القيمة</th>
+                            <th>النوع</th>
+                            <th style="min-width:250px">الوصف</th>
+                            <th>آخر تحديث</th>
+                            @if (CanManage)
+                            {
+                                <th style="width:56px"></th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in _settings ?? NoSet)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="id">@s.SettingKey</div>
+                                    @if (s.IsSystem)
+                                    {
+                                        <span class="fc-chip fc-chip-gold">أساسي</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (s.ValueType == "Bool")
+                                    {
+                                        <select class="fc-field-in" @bind="s.SettingValue">
+                                            <option value="true">نعم</option>
+                                            <option value="false">لا</option>
+                                        </select>
+                                    }
+                                    else if (s.ValueType == "Date")
+                                    {
+                                        <input type="date" class="fc-field-in" value="@s.SettingValue"
+                                               @onchange="e => s.SettingValue = e.Value?.ToString() ?? s.SettingValue" />
+                                    }
+                                    else
+                                    {
+                                        <input class="fc-field-in" @bind="s.SettingValue"
+                                               placeholder="—" />
+                                    }
+                                </td>
+                                <td><span class="fc-chip @TypeChip(s.ValueType)">@s.ValueType</span></td>
+                                <td class="fc-cell-sub">@(s.Description ?? "—")</td>
+                                <td class="fc-cell-sub">@(s.UpdatedAt ?? "—")</td>
+                                @if (CanManage)
+                                {
+                                    <td>
+                                        @if (!s.IsSystem)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
+                                                           Size="Size.Small" title="حذف"
+                                                           OnClick="@(() => DeleteKey(s))" />
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                        @if (_settings is null || _settings.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="6" class="fc-empty">
+                                    مافيش مفاتيح لسه — دوس «مفتاح جديد» وضيف الأول،
+                                    أو نفّذ <code>sql/FastCom-settings-seed.sql</code> في SSMS
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@* ══════════════════ مودال مفتاح جديد ══════════════════ *@
+@if (_newOpen)
+{
+    <div class="fc-modal-backdrop" @onclick="CloseNew"></div>
+    <div class="fc-modal fc-modal-sm">
+        <div class="fc-modal-head">
+            <div>
+                <div class="fc-modal-title">مفتاح جديد</div>
+                <div class="fc-modal-sub">الحروف الكبيرة والأرقام والنقطة والشرطة السفلية بس</div>
+            </div>
+            <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseNew" />
+        </div>
+        <div class="fc-modal-body">
+            <div class="fc-field">
+                <div class="fc-field-lb">اسم المفتاح <b>*</b></div>
+                <input class="fc-field-in" @bind="_nf.SettingKey" placeholder="CUSTODY.MAX_AMOUNT" />
+            </div>
+
+            <div class="fc-field" style="margin-top:13px">
+                <div class="fc-field-lb">النوع</div>
+                <select class="fc-field-in" @bind="_nf.ValueType">
+                    @foreach (var vt in _valueTypes)
+                    {
+                        <option value="@vt">@vt</option>
+                    }
+                </select>
+                <div class="fc-field-hint">@TypeHint(_nf.ValueType)</div>
+            </div>
+
+            <div class="fc-field" style="margin-top:13px">
+                <div class="fc-field-lb">القيمة</div>
+                <input class="fc-field-in" @bind="_nf.SettingValue" placeholder="سيبها فاضية لو مش عايز تحدد" />
+            </div>
+
+            <div class="fc-field" style="margin-top:13px">
+                <div class="fc-field-lb">الوصف</div>
+                <input class="fc-field-in" @bind="_nf.Description" placeholder="بيظهر في الجدول" />
+            </div>
+
+            @if (_newErr is not null)
+            {
+                <div class="fc-alert fc-alert-bad" style="margin-top:13px">
+                    <div class="fc-alert-body"><div>@_newErr</div></div>
+                </div>
+            }
+        </div>
+        <div class="fc-modal-foot">
+            <MudButton Variant="Variant.Text" OnClick="CloseNew">إلغاء</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       Disabled="@_saving" OnClick="SaveNew">
+                @(_saving ? "بيحفظ…" : "إضافة")
+            </MudButton>
+        </div>
+    </div>
+}
+
+@code {
+    // 🔴 `Can` موجودة على AuthUser — مش على AuthService
+    private AuthUser? _user;
+    private bool CanManage => _user?.Can("SETTINGS.MANAGE") ?? false;
+
+    private int _tab;
+    private bool _loading, _saving;
+    private string? _err;
+    private bool _newOpen;
+    private string? _newErr;
+
+    private ProfileOut? _p;
+    private ProfileForm? _pf;
+    private List<SettingRow>? _settings;
+    private List<TaxOpt> _taxRates = new();
+    private List<string> _valueTypes = new() { "String", "Int", "Bool", "Decimal", "Json", "Date" };
+    private NewForm _nf = new();
+
+    private static readonly List<SettingRow> NoSet = new();
+
+    private string CompanyName => string.IsNullOrWhiteSpace(_p?.LegalNameAr) ? "—" : _p!.LegalNameAr;
+
+    private int SystemKeys => _settings?.Count(s => s.IsSystem) ?? 0;
+
+    private List<Slot> Slots => new()
+    {
+        new("main",  "الشعار الرئيسي", _p?.LogoPath),
+        new("dark",  "الشعار (نسخة غامقة)", _p?.LogoDarkPath),
+        new("stamp", "الختم", _p?.StampPath)
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        await LoadAsync();
+    }
+
+    private async Task Reload() { await LoadAsync(); Snackbar.Add("اتحدّثت", Severity.Success); }
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _err = null;
+        try
+        {
+            _p = await Http.GetFromJsonAsync<ProfileOut>("api/settings/company");
+            if (_p is not null) _pf = ProfileForm.From(_p);
+
+            _settings = await Http.GetFromJsonAsync<List<SettingRow>>("api/settings");
+
+            var opt = await Http.GetFromJsonAsync<Opts>("api/settings/options");
+            if (opt is not null)
+            {
+                _taxRates   = opt.TaxRates ?? new();
+                _valueTypes = opt.ValueTypes is { Count: > 0 } ? opt.ValueTypes : _valueTypes;
+            }
+        }
+        catch (Exception ex) { _err = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    // ══════════ تنسيق ══════════
+
+    private string TabClass(int i) => _tab == i ? "fc-rtab on" : "fc-rtab";
+
+    private static string TypeChip(string vt) => vt switch
+    {
+        "Bool"    => "fc-chip-purple",
+        "Int"     => "fc-chip-blue",
+        "Decimal" => "fc-chip-green",
+        "Date"    => "fc-chip-gold",
+        "Json"    => "fc-chip-warn",
+        _         => "fc-chip-gray"
+    };
+
+    private static string TypeHint(string vt) => vt switch
+    {
+        "Int"     => "رقم صحيح — زي 30",
+        "Decimal" => "رقم بكسور — زي 50000 أو 5000.50",
+        "Bool"    => "true أو false",
+        "Date"    => "yyyy-MM-dd — زي 2026-01-01",
+        "Json"    => "نص JSON — بيتحفظ زي ما هو",
+        _         => "نص عادي"
+    };
+
+    private static string MonthName(int m) => m switch
+    {
+        1 => "يناير", 2 => "فبراير", 3 => "مارس", 4 => "أبريل",
+        5 => "مايو", 6 => "يونيو", 7 => "يوليو", 8 => "أغسطس",
+        9 => "سبتمبر", 10 => "أكتوبر", 11 => "نوفمبر", 12 => "ديسمبر",
+        _ => m.ToString()
+    };
+
+    // ══════════ حفظ ══════════
+
+    private async Task SaveProfile()
+    {
+        if (_pf is null) return;
+        _saving = true;
+        try
+        {
+            var res = await Http.PutAsJsonAsync("api/settings/company", new
+            {
+                legalNameAr           = _pf.LegalNameAr,
+                legalNameEn           = _pf.LegalNameEn,
+                tradeNameAr           = _pf.TradeNameAr,
+                tradeNameEn           = _pf.TradeNameEn,
+                taxNumber             = _pf.TaxNumber,
+                vatRegistrationNumber = _pf.VatRegistrationNumber,
+                commercialRegister    = _pf.CommercialRegister,
+                addressAr             = _pf.AddressAr,
+                addressEn             = _pf.AddressEn,
+                cityAr                = _pf.CityAr,
+                cityEn                = _pf.CityEn,
+                phone                 = _pf.Phone,
+                mobile                = _pf.Mobile,
+                email                 = _pf.Email,
+                website               = _pf.Website,
+                invoiceFooterNoteAr   = _pf.InvoiceFooterNoteAr,
+                invoiceFooterNoteEn   = _pf.InvoiceFooterNoteEn,
+                currencyCode          = _pf.CurrencyCode,
+                defaultTaxRateId      = _pf.DefaultTaxRateId,
+                fiscalYearStartMonth  = _pf.FiscalYearStartMonth
+            });
+            var msg = await MsgOf(res);
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(msg, Severity.Success);
+                await LoadAsync();
+            }
+            else Snackbar.Add(msg, Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        finally { _saving = false; }
+    }
+
+    private async Task OnLogo(InputFileChangeEventArgs e, string kind)
+    {
+        var f = e.File;
+        if (f is null) return;
+        if (f.Size > 5 * 1024 * 1024)
+        { Snackbar.Add("الملف أكبر من 5 ميجا", Severity.Error); return; }
+
+        _saving = true;
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            var sc = new StreamContent(f.OpenReadStream(5 * 1024 * 1024));
+            sc.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(f.ContentType);
+            content.Add(sc, "file", f.Name);
+            content.Add(new StringContent(kind), "kind");
+
+            var res = await Http.PostAsync("api/settings/company/logo", content);
+            var msg = await MsgOf(res);
+            if (res.IsSuccessStatusCode) { Snackbar.Add(msg, Severity.Success); await LoadAsync(); }
+            else Snackbar.Add(msg, Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add("فشل الرفع: " + ex.Message, Severity.Error); }
+        finally { _saving = false; }
+    }
+
+    private async Task SaveBulk()
+    {
+        if (_settings is null || _settings.Count == 0) return;
+        _saving = true;
+        try
+        {
+            var payload = _settings.Select(s => new
+            {
+                settingKey   = s.SettingKey,
+                settingValue = s.SettingValue,
+                valueType    = s.ValueType,
+                description  = s.Description
+            }).ToList();
+
+            var res = await Http.PostAsJsonAsync("api/settings/bulk", payload);
+            var msg = await MsgOf(res);
+            if (res.IsSuccessStatusCode) { Snackbar.Add(msg, Severity.Success); await LoadAsync(); }
+            else Snackbar.Add(msg, Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        finally { _saving = false; }
+    }
+
+    private void OpenNew()
+    {
+        _nf = new NewForm { ValueType = _valueTypes.Count > 0 ? _valueTypes[0] : "String" };
+        _newErr = null;
+        _newOpen = true;
+    }
+
+    private void CloseNew() { _newOpen = false; _newErr = null; _nf = new NewForm(); }
+
+    private async Task SaveNew()
+    {
+        _newErr = null; _saving = true;
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/settings", new
+            {
+                settingKey   = _nf.SettingKey,
+                settingValue = _nf.SettingValue,
+                valueType    = _nf.ValueType,
+                description  = _nf.Description
+            });
+            var msg = await MsgOf(res);
+            if (res.IsSuccessStatusCode)
+            { Snackbar.Add(msg, Severity.Success); CloseNew(); await LoadAsync(); }
+            else { _newErr = msg; Snackbar.Add(msg, Severity.Error); }
+        }
+        catch (Exception ex) { _newErr = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task DeleteKey(SettingRow s)
+    {
+        var ok = await JS.InvokeAsync<bool>("confirm", $"تحذف المفتاح {s.SettingKey}؟");
+        if (!ok) return;
+        try
+        {
+            var res = await Http.DeleteAsync($"api/settings/{Uri.EscapeDataString(s.SettingKey)}");
+            var msg = await MsgOf(res);
+            Snackbar.Add(msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var m = await res.Content.ReadFromJsonAsync<Msg>();
+            if (!string.IsNullOrWhiteSpace(m?.Message)) return m!.Message!;
+        }
+        catch { /* مش JSON */ }
+        return res.IsSuccessStatusCode ? "تم" : $"فشل ({(int)res.StatusCode})";
+    }
+
+    private class Msg { public string? Message { get; set; } }
+
+    public class NewForm
+    {
+        public string SettingKey { get; set; } = "";
+        public string ValueType { get; set; } = "String";
+        public string? SettingValue { get; set; }
+        public string? Description { get; set; }
+    }
+
+    public record Slot(string Kind, string Label, string? Path);
+
+    public class Opts
+    {
+        public List<TaxOpt>? TaxRates { get; set; }
+        public List<string>? ValueTypes { get; set; }
+    }
+
+    public class TaxOpt
+    {
+        public int TaxRateId { get; set; }
+        public string Code { get; set; } = "";
+        public string NameAr { get; set; } = "";
+        public decimal Rate { get; set; }
+    }
+
+    public class SettingRow
+    {
+        public int SettingId { get; set; }
+        public string SettingKey { get; set; } = "";
+        public string? SettingValue { get; set; }
+        public string ValueType { get; set; } = "String";
+        public string? Description { get; set; }
+        public bool IsSystem { get; set; }
+        public string? UpdatedAt { get; set; }
+    }
+
+    public class ProfileOut
+    {
+        public int CompanyProfileId { get; set; }
+        public string LegalNameAr { get; set; } = "";
+        public string? LegalNameEn { get; set; }
+        public string? TradeNameAr { get; set; }
+        public string? TradeNameEn { get; set; }
+        public string TaxNumber { get; set; } = "";
+        public string? VatRegistrationNumber { get; set; }
+        public string? CommercialRegister { get; set; }
+        public string AddressAr { get; set; } = "";
+        public string? AddressEn { get; set; }
+        public string? CityAr { get; set; }
+        public string? CityEn { get; set; }
+        public string? Phone { get; set; }
+        public string? Mobile { get; set; }
+        public string? Email { get; set; }
+        public string? Website { get; set; }
+        public string? LogoPath { get; set; }
+        public string? LogoDarkPath { get; set; }
+        public string? StampPath { get; set; }
+        public string? InvoiceFooterNoteAr { get; set; }
+        public string? InvoiceFooterNoteEn { get; set; }
+        public string DefaultCurrencyCode { get; set; } = "EGP";
+        public int? DefaultTaxRateId { get; set; }
+        public byte FiscalYearStartMonth { get; set; } = 1;
+        public string? UpdatedAt { get; set; }
+    }
+
+    public class ProfileForm
+    {
+        public string LegalNameAr { get; set; } = "";
+        public string? LegalNameEn { get; set; }
+        public string? TradeNameAr { get; set; }
+        public string? TradeNameEn { get; set; }
+        public string TaxNumber { get; set; } = "";
+        public string? VatRegistrationNumber { get; set; }
+        public string? CommercialRegister { get; set; }
+        public string AddressAr { get; set; } = "";
+        public string? AddressEn { get; set; }
+        public string? CityAr { get; set; }
+        public string? CityEn { get; set; }
+        public string? Phone { get; set; }
+        public string? Mobile { get; set; }
+        public string? Email { get; set; }
+        public string? Website { get; set; }
+        public string? InvoiceFooterNoteAr { get; set; }
+        public string? InvoiceFooterNoteEn { get; set; }
+        public string CurrencyCode { get; set; } = "EGP";
+        public int? DefaultTaxRateId { get; set; }
+        public byte FiscalYearStartMonth { get; set; } = 1;
+
+        public static ProfileForm From(ProfileOut p) => new()
+        {
+            LegalNameAr           = p.LegalNameAr,
+            LegalNameEn           = p.LegalNameEn,
+            TradeNameAr           = p.TradeNameAr,
+            TradeNameEn           = p.TradeNameEn,
+            TaxNumber             = p.TaxNumber,
+            VatRegistrationNumber = p.VatRegistrationNumber,
+            CommercialRegister    = p.CommercialRegister,
+            AddressAr             = p.AddressAr,
+            AddressEn             = p.AddressEn,
+            CityAr                = p.CityAr,
+            CityEn                = p.CityEn,
+            Phone                 = p.Phone,
+            Mobile                = p.Mobile,
+            Email                 = p.Email,
+            Website               = p.Website,
+            InvoiceFooterNoteAr   = p.InvoiceFooterNoteAr,
+            InvoiceFooterNoteEn   = p.InvoiceFooterNoteEn,
+            CurrencyCode          = p.DefaultCurrencyCode,
+            DefaultTaxRateId      = p.DefaultTaxRateId,
+            FiscalYearStartMonth  = p.FiscalYearStartMonth
+        };
+    }
+}

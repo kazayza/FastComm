@@ -1,86 +1,1780 @@
 @page "/"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject CompanyService Company
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
 
 <PageTitle>الرئيسية — @_company.DisplayName</PageTitle>
 
-@inject CompanyService Company
 
-@* ── الترويسة ─────────────────────────────────────────────────────────── *@
-<div class="page-hero">
-    <div>
-        <MudText Typo="Typo.h4">أهلًا بك </MudText>
-        <MudText Typo="Typo.body1" Class="muted mt-1">
-            @_company.DisplayName — نظام إدارة مكتب نقل الحاويات والموانئ
-        </MudText>
+@* ═══════════════════════════════════════════
+   LOADING SKELETON
+═══════════════════════════════════════════ *@
+@if (_loading)
+{
+    <div class="home-skeleton" dir="rtl">
+        <div class="sk-hero sk-pulse"></div>
+        <div class="sk-kpi-row">
+            @for (var i = 0; i < 4; i++)
+            {
+                <div class="sk-kpi sk-pulse"></div>
+            }
+        </div>
+        <div class="sk-grid">
+            <div class="sk-card sk-pulse"></div>
+            <div class="sk-card sk-pulse"></div>
+            <div class="sk-card-wide sk-pulse"></div>
+        </div>
     </div>
-    <MudChip T="string" Color="Color.Warning" Variant="Variant.Filled" Icon="@Icons.Material.Filled.Construction">
-        Step 3 — الواجهة لسه بتتبنى
-    </MudChip>
-</div>
+}
+else
+{
+    <div class="home-root" dir="rtl">
 
-@* ── كروت المؤشرات (placeholder لحد Step 12) ─────────────────────────── *@
-<MudGrid Class="mt-6">
-    @foreach (var k in _kpis)
-    {
-        <MudItem xs="12" sm="6" md="3">
-            <MudPaper Class="kpi-card pa-5" Elevation="0">
-                <div class="kpi-icon" style="background:@k.Color20">
-                    <MudIcon Icon="@k.Icon" Color="Color.Primary" />
+
+        @* ═══════════════════════════════════════════
+           HERO BANNER
+        ═══════════════════════════════════════════ *@
+        <div class="home-hero">
+
+            <div class="hero-bg-circles" aria-hidden="true">
+                <span class="hbc-1"></span>
+                <span class="hbc-2"></span>
+                <span class="hbc-3"></span>
+            </div>
+
+            <div class="hero-inner">
+
+                <div class="hero-top">
+                    <div class="hero-greet">
+                        <div class="hero-crumb">
+                            <svg viewBox="0 0 16 16" width="13" height="13"
+                                 fill="none" stroke="currentColor" stroke-width="1.7"
+                                 aria-hidden="true">
+                                <rect x="2" y="3" width="12" height="11" rx="2"/>
+                                <path d="M5 1v3M11 1v3M2 7h12" stroke-linecap="round"/>
+                            </svg>
+                            @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                        </div>
+                        <h1 class="hero-title">
+                            أهلًا،
+                            <span class="hero-name">@_user?.DisplayName</span>
+                            👋
+                        </h1>
+                        <p class="hero-sub">
+                            <span class="hero-company-badge">
+                                <svg viewBox="0 0 16 16" width="11" height="11"
+                                     fill="currentColor" aria-hidden="true">
+                                    <path d="M8 1L10.5 6H14L11 9.5L12.5 14L8 11L3.5 14L5 9.5L2 6H5.5L8 1Z"/>
+                                </svg>
+                                @_company.DisplayName
+                            </span>
+                            — لوحة مؤشرات اليوم
+                        </p>
+                    </div>
+
+                    <div class="hero-actions">
+                        <button class="hero-btn-ghost"
+                                @onclick="Reload"
+                                title="تحديث البيانات"
+                                aria-label="تحديث">
+                            <svg viewBox="0 0 24 24" width="18" height="18"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 class="@(_loading ? "spin-icon" : "")"
+                                 aria-hidden="true">
+                                <path d="M23 4v6h-6" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M1 20v-6h6" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"
+                                      stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            تحديث
+                        </button>
+                        <button class="hero-btn-solid" @onclick="GoReports">
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M18 20V10M12 20V4M6 20v-6" stroke-linecap="round"/>
+                            </svg>
+                            التقارير
+                        </button>
+                    </div>
                 </div>
-                <MudText Typo="Typo.h4" Class="kpi-value">@k.Value</MudText>
-                <MudText Typo="Typo.body2" Class="muted">@k.Label</MudText>
-            </MudPaper>
-        </MudItem>
+
+                @* ── KPI التشغيل ── *@
+                <div class="hero-kpis">
+
+                    <div class="hkpi hkpi-blue">
+                        <div class="hkpi-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="22" height="22"
+                                 fill="none" stroke="currentColor" stroke-width="1.8">
+                                <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                <path d="M16 8h4l3 3v5h-7V8z" stroke-linecap="round" stroke-linejoin="round"/>
+                                <circle cx="5.5" cy="18.5" r="2.5"/>
+                                <circle cx="18.5" cy="18.5" r="2.5"/>
+                            </svg>
+                        </div>
+                        <div class="hkpi-data">
+                            <div class="hkpi-num">@(_s?.OpenOperations ?? 0)</div>
+                            <div class="hkpi-label">عملية شغالة</div>
+                        </div>
+                    </div>
+
+                    <div class="hkpi hkpi-red">
+                        <div class="hkpi-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="22" height="22"
+                                 fill="none" stroke="currentColor" stroke-width="1.8">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                                <path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="hkpi-data">
+                            <div class="hkpi-num">@(_s?.DelayedOperations ?? 0)</div>
+                            <div class="hkpi-label">عملية متأخرة</div>
+                        </div>
+                        @if ((_s?.DelayedOperations ?? 0) > 0)
+                        {
+                            <span class="hkpi-badge-alert" aria-label="يحتاج مراجعة">!</span>
+                        }
+                    </div>
+
+                    <div class="hkpi hkpi-amber">
+                        <div class="hkpi-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="22" height="22"
+                                 fill="none" stroke="currentColor" stroke-width="1.8">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 6v6l4 2" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="hkpi-data">
+                            <div class="hkpi-num">@(_s?.TripsToday ?? 0)</div>
+                            <div class="hkpi-label">رحلات اليوم</div>
+                        </div>
+                    </div>
+
+                    <div class="hkpi hkpi-green">
+                        <div class="hkpi-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="22" height="22"
+                                 fill="none" stroke="currentColor" stroke-width="1.8">
+                                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                                <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="hkpi-data">
+                            <div class="hkpi-num">@(_s?.ClosedThisMonth ?? 0)</div>
+                            <div class="hkpi-label">أُغلقت هذا الشهر</div>
+                        </div>
+                    </div>
+
+                </div>
+
+                @* ── KPI المالية ── *@
+                @if (CanSeeFinance)
+                {
+                    <div class="hero-finance-strip">
+                        <div class="hfin">
+                            <div class="hfin-label">إيراد الشهر</div>
+                            <div class="hfin-value hfin-green">
+                                @Money(_s?.RevenueThisMonth ?? 0)
+                                <span class="hfin-curr">ج.م</span>
+                            </div>
+                        </div>
+                        <div class="hfin-div" aria-hidden="true"></div>
+                        <div class="hfin">
+                            <div class="hfin-label">محصّل الشهر</div>
+                            <div class="hfin-value hfin-blue">
+                                @Money(_s?.CollectedThisMonth ?? 0)
+                                <span class="hfin-curr">ج.م</span>
+                            </div>
+                        </div>
+                        <div class="hfin-div" aria-hidden="true"></div>
+                        <div class="hfin">
+                            <div class="hfin-label">مستحق على العملاء</div>
+                            <div class="hfin-value hfin-red">
+                                @Money(_s?.Receivables ?? 0)
+                                <span class="hfin-curr">ج.م</span>
+                            </div>
+                        </div>
+                        <div class="hfin-div" aria-hidden="true"></div>
+                        <div class="hfin">
+                            <div class="hfin-label">رصيد الخزينة</div>
+                            <div class="hfin-value hfin-amber">
+                                @Money(_s?.CashBalance ?? 0)
+                                <span class="hfin-curr">ج.م</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+            </div>
+        </div>
+
+
+        @* ═══════════════════════════════════════════════════
+           CONTENT GRID — التصميم الجديد V3
+        ═══════════════════════════════════════════════════ *@
+        <div class="home-content">
+
+
+            @* ══════════════════════════════════════════
+               التنبيهات
+            ══════════════════════════════════════════ *@
+            <div class="v3-card v3-card-alerts">
+
+                @* الهيدر الجديد *@
+                <div class="v3-head">
+                    <div class="v3-head-right">
+                        <div class="v3-icon-box v3-icon-red" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="20" height="20"
+                                 fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                                <path d="M13.73 21a2 2 0 01-3.46 0" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="v3-title">تنبيهات تحتاج قرار</div>
+                            <div class="v3-subtitle">Management Alerts</div>
+                        </div>
+                    </div>
+                    @if (_alerts.Any())
+                    {
+                        <div class="v3-badge v3-badge-red">
+                            <span class="v3-badge-pulse" aria-hidden="true"></span>
+                            @_alerts.Count
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="v3-badge v3-badge-green">✓</div>
+                    }
+                </div>
+
+                @* المحتوى *@
+                <div class="v3-body">
+                    @if (!_alerts.Any())
+                    {
+                        <div class="v3-empty">
+                            <div class="v3-empty-glow green"></div>
+                            <svg viewBox="0 0 24 24" width="36" height="36"
+                                 fill="none" stroke="currentColor" stroke-width="1.5"
+                                 aria-hidden="true">
+                                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                                <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>مافيش تنبيهات — كله تمام 🎉</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="v3-alerts-list">
+                            @foreach (var a in _alerts)
+                            {
+                                <button class="v3-alert-item v3-sev-@a.Severity"
+                                        @onclick="() => Nav.NavigateTo(a.Route)">
+
+                                    <div class="v3-alert-stripe" aria-hidden="true"></div>
+
+                                    <div class="v3-alert-icon" aria-hidden="true">
+                                        @if (a.Severity == "bad")
+                                        {
+                                            <svg viewBox="0 0 24 24" width="18" height="18"
+                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="12" cy="12" r="10"/>
+                                                <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                                            </svg>
+                                        }
+                                        else if (a.Severity == "warn")
+                                        {
+                                            <svg viewBox="0 0 24 24" width="18" height="18"
+                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="12" cy="12" r="10"/>
+                                                <path d="M12 8v4M12 16h.01" stroke-linecap="round"/>
+                                            </svg>
+                                        }
+                                        else
+                                        {
+                                            <svg viewBox="0 0 24 24" width="18" height="18"
+                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="12" cy="12" r="10"/>
+                                                <path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                                            </svg>
+                                        }
+                                    </div>
+
+                                    <div class="v3-alert-body">
+                                        <div class="v3-alert-title">
+                                            @a.Kind <strong>— @a.Ref</strong>
+                                        </div>
+                                        <div class="v3-alert-detail">@a.Detail · @a.Date</div>
+                                    </div>
+
+                                    <div class="v3-alert-go" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="16" height="16"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M9 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </div>
+
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+
+            @* ══════════════════════════════════════════
+               حركة آخر 6 شهور — بار تشارت
+            ══════════════════════════════════════════ *@
+            <div class="v3-card v3-card-chart">
+
+                <div class="v3-head">
+                    <div class="v3-head-right">
+                        <div class="v3-icon-box v3-icon-blue" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="20" height="20"
+                                 fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 20V10M12 20V4M6 20v-6" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="v3-title">حركة آخر 6 شهور</div>
+                            <div class="v3-subtitle">Cash Flow Trend</div>
+                        </div>
+                    </div>
+                    <div class="v3-legend">
+                        <span><i class="v3-leg-dot v3-dot-amber" aria-hidden="true"></i>مفوتر</span>
+                        <span><i class="v3-leg-dot v3-dot-green" aria-hidden="true"></i>محصّل</span>
+                    </div>
+                </div>
+
+                <div class="v3-body v3-chart-body">
+                    @if (!_flow.Any())
+                    {
+                        <div class="v3-empty">
+                            <div class="v3-empty-glow blue"></div>
+                            <span>📊</span>
+                            <span>مافيش حركة لسه</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="v3-bar-chart" role="img"
+                             aria-label="مخطط حركة الفلوس آخر 6 شهور">
+
+                            @* خطوط شبكية أفقية *@
+                            <div class="v3-chart-grid" aria-hidden="true">
+                                <span></span><span></span><span></span><span></span>
+                            </div>
+
+                            <div class="v3-bars-wrap">
+                                @foreach (var f in _flow)
+                                {
+                                    <div class="v3-bar-group">
+
+                                        <div class="v3-bar-tip">
+                                            <div><i class="v3-dot-amber"></i>@InvTip(f.Invoiced)</div>
+                                            <div><i class="v3-dot-green"></i>@ColTip(f.Collected)</div>
+                                        </div>
+
+                                        <div class="v3-bar-pair">
+                                            <div class="v3-bar v3-bar-amber"
+                                                 style="@BarStyle(f.Invoiced, Peak)"></div>
+                                            <div class="v3-bar v3-bar-green"
+                                                 style="@BarStyle(f.Collected, Peak)"></div>
+                                        </div>
+
+                                        <div class="v3-bar-month">@f.Month.Substring(5)</div>
+
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+
+            @* ══════════════════════════════════════════
+               الحالة التشغيلية
+            ══════════════════════════════════════════ *@
+            <div class="v3-card v3-card-ops">
+
+                <div class="v3-head">
+                    <div class="v3-head-right">
+                        <div class="v3-icon-box v3-icon-green" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="20" height="20"
+                                 fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="v3-title">الحالة التشغيلية</div>
+                            <div class="v3-subtitle">Operational Status</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="v3-body">
+
+                    <div class="v3-ops-grid">
+
+                        <div class="v3-ops-tile">
+                            <div class="v3-ops-ring v3-ring-blue" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <path d="M12 6v6l4 2" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <div class="v3-ops-num v3-num-blue">@(_s?.OpenTrips ?? 0)</div>
+                            <div class="v3-ops-lb">رحلة شغالة</div>
+                        </div>
+
+                        <div class="v3-ops-tile">
+                            <div class="v3-ops-ring v3-ring-red" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                                    <path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <div class="v3-ops-num v3-num-red">@(_s?.DelayedTrips ?? 0)</div>
+                            <div class="v3-ops-lb">رحلة متأخرة</div>
+                        </div>
+
+                        <div class="v3-ops-tile">
+                            <div class="v3-ops-ring v3-ring-amber" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="7" width="20" height="14" rx="2"/>
+                                    <path d="M16 7V5a4 4 0 00-8 0v2" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <div class="v3-ops-num v3-num-amber">@(_s?.OpenCustodies ?? 0)</div>
+                            <div class="v3-ops-lb">عهدة مفتوحة</div>
+                        </div>
+
+                        <div class="v3-ops-tile">
+                            <div class="v3-ops-ring v3-ring-red" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                    <path d="M14 2v6h6M12 18v-6M9 15h6" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <div class="v3-ops-num v3-num-red">@(_s?.OverdueCount ?? 0)</div>
+                            <div class="v3-ops-lb">فاتورة فات ميعادها</div>
+                        </div>
+
+                        <div class="v3-ops-tile">
+                            <div class="v3-ops-ring v3-ring-neutral" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                    <circle cx="12" cy="7" r="4"/>
+                                </svg>
+                            </div>
+                            <div class="v3-ops-num">@(_s?.ActiveDrivers ?? 0)</div>
+                            <div class="v3-ops-lb">سائق متاح</div>
+                        </div>
+
+                        <div class="v3-ops-tile">
+                            <div class="v3-ops-ring v3-ring-neutral" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                                </svg>
+                            </div>
+                            <div class="v3-ops-num">@(_s?.ActiveVehicles ?? 0)</div>
+                            <div class="v3-ops-lb">سيارة متاحة</div>
+                        </div>
+
+                        <div class="v3-ops-tile">
+                            <div class="v3-ops-ring v3-ring-blue" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                                </svg>
+                            </div>
+                            <div class="v3-ops-num v3-num-blue">@(_s?.VehiclesInTrip ?? 0)</div>
+                            <div class="v3-ops-lb">سيارة في رحلة</div>
+                        </div>
+
+                        <div class="v3-ops-tile">
+                            <div class="v3-ops-ring v3-ring-neutral" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <div class="v3-ops-num">@(_s?.InvoicesIssued ?? 0)</div>
+                            <div class="v3-ops-lb">فاتورة مصدّرة</div>
+                        </div>
+
+                    </div>
+
+                    @if (CanSeeFinance && (_s?.CustodyOutstanding ?? 0) > 0)
+                    {
+                        <div class="v3-custody-alert" role="alert">
+                            <div class="v3-custody-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                                    <path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <div>
+                                عهد مفتوحة بمبلغ
+                                <strong>@Money(_s!.CustodyOutstanding) ج.م</strong>
+                                لسه ماتسوّتش
+                            </div>
+                        </div>
+                    }
+
+                </div>
+            </div>
+
+
+            @* ══════════════════════════════════════════
+               أعلى العملاء
+            ══════════════════════════════════════════ *@
+            @if (CanSeeFinance)
+            {
+                <div class="v3-card v3-card-full v3-card-customers">
+
+                    <div class="v3-head">
+                        <div class="v3-head-right">
+                            <div class="v3-icon-box v3-icon-purple" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="20" height="20"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                                    <circle cx="9" cy="7" r="4"/>
+                                    <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="v3-title">أعلى العملاء</div>
+                                <div class="v3-subtitle">Top Customers — آخر 3 شهور</div>
+                            </div>
+                        </div>
+                        <div class="v3-head-chip">
+                            <svg viewBox="0 0 16 16" width="11" height="11"
+                                 fill="none" stroke="currentColor" stroke-width="1.8"
+                                 aria-hidden="true">
+                                <circle cx="8" cy="8" r="6"/>
+                                <path d="M8 5v3l2 1" stroke-linecap="round"/>
+                            </svg>
+                            آخر 3 شهور
+                        </div>
+                    </div>
+
+                    <div class="v3-body v3-body-flush">
+                        @if (!_top.Any())
+                        {
+                            <div class="v3-empty">
+                                <span>👥</span>
+                                <span>مافيش فواتير في الفترة دي</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="v3-table-wrap">
+                                <table class="v3-table" aria-label="جدول أعلى العملاء">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">#</th>
+                                            <th scope="col" class="th-start">العميل</th>
+                                            <th scope="col">فواتير</th>
+                                            <th scope="col">الإيراد</th>
+                                            <th scope="col">المحصّل</th>
+                                            <th scope="col">المتبقي</th>
+                                            <th scope="col">التحصيل</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var (c, ci) in _top.Select((x, i) => (x, i + 1)))
+                                        {
+                                            var remaining = c.Invoiced - c.Paid;
+                                            var paidPct   = c.Invoiced > 0
+                                                ? (double)(c.Paid / c.Invoiced * 100)
+                                                : 0;
+
+                                            <tr>
+                                                <td>
+                                                    <span class="v3-rank v3-rank-@ci">@ci</span>
+                                                </td>
+                                                <td class="td-start">
+                                                    <div class="v3-customer">
+                                                        <div class="v3-avatar @(ci <= 3 ? $"v3-avatar-{ci}" : "")">
+                                                            @(c.CustomerName.Length > 0
+                                                                ? c.CustomerName[0].ToString()
+                                                                : "؟")
+                                                        </div>
+                                                        <strong>@c.CustomerName</strong>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="v3-inv-chip">@c.Invoices</span>
+                                                </td>
+                                                <td class="td-money">
+                                                    @Money(c.Invoiced)
+                                                    <small>ج.م</small>
+                                                </td>
+                                                <td class="td-money td-muted">
+                                                    @Money(c.Paid)
+                                                    <small>ج.م</small>
+                                                </td>
+                                                <td>
+                                                    <span class="@(remaining > 0 ? "v3-due" : "v3-paid")">
+                                                        @Money(remaining)
+                                                        <small>ج.م</small>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div class="v3-pct-cell">
+                                                        <div class="v3-pct-track">
+                                                            <div class="v3-pct-fill @(paidPct >= 80 ? "fill-green" : paidPct >= 50 ? "fill-amber" : "fill-red")"
+                                                                 style="width:@paidPct%"></div>
+                                                        </div>
+                                                        <span class="v3-pct-label @(paidPct >= 80 ? "pct-green" : paidPct >= 50 ? "pct-amber" : "pct-red")">
+                                                            @paidPct.ToString("0")%
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+
+        </div>
+
+
+        @* ── Footer ── *@
+        <footer class="home-footer">
+            <span>FastCom ERP © @DateTime.Now.Year</span>
+            <span aria-hidden="true">·</span>
+            <span>@_company.DisplayName</span>
+        </footer>
+
+    </div>
+}
+
+
+@* ═══════════════════════════════════════════
+   CSS V3
+═══════════════════════════════════════════ *@
+<style>
+
+    /* ================================================================
+       VARIABLES
+    ================================================================ */
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-dk:   #1558d6;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-navy:      #0f2952;
+        --fc-navy-2:    #1a3a6b;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    16px;
     }
-</MudGrid>
 
-@* ── حالة المشروع ────────────────────────────────────────────────────── *@
-<MudPaper Class="pa-6 mt-6" Elevation="0">
-    <MudText Typo="Typo.h5">
-        <MudIcon Icon="@Icons.Material.Filled.Route" Class="ml-1" />
-        خطة البناء
-    </MudText>
+    /* ================================================================
+       SKELETON
+    ================================================================ */
+    .home-skeleton {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
 
-    <MudList T="string" Dense="true" Class="mt-3">
-        @foreach (var s in _steps)
-        {
-            <MudListItem T="string" Icon="@s.Icon" IconColor="@s.Color">
-                <MudText Typo="Typo.body1">
-                    <strong>@s.Name</strong>
-                    <MudText Typo="Typo.caption" Class="muted mr-2">@s.Note</MudText>
-                </MudText>
-            </MudListItem>
-        }
-    </MudList>
-</MudPaper>
+    .sk-pulse {
+        border-radius: 14px;
+        background: linear-gradient(90deg, #e4eaf3 25%, #eff3f9 50%, #e4eaf3 75%);
+        background-size: 200% 100%;
+        animation: sk-shimmer 1.4s infinite;
+    }
+
+    @@keyframes sk-shimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    .sk-hero      { height: 260px; }
+    .sk-kpi-row   { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
+    .sk-kpi       { height: 85px; }
+    .sk-grid      { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .sk-card      { height: 300px; }
+    .sk-card-wide { grid-column: span 2; height: 200px; }
+
+    /* ================================================================
+       ROOT
+    ================================================================ */
+    .home-root {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        background: var(--fc-bg);
+        font-family: "Cairo","Tajawal","Inter",Arial,sans-serif;
+        color: var(--fc-text);
+        box-sizing: border-box;
+    }
+
+    .home-root *, .home-root *::before, .home-root *::after {
+        box-sizing: border-box;
+    }
+
+    /* ================================================================
+       HERO — زي ما هو بالظبط
+    ================================================================ */
+    .home-hero {
+        position: relative;
+        background: linear-gradient(135deg, #0d2654 0%, #1a3a6b 45%, #1e4d8c 100%);
+        padding: 28px 24px 96px;
+        overflow: hidden;
+    }
+
+    .hero-bg-circles { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+    .hbc-1,.hbc-2,.hbc-3 { position: absolute; border-radius: 50%; opacity: .07; background: #fff; }
+    .hbc-1 { width: 420px; height: 420px; top: -180px; left: -80px; }
+    .hbc-2 { width: 260px; height: 260px; bottom: -80px; right: 120px; opacity: .05; }
+    .hbc-3 { width: 150px; height: 150px; top: 30px; right: 40%; opacity: .04; }
+
+    .hero-inner {
+        position: relative; z-index: 1;
+        max-width: 1400px; margin: 0 auto;
+        display: flex; flex-direction: column; gap: 20px;
+    }
+
+    .hero-top {
+        display: flex; align-items: flex-start;
+        justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    }
+
+    .hero-crumb {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 11px; font-weight: 600; color: rgba(255,255,255,.55); margin-bottom: 6px;
+    }
+
+    .hero-title {
+        margin: 0 0 4px; font-size: clamp(20px, 2.2vw, 28px);
+        font-weight: 900; color: #fff; line-height: 1.2;
+    }
+
+    .hero-name { color: #7dd3fc; }
+
+    .hero-sub {
+        margin: 0; font-size: 12px; color: rgba(255,255,255,.55);
+        display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+    }
+
+    .hero-company-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 2px 9px; border-radius: 20px;
+        background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.15);
+        color: rgba(255,255,255,.75); font-size: 11px; font-weight: 700;
+    }
+
+    .hero-actions { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
+
+    .hero-btn-ghost {
+        display: inline-flex; align-items: center; gap: 6px; height: 36px;
+        padding: 0 14px; border: 1px solid rgba(255,255,255,.22);
+        border-radius: 9px; background: rgba(255,255,255,.08);
+        color: rgba(255,255,255,.85); font-family: inherit;
+        font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: background .15s ease;
+    }
+    .hero-btn-ghost:hover { background: rgba(255,255,255,.14); }
+
+    .hero-btn-solid {
+        display: inline-flex; align-items: center; gap: 7px; height: 36px;
+        padding: 0 16px; border: 0; border-radius: 9px;
+        background: var(--fc-blue); color: #fff; font-family: inherit;
+        font-size: 12px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 12px rgba(30,110,245,.35);
+        transition: background .15s ease, transform .12s ease;
+    }
+    .hero-btn-solid:hover { background: var(--fc-blue-dk); transform: translateY(-1px); }
+
+    .spin-icon { animation: fc-spin .8s linear infinite; }
+    @@keyframes fc-spin { to { transform: rotate(360deg); } }
+
+    /* ── KPI Hero ── */
+    .hero-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+    .hkpi {
+        position: relative; display: flex; align-items: center; gap: 12px;
+        padding: 14px 16px; border-radius: 12px;
+        background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.10);
+        backdrop-filter: blur(6px);
+        transition: background .15s ease, transform .15s ease; overflow: hidden;
+    }
+    .hkpi:hover { background: rgba(255,255,255,.12); transform: translateY(-2px); }
+
+    .hkpi-icon {
+        width: 44px; height: 44px; flex: 0 0 44px;
+        display: flex; align-items: center; justify-content: center; border-radius: 11px;
+    }
+    .hkpi-blue  .hkpi-icon { background: rgba(125,211,252,.15); color: #7dd3fc; }
+    .hkpi-red   .hkpi-icon { background: rgba(252,165,165,.15); color: #fca5a5; }
+    .hkpi-amber .hkpi-icon { background: rgba(252,211,77,.15);  color: #fcd34d; }
+    .hkpi-green .hkpi-icon { background: rgba(110,231,183,.15); color: #6ee7b7; }
+
+    .hkpi-num {
+        font-family: "Inter", Arial, sans-serif; font-size: 26px;
+        font-weight: 900; color: #fff; line-height: 1; margin-bottom: 3px;
+    }
+    .hkpi-label { font-size: 10.5px; font-weight: 600; color: rgba(255,255,255,.55); }
+
+    .hkpi-badge-alert {
+        position: absolute; top: 8px; left: 8px;
+        width: 18px; height: 18px; border-radius: 50%; background: #ef4444;
+        color: #fff; font-size: 10px; font-weight: 900;
+        display: flex; align-items: center; justify-content: center;
+        animation: pulse-badge 1.8s ease infinite;
+    }
+    @@keyframes pulse-badge {
+        0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,.5); }
+        50%     { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+    }
+
+    /* ── Finance Strip ── */
+    .hero-finance-strip {
+        display: flex; align-items: stretch;
+        background: rgba(0,0,0,.18); border: 1px solid rgba(255,255,255,.10);
+        border-radius: 12px; overflow: hidden; backdrop-filter: blur(8px);
+    }
+    .hfin {
+        flex: 1; display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 4px; padding: 14px 10px; text-align: center;
+    }
+    .hfin-div { width: 1px; background: rgba(255,255,255,.10); align-self: stretch; }
+    .hfin-label { font-size: 10px; font-weight: 600; color: rgba(255,255,255,.5); }
+    .hfin-value {
+        font-family: "Inter", Arial, sans-serif; font-size: 18px; font-weight: 900;
+        display: flex; align-items: baseline; gap: 3px;
+    }
+    .hfin-curr  { font-size: 10px; font-weight: 600; opacity: .7; }
+    .hfin-green { color: #6ee7b7; }
+    .hfin-blue  { color: #93c5fd; }
+    .hfin-red   { color: #fca5a5; }
+    .hfin-amber { color: #fcd34d; }
+
+
+    /* ================================================================
+       V3 CONTENT — الكروت بتصميم بنفس قوة الهيرو
+    ================================================================ */
+    .home-content {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        padding: 0 22px 22px;
+        margin-top: -70px;
+        position: relative;
+        z-index: 2;
+        max-width: 1400px;
+        width: 100%;
+        margin-inline: auto;
+    }
+
+    /* ================================================================
+       V3 CARD BASE
+    ================================================================ */
+    .v3-card {
+        background: var(--fc-card);
+        border: 1px solid rgba(0,0,0,.06);
+        border-radius: var(--fc-radius);
+        box-shadow:
+            0 1px 3px rgba(15,41,82,.04),
+            0 8px 24px rgba(15,41,82,.06),
+            0 20px 48px rgba(15,41,82,.04);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        transition: box-shadow .25s ease, transform .25s ease;
+    }
+
+    .v3-card:hover {
+        box-shadow:
+            0 2px 6px rgba(15,41,82,.05),
+            0 12px 32px rgba(15,41,82,.10),
+            0 28px 56px rgba(15,41,82,.06);
+        transform: translateY(-3px);
+    }
+
+    .v3-card-full {
+        grid-column: 1 / -1;
+    }
+
+    /* ================================================================
+       V3 CARD HEADER
+    ================================================================ */
+    .v3-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 20px;
+        background: linear-gradient(180deg, #ffffff 0%, #fafbfe 100%);
+        border-bottom: 1px solid #edf1f7;
+        min-height: 62px;
+    }
+
+    .v3-head-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .v3-icon-box {
+        width: 42px;
+        height: 42px;
+        flex: 0 0 42px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+    }
+
+    .v3-icon-red    { background: linear-gradient(135deg, #fff0f2, #ffe4e8); color: var(--fc-red);    border: 1px solid #ffc8cf; }
+    .v3-icon-blue   { background: linear-gradient(135deg, #eaf1ff, #dbe8ff); color: var(--fc-blue);   border: 1px solid #bdd4fc; }
+    .v3-icon-green  { background: linear-gradient(135deg, #e9f8f0, #d4f0e0); color: var(--fc-green);  border: 1px solid #b0e0c5; }
+    .v3-icon-purple { background: linear-gradient(135deg, #f3eeff, #e8dfff); color: var(--fc-purple); border: 1px solid #d0bfef; }
+    .v3-icon-amber  { background: linear-gradient(135deg, #fff8e6, #ffefc0); color: var(--fc-amber);  border: 1px solid #f0d070; }
+
+    .v3-title {
+        font-size: 14px;
+        font-weight: 800;
+        color: #1c2b43;
+        line-height: 1.2;
+    }
+
+    .v3-subtitle {
+        font-size: 10px;
+        font-weight: 500;
+        color: #9aa6b8;
+        font-family: "Inter", Arial, sans-serif;
+        margin-top: 2px;
+    }
+
+    .v3-head-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border-radius: 8px;
+        background: #f0f4fa;
+        border: 1px solid #e0e8f4;
+        color: #6b7d95;
+        font-size: 10px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    /* Badges */
+    .v3-badge {
+        min-width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+        position: relative;
+    }
+
+    .v3-badge-red {
+        background: linear-gradient(135deg, #fff0f2, #ffe4e8);
+        color: var(--fc-red);
+        border: 1px solid #ffb8c2;
+    }
+
+    .v3-badge-green {
+        background: linear-gradient(135deg, #e9f8f0, #d4f0e0);
+        color: var(--fc-green);
+        border: 1px solid #b0e0c5;
+    }
+
+    .v3-badge-pulse {
+        position: absolute;
+        inset: -2px;
+        border-radius: inherit;
+        border: 2px solid var(--fc-red);
+        animation: v3-ping 2s cubic-bezier(0,0,.2,1) infinite;
+        pointer-events: none;
+    }
+
+    @@keyframes v3-ping {
+        75%, 100% { transform: scale(1.4); opacity: 0; }
+    }
+
+    /* ================================================================
+       V3 CARD BODY
+    ================================================================ */
+    .v3-body {
+        padding: 16px 20px;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .v3-body-flush { padding: 0; }
+
+    /* ================================================================
+       V3 EMPTY STATE
+    ================================================================ */
+    .v3-empty {
+        min-height: 140px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        color: #9aaabb;
+        font-size: 13px;
+        font-weight: 600;
+        position: relative;
+    }
+
+    .v3-empty-glow {
+        position: absolute;
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        filter: blur(40px);
+        opacity: .15;
+        pointer-events: none;
+    }
+
+    .v3-empty-glow.green { background: var(--fc-green); }
+    .v3-empty-glow.blue  { background: var(--fc-blue); }
+
+    /* ================================================================
+       V3 ALERTS
+    ================================================================ */
+    .v3-alerts-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .v3-alert-item {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid transparent;
+        background: #f8fafc;
+        cursor: pointer;
+        text-align: right;
+        font-family: inherit;
+        position: relative;
+        overflow: hidden;
+        transition: all .18s ease;
+    }
+
+    .v3-alert-item:hover {
+        transform: translateX(-4px);
+    }
+
+    /* ── Stripe (خط ملون عمودي داخل الكارد) ── */
+    .v3-alert-stripe {
+        position: absolute;
+        right: 0;
+        top: 6px;
+        bottom: 6px;
+        width: 4px;
+        border-radius: 0 4px 4px 0;
+    }
+
+    /* ── Severity Colors ── */
+    .v3-sev-bad  { background: #fef5f6; border-color: #fde0e4; }
+    .v3-sev-warn { background: #fffdf5; border-color: #fdecc0; }
+    .v3-sev-info { background: #f5f8ff; border-color: #dbe8fc; }
+
+    .v3-sev-bad:hover  { background: #fff0f2; border-color: #fcc8d0; box-shadow: 0 4px 16px rgba(224,48,72,.08); }
+    .v3-sev-warn:hover { background: #fffbf0; border-color: #f5d88c; box-shadow: 0 4px 16px rgba(224,154,16,.08); }
+    .v3-sev-info:hover { background: #eef4ff; border-color: #b8d0f8; box-shadow: 0 4px 16px rgba(30,110,245,.08); }
+
+    .v3-sev-bad  .v3-alert-stripe { background: var(--fc-red); }
+    .v3-sev-warn .v3-alert-stripe { background: var(--fc-amber); }
+    .v3-sev-info .v3-alert-stripe { background: var(--fc-blue); }
+
+    .v3-sev-bad  .v3-alert-icon { color: var(--fc-red); }
+    .v3-sev-warn .v3-alert-icon { color: var(--fc-amber); }
+    .v3-sev-info .v3-alert-icon { color: var(--fc-blue); }
+
+    .v3-alert-icon { flex: 0 0 auto; display: flex; }
+
+    .v3-alert-body { flex: 1; min-width: 0; }
+
+    .v3-alert-title {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: #1c2c44;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .v3-alert-detail {
+        font-size: 10.5px;
+        color: #7c8899;
+        margin-top: 3px;
+    }
+
+    .v3-alert-go {
+        flex: 0 0 auto;
+        color: #c0ccd8;
+        transition: color .15s ease, transform .15s ease;
+    }
+
+    .v3-alert-item:hover .v3-alert-go {
+        color: #8899ae;
+        transform: translateX(-3px);
+    }
+
+    /* ================================================================
+       V3 BAR CHART
+    ================================================================ */
+    .v3-chart-body { padding: 16px 20px 12px; }
+
+    .v3-legend {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-size: 10px;
+        font-weight: 700;
+        color: #7c8899;
+    }
+
+    .v3-legend span { display: flex; align-items: center; gap: 5px; }
+
+    .v3-leg-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+    }
+
+    .v3-dot-amber { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
+    .v3-dot-green { background: linear-gradient(135deg, #34d399, #10b981); }
+
+    .v3-bar-chart {
+        position: relative;
+        height: 200px;
+        margin-top: 10px;
+    }
+
+    /* خطوط شبكية */
+    .v3-chart-grid {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        pointer-events: none;
+        padding: 0 0 28px;
+    }
+
+    .v3-chart-grid span {
+        display: block;
+        height: 1px;
+        background: #edf1f7;
+    }
+
+    .v3-bars-wrap {
+        position: relative;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-around;
+        gap: 8px;
+        height: 100%;
+        padding-bottom: 28px;
+        z-index: 1;
+    }
+
+    .v3-bar-group {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        position: relative;
+        max-width: 80px;
+    }
+
+    /* Tooltip */
+    .v3-bar-tip {
+        position: absolute;
+        bottom: calc(100% + 4px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1c2c44;
+        color: #fff;
+        font-size: 9.5px;
+        font-weight: 600;
+        padding: 6px 10px;
+        border-radius: 9px;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .15s ease;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        box-shadow: 0 6px 20px rgba(0,0,0,.25);
+    }
+
+    .v3-bar-tip::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 5px solid transparent;
+        border-top-color: #1c2c44;
+    }
+
+    .v3-bar-group:hover .v3-bar-tip { opacity: 1; }
+
+    .v3-bar-tip i {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        border-radius: 2px;
+        margin-left: 5px;
+        vertical-align: middle;
+    }
+
+    .v3-bar-pair {
+        width: 100%;
+        height: 160px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 4px;
+    }
+
+    .v3-bar {
+        width: 38%;
+        border-radius: 6px 6px 2px 2px;
+        min-height: 4px;
+        transition: height .6s cubic-bezier(.34,1.3,.64,1);
+    }
+
+    .v3-bar-amber {
+        background: linear-gradient(180deg, #fbbf24, #f59e0b);
+        box-shadow: 0 -3px 10px rgba(251,191,36,.20);
+    }
+
+    .v3-bar-green {
+        background: linear-gradient(180deg, #34d399, #10b981);
+        box-shadow: 0 -3px 10px rgba(52,211,153,.20);
+    }
+
+    .v3-bar:hover {
+        filter: brightness(1.1);
+        transform: scaleY(1.03);
+        transform-origin: bottom;
+    }
+
+    .v3-bar-month {
+        font-size: 10px;
+        font-weight: 800;
+        color: #8899ae;
+        font-family: "Inter", Arial, sans-serif;
+        position: absolute;
+        bottom: 0;
+    }
+
+    /* ================================================================
+       V3 OPS TILES
+    ================================================================ */
+    .v3-ops-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+    }
+
+    .v3-ops-tile {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 16px 10px;
+        border-radius: 14px;
+        border: 1px solid transparent;
+        text-align: center;
+        transition: all .2s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .v3-ops-tile::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        opacity: 0;
+        transition: opacity .2s ease;
+        pointer-events: none;
+    }
+
+    .v3-ops-tile:hover {
+        transform: translateY(-3px);
+    }
+
+    .v3-ops-tile:hover::before {
+        opacity: 1;
+    }
+
+    /* Ring around icon */
+    .v3-ops-ring {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        border: 2px solid transparent;
+    }
+
+    .v3-ring-blue    { background: #eaf1ff; border-color: #c0d4fb; color: var(--fc-blue); }
+    .v3-ring-red     { background: #fff0f2; border-color: #fcc0c8; color: var(--fc-red); }
+    .v3-ring-amber   { background: #fff8e6; border-color: #f5d888; color: #b87d08; }
+    .v3-ring-neutral { background: #f0f4fa; border-color: #dde5f0; color: #6b7d95; }
+
+    .v3-ops-num {
+        font-family: "Inter", Arial, sans-serif;
+        font-size: 28px;
+        font-weight: 900;
+        line-height: 1;
+        color: #344563;
+    }
+
+    .v3-num-blue  { color: var(--fc-blue); }
+    .v3-num-red   { color: var(--fc-red); }
+    .v3-num-amber { color: #b87d08; }
+
+    .v3-ops-lb {
+        font-size: 10px;
+        font-weight: 700;
+        color: #8899ae;
+    }
+
+    /* Tile bg colors */
+    .v3-ops-tile:nth-child(1),
+    .v3-ops-tile:nth-child(7) { background: #f5f8ff; border-color: #dfe9fc; }
+    .v3-ops-tile:nth-child(2),
+    .v3-ops-tile:nth-child(4) { background: #fef6f7; border-color: #fde0e4; }
+    .v3-ops-tile:nth-child(3)  { background: #fffcf0; border-color: #f8e8b0; }
+    .v3-ops-tile:nth-child(5),
+    .v3-ops-tile:nth-child(6),
+    .v3-ops-tile:nth-child(8) { background: #f5f7fa; border-color: #e4eaf3; }
+
+    .v3-ops-tile:hover::before { background: rgba(255,255,255,.5); }
+
+    /* Custody alert */
+    .v3-custody-alert {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 14px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #fffbeb, #fff7d6);
+        border: 1px solid #fde68a;
+        color: #92400e;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .v3-custody-icon {
+        flex: 0 0 auto;
+        display: flex;
+        color: #d97706;
+    }
+
+    .v3-custody-alert strong { font-weight: 900; color: #78350f; }
+
+    /* ================================================================
+       V3 TABLE
+    ================================================================ */
+    .v3-table-wrap { overflow-x: auto; }
+
+    .v3-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+
+    .v3-table thead th {
+        padding: 12px 16px;
+        background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74;
+        font-size: 11px;
+        font-weight: 800;
+        text-align: center;
+        border-bottom: 1px solid #e4eaf3;
+        white-space: nowrap;
+    }
+
+    .v3-table .th-start { text-align: right; }
+
+    .v3-table tbody tr {
+        border-bottom: 1px solid #f0f3f8;
+        transition: background .12s ease;
+    }
+    .v3-table tbody tr:last-child { border-bottom: none; }
+    .v3-table tbody tr:hover { background: #fafcff; }
+
+    .v3-table tbody td {
+        padding: 13px 16px;
+        color: #526070;
+        text-align: center;
+        vertical-align: middle;
+    }
+
+    .td-start { text-align: right !important; }
+
+    /* Rank */
+    .v3-rank {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 9px;
+        font-size: 11px;
+        font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .v3-rank-1 { background: linear-gradient(135deg, #fff4cc, #ffe580); color: #7a5a00; border: 1px solid #f0d060; }
+    .v3-rank-2 { background: linear-gradient(135deg, #f0f4f8, #e0e8f0); color: #5c7080; border: 1px solid #d0dce8; }
+    .v3-rank-3 { background: linear-gradient(135deg, #fff0ea, #ffe0d0); color: #9a4a20; border: 1px solid #f0c0a8; }
+    .v3-rank-4, .v3-rank-5 { background: #f3f5f8; color: #8899ae; border: 1px solid #e4eaf2; }
+
+    /* Customer cell */
+    .v3-customer {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .v3-customer strong {
+        font-size: 13px;
+        font-weight: 800;
+        color: #1c2c44;
+        white-space: nowrap;
+    }
+
+    .v3-avatar {
+        width: 36px;
+        height: 36px;
+        flex: 0 0 36px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #1a3a6b, #1e6ef5);
+        color: #fff;
+        font-size: 14px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(30,110,245,.25);
+    }
+
+    .v3-avatar-1 { background: linear-gradient(135deg, #b87d08, #e09a10); box-shadow: 0 2px 8px rgba(224,154,16,.30); }
+    .v3-avatar-2 { background: linear-gradient(135deg, #5c7080, #8899ae); box-shadow: 0 2px 8px rgba(136,153,174,.25); }
+    .v3-avatar-3 { background: linear-gradient(135deg, #9a4a20, #c06830); box-shadow: 0 2px 8px rgba(154,74,32,.25); }
+
+    .v3-inv-chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 28px;
+        height: 24px;
+        padding: 0 8px;
+        border-radius: 7px;
+        background: #f0f4fa;
+        color: #5a6e88;
+        font-size: 11px;
+        font-weight: 800;
+        border: 1px solid #e0e8f2;
+    }
+
+    .td-money {
+        font-family: "Inter", Arial, sans-serif;
+        font-weight: 700;
+        color: #1c2c44;
+    }
+
+    .td-money small { font-size: 9px; color: #99aabb; margin-right: 2px; }
+    .td-muted { color: #6b7d95 !important; font-weight: 600 !important; }
+
+    .v3-due {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 4px 10px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #fff0f2, #ffe8ec);
+        color: var(--fc-red);
+        font-size: 12px;
+        font-weight: 800;
+        border: 1px solid #ffc0c8;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .v3-paid {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 4px 10px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #e9f8f0, #d4f0e0);
+        color: var(--fc-green);
+        font-size: 12px;
+        font-weight: 800;
+        border: 1px solid #b5e8d0;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .v3-due small, .v3-paid small { font-size: 9px; opacity: .75; }
+
+    /* Progress bar for collection % */
+    .v3-pct-cell {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        justify-content: center;
+    }
+
+    .v3-pct-track {
+        width: 50px;
+        height: 6px;
+        background: #e8edf4;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    .v3-pct-fill {
+        height: 100%;
+        border-radius: inherit;
+        transition: width .5s cubic-bezier(.34,1.2,.64,1);
+    }
+
+    .fill-green { background: linear-gradient(90deg, #34d399, #10b981); }
+    .fill-amber { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+    .fill-red   { background: linear-gradient(90deg, #f87171, #ef4444); }
+
+    .v3-pct-label {
+        font-family: "Inter", Arial, sans-serif;
+        font-size: 11px;
+        font-weight: 800;
+        min-width: 30px;
+    }
+
+    .pct-green { color: var(--fc-green); }
+    .pct-amber { color: #b87d08; }
+    .pct-red   { color: var(--fc-red); }
+
+    /* ================================================================
+       FOOTER
+    ================================================================ */
+    .home-footer {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 14px 20px;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: #99aabb;
+        border-top: 1px solid #e8edf5;
+        background: #fff;
+        margin-top: 8px;
+    }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 1200px) {
+        .hero-kpis    { grid-template-columns: repeat(2, 1fr); }
+        .v3-ops-grid  { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    @@media (max-width: 900px) {
+        .home-content    { grid-template-columns: 1fr; }
+        .v3-card-full    { grid-column: 1; }
+        .hero-finance-strip { flex-wrap: wrap; }
+        .hfin            { flex: 0 0 50%; }
+        .hfin-div:nth-child(4) { display: none; }
+    }
+
+    @@media (max-width: 680px) {
+        .home-hero      { padding: 18px 14px 80px; }
+        .hero-title     { font-size: 20px; }
+        .hero-kpis      { grid-template-columns: repeat(2, 1fr); }
+        .v3-ops-grid    { grid-template-columns: repeat(2, 1fr); }
+        .home-content   { padding: 0 12px 16px; margin-top: -60px; }
+        .hfin           { flex: 0 0 100%; }
+        .hfin-div       { display: none; }
+        .v3-head        { padding: 12px 14px; }
+        .v3-body        { padding: 12px 14px; }
+    }
+
+    @@media (max-width: 480px) {
+        .hero-kpis        { grid-template-columns: 1fr 1fr; }
+        .hkpi-num         { font-size: 22px; }
+        .v3-ops-grid      { grid-template-columns: repeat(2, 1fr); }
+        .v3-table         { font-size: 11px; }
+        .v3-avatar        { display: none; }
+        .v3-ops-num       { font-size: 22px; }
+        .hero-actions     { width: 100%; justify-content: flex-end; }
+    }
+
+</style>
+
 
 @code {
     private CompanyInfo _company = new();
+    private AuthUser?   _user;
+    private Summary?    _s;
+    private List<AlertItem>   _alerts = new();
+    private List<MonthFlow>   _flow   = new();
+    private List<TopCustomer> _top    = new();
+    private bool _loading = true;
 
+    private bool CanSeeFinance =>
+        _user is not null &&
+        (_user.Can("INVOICE.VIEW") || _user.Can("TREASURY.VIEW"));
+
+    /* ── DTOs ── */
+    public class Summary
+    {
+        public int     OpenOperations     { get; set; }
+        public int     DelayedOperations  { get; set; }
+        public int     ClosedThisMonth    { get; set; }
+        public int     OpenTrips          { get; set; }
+        public int     TripsToday         { get; set; }
+        public int     DelayedTrips       { get; set; }
+        public int     OpenCustodies      { get; set; }
+        public decimal CustodyOutstanding { get; set; }
+        public int     InvoicesIssued     { get; set; }
+        public decimal RevenueThisMonth   { get; set; }
+        public decimal CollectedThisMonth { get; set; }
+        public decimal Receivables        { get; set; }
+        public int     OverdueCount       { get; set; }
+        public decimal CashBalance        { get; set; }
+        public int     ActiveDrivers      { get; set; }
+        public int     ActiveVehicles     { get; set; }
+        public int     VehiclesInTrip     { get; set; }
+    }
+
+    public class AlertItem
+    {
+        public string Kind     { get; set; } = "";
+        public string Ref      { get; set; } = "";
+        public string Date     { get; set; } = "";
+        public string Detail   { get; set; } = "";
+        public int    Days     { get; set; }
+        public string Severity { get; set; } = "";
+        public string Route    { get; set; } = "";
+    }
+
+    public class MonthFlow
+    {
+        public string  Month      { get; set; } = "";
+        public string  MonthName  { get; set; } = "";
+        public decimal Collected  { get; set; }
+        public decimal Expenses   { get; set; }
+        public decimal Invoiced   { get; set; }
+    }
+
+    public class TopCustomer
+    {
+        public int     CustomerId    { get; set; }
+        public string  CustomerName  { get; set; } = "";
+        public decimal Invoiced      { get; set; }
+        public decimal Paid          { get; set; }
+        public int     Invoices      { get; set; }
+    }
+
+    /* ── Helpers ── */
+    private static string  Money(decimal v)                => v.ToString("N0");
+    private static decimal Pct(decimal v, decimal pk)      => pk <= 0 ? 0 : Math.Max(2m, Math.Round(v / pk * 100m, 0));
+    private static string  BarStyle(decimal v, decimal pk) => "height:" + Pct(v, pk) + "%";
+    private static string  InvTip(decimal v) => "مفوتر: " + v.ToString("N0");
+    private static string  ColTip(decimal v) => "محصّل: " + v.ToString("N0");
+
+    private decimal Peak => _flow.Any()
+        ? Math.Max(1m, _flow.Max(f => Math.Max(f.Collected, f.Invoiced)))
+        : 1m;
+
+    /* ── Lifecycle ── */
     protected override async Task OnInitializedAsync()
-        => _company = await Company.GetAsync();
-
-    private record Kpi(string Label, string Value, string Icon, string Color20);
-
-    private readonly Kpi[] _kpis =
     {
-        new("عمليات مفتوحة",  "—", Icons.Material.Filled.LocalShipping, "#E3EEF8"),
-        new("فواتير غير محصّلة", "—", Icons.Material.Filled.ReceiptLong, "#FDF3DC"),
-        new("عهد مفتوحة",     "—", Icons.Material.Filled.Savings,       "#E4F4EC"),
-        new("رحلات اليوم",    "—", Icons.Material.Filled.AirportShuttle,"#EAF2F8"),
-    };
+        _company = await Company.GetAsync();
+        _user    = await Auth.GetUserAsync();
+        await LoadAsync();
+    }
 
-    private record Step(string Name, string Note, string Icon, Color Color);
+    private async Task Reload()  => await LoadAsync();
+    private void   GoReports()  => Nav.NavigateTo("/reports");
 
-    private readonly Step[] _steps =
+    private async Task LoadAsync()
     {
-        new("قاعدة البيانات", "68 جدول · 7 Views · 8 Triggers", Icons.Material.Filled.CheckCircle, Color.Success),
-        new("هيكل المشروع",  "61 Entity · Build succeeded",     Icons.Material.Filled.CheckCircle, Color.Success),
-        new("الواجهة",       "Blazor WASM + MudBlazor + RTL",   Icons.Material.Filled.HourglassTop, Color.Warning),
-        new("المستخدمين والصلاحيات", "107 صلاحية · 11 دور",     Icons.Material.Filled.RadioButtonUnchecked, Color.Default),
-        new("البيانات الأساسية",     "عملاء · موانئ · خدمات",  Icons.Material.Filled.RadioButtonUnchecked, Color.Default),
-        new("الحجوزات",       "Booking + Containers",            Icons.Material.Filled.RadioButtonUnchecked, Color.Default),
-        new("العمليات والرحلات", "Trips + Custody + Expenses",   Icons.Material.Filled.RadioButtonUnchecked, Color.Default),
-        new("الفواتير والتحصيل", "Invoices + Payments",          Icons.Material.Filled.RadioButtonUnchecked, Color.Default),
-        new("التقارير",       "ربحية · أداء · Dashboard",        Icons.Material.Filled.RadioButtonUnchecked, Color.Default),
-    };
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            _s      = await Http.GetFromJsonAsync<Summary>("api/dashboard/summary");
+            _alerts = await Http.GetFromJsonAsync<List<AlertItem>>("api/dashboard/alerts?take=5") ?? new();
+            _flow   = await Http.GetFromJsonAsync<List<MonthFlow>>("api/dashboard/monthly")       ?? new();
+
+            if (CanSeeFinance)
+                _top = await Http.GetFromJsonAsync<List<TopCustomer>>("api/dashboard/top-customers?take=5") ?? new();
+        }
+        catch { /* الرئيسية ماتقعش لو فيه endpoint مفقود */ }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
 }

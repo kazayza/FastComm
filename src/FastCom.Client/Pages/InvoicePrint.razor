@@ -1,0 +1,240 @@
+@page "/invoices/print/{Id:long}"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject CompanyService Company
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<PageTitle>طباعة فاتورة — فاست كوم</PageTitle>
+
+<div class="fc-page">
+
+    <div class="fc-toolbar fc-no-print">
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Back">رجوع</MudButton>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.FactCheck" OnClick="Print">طباعة</MudButton>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+    }
+    else if (_e is null)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled">الفاتورة مش موجودة</MudAlert>
+    }
+    else
+    {
+        <div class="fc-card fc-print-sheet">
+
+            @* ── الترويسة ── *@
+            <div class="fc-doc-head">
+                <div>
+                    <div class="fc-doc-company">@_co.DisplayName</div>
+                    <div class="fc-cell-sub">
+                        @if (!string.IsNullOrWhiteSpace(_co.TaxNumber) && _co.TaxNumber != "000000000")
+                        {
+                            <span>الرقم الضريبي: @_co.TaxNumber</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(_co.AddressAr))
+                        {
+                            <span> · @_co.AddressAr</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(_co.Phone))
+                        {
+                            <span> · @_co.Phone</span>
+                        }
+                    </div>
+                </div>
+                <div style="text-align:left">
+                    <div class="fc-doc-title">
+                        @(_e.Invoice.DocumentTypeCode switch
+                        {
+                            "CreditNote" => "إشعار دائن",
+                            "DebitNote"  => "إشعار مدين",
+                            _            => "فاتورة ضريبية"
+                        })
+                    </div>
+                    <div class="fc-doc-no">@_e.Invoice.InvoiceNumber</div>
+                </div>
+            </div>
+
+            @* ── بيانات الفاتورة والعميل ── *@
+            <div class="fc-doc-meta">
+                <div>
+                    <div class="fc-meta-lb">العميل</div>
+                    <div class="fc-meta-num">@_e.Invoice.CustomerName</div>
+                    @if (_e.Invoice.CustomerTaxNumber is not null)
+                    {
+                        <div class="fc-cell-sub">الرقم الضريبي: @_e.Invoice.CustomerTaxNumber</div>
+                    }
+                </div>
+                <div>
+                    <div class="fc-meta-lb">تاريخ الإصدار</div>
+                    <div class="fc-meta-num">@_e.Invoice.InvoiceDate</div>
+                </div>
+                <div>
+                    <div class="fc-meta-lb">تاريخ الاستحقاق</div>
+                    <div class="fc-meta-num">@(_e.Invoice.DueDate ?? "—")</div>
+                </div>
+                <div>
+                    <div class="fc-meta-lb">الحالة</div>
+                    <div class="fc-meta-num">@StatusAr(_e.Invoice.Status)</div>
+                </div>
+            </div>
+
+            @if (_e.Invoice.OriginalInvoiceNumber is not null)
+            {
+                <div class="fc-cell-main" style="margin:10px 0">
+                    إشعار دائن على الفاتورة @_e.Invoice.OriginalInvoiceNumber
+                </div>
+            }
+
+            @* ── البنود ── *@
+            <table class="fc-table fc-doc-table">
+                <thead><tr>
+                    <th style="width:40px">م</th>
+                    <th>البيان</th>
+                    <th style="width:80px">الكمية</th>
+                    <th style="width:110px">سعر الوحدة</th>
+                    <th style="width:100px">الخصم</th>
+                    <th style="width:80px">الضريبة</th>
+                    <th style="width:120px">الإجمالي</th>
+                </tr></thead>
+                <tbody>
+                    @{ var i = 0; }
+                    @foreach (var l in _e.Items)
+                    {
+                        i++;
+                        <tr>
+                            <td class="fc-cell-sub">@i</td>
+                            <td class="fc-cell-main">@l.Description
+                                @if (l.OperationNumber is not null) { <div class="fc-cell-sub">@l.OperationNumber</div> }</td>
+                            <td class="fc-cell-sub">@l.Quantity.ToString("0.###")</td>
+                            <td class="fc-cell-sub">@Money(l.UnitPrice)</td>
+                            <td class="fc-cell-sub">@Money(l.Discount)</td>
+                            <td class="fc-cell-sub">@l.TaxRate.ToString("0.##")%</td>
+                            <td><b>@Money(l.LineTotal)</b></td>
+                        </tr>
+                    }
+                    @if (!_e.Items.Any())
+                    {
+                        <tr><td colspan="7"><div class="fc-lines-empty">مافيش بنود</div></td></tr>
+                    }
+                </tbody>
+            </table>
+
+            @* ── المجاميع ── *@
+            <div class="fc-doc-totals">
+                <div class="fc-ov-row"><span>الإجمالي قبل الضريبة</span><b>@Money(_e.Invoice.SubTotal)</b></div>
+                <div class="fc-ov-row"><span>الخصم</span><b>@Money(_e.Invoice.DiscountTotal)</b></div>
+                <div class="fc-ov-row"><span>الضريبة</span><b>@Money(_e.Invoice.TaxTotal)</b></div>
+                <div class="fc-rev-total"><span>الإجمالي المستحق</span><b>@Money(_e.Invoice.GrandTotal) @_e.Invoice.CurrencyCode</b></div>
+                <div class="fc-ov-row"><span>المسدّد</span><b>@Money(_e.Invoice.PaidAmount)</b></div>
+                <div class="fc-ov-row"><span>المتبقي</span><b>@Money(_e.Invoice.Due)</b></div>
+            </div>
+
+            @if (_e.Invoice.Notes is not null)
+            {
+                <div class="fc-panel-sub" style="margin-top:18px">ملاحظات</div>
+                <div class="fc-cell-main">@_e.Invoice.Notes</div>
+            }
+
+            <div class="fc-doc-foot">
+                <span>@_co.DisplayName</span>
+                <span>طُبعت في @DateTime.Now.ToString("yyyy-MM-dd HH:mm")</span>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public long Id { get; set; }
+
+    private Envelope? _e;
+    private CompanyInfo _co = new();
+    private bool _loading = true;
+
+    public class Line
+    {
+        public long InvoiceItemId { get; set; }
+        public long? OperationId { get; set; }
+        public string? OperationNumber { get; set; }
+        public int? ServiceId { get; set; }
+        public string Description { get; set; } = "";
+        public decimal Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
+        public int? TaxRateId { get; set; }
+        public decimal TaxRate { get; set; }
+        public decimal LineSubtotal { get; set; }
+        public decimal LineTax { get; set; }
+        public decimal LineTotal { get; set; }
+    }
+
+    public class Head
+    {
+        public long InvoiceId { get; set; }
+        public string InvoiceNumber { get; set; } = "";
+        public string DocumentTypeCode { get; set; } = "";
+        public string InvoiceType { get; set; } = "";
+        public int CustomerId { get; set; }
+        public string CustomerName { get; set; } = "";
+        public string? CustomerTaxNumber { get; set; }
+        public string? InvoiceDate { get; set; }
+        public string? DueDate { get; set; }
+        public decimal SubTotal { get; set; }
+        public decimal DiscountTotal { get; set; }
+        public decimal TaxTotal { get; set; }
+        public decimal GrandTotal { get; set; }
+        public decimal PaidAmount { get; set; }
+        public decimal Due { get; set; }
+        public string Status { get; set; } = "";
+        public string PaymentStatus { get; set; } = "";
+        public string? Notes { get; set; }
+        public string? OriginalInvoiceNumber { get; set; }
+        public DateTime? IssuedAt { get; set; }
+        public string CurrencyCode { get; set; } = "EGP";
+    }
+
+    public class Envelope
+    {
+        public Head Invoice { get; set; } = new();
+        public List<Line> Items { get; set; } = new();
+    }
+
+    private static string Money(decimal v) => v.ToString("N2");
+
+    private static string StatusAr(string s) => s switch
+    {
+        "Draft" => "مسودة", "Approved" => "معتمدة", "Issued" => "مصدّرة", "Sent" => "مُرسلة",
+        "Cancelled" => "ملغية", "Returned" => "مرتجعة", _ => s
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _co = await Company.GetAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _e = await Http.GetFromJsonAsync<Envelope>($"api/invoices/{Id}"); }
+        catch (Exception ex) { Snackbar.Add("فشل تحميل الفاتورة: " + ex.Message, Severity.Error); }
+        finally { _loading = false; }
+    }
+
+    private void Back() => Nav.NavigateTo("/invoices");
+
+    private async Task Print()
+    {
+        try { await JS.InvokeAsync<bool>("fastcom.printPage"); }
+        catch (Exception ex) { Snackbar.Add("ماتنفذتش الطباعة: " + ex.Message, Severity.Error); }
+    }
+}

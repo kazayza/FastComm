@@ -1,0 +1,298 @@
+@page "/operations"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>العمليات — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">التشغيل · العمليات</div>
+                <h1 class="fc-hero-title">العمليات</h1>
+                <p class="fc-hero-sub">كل عملية نقل بإيرادها وتكلفتها وربحها — من الحجز أو مستقلة</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                @if (CanCreate)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="GoNew">عملية جديدة</MudButton>
+                }
+            </div>
+        </div>
+        @if (CanView)
+        {
+            <div class="fc-kpis fc-kpis-glass">
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.LocalShipping" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي العمليات</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.HourglassTop" /></div>
+                    <div><div class="fc-kpi-num">@Open.Count()</div><div class="fc-kpi-lb">لسه شغالة</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(o => o.Status == "Closed")</div><div class="fc-kpi-lb">مقفولة</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
+                    <div><div class="fc-kpi-num">@Money(_items.Sum(o => o.RevenueNet - o.ActualCost))</div><div class="fc-kpi-lb">صافي الربح</div></div></div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanView)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديكصلاحية عرض العمليات.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+            <div class="fc-toolbar">
+                <div class="fc-filters">
+                    @foreach (var t in Tabs)
+                    {
+                        <button class='fc-filter @(_tab == t.Key ? "on" : "")' @onclick="() => SetTab(t.Key)">@t.Value</button>
+                    }
+                </div>
+                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
+                              Placeholder="ابحث برقم العملية أو العميل أو الحجز..." Variant="Variant.Outlined" Dense="true"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Class="fc-search-box" Immediate="true" />
+                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+            }
+            else
+            {
+                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
+                    <thead><tr>
+                        <th>رقم العملية</th><th>العميل</th><th>الخط</th><th>التاريخ</th>
+                        <th>الحالة</th><th>الإيراد</th><th>التكلفة</th><th>الربح</th>
+                        <th style="width:170px; text-align:left">إجراءات</th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach (var o in Filtered)
+                        {
+                            <tr>
+                                <td><span class="fc-role-chip">@o.OperationNumber</span>
+                                    @if (o.BookingNumber is not null)
+                                    { <div class="fc-cell-sub">حجز @o.BookingNumber</div> }</td>
+                                <td><div class="fc-cell-main">@o.CustomerName</div>
+                                    <div class="fc-cell-sub">@(o.ServiceName ?? "—")</div></td>
+                                <td class="fc-cell-sub">@(o.PortName ?? "—") ← @(o.DestinationName ?? "—")</td>
+                                <td class="fc-cell-sub">@(o.PlannedDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+                                <td><span class="fc-chip @ChipClass(o.Status)"><i></i>@StatusAr(o.Status)</span></td>
+                                <td><b>@Money(o.RevenueNet)</b>
+                                    @if (o.RevenueTax > 0) { <div class="fc-cell-sub">ضريبة @Money(o.RevenueTax)</div> }</td>
+                                <td class="fc-cell-sub">@Money(o.ActualCost)
+                                    @if (o.EstimatedCost > 0) { <div class="fc-cell-sub">تقدير @Money(o.EstimatedCost)</div> }</td>
+                                <td><span class='fc-chip @(o.RevenueNet - o.ActualCost >= 0 ? "fc-chip-ok" : "fc-chip-bad")'>
+                                    <i></i>@Money(o.RevenueNet - o.ActualCost)</span></td>
+                                <td><div class="fc-row-actions">
+                                    @if (o.Status is not ("Closed" or "Cancelled") && CanEdit)
+                                    {
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
+                                                       Color="Color.Primary" title="تعديل" OnClick="() => GoEdit(o)" />
+                                    }
+                                    @if (o.Status is ("Assigned" or "InTransit" or "DriverReceived") && CanEdit)
+                                    {
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle"
+                                                       Color="Color.Success" title="تم التسليم" OnClick='() => SetStatus(o, "Delivered")' />
+                                    }
+                                    @if (o.Status is ("Delivered" or "ExpensesPending" or "CustodyPending" or "ReadyToClose") && CanClose)
+                                    {
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Lock"
+                                                       Color="Color.Primary" title="إقفال العملية" OnClick="() => Close(o)" />
+                                    }
+                                    @if (o.Status == "Closed" && CanReopen)
+                                    {
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.LockOpen"
+                                                       Color="Color.Warning" title="فتح تاني" OnClick="() => Reopen(o)" />
+                                    }
+                                    @if (o.Status is ("Pending" or "Assigned") && CanCancel)
+                                    {
+                                        @if (_confirmId == o.OperationId)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                                                       OnClick='() => SetStatus(o, "Cancelled")'>إلغاء؟</MudButton>
+                                        }
+                                        else
+                                        {
+                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Close"
+                                                           Color="Color.Error" title="إلغاء" OnClick="() => _confirmId = o.OperationId" />
+                                        }
+                                    }
+                                    else if (o.Status is ("Pending" or "Cancelled") && CanDelete)
+                                    {
+                                        @if (_confirmId == o.OperationId)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                                                       OnClick="() => Delete(o)">حذف؟</MudButton>
+                                        }
+                                        else
+                                        {
+                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
+                                                           Color="Color.Error" title="حذف" OnClick="() => _confirmId = o.OperationId" />
+                                        }
+                                    }
+                                </div></td>
+                            </tr>
+                        }
+                        @if (!Filtered.Any())
+                        {
+                            <tr><td colspan="9"><div class="fc-empty"><div>لايوجد عمليات في الفلتر ده</div></div></td></tr>
+                        }
+                    </tbody>
+                </table></div>
+            }
+        </div></div>
+    }
+</div>
+
+@code {
+    private AuthUser? _user;
+    private bool CanView   => _user?.Can("OPERATION.VIEW") ?? false;
+    private bool CanCreate => _user?.Can("OPERATION.CREATE") ?? false;
+    private bool CanEdit   => _user?.Can("OPERATION.EDIT") ?? false;
+    private bool CanDelete => _user?.Can("OPERATION.DELETE") ?? false;
+    private bool CanCancel => _user?.Can("OPERATION.CANCEL") ?? false;
+    private bool CanClose  => _user?.Can("OPERATION.CLOSE") ?? false;
+    private bool CanReopen => _user?.Can("OPERATION.REOPEN") ?? false;
+
+    private static readonly Dictionary<string, string> Tabs = new()
+    {
+        ["all"] = "الكل", ["Pending"] = "قيد الانتظار", ["Assigned"] = "متعين",
+        ["InTransit"] = "في الطريق", ["Delivered"] = "اتسلّمت",
+        ["Closed"] = "مقفولة", ["Cancelled"] = "ملغاة"
+    };
+
+    private static readonly string[] OpenStatuses =
+        { "Pending", "Assigned", "DriverReceived", "InTransit", "Delivered",
+          "ExpensesPending", "CustodyPending", "ReadyToClose" };
+
+    private List<Item> _items = new();
+    private bool _loading; private string _search = ""; private string _tab = "all";
+    private long? _confirmId;
+
+    public class Item
+    {
+        public long OperationId { get; set; }
+        public string OperationNumber { get; set; } = "";
+        public string? BookingNumber { get; set; }
+        public string CustomerName { get; set; } = "";
+        public string? ServiceName { get; set; }
+        public string? PortName { get; set; }
+        public string? DestinationName { get; set; }
+        public DateTime? PlannedDate { get; set; }
+        public string Status { get; set; } = "";
+        public decimal RevenueNet { get; set; }
+        public decimal RevenueTax { get; set; }
+        public decimal EstimatedCost { get; set; }
+        public decimal ActualCost { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    private static string StatusAr(string s) => s switch
+    {
+        "Pending" => "قيد الانتظار", "Assigned" => "تم التعيين",
+        "DriverReceived" => "استلم السائق", "InTransit" => "في الطريق",
+        "Delivered" => "تم التسليم", "ExpensesPending" => "بانتظار المصروفات",
+        "CustodyPending" => "بانتظار العهدة", "ReadyToClose" => "جاهزة للإغلاق",
+        "Closed" => "مغلقة", "Cancelled" => "ملغاة", _ => s
+    };
+
+    private static string ChipClass(string s) => s switch
+    {
+        "Pending" => "fc-chip-gray", "Assigned" => "fc-chip-blue",
+        "DriverReceived" => "fc-chip-purple", "InTransit" => "fc-chip-warn",
+        "Delivered" => "fc-chip-ok", "Closed" => "fc-chip-gold",
+        "Cancelled" => "fc-chip-bad", _ => "fc-chip-gray"
+    };
+
+    private static string Money(decimal v) => v.ToString("N0");
+
+    private IEnumerable<Item> Open => _items.Where(o => OpenStatuses.Contains(o.Status));
+
+    private IEnumerable<Item> Filtered => _items.Where(o =>
+        (_tab == "all" || o.Status == _tab) &&
+        (string.IsNullOrWhiteSpace(_search) ||
+         o.OperationNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         o.CustomerName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         (o.BookingNumber ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (CanView) await LoadAsync();
+    }
+
+    private async Task Reload() { await LoadAsync(); }
+
+    private void SetTab(string t) { _tab = t; _confirmId = null; }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/operations?take=300") ?? new(); }
+        catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
+        finally { _loading = false; }
+    }
+
+    private void GoNew() => Nav.NavigateTo("/operations/new");
+    private void GoEdit(Item o) => Nav.NavigateTo($"/operations/new/{o.OperationId}");
+
+    private async Task SetStatus(Item o, string to)
+    {
+        try
+        {
+            var res = await Http.PostAsJsonAsync($"api/operations/{o.OperationId}/status", new { to });
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            _confirmId = null;
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private async Task Close(Item o) => await Post(o, "close");
+    private async Task Reopen(Item o) => await Post(o, "reopen");
+
+    private async Task Post(Item o, string action)
+    {
+        try
+        {
+            var res = await Http.PostAsync($"api/operations/{o.OperationId}/{action}", null);
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private async Task Delete(Item o)
+    {
+        try
+        {
+            var res = await Http.DeleteAsync($"api/operations/{o.OperationId}");
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            _confirmId = null;
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+    }
+}

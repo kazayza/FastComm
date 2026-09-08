@@ -1,0 +1,807 @@
+@page "/custodies"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>العهد — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">المالية · العهد</div>
+                <h1 class="fc-hero-title">العهد</h1>
+                <p class="fc-hero-sub">فلوس بتتسلّم للسائق أو الموظف على الرحلة — بيتصرف منها، والباقي يت رد، وبعدين تتسوّى وتتقفل</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                @if (CanCreate)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="OpenIssue">صرف عهدة</MudButton>
+                }
+            </div>
+        </div>
+        @if (CanView)
+        {
+            <div class="fc-kpis fc-kpis-glass">
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(c => c.Status != "Closed")</div><div class="fc-kpi-lb">عهد مفتوحة</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" /></div>
+                    <div><div class="fc-kpi-num">@Money(OpenRemaining)</div><div class="fc-kpi-lb">باقي معاهم</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.Payments" /></div>
+                    <div><div class="fc-kpi-num">@Money(ThisMonth)</div><div class="fc-kpi-lb">اتصرف الشهر ده</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(c => c.Status == "Submitted")</div><div class="fc-kpi-lb">مستنية اعتماد</div></div></div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanView)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض العهد.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+            <div class="fc-toolbar">
+                <div class="fc-filters">
+                    @foreach (var t in Tabs)
+                    {
+                        <button class='fc-filter @(_tab == t.Key ? "on" : "")' @onclick="() => SetTab(t.Key)">@t.Value</button>
+                    }
+                </div>
+                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
+                              Placeholder="ابحث برقم العهدة أو الرحلة..." Variant="Variant.Outlined" Dense="true"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Class="fc-search-box" Immediate="true" />
+                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+            }
+            else
+            {
+                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
+                    <thead><tr>
+                        <th>الرقم</th><th>التاريخ</th><th>صاحب العهدة</th><th>الرحلة</th>
+                        <th>المصروف</th><th>المنصرف</th><th>المرتد</th><th>الباقي</th>
+                        <th>الحالة</th><th style="width:200px; text-align:left">إجراءات</th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach (var c in Filtered)
+                        {
+                            <tr>
+                                <td><button class="fc-role-chip" style="border:0; background:none; cursor:pointer; font:inherit"
+                                            @onclick="() => Open(c)">@c.CustodyNumber</button></td>
+                                <td class="fc-cell-sub">@c.CustodyDate.ToString("yyyy-MM-dd")</td>
+                                <td class="fc-cell-main">@c.OwnerName
+                                    <div class="fc-cell-sub">@(c.OwnerType == "Driver" ? "سائق" : "موظف")</div></td>
+                                <td class="fc-cell-sub">رحلة @c.TripNumber
+                                    @if (c.DriverName is not null) { <div>السائق: @c.DriverName</div> }</td>
+                                <td>@Money(c.AmountIssued)
+                                    @if (c.AdditionalDue > 0) { <div class="fc-cell-sub">+ إضافي @Money(c.AdditionalDue)</div> }</td>
+                                <td class="fc-cell-sub">@Money(c.AmountSpent)</td>
+                                <td class="fc-cell-sub">@Money(c.AmountReturned)</td>
+                                <td><b class='@(c.Remaining > 0 ? "" : "fc-cell-sub")'>@Money(c.Remaining)</b></td>
+                                <td><span class="fc-chip @StatusChip(c.Status)"><i></i>@StatusAr(c.Status)</span></td>
+                                <td><div class="fc-row-actions">
+                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Info"
+                                                   title="الدفتر" OnClick="() => Open(c)" />
+                                    @if (c.Status is "Open" or "PartiallySettled" && CanSettle)
+                                    {
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Payments"
+                                                       Color="Color.Success" title="رد باقي / إضافة" OnClick="() => OpenTx(c)" />
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.ReceiptLong"
+                                                       Color="Color.Primary" title="مصروف على العهدة" OnClick="() => GoExpense(c)" />
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle"
+                                                       Color="Color.Warning" title="تقديم التسوية" OnClick="() => Settle(c)" />
+                                    }
+                                    @if (c.Status == "Submitted" && CanApprove)
+                                    {
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.LockOpen"
+                                                       Color="Color.Success" title="اعتماد التسوية"
+                                                       OnClick="() => OpenApprove(c)" />
+                                    }
+                                    @if (c.Status == "Approved" && CanClose)
+                                    {
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Lock"
+                                                       title="إغلاق العهدة" OnClick="() => CloseCustody(c)" />
+                                    }
+                                    @if (c.Status == "Open" && CanDelete && c.TxCount <= 1 && c.AmountSpent == 0)
+                                    {
+                                        @if (_confirmId == c.CustodyId)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                                                       OnClick="() => Delete(c)">حذف؟</MudButton>
+                                        }
+                                        else
+                                        {
+                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
+                                                           Color="Color.Error" title="حذف" OnClick="() => _confirmId = c.CustodyId" />
+                                        }
+                                    }
+                                </div></td>
+                            </tr>
+                        }
+                        @if (!Filtered.Any())
+                        {
+                            <tr><td colspan="10"><div class="fc-empty"><div>مافيش عهد في الفلتر ده</div></div></td></tr>
+                        }
+                    </tbody>
+                </table></div>
+            }
+        </div></div>
+    }
+
+    @* ═══════════ مودال: صرف عهدة ═══════════ *@
+    @if (_issueOpen && CanCreate)
+    {
+        <div class="fc-modal-backdrop" @onclick="CloseIssue">
+            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation="true">
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">صرف عهدة</div>
+                        <div class="fc-modal-sub">الرقم بيتولد تلقائيًا (CUS-)</div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseIssue" />
+                </div>
+                <div class="fc-modal-body">
+                    @if (_msg is not null)
+                    {
+                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                                  Class="mb-4">@_msg</MudAlert>
+                    }
+                    <div class="fc-form-grid">
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">الرحلة *</div>
+                            <select class="fc-sel fc-sel-lg" value="@_nf.TripId" @onchange="OnTripChanged">
+                                <option value="">— اختر رحلة —</option>
+                                @foreach (var t in _trips)
+                                {
+                                    <option value="@t.TripId">@t.TripNumber — @t.DriverName (@TripStatusAr(t.Status))</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">تاريخ الصرف</div>
+                            <input type="datetime-local" class="fc-sel fc-sel-lg" value="@_nf.CustodyDate"
+                                   @onchange="e => _nf.CustodyDate = e.Value?.ToString()" />
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">صاحب العهدة *</div>
+                            <select class="fc-sel fc-sel-lg" value="@_nf.OwnerType" @onchange="OnOwnerTypeChanged">
+                                <option value="Driver">سائق</option>
+                                <option value="Employee">موظف</option>
+                            </select>
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">@(_nf.OwnerType == "Driver" ? "السائق" : "الموظف")</div>
+                            @if (_nf.OwnerType == "Driver")
+                            {
+                                <select class="fc-sel fc-sel-lg" value="@_nf.OwnerId" @onchange="e => _nf.OwnerId = ParseInt(e.Value)">
+                                    <option value="0">— اختر —</option>
+                                    @foreach (var d in _drivers) { <option value="@d.Id">@d.Label</option> }
+                                </select>
+                            }
+                            else
+                            {
+                                <select class="fc-sel fc-sel-lg" value="@_nf.OwnerId" @onchange="e => _nf.OwnerId = ParseInt(e.Value)">
+                                    <option value="0">— اختر —</option>
+                                    @foreach (var em in _employees) { <option value="@em.Id">@em.Label</option> }
+                                </select>
+                            }
+                            @if (SelectedTrip is not null)
+                            {
+                                <div class="fc-cell-sub">سائق الرحلة: @SelectedTrip.DriverName</div>
+                            }
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">مبلغ العهدة *</div>
+                            <input type="number" min="0" step="0.01" class="fc-sel fc-sel-lg" value="@_nf.AmountIssued"
+                                   @onchange="e => _nf.AmountIssued = ParseAmount(e.Value)" />
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">ملاحظات</div>
+                            <input class="fc-sel fc-sel-lg" value="@_nf.Notes" maxlength="500"
+                                   @onchange="e => _nf.Notes = e.Value?.ToString()" />
+                        </div>
+                    </div>
+                </div>
+                <div class="fc-modal-foot">
+                    <MudButton OnClick="CloseIssue">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="SaveIssue">صرف العهدة</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ═══════════ مودال: رد باقي / إضافة ═══════════ *@
+    @if (_txOpen && CanSettle && _txTarget is not null)
+    {
+        <div class="fc-modal-backdrop" @onclick="CloseTx">
+            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation="true">
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">حركة على العهدة @_txTarget.CustodyNumber</div>
+                        <div class="fc-modal-sub">المتاح للرد: @Money(MaxRefund(_txTarget))</div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseTx" />
+                </div>
+                <div class="fc-modal-body">
+                    @if (_msg is not null)
+                    {
+                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                                  Class="mb-4">@_msg</MudAlert>
+                    }
+                    <div class="fc-form-grid">
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">نوع الحركة *</div>
+                            <select class="fc-sel fc-sel-lg" @bind="_tx.Type">
+                                <option value="Refund">رد باقي العهدة</option>
+                                <option value="Additional">إضافة مبلغ على العهدة</option>
+                            </select>
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">المبلغ *</div>
+                            <input type="number" min="0.01" step="0.01" class="fc-sel fc-sel-lg" value="@_tx.Amount"
+                                   @onchange="e => _tx.Amount = ParseAmount(e.Value)" />
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">التاريخ</div>
+                            <input type="datetime-local" class="fc-sel fc-sel-lg" value="@_tx.TxDate"
+                                   @onchange="e => _tx.TxDate = e.Value?.ToString()" />
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">ملاحظات</div>
+                            <input class="fc-sel fc-sel-lg" value="@_tx.Notes" maxlength="500"
+                                   @onchange="e => _tx.Notes = e.Value?.ToString()" />
+                        </div>
+                    </div>
+                </div>
+                <div class="fc-modal-foot">
+                    <MudButton OnClick="CloseTx">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                               StartIcon="@Icons.Material.Filled.Payments" OnClick="SaveTx">تسجيل الحركة</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ═══════════ مودال: اعتماد التسوية ═══════════ *@
+    @if (_approveOpen && _approveTarget is not null)
+    {
+        <div class="fc-modal-backdrop" @onclick="CloseApprove">
+            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation="true">
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">اعتماد تسوية @_approveTarget.CustodyNumber</div>
+                        <div class="fc-modal-sub">راجع الأرقام قبل الاعتماد — بعد الاعتماد مافيش تعديل</div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseApprove" />
+                </div>
+                <div class="fc-modal-body">
+                    @if (_msg is not null)
+                    {
+                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                                  Class="mb-4">@_msg</MudAlert>
+                    }
+                    <div class="fc-lines">
+                        <div class="fc-lines-head"><span>المصروف</span><span>المنصرف</span><span>المرتد</span><span>الباقي</span></div>
+                        <div class="fc-lines-row">
+                            <span>@Money(_approveTarget.AmountIssued)</span>
+                            <span>@Money(_approveTarget.AmountSpent)</span>
+                            <span>@Money(_approveTarget.AmountReturned)</span>
+                            <b>@Money(_approveTarget.Remaining)</b>
+                        </div>
+                    </div>
+                    @if (_needAdditional)
+                    {
+                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-4">
+                            صرف أكتر من العهدة — علّم الاختيار ده عشان الفرق يتسجّل كمبلغ إضافي على العهدة.
+                        </MudAlert>
+                        <MudCheckBox T="bool" @bind-Value="_addAdditional" Label="سجّل الفرق كمبلغ إضافي"
+                                     Color="Color.Warning" />
+                    }
+                </div>
+                <div class="fc-modal-foot">
+                    <MudButton OnClick="CloseApprove">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" Disabled="_saving"
+                               StartIcon="@Icons.Material.Filled.LockOpen" OnClick="ConfirmApprove">اعتماد</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ═══════════ مودال: دفتر العهدة ═══════════ *@
+    @if (_detailOpen && _detail is not null)
+    {
+        <div class="fc-modal-backdrop" @onclick="CloseDetail">
+            <div class="fc-modal" @onclick:stopPropagation="true">
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">العهدة @_detail.Custody.CustodyNumber</div>
+                        <div class="fc-modal-sub">
+                            @_detail.Custody.OwnerName · رحلة @_detail.Custody.TripNumber · @_detail.Custody.CustodyDate.ToString("yyyy-MM-dd")
+                            · <span class="fc-chip @StatusChip(_detail.Custody.Status)"><i></i>@StatusAr(_detail.Custody.Status)</span>
+                        </div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseDetail" />
+                </div>
+                <div class="fc-modal-body">
+                    <div class="fc-lines">
+                        <div class="fc-lines-head">
+                            <span>المصروف</span><span>إضافي</span><span>المنصرف</span><span>المرتد</span><span>الباقي</span>
+                        </div>
+                        <div class="fc-lines-row">
+                            <span>@Money(_detail.Custody.AmountIssued)</span>
+                            <span>@Money(_detail.Custody.AdditionalDue)</span>
+                            <span>@Money(_detail.Custody.AmountSpent)</span>
+                            <span>@Money(_detail.Custody.AmountReturned)</span>
+                            <b>@Money(_detail.Custody.Remaining)</b>
+                        </div>
+                    </div>
+
+                    <div class="fc-panel-sub" style="margin:18px 0 6px">حركات العهدة (@_detail.Transactions.Count)</div>
+                    <div class="fc-table-wrap"><table class="fc-table">
+                        <thead><tr><th>التاريخ</th><th>الحركة</th><th>المبلغ</th><th>ملاحظات</th></tr></thead>
+                        <tbody>
+                            @foreach (var t in _detail.Transactions)
+                            {
+                                <tr>
+                                    <td class="fc-cell-sub">@t.TransactionDate.ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td><span class="fc-chip @TxChip(t.TransactionType)"><i></i>@TxAr(t.TransactionType)</span></td>
+                                    <td>@Money(t.Amount)</td>
+                                    <td class="fc-cell-sub">
+                                        @(t.Notes ?? "—")
+                                        @if (t.ExpenseNumber is not null) { <div>مصروف @t.ExpenseNumber</div> }
+                                    </td>
+                                </tr>
+                            }
+                            @if (!_detail.Transactions.Any())
+                            {
+                                <tr><td colspan="4"><div class="fc-lines-empty">مافيش حركات لسه</div></td></tr>
+                            }
+                        </tbody>
+                    </table></div>
+
+                    <div class="fc-panel-sub" style="margin:18px 0 6px">المصروفات (@_detail.Expenses.Count)</div>
+                    <div class="fc-table-wrap"><table class="fc-table">
+                        <thead><tr><th>الرقم</th><th>النوع</th><th>البيان</th><th>المبلغ</th><th>الدفع</th></tr></thead>
+                        <tbody>
+                            @foreach (var e in _detail.Expenses)
+                            {
+                                <tr>
+                                    <td class="fc-cell-sub">@e.ExpenseNumber</td>
+                                    <td class="fc-cell-main">@e.TypeName</td>
+                                    <td class="fc-cell-sub">@(e.Description ?? "—")</td>
+                                    <td>@Money(e.Amount)</td>
+                                    <td class="fc-cell-sub">@PayAr(e.PaymentStatus)</td>
+                                </tr>
+                            }
+                            @if (!_detail.Expenses.Any())
+                            {
+                                <tr><td colspan="5"><div class="fc-lines-empty">مافيش مصروفات مربوطة بالعهدة دي</div></td></tr>
+                            }
+                        </tbody>
+                    </table></div>
+
+                    @if (_detail.Custody.Notes is not null)
+                    {
+                        <div class="fc-panel-sub" style="margin:18px 0 6px">ملاحظات</div>
+                        <div class="fc-cell-main">@_detail.Custody.Notes</div>
+                    }
+                </div>
+                <div class="fc-modal-foot">
+                    @if (_detail.Custody.Status is "Open" or "PartiallySettled" && CanCreate)
+                    {
+                        <MudButton StartIcon="@Icons.Material.Filled.ReceiptLong" Color="Color.Primary"
+                                   OnClick="() => GoExpense(_detail.Custody.ToItem())">مصروف على العهدة</MudButton>
+                    }
+                    <MudButton OnClick="CloseDetail">إغلاق</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private AuthUser? _user;
+    private bool CanView    => _user?.Can("CUSTODY.VIEW") ?? false;
+    private bool CanCreate  => _user?.Can("CUSTODY.CREATE") ?? false;
+    private bool CanSettle  => _user?.Can("CUSTODY.SETTLE") ?? false;
+    private bool CanApprove => _user?.Can("CUSTODY.APPROVE") ?? false;
+    private bool CanClose   => _user?.Can("CUSTODY.CLOSE") ?? false;
+    private bool CanDelete  => _user?.Can("CUSTODY.DELETE") ?? false;
+
+    private static readonly Dictionary<string, string> Tabs = new()
+    {
+        ["all"] = "الكل", ["Open"] = "مفتوحة", ["PartiallySettled"] = "تسوية جزئية",
+        ["Submitted"] = "مقدّمة", ["Approved"] = "معتمدة", ["Closed"] = "مقفولة"
+    };
+
+    private List<Item> _items = new();
+    private List<TripOpt> _trips = new();
+    private List<Opt> _drivers = new();
+    private List<Opt> _employees = new();
+
+    private bool _loading; private string _search = ""; private string _tab = "all";
+    private long? _confirmId;
+    private bool _saving; private string? _msg; private bool _ok;
+
+    private bool _issueOpen; private NewForm _nf = new();
+    private bool _txOpen; private TxForm _tx = new(); private Item? _txTarget;
+    private bool _detailOpen; private Envelope? _detail;
+    private bool _approveOpen; private Item? _approveTarget;
+    private bool _addAdditional; private bool _needAdditional;
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+
+    public class TripOpt { public long TripId { get; set; } public string TripNumber { get; set; } = "";
+        public string Status { get; set; } = ""; public int DriverId { get; set; }
+        public string DriverName { get; set; } = ""; }
+
+    public class Item
+    {
+        public long CustodyId { get; set; }
+        public string CustodyNumber { get; set; } = "";
+        public DateTime CustodyDate { get; set; }
+        public string OwnerType { get; set; } = "";
+        public string OwnerName { get; set; } = "";
+        public long TripId { get; set; }
+        public string TripNumber { get; set; } = "";
+        public string? DriverName { get; set; }
+        public decimal AmountIssued { get; set; }
+        public decimal AmountSpent { get; set; }
+        public decimal AmountReturned { get; set; }
+        public decimal AdditionalDue { get; set; }
+        public decimal Remaining { get; set; }
+        public string Status { get; set; } = "";
+        public int TxCount { get; set; }
+    }
+
+    public class CustodyDetail
+    {
+        public long CustodyId { get; set; }
+        public string CustodyNumber { get; set; } = "";
+        public DateTime CustodyDate { get; set; }
+        public string OwnerType { get; set; } = "";
+        public int OwnerId { get; set; }
+        public string OwnerName { get; set; } = "";
+        public long TripId { get; set; }
+        public string TripNumber { get; set; } = "";
+        public string? DriverName { get; set; }
+        public decimal AmountIssued { get; set; }
+        public decimal AmountSpent { get; set; }
+        public decimal AmountReturned { get; set; }
+        public decimal AdditionalDue { get; set; }
+        public decimal Remaining { get; set; }
+        public string Status { get; set; } = "";
+        public string? Notes { get; set; }
+        public DateTime? ClosedAt { get; set; }
+
+        public Item ToItem() => new()
+        {
+            CustodyId = CustodyId, CustodyNumber = CustodyNumber, CustodyDate = CustodyDate,
+            OwnerType = OwnerType, OwnerName = OwnerName, TripId = TripId, TripNumber = TripNumber,
+            DriverName = DriverName, AmountIssued = AmountIssued, AmountSpent = AmountSpent,
+            AmountReturned = AmountReturned, AdditionalDue = AdditionalDue,
+            Remaining = Remaining, Status = Status
+        };
+    }
+
+    public class TxLine { public long CustodyTransactionId { get; set; }
+        public string TransactionType { get; set; } = ""; public DateTime TransactionDate { get; set; }
+        public decimal Amount { get; set; } public long? ExpenseId { get; set; }
+        public string? ExpenseNumber { get; set; } public string? Notes { get; set; } }
+
+    public class CustodyExpense { public long ExpenseId { get; set; }
+        public string ExpenseNumber { get; set; } = ""; public string TypeName { get; set; } = "";
+        public decimal Amount { get; set; } public DateTime ExpenseDate { get; set; }
+        public string? Description { get; set; } public string PaymentStatus { get; set; } = ""; }
+
+    public class Envelope
+    {
+        public CustodyDetail Custody { get; set; } = new();
+        public List<TxLine> Transactions { get; set; } = new();
+        public List<CustodyExpense> Expenses { get; set; } = new();
+    }
+
+    public class NewForm
+    {
+        public long? TripId { get; set; }
+        public string OwnerType { get; set; } = "Driver";
+        public int OwnerId { get; set; }
+        public decimal AmountIssued { get; set; }
+        public string? CustodyDate { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    public class TxForm
+    {
+        public string Type { get; set; } = "Refund";
+        public decimal Amount { get; set; }
+        public string? TxDate { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    private TripOpt? SelectedTrip => _trips.FirstOrDefault(t => t.TripId == _nf.TripId);
+
+    private IEnumerable<Item> NotClosed => _items.Where(c => c.Status != "Closed");
+
+    private decimal OpenRemaining => NotClosed.Sum(c => c.Remaining);
+
+    private decimal ThisMonth => _items
+        .Where(c => c.CustodyDate.Year == DateTime.Now.Year && c.CustodyDate.Month == DateTime.Now.Month)
+        .Sum(c => c.AmountIssued);
+
+    private static decimal MaxRefund(Item c) =>
+        c.AmountIssued + c.AdditionalDue - c.AmountSpent - c.AmountReturned;
+
+    private static string StatusAr(string s) => s switch
+    {
+        "Open" => "مفتوحة", "PartiallySettled" => "تسوية جزئية", "Submitted" => "مقدّمة للتسوية",
+        "Approved" => "معتمدة", "Closed" => "مقفولة", _ => s
+    };
+
+    private static string StatusChip(string s) => s switch
+    {
+        "Open" => "fc-chip-blue", "PartiallySettled" => "fc-chip-warn", "Submitted" => "fc-chip-purple",
+        "Approved" => "fc-chip-gold", "Closed" => "fc-chip-ok", _ => "fc-chip-gray"
+    };
+
+    private static string TripStatusAr(string s) => s switch
+    {
+        "Planned" => "مخططة", "Assigned" => "متسندة", "InTransit" => "في الطريق",
+        "Completed" => "مكتملة", "Cancelled" => "ملغية", _ => s
+    };
+
+    private static string TxAr(string t) => t switch
+    {
+        "Issue" => "صرف العهدة", "Expense" => "مصروف", "Refund" => "رد باقي",
+        "Additional" => "إضافة مبلغ", _ => t
+    };
+
+    private static string TxChip(string t) => t switch
+    {
+        "Issue" => "fc-chip-blue", "Expense" => "fc-chip-warn", "Refund" => "fc-chip-ok",
+        "Additional" => "fc-chip-purple", _ => "fc-chip-gray"
+    };
+
+    private static string PayAr(string p) => p switch
+    {
+        "Unpaid" => "غير مدفوعه", "PartiallyPaid" => "جزئي", "Paid" => "مدفوع", _ => p
+    };
+
+    private static string Money(decimal v) => v.ToString("N2");
+
+    private static decimal ParseAmount(object? v) =>
+        decimal.TryParse(v?.ToString(), out var n) && n > 0 ? n : 0m;
+
+    private static int ParseInt(object? v) => int.TryParse(v?.ToString(), out var n) ? n : 0;
+
+    private IEnumerable<Item> Filtered => _items.Where(c =>
+        (_tab == "all" || c.Status == _tab) &&
+        (string.IsNullOrWhiteSpace(_search) ||
+         c.CustodyNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         c.TripNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         c.OwnerName.Contains(_search, StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (!CanView) return;
+        await LoadAsync();
+        if (CanCreate) await LoadLookupsAsync();
+    }
+
+    private async Task LoadLookupsAsync()
+    {
+        _trips     = await SafeGetT<TripOpt>("api/custodies/trips");
+        _employees = await SafeGetT<Opt>("api/custodies/employees");
+        _drivers   = await SafeGetT<Opt>("api/options/drivers");
+        // لو مامعاهوش صلاحية السواقين — ناخد سواقين الرحلات نفسهم
+        if (!_drivers.Any() && _trips.Any())
+            _drivers = _trips.GroupBy(t => t.DriverId)
+                .Select(g => new Opt { Id = g.Key, Label = g.First().DriverName }).ToList();
+    }
+
+    private async Task<List<T>> SafeGetT<T>(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<T>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    private async Task Reload() { await LoadAsync(); }
+
+    private void SetTab(string t) { _tab = t; _confirmId = null; }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/custodies?take=300") ?? new(); }
+        catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
+        finally { _loading = false; }
+    }
+
+    // ── صرف عهدة ──
+
+    private void OpenIssue()
+    {
+        _nf = new NewForm { CustodyDate = DateTime.Now.ToString("yyyy-MM-ddTHH:mm") };
+        _msg = null; _issueOpen = true;
+    }
+
+    private void CloseIssue() { _issueOpen = false; }
+
+    private void OnTripChanged(ChangeEventArgs e)
+    {
+        _nf.TripId = long.TryParse(e.Value?.ToString(), out var t) && t > 0 ? t : null;
+        // لو صاحب العهدة سائق — نملا سائق الرحلة أوتوماتيك
+        if (_nf.OwnerType == "Driver" && SelectedTrip is not null)
+            _nf.OwnerId = SelectedTrip.DriverId;
+    }
+
+    private void OnOwnerTypeChanged(ChangeEventArgs e)
+    {
+        _nf.OwnerType = e.Value?.ToString() == "Employee" ? "Employee" : "Driver";
+        _nf.OwnerId = 0;
+        if (_nf.OwnerType == "Driver" && SelectedTrip is not null)
+            _nf.OwnerId = SelectedTrip.DriverId;
+    }
+
+    private async Task SaveIssue()
+    {
+        if (_nf.TripId is null) { _ok = false; _msg = "اختار الرحلة"; return; }
+        if (_nf.OwnerId <= 0)   { _ok = false; _msg = "اختار صاحب العهدة"; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/custodies", new
+            {
+                tripId       = _nf.TripId,
+                ownerType    = _nf.OwnerType,
+                ownerId      = _nf.OwnerId,
+                amountIssued = _nf.AmountIssued,
+                custodyDate  = _nf.CustodyDate,
+                notes        = _nf.Notes
+            });
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); CloseIssue(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    // ── حركة ──
+
+    private void OpenTx(Item c)
+    {
+        _txTarget = c;
+        _tx = new TxForm { TxDate = DateTime.Now.ToString("yyyy-MM-ddTHH:mm") };
+        _msg = null; _txOpen = true;
+    }
+
+    private void CloseTx() { _txOpen = false; _txTarget = null; }
+
+    private async Task SaveTx()
+    {
+        if (_txTarget is null) return;
+        if (_tx.Amount <= 0) { _ok = false; _msg = "اكتب مبلغ"; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var res = await Http.PostAsJsonAsync($"api/custodies/{_txTarget.CustodyId}/transactions", new
+            {
+                type       = _tx.Type,
+                amount     = _tx.Amount,
+                txDate     = _tx.TxDate,
+                expenseId  = (long?)null,
+                notes      = _tx.Notes
+            });
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode)
+            { Snackbar.Add(_msg, Severity.Success); CloseTx(); _detailOpen = false; await LoadAsync(); }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    // ── دفتر ──
+
+    private async Task Open(Item c)
+    {
+        try
+        {
+            _detail = await Http.GetFromJsonAsync<Envelope>($"api/custodies/{c.CustodyId}");
+            if (_detail is null) return;
+            _msg = null; _detailOpen = true;
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private void CloseDetail() { _detailOpen = false; }
+
+    private void GoExpense(Item c)
+    {
+        _detailOpen = false; _issueOpen = false; _txOpen = false;
+        Nav.NavigateTo($"/expenses?tripId={c.TripId}&custodyId={c.CustodyId}");
+    }
+
+    // ── حالات ──
+
+    private async Task Post(string url, object? body)
+    {
+        try
+        {
+            var res = body is null
+                ? await Http.PostAsync(url, null)
+                : await Http.PostAsJsonAsync(url, body);
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) { _detailOpen = false; _approveOpen = false; await LoadAsync(); }
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private Task Settle(Item c) => Post($"api/custodies/{c.CustodyId}/settle", null);
+
+    private Task CloseCustody(Item c) => Post($"api/custodies/{c.CustodyId}/close", null);
+
+    private void OpenApprove(Item c)
+    {
+        _approveTarget = c; _addAdditional = false; _needAdditional = false;
+        _msg = null; _approveOpen = true;
+    }
+
+    private void CloseApprove() { _approveOpen = false; _approveTarget = null; }
+
+    private async Task ConfirmApprove()
+    {
+        if (_approveTarget is null) return;
+        _saving = true; _msg = null;
+        try
+        {
+            var res = await Http.PostAsJsonAsync($"api/custodies/{_approveTarget.CustodyId}/approve",
+                new { addAdditional = _addAdditional });
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(_msg, Severity.Success);
+                _approveOpen = false; _approveTarget = null; _detailOpen = false;
+                await LoadAsync();
+            }
+            else if (_msg.Contains("كمبلغ إضافي"))
+            {
+                _needAdditional = true;   // نوريه الاختيار ويسجّل الفرق
+            }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task Delete(Item c)
+    {
+        try
+        {
+            var res = await Http.DeleteAsync($"api/custodies/{c.CustodyId}");
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            _confirmId = null;
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+    }
+}

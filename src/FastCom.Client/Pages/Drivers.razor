@@ -1,0 +1,303 @@
+@page "/drivers"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject ISnackbar Snackbar
+
+<PageTitle>السائقين — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">البيانات الأساسية · الأسطول</div>
+                <h1 class="fc-hero-title">السائقين</h1>
+                <p class="fc-hero-sub">داخلي (موظفين) وخارجي (موردين) — مع الرخص والحالات</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                @if (CanCreate)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="New">سائق جديد</MudButton>
+                }
+            </div>
+        </div>
+        @if (CanView)
+        {
+            <div class="fc-kpis fc-kpis-glass">
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.Badge" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي السائقين</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(d => d.Status == "Active")</div><div class="fc-kpi-lb">نشط</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
+                    <div><div class="fc-kpi-num">@ExpiringSoon</div><div class="fc-kpi-lb">رخص تنتهي خلال 30 يوم</div></div></div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanView)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض السائقين.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+            <div class="fc-toolbar">
+                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
+                              Placeholder="ابحث بالاسم أو الكود..." Variant="Variant.Outlined" Dense="true"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Class="fc-search-box" Immediate="true" />
+                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+            </div>
+            @if (_loading)
+            {
+                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+            }
+            else
+            {
+                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
+                    <thead><tr><th>الكود</th><th>الاسم</th><th>النوع</th><th>الموبايل</th><th>انتهاء الرخصة</th><th>الحالة</th>
+                        @if (CanEdit) { <th style="width:120px; text-align:left">إجراءات</th> }</tr></thead>
+                    <tbody>
+                        @foreach (var d in Filtered)
+                        {
+                            <tr>
+                                <td><span class="fc-role-chip">@d.DriverCode</span></td>
+                                <td><div class="fc-cell-main">@d.FullName</div></td>
+                                <td>@if (d.DriverType == "Internal") { <span class="fc-chip fc-chip-blue"><i></i>داخلي</span> }
+                                    else { <span class="fc-chip fc-chip-purple"><i></i>خارجي</span> }</td>
+                                <td class="fc-cell-sub">@(d.Mobile ?? "—")</td>
+                                <td>
+                                    @if (d.LicenseExpiryDate is null) { <span class="fc-cell-sub">—</span> }
+                                    else if (d.LicenseExpiryDate.Value < DateOnly.FromDateTime(DateTime.Today))
+                                    { <span class="fc-chip fc-chip-bad"><i></i>منتهية</span> }
+                                    else if (d.LicenseExpiryDate.Value <= DateOnly.FromDateTime(DateTime.Today.AddDays(30)))
+                                    { <span class="fc-chip fc-chip-warn"><i></i>@d.LicenseExpiryDate.Value.ToString("yyyy-MM-dd")</span> }
+                                    else { <span class="fc-cell-sub">@d.LicenseExpiryDate.Value.ToString("yyyy-MM-dd")</span> }
+                                </td>
+                                <td>@(d.Status == "Active" ? "نشط" : d.Status == "Suspended" ? "موقوف" : "غير نشط")</td>
+                                @if (CanEdit)
+                                {
+                                    <td><div class="fc-row-actions">
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="() => Edit(d)" />
+                                        @if (_confirmId == d.DriverId)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" OnClick="() => Delete(d)">متأكد؟</MudButton>
+                                        }
+                                        else if (CanDelete)
+                                        {
+                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => _confirmId = d.DriverId" />
+                                        }
+                                    </div></td>
+                                }
+                            </tr>
+                        }
+                        @if (!Filtered.Any())
+                        {
+                            <tr><td colspan="7"><div class="fc-empty"><div>لايوجد اى سائقين على النظام</div></div></td></tr>
+                        }
+                    </tbody>
+                </table></div>
+            }
+        </div></div>
+    }
+
+    @if (_modalOpen && CanCreate)
+    {
+        <div class="fc-modal-backdrop" @onclick="Close">
+            <div class="fc-modal" @onclick:stopPropagation>
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">@(_editId is null ? "سائق جديد" : "تعديل سائق")</div>
+                        <div class="fc-modal-sub">الكود بيتولد تلقائيًا (DRV-)</div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="Close" />
+                </div>
+                <div class="fc-modal-body">
+                    @if (_msg is not null)
+                    {
+                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
+                    }
+                    <div class="fc-form-grid">
+                        <div><div class="fc-panel-sub" style="margin-bottom:6px">نوع السائق</div>
+                            <select class="fc-sel fc-sel-lg" @bind="_f.DriverType">
+                                <option value="Internal">داخلي (موظف)</option>
+                                <option value="External">خارجي (مورد)</option>
+                            </select></div>
+                        @if (_f.DriverType == "Internal")
+                        {
+                            <div><div class="fc-panel-sub" style="margin-bottom:6px">الموظف *</div>
+                                <select class="fc-sel fc-sel-lg" @bind="_f.EmployeeId">
+                                    <option value="">— اختار —</option>
+                                    @foreach (var e in _employees) { <option value="@e.Id">@e.Label</option> }
+                                </select></div>
+                        }
+                        else
+                        {
+                            <div><div class="fc-panel-sub" style="margin-bottom:6px">المورد *</div>
+                                <select class="fc-sel fc-sel-lg" @bind="_f.SupplierId">
+                                    <option value="">— اختار —</option>
+                                    @foreach (var s in _suppliers) { <option value="@s.Id">@s.Label</option> }
+                                </select></div>
+                        }
+                        <MudTextField T="string" @bind-Value="_f.FullName" Label="الاسم الكامل *" Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_f.NationalId" Label="الرقم القومي" Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_f.Mobile" Label="الموبايل" Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_f.LicenseNumber" Label="رقم الرخصة" Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_f.LicenseType" Label="درجة الرخصة" Variant="Variant.Outlined" />
+                        <div><div class="fc-panel-sub" style="margin-bottom:6px">انتهاء الرخصة</div>
+                            <input type="date" class="fc-sel fc-sel-lg" value="@_f.LicenseExpiryDate"
+                                   @onchange="e => _f.LicenseExpiryDate = e.Value?.ToString()" /></div>
+                        <div><div class="fc-panel-sub" style="margin-bottom:6px">الحالة</div>
+                            <select class="fc-sel fc-sel-lg" @bind="_f.Status">
+                                <option value="Active">نشط</option>
+                                <option value="Inactive">غير نشط</option>
+                                <option value="Suspended">موقوف</option>
+                            </select></div>
+                    </div>
+                </div>
+                <div class="fc-modal-foot">
+                    <MudButton Variant="Variant.Outlined" OnClick="Close">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveAsync">حفظ</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private AuthUser? _user;
+    private bool CanView => _user?.Can("DRIVER.VIEW") ?? false;
+    private bool CanCreate => _user?.Can("DRIVER.CREATE") ?? false;
+    private bool CanEdit => _user?.Can("DRIVER.EDIT") ?? false;
+    private bool CanDelete => _user?.Can("DRIVER.DELETE") ?? false;
+
+    private List<Item> _items = new();
+    private List<Opt> _employees = new();
+    private List<Opt> _suppliers = new();
+    private bool _loading; private string _search = ""; private int? _confirmId;
+    private bool _modalOpen; private int? _editId; private bool _saving; private string? _msg; private bool _ok;
+    private Form _f = new();
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+
+    public class Item { public int DriverId { get; set; } public string DriverCode { get; set; } = "";
+        public string DriverType { get; set; } = ""; public string FullName { get; set; } = "";
+        public string? Mobile { get; set; } public DateOnly? LicenseExpiryDate { get; set; } public string Status { get; set; } = ""; }
+
+    public class Detail { public string DriverType { get; set; } = ""; public int? EmployeeId { get; set; }
+        public int? SupplierId { get; set; } public string FullName { get; set; } = ""; public string? NationalId { get; set; }
+        public string? Mobile { get; set; } public string? LicenseNumber { get; set; } public string? LicenseType { get; set; }
+        public DateOnly? LicenseExpiryDate { get; set; } public string Status { get; set; } = ""; public string? Notes { get; set; } }
+
+    public class Form { public string DriverType { get; set; } = "Internal"; public int? EmployeeId { get; set; }
+        public int? SupplierId { get; set; } public string FullName { get; set; } = ""; public string? NationalId { get; set; }
+        public string? Mobile { get; set; } public string? LicenseNumber { get; set; } public string? LicenseType { get; set; }
+        public string? LicenseExpiryDate { get; set; } public string Status { get; set; } = "Active"; }
+
+    private int ExpiringSoon => _items.Count(d =>
+        d.LicenseExpiryDate is not null && d.LicenseExpiryDate.Value > DateOnly.FromDateTime(DateTime.Today) &&
+        d.LicenseExpiryDate.Value <= DateOnly.FromDateTime(DateTime.Today.AddDays(30)));
+
+    private IEnumerable<Item> Filtered => string.IsNullOrWhiteSpace(_search) ? _items :
+        _items.Where(d => d.FullName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                          d.DriverCode.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (CanView)
+        {
+            await LoadAsync();
+            if (CanCreate)
+            {
+                _employees = await SafeGet("api/options/employees");
+                _suppliers = await SafeGet("api/options/suppliers");
+            }
+        }
+    }
+
+    private async Task<List<Opt>> SafeGet(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<Opt>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    private async Task Reload() { await LoadAsync(); }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/drivers") ?? new(); }
+        catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
+        finally { _loading = false; }
+    }
+
+    private void New() { _editId = null; _f = new Form(); _msg = null; _modalOpen = true; }
+
+    private async Task Edit(Item d)
+    {
+        try
+        {
+            var x = await Http.GetFromJsonAsync<Detail>($"api/drivers/{d.DriverId}");
+            if (x is null) return;
+            _editId = d.DriverId;
+            _f = new Form { DriverType = x.DriverType, EmployeeId = x.EmployeeId, SupplierId = x.SupplierId,
+                FullName = x.FullName, NationalId = x.NationalId, Mobile = x.Mobile,
+                LicenseNumber = x.LicenseNumber, LicenseType = x.LicenseType,
+                LicenseExpiryDate = x.LicenseExpiryDate?.ToString("yyyy-MM-dd"), Status = x.Status };
+            _msg = null; _modalOpen = true;
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private void Close() { _modalOpen = false; }
+
+    private async Task SaveAsync()
+    {
+        _saving = true; _msg = null;
+        try
+        {
+            var payload = new
+            {
+                driverType = _f.DriverType, employeeId = _f.EmployeeId, supplierId = _f.SupplierId,
+                fullName = _f.FullName, nationalId = _f.NationalId, mobile = _f.Mobile,
+                licenseNumber = _f.LicenseNumber, licenseType = _f.LicenseType,
+                licenseExpiryDate = _f.LicenseExpiryDate, status = _f.Status, notes = (string?)null
+            };
+            var res = _editId is null
+                ? await Http.PostAsJsonAsync("api/drivers", payload)
+                : await Http.PutAsJsonAsync($"api/drivers/{_editId}", payload);
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); Close(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task Delete(Item d)
+    {
+        try
+        {
+            var res = await Http.DeleteAsync($"api/drivers/{d.DriverId}");
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            _confirmId = null;
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+    }
+}

@@ -1,0 +1,768 @@
+@page "/users"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject ISnackbar Snackbar
+
+<PageTitle>المستخدمين — فاست كوم</PageTitle>
+
+@* ═══════════════ الهيرو هيدر ═══════════════ *@
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">الإدارة · الأمن</div>
+                <h1 class="fc-hero-title">المستخدمين والأدوار</h1>
+                <p class="fc-hero-sub">إنشاء الحسابات وتعيين الأدوار وكلمات المرور واستثناءات الصلاحيات</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Inherit"
+                               title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                @if (CanManage)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="NewUser">مستخدم جديد</MudButton>
+                }
+            </div>
+        </div>
+
+        @if (CanView)
+        {
+            <div class="fc-kpis fc-kpis-glass">
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.Groups" /></div>
+                    <div><div class="fc-kpi-num">@_users.Count</div><div class="fc-kpi-lb">إجمالي الحسابات</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
+                    <div><div class="fc-kpi-num">@_users.Count(u => u.IsActive)</div><div class="fc-kpi-lb">نشط</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Lock" /></div>
+                    <div><div class="fc-kpi-num">@_users.Count(u => !u.IsActive)</div><div class="fc-kpi-lb">موقوف</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.Badge" /></div>
+                    <div><div class="fc-kpi-num">@_roles.Count</div><div class="fc-kpi-lb">الأدوار</div></div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanView)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">
+            ليس لديك صلاحية عرض المستخدمين.
+        </MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap">
+            <div class="fc-card">
+
+                <div class="fc-toolbar">
+                    <MudTextField T="string" Value="_search" ValueChanged="OnSearch"
+                                  Placeholder="ابحث بالاسم أو اسم المستخدم..."
+                                  Variant="Variant.Outlined" Dense="true"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search"
+                                  Class="fc-search-box" Immediate="true" />
+
+                    <div class="fc-filters">
+                        <button class='fc-filter @(_filter == "all" ? "on" : "")' @onclick='() => _filter = "all"'>الكل</button>
+                        <button class='fc-filter @(_filter == "on" ? "on" : "")' @onclick='() => _filter = "on"'>نشط</button>
+                        <button class='fc-filter @(_filter == "off" ? "on" : "")' @onclick='() => _filter = "off"'>موقوف</button>
+                    </div>
+
+                    <span class="fc-count">عرض @Filtered.Count() من @_users.Count</span>
+                </div>
+
+                @if (_loading)
+                {
+                    <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+                }
+                else if (_loadError is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="ma-4">@_loadError</MudAlert>
+                }
+                else
+                {
+                    <div class="fc-table-wrap">
+                        <table class="fc-table fc-table-pro">
+                            <thead>
+                                <tr>
+                                    <th style="width:52px"></th>
+                                    <th>المستخدم</th>
+                                    <th>الأدوار</th>
+                                    <th>الحالة</th>
+                                    <th>آخر دخول</th>
+                                    @if (CanManage)
+                                    {
+                                        <th style="width:190px; text-align:left">إجراءات</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var u in Filtered)
+                                {
+                                    <tr>
+                                        <td><span class="fc-avatar fc-av-@(u.Id % 5)">@Initials(u)</span></td>
+                                        <td>
+                                            <div class="fc-cell-main">@u.FullName</div>
+                                            <div class="fc-cell-sub">@u.UserName · @(u.Email ?? "بدون بريد")</div>
+                                        </td>
+                                        <td>
+                                            @if (string.IsNullOrEmpty(u.Roles))
+                                            {
+                                                <span class="fc-role-chip fc-role-none">بدون دور</span>
+                                            }
+                                            else
+                                            {
+                                                @foreach (var r in u.Roles.Split(" · "))
+                                                {
+                                                    <span class="fc-role-chip">@r</span>
+                                                }
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (u.IsActive && u.UserStatus == "Active")
+                                            {
+                                                <span class="fc-chip fc-chip-ok"><i></i>نشط</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="fc-chip fc-chip-bad"><i></i>موقوف</span>
+                                            }
+                                        </td>
+                                        <td class="fc-cell-sub">@(u.LastLoginAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "لم يدخل بعد")</td>
+                                        @if (CanManage)
+                                        {
+                                            <td>
+                                                <div class="fc-row-actions">
+                                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
+                                                                   Color="Color.Primary" title="تعديل"
+                                                                   OnClick="() => Edit(u)" />
+                                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Key"
+                                                                   Color="Color.Warning" title="كلمة المرور"
+                                                                   OnClick="() => OpenPwd(u)" />
+                                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Lock"
+                                                                   Color="Color.Info" title="استثناءات الصلاحيات"
+                                                                   OnClick="() => OpenOverrides(u)" />
+                                                    @if (u.IsActive)
+                                                    {
+                                                        @if (_confirmId == u.Id)
+                                                        {
+                                                            <MudButton Size="Size.Small" Variant="Variant.Filled"
+                                                                       Color="Color.Error" OnClick="() => Disable(u)">
+                                                                متأكد؟
+                                                            </MudButton>
+                                                        }
+                                                        else
+                                                        {
+                                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
+                                                                           Color="Color.Error" title="تعطيل"
+                                                                           OnClick="() => _confirmId = u.Id" />
+                                                        }
+                                                    }
+                                                </div>
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                                @if (!Filtered.Any())
+                                {
+                                    <tr>
+                                        <td colspan="6">
+                                            <div class="fc-empty">
+                                                <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" />
+                                                <div>مافيش نتائج مطابقة</div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @* ═══════════════ مودال إنشاء / تعديل ═══════════════ *@
+    @if (_panelOpen && CanManage)
+    {
+        <div class="fc-modal-backdrop" @onclick="ClosePanel">
+            <div class="fc-modal" @onclick:stopPropagation>
+                <div class="fc-modal-head">
+                    <div>
+                        <div class="fc-modal-title">@(_editingId is null ? "مستخدم جديد" : "تعديل مستخدم")</div>
+                        <div class="fc-modal-sub">@(_editingId is null ? "هيتعمل بكلمة المرور اللي هتكتبها دلوقتي" : _form.FullName)</div>
+                    </div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="ClosePanel" />
+                </div>
+
+                <div class="fc-modal-body">
+                    @if (_saveMsg is not null)
+                    {
+                        <MudAlert Severity="@(_saveOk ? Severity.Success : Severity.Error)"
+                                  Variant="Variant.Outlined" Class="mb-4">@_saveMsg</MudAlert>
+                    }
+
+                    <div class="fc-form-grid">
+                        <MudTextField T="string" @bind-Value="_form.UserName" Label="اسم المستخدم"
+                                      Variant="Variant.Outlined" Disabled="_editingId is not null"
+                                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.PersonOutline" />
+                        <MudTextField T="string" @bind-Value="_form.FullName" Label="الاسم الكامل"
+                                      Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_form.Email" Label="البريد الإلكتروني (اختياري)"
+                                      Variant="Variant.Outlined" InputType="InputType.Email" />
+                        @if (_editingId is null)
+                        {
+                            <MudTextField T="string" @bind-Value="_form.Password" Label="كلمة المرور (8+ حروف)"
+                                          Variant="Variant.Outlined" InputType="InputType.Password"
+                                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Key" />
+                        }
+                        else
+                        {
+                            <div class="fc-active-toggle">
+                                <MudCheckBox T="bool" @bind-Value="_form.IsActive" Label="الحساب مفعّل"
+                                             Color="Color.Success" />
+                                <div class="fc-cell-sub">لو اتقفل، المستخدم مش هيقدر يدخل لحد ما يتفعّل</div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="fc-roles-block">
+                        <div class="fc-panel-sub">الأدوار — اختار دور أو أكتر</div>
+                        @if (!_roles.Any())
+                        {
+                            <div class="fc-cell-sub">مافيش أدوار في النظام</div>
+                        }
+                        <div class="fc-role-grid">
+                            @foreach (var r in _roles.Where(r => r.IsActive || _form.RoleIds.Contains(r.Id)))
+                            {
+                                <label class='fc-role-tile @(_form.RoleIds.Contains(r.Id) ? "sel" : "")'>
+                                    <MudCheckBox T="bool"
+                                                 Value="_form.RoleIds.Contains(r.Id)"
+                                                 ValueChanged="@(v => ToggleRole(r.Id, v))"
+                                                 Color="Color.Primary" Dense="true" />
+                                    <span class="fc-role-tile-txt">
+                                        <b>@r.NameAr</b>
+                                        <small>@r.RoleCode · @r.UserCount مستخدم</small>
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fc-modal-foot">
+                    <MudButton Variant="Variant.Outlined" OnClick="ClosePanel">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               Disabled="_saving" OnClick="SaveAsync">
+                        @if (_saving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                        }
+                        حفظ
+                    </MudButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ═══════════════ مودال كلمة المرور ═══════════════ *@
+    @if (_pwdFor is not null && CanManage)
+    {
+        <div class="fc-modal-backdrop" @onclick="() => _pwdFor = null">
+            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation>
+                <div class="fc-modal-head">
+                    <div>
+                        <div class="fc-modal-title">كلمة مرور جديدة</div>
+                        <div class="fc-modal-sub">للمستخدم: @_pwdFor.FullName</div>
+                    </div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _pwdFor = null" />
+                </div>
+
+                <div class="fc-modal-body">
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
+                        التعيين بيفتح الحساب المقفول ويصفّر عدّاد المحاولات.
+                    </MudAlert>
+                    <MudTextField T="string" @bind-Value="_newPwd" Label="كلمة المرور الجديدة (8+)"
+                                  Variant="Variant.Outlined" InputType="InputType.Password" Class="mb-3" />
+                    <MudTextField T="string" @bind-Value="_newPwd2" Label="تأكيد كلمة المرور"
+                                  Variant="Variant.Outlined" InputType="InputType.Password" />
+                </div>
+
+                <div class="fc-modal-foot">
+                    <MudButton Variant="Variant.Outlined" OnClick="() => _pwdFor = null">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Warning"
+                               Disabled="_savingPwd" OnClick="SavePwdAsync">تعيين</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ═══════════════ مودال استثناءات الصلاحيات ═══════════════ *@
+    @if (_ovFor is not null && CanManage)
+    {
+        <div class="fc-modal-backdrop" @onclick="CloseOverrides">
+            <div class="fc-modal" @onclick:stopPropagation>
+                <div class="fc-modal-head">
+                    <div>
+                        <div class="fc-modal-title">استثناءات الصلاحيات</div>
+                        <div class="fc-modal-sub">للمستخدم: @_ovFor.FullName — منح أو منع صلاحية بره دوره</div>
+                    </div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseOverrides" />
+                </div>
+
+                <div class="fc-modal-body">
+                    @if (_ovLoading)
+                    {
+                        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
+                            «افتراضي» = حسب أدواره. أي استثناء بيتفعّل خلال دقيقة من الحفظ.
+                        </MudAlert>
+
+                        @foreach (var mod in _ovCatalog)
+                        {
+                            <details class="fc-matrix-mod" open="@(_ovCatalog.Count <= 3)">
+                                <summary class="fc-matrix-mod-head">@mod.ModuleCode <small>@mod.Items.Count صلاحية</small></summary>
+                                <div class="fc-matrix-mod-body" style="display:block">
+                                    @foreach (var p in mod.Items)
+                                    {
+                                        <div class="fc-ov-row">
+                                            <span class="fc-ov-name">@p.NameAr <small>(@p.PermissionCode)</small></span>
+                                            <select class="fc-sel" value="@OvState(p.PermissionId)"
+                                                    @onchange="e => SetOv(p.PermissionId, (string?)e.Value)">
+                                                <option value="default">افتراضي</option>
+                                                <option value="grant">منح إضافي</option>
+                                                <option value="deny">منع صريح</option>
+                                            </select>
+                                        </div>
+                                    }
+                                </div>
+                            </details>
+                        }
+                    }
+                </div>
+
+                <div class="fc-modal-foot">
+                    <span class="fc-count">@_ovState.Count(k => k.Value != "default") استثناء</span>
+                    <MudButton Variant="Variant.Outlined" OnClick="CloseOverrides">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               Disabled="_ovSaving" OnClick="SaveOverridesAsync">حفظ الاستثناءات</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    // ═══════════════════════ الصلاحيات ═══════════════════════
+    private AuthUser? _user;
+    private bool CanView   => _user?.Can("USER.VIEW") ?? false;
+    private bool CanManage => _user?.Can("USER.MANAGE") ?? false;
+
+    // ═══════════════════════ البيانات ═══════════════════════
+    private List<UserItem> _users = new();
+    private List<RoleItem> _roles = new();
+    private bool _loading;
+    private string? _loadError;
+    private string _search = "";
+    private string _filter = "all";
+    private int? _confirmId;
+
+    private bool _panelOpen;
+    private int? _editingId;
+    private UserForm _form = new();
+    private bool _saving;
+    private string? _saveMsg;
+    private bool _saveOk;
+
+    private UserItem? _pwdFor;
+    private string _newPwd = "";
+    private string _newPwd2 = "";
+    private bool _savingPwd;
+
+    // استثناءات الصلاحيات
+    private UserItem? _ovFor;
+    private bool _ovLoading;
+    private bool _ovSaving;
+    private List<PermModule> _ovCatalog = new();
+    private Dictionary<int, string> _ovState = new();
+
+    public class UserItem
+    {
+        public int Id { get; set; }
+        public string UserName { get; set; } = "";
+        public string FullName { get; set; } = "";
+        public string? Email { get; set; }
+        public bool IsActive { get; set; }
+        public string UserStatus { get; set; } = "";
+        public DateTime? LastLoginAt { get; set; }
+        public string Roles { get; set; } = "";
+    }
+
+    public class RoleItem
+    {
+        public int Id { get; set; }
+        public string RoleCode { get; set; } = "";
+        public string NameAr { get; set; } = "";
+        public bool IsSystem { get; set; }
+        public bool IsActive { get; set; }
+        public int UserCount { get; set; }
+    }
+
+    public class UserForm
+    {
+        public string UserName { get; set; } = "";
+        public string Password { get; set; } = "";
+        public string FullName { get; set; } = "";
+        public string? Email { get; set; }
+        public bool IsActive { get; set; } = true;
+        public List<int> RoleIds { get; set; } = new();
+    }
+
+    public class UserDetail
+    {
+        public int Id { get; set; }
+        public string UserName { get; set; } = "";
+        public string FullName { get; set; } = "";
+        public string? Email { get; set; }
+        public bool IsActive { get; set; }
+        public List<int> RoleIds { get; set; } = new();
+    }
+
+    public class PermItem
+    {
+        public int PermissionId { get; set; }
+        public string PermissionCode { get; set; } = "";
+        public string NameAr { get; set; } = "";
+    }
+
+    public class PermModule
+    {
+        public string ModuleCode { get; set; } = "";
+        public List<PermItem> Items { get; set; } = new();
+    }
+
+    public class OvDto
+    {
+        public int PermissionId { get; set; }
+        public int IsGranted { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    private IEnumerable<UserItem> Filtered
+    {
+        get
+        {
+            var q = _users.AsEnumerable();
+            q = _filter switch
+            {
+                "on"  => q.Where(u => u.IsActive),
+                "off" => q.Where(u => !u.IsActive),
+                _     => q
+            };
+            return string.IsNullOrWhiteSpace(_search)
+                ? q
+                : q.Where(u =>
+                    u.UserName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                    u.FullName.Contains(_search, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    private static string Initials(UserItem u)
+    {
+        var parts = (u.FullName ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return "?";
+        if (parts.Length == 1) return parts[0][0].ToString();
+        return $"{parts[0][0]}{parts[1][0]}";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (CanView) await LoadAsync();
+    }
+
+    private async Task Reload() { await LoadAsync(); Snackbar.Add("اتحدّثت القائمة", Severity.Success); }
+
+    private void OnSearch(string v) { _search = v; }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _loadError = null;
+        try
+        {
+            _users = await Http.GetFromJsonAsync<List<UserItem>>("api/users") ?? new();
+            _roles = await Http.GetFromJsonAsync<List<RoleItem>>("api/roles") ?? new();
+        }
+        catch (Exception ex)
+        {
+            _loadError = "فشل تحميل البيانات: " + ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    // ═══════════════════════ لوحة التعديل ═══════════════════════
+
+    private void NewUser()
+    {
+        _editingId = null;
+        _form = new UserForm();
+        _saveMsg = null;
+        _panelOpen = true;
+        _pwdFor = null;
+        _ovFor = null;
+        _confirmId = null;
+    }
+
+    private async Task Edit(UserItem u)
+    {
+        _saveMsg = null;
+        _pwdFor = null;
+        _ovFor = null;
+        _confirmId = null;
+        try
+        {
+            var d = await Http.GetFromJsonAsync<UserDetail>($"api/users/{u.Id}");
+            if (d is null) { Snackbar.Add("فشل تحميل المستخدم", Severity.Error); return; }
+
+            _editingId = d.Id;
+            _form = new UserForm
+            {
+                UserName = d.UserName,
+                FullName = d.FullName,
+                Email    = d.Email,
+                IsActive = d.IsActive,
+                RoleIds  = d.RoleIds
+            };
+            _panelOpen = true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("فشل تحميل المستخدم: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private void ToggleRole(int id, bool v)
+    {
+        if (v && !_form.RoleIds.Contains(id)) _form.RoleIds.Add(id);
+        if (!v) _form.RoleIds.Remove(id);
+    }
+
+    private void ClosePanel() { _panelOpen = false; _editingId = null; }
+
+    private async Task SaveAsync()
+    {
+        _saveMsg = null;
+
+        if (string.IsNullOrWhiteSpace(_form.FullName))
+        { _saveOk = false; _saveMsg = "الاسم الكامل مطلوب"; return; }
+
+        _saving = true;
+        try
+        {
+            HttpResponseMessage res;
+            if (_editingId is null)
+            {
+                if (string.IsNullOrWhiteSpace(_form.UserName) || _form.Password.Length < 8)
+                { _saveOk = false; _saveMsg = "اسم المستخدم وكلمة مرور 8+ حروف مطلوبين"; _saving = false; return; }
+
+                res = await Http.PostAsJsonAsync("api/users", new
+                {
+                    userName = _form.UserName.Trim(),
+                    password = _form.Password,
+                    fullName = _form.FullName.Trim(),
+                    email    = _form.Email,
+                    branchId = (int?)null,
+                    roleIds  = _form.RoleIds
+                });
+            }
+            else
+            {
+                res = await Http.PutAsJsonAsync($"api/users/{_editingId}", new
+                {
+                    fullName   = _form.FullName.Trim(),
+                    email      = _form.Email,
+                    branchId   = (int?)null,
+                    isActive   = _form.IsActive,
+                    userStatus = _form.IsActive ? "Active" : "Inactive",
+                    roleIds    = _form.RoleIds
+                });
+            }
+
+            var msg = await MsgOf(res);
+            _saveOk = res.IsSuccessStatusCode;
+            _saveMsg = msg;
+
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(msg, Severity.Success);
+                ClosePanel();
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _saveOk = false;
+            _saveMsg = "مش قادر أوصل للسيرفر: " + ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    // ═══════════════════════ تعطيل ═══════════════════════
+
+    private async Task Disable(UserItem u)
+    {
+        try
+        {
+            var res = await Http.DeleteAsync($"api/users/{u.Id}");
+            var msg = await MsgOf(res);
+            Snackbar.Add(msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            _confirmId = null;
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("فشل التعطيل: " + ex.Message, Severity.Error);
+        }
+    }
+
+    // ═══════════════════════ كلمة المرور ═══════════════════════
+
+    private void OpenPwd(UserItem u)
+    {
+        _pwdFor = u;
+        _newPwd = _newPwd2 = "";
+        _panelOpen = false;
+        _ovFor = null;
+        _confirmId = null;
+    }
+
+    private async Task SavePwdAsync()
+    {
+        if (_pwdFor is null) return;
+
+        if (_newPwd.Length < 8)
+        { Snackbar.Add("كلمة المرور لازم تكون 8 حروف على الأقل", Severity.Error); return; }
+        if (_newPwd != _newPwd2)
+        { Snackbar.Add("التأكيد مش مطابق", Severity.Error); return; }
+
+        _savingPwd = true;
+        try
+        {
+            var res = await Http.PostAsJsonAsync($"api/users/{_pwdFor.Id}/reset-password",
+                new { newPassword = _newPwd });
+            var msg = await MsgOf(res);
+            Snackbar.Add(msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) _pwdFor = null;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("فشل التعيين: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _savingPwd = false;
+        }
+    }
+
+    // ═══════════════════════ الاستثناءات ═══════════════════════
+
+    private async Task OpenOverrides(UserItem u)
+    {
+        _ovFor = u;
+        _panelOpen = false;
+        _pwdFor = null;
+        _confirmId = null;
+        _ovLoading = true;
+        _ovState = new();
+        try
+        {
+            _ovCatalog = await Http.GetFromJsonAsync<List<PermModule>>("api/permissions") ?? new();
+            var current = await Http.GetFromJsonAsync<List<OvDto>>($"api/users/{u.Id}/permissions") ?? new();
+            foreach (var o in current)
+                _ovState[o.PermissionId] = o.IsGranted != 0 ? "grant" : "deny";
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("فشل تحميل الصلاحيات: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _ovLoading = false;
+        }
+    }
+
+    private string OvState(int pid) => _ovState.TryGetValue(pid, out var s) ? s : "default";
+
+    private void SetOv(int pid, string? v)
+    {
+        v ??= "default";
+        if (v == "default") _ovState.Remove(pid);
+        else _ovState[pid] = v;
+    }
+
+    private void CloseOverrides() { _ovFor = null; }
+
+    private async Task SaveOverridesAsync()
+    {
+        if (_ovFor is null) return;
+        _ovSaving = true;
+        try
+        {
+            var payload = _ovState
+                .Select(kv => new { permissionId = kv.Key, isGranted = kv.Value == "grant" ? 1 : 0, notes = (string?)null })
+                .ToList();
+
+            var res = await Http.PutAsJsonAsync($"api/users/{_ovFor.Id}/permissions", payload);
+            var msg = await MsgOf(res);
+            Snackbar.Add(msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) _ovFor = null;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("فشل الحفظ: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _ovSaving = false;
+        }
+    }
+
+    // ═══════════════════════ helpers ═══════════════════════
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var body = await res.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(body)) return res.IsSuccessStatusCode ? "تم" : "خطأ غير معروف";
+            var doc = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(body);
+            if (doc.TryGetProperty("message", out var m)) return m.GetString() ?? body;
+            return body;
+        }
+        catch
+        {
+            return res.IsSuccessStatusCode ? "تم" : $"خطأ HTTP {(int)res.StatusCode}";
+        }
+    }
+}

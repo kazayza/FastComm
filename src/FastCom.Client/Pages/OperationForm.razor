@@ -1,0 +1,537 @@
+@page "/operations/new"
+@page "/operations/new/{Id:long}"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_id is null ? "عملية جديدة" : "تعديل عملية") — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">التشغيل · العمليات</div>
+                <h1 class="fc-hero-title">@(_id is null ? "عملية جديدة" : $"تعديل {OpNumber}")</h1>
+                <p class="fc-hero-sub">الإيراد والتكلفة بيتحسبوا تلقائي — الرقم بيتولد (OP-)</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudButton Variant="Variant.Outlined" OnClick="GoBack" Style="color:#9FB4CC">رجوع</MudButton>
+                @if (CanSave && !_locked)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving"
+                               StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="SaveAsync">حفظ</MudButton>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanCreate && _id is null)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديكصلاحية إنشاء عملية.</MudAlert>
+    }
+    else if (_loading)
+    {
+        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+
+            @if (_msg is not null)
+            {
+                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
+            }
+            @if (_locked)
+            {
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
+                    العملية حالتها «@StatusAr(_status)» — التعديل مقفول.
+                </MudAlert>
+            }
+
+            @if (_id is null && _bookings.Count > 0)
+            {
+                <div class="fc-panel-sub" style="margin-bottom:6px">من حجز مؤكد (اختياري)</div>
+                <select class="fc-sel fc-sel-lg" style="max-width:520px" value="@_selectedBooking"
+                        @onchange="OnBookingPicked">
+                    <option value="">— عملية مستقلة من غير حجز —</option>
+                    @foreach (var b in _bookings)
+                    {
+                        <option value="@b.BookingId">@b.BookingNumber — @b.CustomerName</option>
+                    }
+                </select>
+            }
+
+            <div class="fc-panel-sub" style="margin:26px 0 14px">بيانات العملية</div>
+            <div class="fc-form-grid">
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">العميل *</div>
+                    <select class="fc-sel fc-sel-lg" value="@_f.CustomerId" disabled="@_locked"
+                            @onchange="OnCustomerChanged">
+                        <option value="0">— اختار العميل —</option>
+                        @foreach (var c in _customers) { <option value="@c.Id">@c.Label</option> }
+                    </select>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">التاريخ المخطط</div>
+                    <input type="datetime-local" class="fc-sel fc-sel-lg" value="@_f.PlannedDate" disabled="@_locked"
+                           @onchange="e => _f.PlannedDate = e.Value?.ToString()" />
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">نوع الرحلة</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.TripTypeId" disabled="@_locked">
+                        <option value="">—</option>
+                        @foreach (var t in _tripTypes) { <option value="@t.Id">@t.Label</option> }
+                    </select>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">التكلفة التقديرية</div>
+                    <input type="number" min="0" step="0.01" class="fc-sel fc-sel-lg" value="@_f.EstimatedCost" disabled="@_locked"
+                           @onchange="e => _f.EstimatedCost = ParseDec(e.Value) ?? 0m" />
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">من (الميناء)</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.PortId" disabled="@_locked">
+                        <option value="">—</option>
+                        @foreach (var p in _ports) { <option value="@p.Id">@p.Label</option> }
+                    </select>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">إلى (الجهة)</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.DestinationId" disabled="@_locked">
+                        <option value="">—</option>
+                        @foreach (var d in _destinations) { <option value="@d.Id">@d.Label</option> }
+                    </select>
+                </div>
+            </div>
+
+            <div class="fc-panel-sub" style="margin:26px 0 6px">
+                سطور الإيراد
+                <span class="fc-cell-sub" style="font-weight:600"> — السعر بييجي من قواعد تسعير العميل، وتقدر تعدّله</span>
+            </div>
+            @if (_priceSource is not null)
+            {
+                <div class="fc-cell-sub" style="margin-bottom:10px">مصدر آخر سعر مقترح: @_priceSource</div>
+            }
+
+            <div class="fc-lines">
+                <div class="fc-rev-head">
+                    <div>الخدمة</div><div>البيان</div><div>الكمية</div><div>سعر الوحدة</div>
+                    <div>الخصم</div><div>الضريبة %</div><div>الإجمالي</div><div></div>
+                </div>
+                @if (_lines.Count == 0)
+                {
+                    <div class="fc-lines-empty">مافيش سطور — ضيف سطر إيراد واحد على الأقل</div>
+                }
+                @foreach (var ln in _lines)
+                {
+                    <div class="fc-rev-row">
+                        <div>
+                            <select class="fc-sel" @bind="ln.ServiceId" disabled="@_locked">
+                                <option value="0">—</option>
+                                @foreach (var s in _services) { <option value="@s.Id">@s.Label</option> }
+                            </select>
+                        </div>
+                        <div>
+                            <input class="fc-sel" value="@ln.Description" disabled="@_locked" maxlength="300"
+                                   @onchange="e => ln.Description = e.Value?.ToString()" />
+                        </div>
+                        <div>
+                            <input type="number" min="0.001" step="0.001" class="fc-sel" value="@ln.Qty" disabled="@_locked"
+                                   @onchange="e => ln.Qty = ParseDec(e.Value) ?? 1m" />
+                        </div>
+                        <div>
+                            <input type="number" min="0" step="0.01" class="fc-sel" value="@ln.UnitPrice" disabled="@_locked"
+                                   @onchange="e => ln.UnitPrice = ParseDec(e.Value) ?? 0m" />
+                        </div>
+                        <div>
+                            <input type="number" min="0" step="0.01" class="fc-sel" value="@ln.Discount" disabled="@_locked"
+                                   @onchange="e => ln.Discount = ParseDec(e.Value) ?? 0m" />
+                        </div>
+                        <div>
+                            <select class="fc-sel" @bind="ln.TaxRateId" disabled="@_locked">
+                                <option value="">0%</option>
+                                @foreach (var t in _taxRates) { <option value="@t.Id">@t.Label</option> }
+                            </select>
+                        </div>
+                        <div class="fc-rev-total">@LineGross(ln).ToString("N2")</div>
+                        <div>
+                            @if (!_locked)
+                            {
+                                <div style="display:flex; gap:2px">
+                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Search"
+                                                   Color="Color.Primary" title="اقترح السعر" OnClick="() => SuggestAsync(ln)" />
+                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
+                                                   Color="Color.Error" title="احذف السطر" OnClick="() => RemoveLine(ln)" />
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (CanSave && !_locked)
+            {
+                <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-3"
+                           StartIcon="@Icons.Material.Filled.Add" OnClick="AddLine">ضيف سطر</MudButton>
+            }
+
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:18px;
+                        padding:14px 16px; background:#F6F8FB; border-radius:12px">
+                <span class="fc-panel-sub" style="margin:0">الإجمالي</span>
+                <span style="font-size:15px; font-weight:800">
+                    صافي @TotalNet.ToString("N2") &nbsp;·&nbsp; ضريبة @TotalTax.ToString("N2") &nbsp;·&nbsp;
+                    إجمالي @((TotalNet + TotalTax)).ToString("N2")
+                </span>
+            </div>
+
+            <div class="fc-panel-sub" style="margin:26px 0 8px">ملاحظات</div>
+            <textarea class="fc-sel" rows="3" maxlength="1000" disabled="@_locked"
+                      @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
+
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:26px">
+                <MudButton Variant="Variant.Outlined" OnClick="GoBack">رجوع</MudButton>
+                @if (CanSave && !_locked)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveAsync">حفظ</MudButton>
+                }
+            </div>
+
+        </div></div>
+    }
+</div>
+
+@code {
+    [Parameter] public long? Id { get; set; }
+    private long? _id;
+    private string OpNumber = "";
+    private string _status = "Pending";
+    private bool _locked;
+
+    private AuthUser? _user;
+    private bool CanCreate => _user?.Can("OPERATION.CREATE") ?? false;
+    private bool CanEdit   => _user?.Can("OPERATION.EDIT") ?? false;
+    private bool CanSave   => _id is null ? CanCreate : CanEdit;
+
+    private bool _loading; private bool _saving; private string? _msg; private bool _ok;
+    private string? _priceSource;
+    private string _selectedBooking = "";
+
+    private List<Opt> _customers = new();
+    private List<Opt> _services = new();
+    private List<Opt> _ports = new();
+    private List<Opt> _destinations = new();
+    private List<Opt> _tripTypes = new();
+    private List<TaxOpt> _taxRates = new();
+    private List<Bk> _bookings = new();
+
+    private List<RevRow> _lines = new();
+    private Form _f = new();
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+    public class TaxOpt { public int Id { get; set; } public string Label { get; set; } = "";
+        public decimal Value { get; set; } }
+    public class Bk { public long BookingId { get; set; } public string BookingNumber { get; set; } = "";
+        public string CustomerName { get; set; } = ""; }
+
+    public class RevRow
+    {
+        public int ServiceId { get; set; }
+        public string? Description { get; set; }
+        public decimal Qty { get; set; } = 1;
+        public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
+        public int? TaxRateId { get; set; }
+        public long? PriceRuleId { get; set; }
+    }
+
+    public class Form
+    {
+        public long? BookingId { get; set; }
+        public int CustomerId { get; set; }
+        public int? ServiceId { get; set; }
+        public int? PortId { get; set; }
+        public int? DestinationId { get; set; }
+        public int? TripTypeId { get; set; }
+        public string? PlannedDate { get; set; }
+        public decimal EstimatedCost { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    public class Suggestion
+    {
+        public decimal UnitPrice { get; set; }
+        public decimal? CostPrice { get; set; }
+        public int? TaxRateId { get; set; }
+        public decimal TaxRate { get; set; }
+        public long? PriceRuleId { get; set; }
+        public string Source { get; set; } = "";
+    }
+
+    public class RevDto
+    {
+        public int ServiceId { get; set; }
+        public string? Description { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
+        public int? TaxRateId { get; set; }
+        public long? PriceRuleId { get; set; }
+    }
+
+    public class DetailOp
+    {
+        public string OperationNumber { get; set; } = "";
+        public long? BookingId { get; set; }
+        public int CustomerId { get; set; }
+        public int? ServiceId { get; set; }
+        public int? PortId { get; set; }
+        public int? DestinationId { get; set; }
+        public int? TripTypeId { get; set; }
+        public string? PlannedDate { get; set; }
+        public decimal EstimatedCost { get; set; }
+        public string? Notes { get; set; }
+        public string Status { get; set; } = "Pending";
+    }
+
+    public class DetailResponse
+    {
+        public DetailOp Operation { get; set; } = new();
+        public List<RevDto> RevenueLines { get; set; } = new();
+    }
+
+    public class BookingDetail
+    {
+        public BookingInfo Booking { get; set; } = new();
+    }
+
+    public class BookingInfo
+    {
+        public int CustomerId { get; set; }
+        public string? RequestedDate { get; set; }
+        public int? ServiceId { get; set; }
+        public int? PortId { get; set; }
+        public int? DestinationId { get; set; }
+        public int? TripTypeId { get; set; }
+        public string? CustomerReference { get; set; }
+    }
+
+    private static string StatusAr(string s) => s switch
+    {
+        "Pending" => "قيد الانتظار", "Assigned" => "تم التعيين",
+        "DriverReceived" => "استلم السائق", "InTransit" => "في الطريق",
+        "Delivered" => "تم التسليم", "Closed" => "مغلقة", "Cancelled" => "ملغاة", _ => s
+    };
+
+    private static decimal? ParseDec(object? v) =>
+        decimal.TryParse(v?.ToString(), out var n) && n >= 0 ? n : null;
+
+    private decimal RateOf(RevRow ln) =>
+        ln.TaxRateId is null ? 0m : _taxRates.FirstOrDefault(x => x.Id == ln.TaxRateId.Value)?.Value ?? 0m;
+
+    private decimal LineNet(RevRow ln) => ln.Qty * ln.UnitPrice - ln.Discount;
+    private decimal LineGross(RevRow ln) => LineNet(ln) + LineNet(ln) * RateOf(ln) / 100m;
+
+    private decimal TotalNet => _lines.Sum(LineNet);
+    private decimal TotalTax => _lines.Sum(ln => LineNet(ln) * RateOf(ln) / 100m);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        _id = Id;
+        if (!CanSave) return;
+
+        _loading = true;
+        try
+        {
+            _customers    = await SafeGet("api/options/customers");
+            _services     = await SafeGet("api/options/services");
+            _ports        = await SafeGet("api/options/ports");
+            _destinations = await SafeGet("api/options/destinations");
+            _tripTypes    = await SafeGet("api/options/trip-types");
+            try { _taxRates = await Http.GetFromJsonAsync<List<TaxOpt>>("api/options/tax-rates") ?? new(); }
+            catch { _taxRates = new(); }
+
+            if (_id is not null) await LoadOperationAsync(_id.Value);
+            else
+            {
+                _bookings = await SafeGetBk("api/operations/available-bookings");
+                AddLine();
+            }
+        }
+        catch (Exception ex) { _msg = "فشل التحميل: " + ex.Message; _ok = false; }
+        finally { _loading = false; }
+    }
+
+    private async Task<List<Opt>> SafeGet(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<Opt>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    private async Task<List<Bk>> SafeGetBk(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<Bk>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    private async Task LoadOperationAsync(long id)
+    {
+        var d = await Http.GetFromJsonAsync<DetailResponse>($"api/operations/{id}");
+        if (d is null) { _msg = "العملية مش موجودة"; _ok = false; return; }
+
+        OpNumber = d.Operation.OperationNumber;
+        _status = d.Operation.Status;
+        _locked = _status is "Closed" or "Cancelled";
+
+        _f = new Form
+        {
+            BookingId     = d.Operation.BookingId,
+            CustomerId    = d.Operation.CustomerId,
+            ServiceId     = d.Operation.ServiceId,
+            PortId        = d.Operation.PortId,
+            DestinationId = d.Operation.DestinationId,
+            TripTypeId    = d.Operation.TripTypeId,
+            PlannedDate   = d.Operation.PlannedDate,
+            EstimatedCost = d.Operation.EstimatedCost,
+            Notes         = d.Operation.Notes
+        };
+
+        _lines = d.RevenueLines.Select(r => new RevRow
+        {
+            ServiceId = r.ServiceId, Description = r.Description, Qty = r.Quantity,
+            UnitPrice = r.UnitPrice, Discount = r.Discount,
+            TaxRateId = r.TaxRateId, PriceRuleId = r.PriceRuleId
+        }).ToList();
+
+        if (_lines.Count == 0) AddLine();
+    }
+
+    private void AddLine() => _lines.Add(new RevRow { ServiceId = _f.ServiceId ?? 0, Qty = 1 });
+
+    private void RemoveLine(RevRow ln) => _lines.Remove(ln);
+
+    private void OnCustomerChanged(ChangeEventArgs e)
+    {
+        _f.CustomerId = int.TryParse(e.Value?.ToString(), out var n) ? n : 0;
+        _priceSource = null;
+    }
+
+    private async Task OnBookingPicked(ChangeEventArgs e)
+    {
+        _selectedBooking = e.Value?.ToString() ?? "";
+        if (!long.TryParse(_selectedBooking, out var bkId) || bkId <= 0)
+        {
+            _f.BookingId = null;
+            return;
+        }
+
+        try
+        {
+            var d = await Http.GetFromJsonAsync<BookingDetail>($"api/bookings/{bkId}");
+            if (d is null) return;
+
+            _f.BookingId     = bkId;
+            _f.CustomerId    = d.Booking.CustomerId;
+            _f.ServiceId     = d.Booking.ServiceId;
+            _f.PortId        = d.Booking.PortId;
+            _f.DestinationId = d.Booking.DestinationId;
+            _f.TripTypeId    = d.Booking.TripTypeId;
+            if (d.Booking.RequestedDate is not null)
+                _f.PlannedDate = d.Booking.RequestedDate + "T08:00";
+
+            _lines.Clear();
+            var row = new RevRow { ServiceId = d.Booking.ServiceId ?? 0, Qty = 1 };
+            _lines.Add(row);
+            await SuggestAsync(row);
+        }
+        catch (Exception ex) { _msg = "فشل قراءة الحجز: " + ex.Message; _ok = false; }
+    }
+
+    private async Task SuggestAsync(RevRow ln)
+    {
+        if (_f.CustomerId <= 0) { _msg = "اختار العميل الأول"; _ok = false; return; }
+        if (ln.ServiceId <= 0)  { _msg = "اختار الخدمة في السطر الأول"; _ok = false; return; }
+
+        var url = $"api/operations/price-suggest?customerId={_f.CustomerId}&serviceId={ln.ServiceId}" +
+                  (_f.PortId is not null ? $"&portId={_f.PortId}" : "") +
+                  (_f.DestinationId is not null ? $"&destinationId={_f.DestinationId}" : "") +
+                  (_f.TripTypeId is not null ? $"&tripTypeId={_f.TripTypeId}" : "");
+
+        try
+        {
+            var s = await Http.GetFromJsonAsync<Suggestion>(url);
+            if (s is null) return;
+
+            ln.UnitPrice  = s.UnitPrice;
+            ln.TaxRateId  = s.TaxRateId;
+            ln.PriceRuleId = s.PriceRuleId;
+            if (string.IsNullOrWhiteSpace(ln.Description))
+                ln.Description = _services.FirstOrDefault(x => x.Id == ln.ServiceId)?.Label;
+            if (s.CostPrice is not null && s.CostPrice > 0) _f.EstimatedCost = s.CostPrice.Value;
+
+            _priceSource = s.Source;
+            _msg = null;
+        }
+        catch (Exception ex) { _msg = "فشل اقتراح السعر: " + ex.Message; _ok = false; }
+    }
+
+    private void GoBack() => Nav.NavigateTo("/operations");
+
+    private async Task SaveAsync()
+    {
+        _msg = null;
+        if (_f.CustomerId <= 0) { _ok = false; _msg = "لازم تختار العميل"; return; }
+        var lines = _lines.Where(l => l.ServiceId > 0 && l.Qty > 0).ToList();
+        if (lines.Count == 0) { _ok = false; _msg = "ضيف سطر إيراد واحد على الأقل"; return; }
+
+        var payload = new
+        {
+            bookingId     = _f.BookingId,
+            customerId    = _f.CustomerId,
+            serviceId     = _f.ServiceId,
+            portId        = _f.PortId,
+            destinationId = _f.DestinationId,
+            tripTypeId    = _f.TripTypeId,
+            plannedDate   = _f.PlannedDate,
+            estimatedCost = _f.EstimatedCost,
+            notes         = _f.Notes,
+            revenueLines  = lines.Select(l => new
+            {
+                serviceId = l.ServiceId, description = l.Description, quantity = l.Qty,
+                unitPrice = l.UnitPrice, discount = l.Discount,
+                taxRateId = l.TaxRateId, priceRuleId = l.PriceRuleId
+            })
+        };
+
+        _saving = true;
+        try
+        {
+            var res = _id is null
+                ? await Http.PostAsJsonAsync("api/operations", payload)
+                : await Http.PutAsJsonAsync($"api/operations/{_id}", payload);
+
+            var msg = await MsgOf(res);
+            if (res.IsSuccessStatusCode) { Snackbar.Add(msg, Severity.Success); Nav.NavigateTo("/operations"); }
+            else { _ok = false; _msg = msg; }
+        }
+        catch (Exception ex) { _ok = false; _msg = "مش قادر أوصل للسيرفر: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+    }
+}

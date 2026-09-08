@@ -27,6 +27,15 @@ public class SearchResponse
     public string Query { get; set; } = "";
     public int Count { get; set; }
     public List<SearchResult> Results { get; set; } = new();
+
+    /// <summary>🔐 الوحدات اللي المستخدم يقدر يبحث فيها.</summary>
+    public List<string> SearchableIn { get; set; } = new();
+
+    /// <summary>🔐 الوحدات اللي ماعندوش صلاحيتها.</summary>
+    public List<string> DeniedEntities { get; set; } = new();
+
+    public string? Message { get; set; }
+
     public string? Error     { get; set; }
     public string? ErrorType { get; set; }
 }

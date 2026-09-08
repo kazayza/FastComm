@@ -1,0 +1,848 @@
+@page "/reports"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject TokenStore Tokens
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>التقارير — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">التقارير</div>
+                <h1 class="fc-hero-title">التقارير</h1>
+                <p class="fc-hero-sub">ربحية العمليات · التدفق النقدي · أداء الأسطول — وصدّر أي تقرير Excel</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
+                               OnClick="Reload" Style="color:#9FB4CC" />
+                @if (CanExport)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.FileDownload"
+                               Disabled="@_busy" OnClick="Export">
+                        @(_busy ? "بيصدّر…" : "تصدير Excel")
+                    </MudButton>
+                }
+            </div>
+        </div>
+
+        @if (Any && _range is not null)
+        {
+            <div class="fc-kpis fc-kpis-glass">
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.DateRange" /></div>
+                    <div><div class="fc-kpi-num" style="font-size:1rem">@_range.From</div>
+                        <div class="fc-kpi-lb">من</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.Event" /></div>
+                    <div><div class="fc-kpi-num" style="font-size:1rem">@_range.To</div>
+                        <div class="fc-kpi-lb">إلى</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Assessment" /></div>
+                    <div><div class="fc-kpi-num">@RowsCount</div>
+                        <div class="fc-kpi-lb">سجل في التقرير</div></div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="fc-overlap">
+    <div class="fc-card">
+
+        @* ══════════ رأس التقرير + الفلاتر ══════════ *@
+        <div class="fc-rep-head">
+            <div>
+                <div class="fc-panel-title">نطاق التقرير</div>
+                <div class="fc-cell-sub">الأرقام بتتحدّث من قاعدة البيانات مباشرة</div>
+            </div>
+            <div class="fc-rep-head-actions">
+                @foreach (var q in Quicks)
+                {
+                    <button type="button" class="@QuickClass(q.Kind)" @onclick="@(() => Quick(q.Kind))">
+                        @q.Label
+                    </button>
+                }
+                <label class="fc-meta-lb">من</label>
+                <input type="date" class="fc-sel" value="@_from"
+                       @onchange="e => _from = e.Value?.ToString() ?? _from" />
+                <label class="fc-meta-lb">إلى</label>
+                <input type="date" class="fc-sel" value="@_to"
+                       @onchange="e => _to = e.Value?.ToString() ?? _to" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Search" OnClick="LoadAsync">تطبيق</MudButton>
+            </div>
+        </div>
+
+        @if (_err is not null)
+        {
+            <div class="fc-alert fc-alert-bad">
+                <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.ErrorOutline" /></div>
+                <div class="fc-alert-body">
+                    <div class="fc-alert-title">تعذّر تحميل التقارير</div>
+                    <div>@_err</div>
+                </div>
+            </div>
+        }
+
+        @if (!Any)
+        {
+            <div class="fc-empty">
+                <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Large" />
+                <div>مافيش صلاحية تقارير — كلّم مدير النظام</div>
+            </div>
+        }
+        else
+        {
+            <div class="fc-rtabs">
+                @if (CanOps)
+                {
+                    <button type="button" class="@TabClass(0)" @onclick="@(() => _tab = 0)">
+                        <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Size="Size.Small" />
+                        العمليات
+                        <span class="fc-rtab-n">@(_ot?.Count ?? 0)</span>
+                    </button>
+                }
+                @if (CanFin)
+                {
+                    <button type="button" class="@TabClass(1)" @onclick="@(() => _tab = 1)">
+                        <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Size="Size.Small" />
+                        المالي
+                        <span class="fc-rtab-n">@(_months?.Count ?? 0)</span>
+                    </button>
+                }
+                @if (CanFleet)
+                {
+                    <button type="button" class="@TabClass(2)" @onclick="@(() => _tab = 2)">
+                        <MudIcon Icon="@Icons.Material.Filled.DirectionsCar" Size="Size.Small" />
+                        الأسطول
+                        <span class="fc-rtab-n">@((_drv?.Count ?? 0) + (_veh?.Count ?? 0))</span>
+                    </button>
+                }
+            </div>
+
+            @if (_loading)
+            {
+                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Size="Size.Small" /> جارٍ التحميل…</div>
+            }
+
+            @* ══════════════════ العمليات ══════════════════ *@
+            @if (_tab == 0 && CanOps && _ot is not null)
+            {
+                <div class="fc-stats">
+                    <div class="fc-stat" style="--fc-accent:#14804A">
+                        <div class="fc-stat-head">
+                            <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.TrendingUp" /></div>
+                            <div class="fc-stat-lb">صافي الربح</div>
+                        </div>
+                        <div class="fc-stat-num @NumClass(_ot.Profit)">@Money(_ot.Profit)</div>
+                        <div class="fc-stat-sub">هامش <b>@Pct(_ot.MarginPct)</b></div>
+                    </div>
+                    <div class="fc-stat" style="--fc-accent:#16233A">
+                        <div class="fc-stat-head">
+                            <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.Payments" /></div>
+                            <div class="fc-stat-lb">الإيراد</div>
+                        </div>
+                        <div class="fc-stat-num">@Money(_ot.Revenue)</div>
+                        <div class="fc-stat-sub">على <b>@_ot.Count</b> عملية</div>
+                    </div>
+                    <div class="fc-stat" style="--fc-accent:#B3261E">
+                        <div class="fc-stat-head">
+                            <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.Receipt" /></div>
+                            <div class="fc-stat-lb">التكلفة</div>
+                        </div>
+                        <div class="fc-stat-num">@Money(_ot.Cost)</div>
+                        <div class="fc-stat-sub"><b>@CostShare</b> من الإيراد</div>
+                    </div>
+                    <div class="fc-stat" style="--fc-accent:#2A6FB0">
+                        <div class="fc-stat-head">
+                            <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.Description" /></div>
+                            <div class="fc-stat-lb">المفوتر</div>
+                        </div>
+                        <div class="fc-stat-num">@Money(_ot.Invoiced)</div>
+                        <div class="fc-stat-sub">محصّل <b>@Money(_ot.Collected)</b></div>
+                    </div>
+                    <div class="fc-stat" style="--fc-accent:#C8860D">
+                        <div class="fc-stat-head">
+                            <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.HourglassEmpty" /></div>
+                            <div class="fc-stat-lb">لسه مفتوحة</div>
+                        </div>
+                        <div class="fc-stat-num">@_ot.Open</div>
+                        <div class="fc-stat-sub">و<b>@_ot.NotInvoiced</b> بإيراد ومفوترتش</div>
+                    </div>
+                </div>
+
+                <div class="fc-rep-sec">
+                    <div>
+                        <h3><MudIcon Icon="@Icons.Material.Filled.TableChart" /> تفصيل العمليات</h3>
+                        <div class="fc-rep-sec-sub">مرتبة من الأعلى ربحًا — اضغط على رأس العمود في Excel للترتيب</div>
+                    </div>
+                </div>
+
+                <div class="fc-table-wrap">
+                    <table class="fc-table-pro2">
+                        <thead>
+                            <tr>
+                                <th>العملية</th><th>العميل</th><th>الحالة</th><th>التسليم</th>
+                                <th class="num">الإيراد</th><th class="num">التكلفة</th>
+                                <th class="num">الربح</th><th class="num">الهامش</th>
+                                <th class="num">المفوتر</th><th class="num">المحصّل</th>
+                                <th class="num">المتبقي</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in _ops ?? NoOp)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="id">@r.OperationNumber</div>
+                                        @if (!string.IsNullOrEmpty(r.InvoiceNumber))
+                                        {
+                                            <div class="fc-cell-sub">@r.InvoiceNumber</div>
+                                        }
+                                    </td>
+                                    <td>@r.CustomerName</td>
+                                    <td><span class="fc-chip @StatusChip(r.Status)">@StatusAr(r.Status)</span></td>
+                                    <td class="fc-cell-sub">@(r.DeliveredAt ?? r.PlannedDate ?? "—")</td>
+                                    <td class="num">@Money(r.Revenue)</td>
+                                    <td class="num mut">@Money(r.TotalCost)</td>
+                                    <td class="num @NumClass(r.Profit)">@Money(r.Profit)</td>
+                                    <td class="num">
+                                        @Pct(r.MarginPct)
+                                        <span class="fc-minibar">
+                                            <i class="@MarginClass(r.MarginPct)" style="@W(Clamp(r.MarginPct))"></i>
+                                        </span>
+                                    </td>
+                                    <td class="num">@Money(r.Invoiced)</td>
+                                    <td class="num">@Money(r.Collected)</td>
+                                    <td class="num @NumClass(-r.Due)">@Money(r.Due)</td>
+                                </tr>
+                            }
+                            @if (_ops is null || _ops.Count == 0)
+                            {
+                                <tr><td colspan="11" class="fc-empty">مافيش عمليات في الفترة دي</td></tr>
+                            }
+                        </tbody>
+                        @if (_ops is not null && _ops.Count > 0)
+                        {
+                            <tfoot>
+                                <tr>
+                                    <td colspan="4">الإجمالي — @_ot.Count عملية</td>
+                                    <td class="num">@Money(_ot.Revenue)</td>
+                                    <td class="num">@Money(_ot.Cost)</td>
+                                    <td class="num">@Money(_ot.Profit)</td>
+                                    <td class="num">@Pct(_ot.MarginPct)</td>
+                                    <td class="num">@Money(_ot.Invoiced)</td>
+                                    <td class="num">@Money(_ot.Collected)</td>
+                                    <td class="num">@Money(_ot.Revenue - _ot.Collected)</td>
+                                </tr>
+                            </tfoot>
+                        }
+                    </table>
+                </div>
+            }
+
+            @* ══════════════════ المالي ══════════════════ *@
+            @if (_tab == 1 && CanFin && _fs is not null)
+            {
+                <div class="fc-stats">
+                    <div class="fc-stat" style="--fc-accent:#16233A">
+                        <div class="fc-stat-head">
+                            <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.Description" /></div>
+                            <div class="fc-stat-lb">المفوتر</div>
+                        </div>
+                        <div class="fc-stat-num">@Money(_fs.Invoiced)</div>
+                        <div class="fc-stat-sub"><b>@_fs.InvoiceCount</b> فاتورة</div>
+                    </div>
+                    <div class="fc-stat" style="--fc-accent:#2A6FB0">
+                        <div class="fc-stat-head">
+                            <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" /></div>
+                            <div class="fc-stat-lb">المحصّل</div>
+                        </div>
+                        <div class="fc-stat-num">@Money(_fs.Collected)</div>
+                        <div class="fc-stat-sub"><b>@_fs.PaymentCount</b> دفعة</div>
+                    </div>
+                    <div class="fc-stat" style="--fc-accent:#B3261E">
+                        <div class="fc-stat-head">
+                            <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.Receipt" /></div>
+                            <div class="fc-stat-lb">المصروفات</div>
+                        </div>
+                        <div class="fc-stat-num">@Money(_fs.Expenses)</div>
+                        <div class="fc-stat-sub">تحصيل <b>@CollectionRate</b> من المفوتر</div>
+                    </div>
+                    <div class="fc-stat" style="--fc-accent:#14804A">
+                        <div class="fc-stat-head">
+                            <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
+                            <div class="fc-stat-lb">صافي النقد</div>
+                        </div>
+                        <div class="fc-stat-num @NumClass(_fs.NetCash)">@Money(_fs.NetCash)</div>
+                        <div class="fc-stat-sub">محصّل − مصروفات</div>
+                    </div>
+                    <div class="fc-stat" style="--fc-accent:#C8860D">
+                        <div class="fc-stat-head">
+                            <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.HourglassBottom" /></div>
+                            <div class="fc-stat-lb">مديونية العملاء</div>
+                        </div>
+                        <div class="fc-stat-num is-neg">@Money(_fs.Receivable)</div>
+                        <div class="fc-stat-sub">كل الفواتير المفتوحة</div>
+                    </div>
+                </div>
+
+                <div class="fc-split2">
+                    <div class="fc-panel2">
+                        <div class="fc-rep-sec" style="margin-top:0">
+                            <div>
+                                <h3><MudIcon Icon="@Icons.Material.Filled.BarChart" /> التدفق الشهري</h3>
+                                <div class="fc-rep-sec-sub">مفوتر مقابل محصّل</div>
+                            </div>
+                        </div>
+                        <div class="fc-chart">
+                            @foreach (var m in _months ?? NoMonth)
+                            {
+                                <div class="fc-chart-col">
+                                    <div class="fc-chart-bars">
+                                        <div class="fc-bar fc-bar-gold" style="@BarH(m.Invoiced, MonthPeak)"
+                                             title="@TipInv(m.Invoiced)"></div>
+                                        <div class="fc-bar fc-bar-green" style="@BarH(m.Collected, MonthPeak)"
+                                             title="@TipCol(m.Collected)"></div>
+                                    </div>
+                                    <div class="fc-chart-lb">@ShortMonth(m.Month)</div>
+                                </div>
+                            }
+                        </div>
+                        <div class="fc-legend">
+                            <span><i class="fc-dot fc-bar-gold"></i> مفوتر</span>
+                            <span><i class="fc-dot fc-bar-green"></i> محصّل</span>
+                        </div>
+                    </div>
+
+                    <div class="fc-panel2">
+                        <div class="fc-rep-sec" style="margin-top:0">
+                            <div>
+                                <h3><MudIcon Icon="@Icons.Material.Filled.PieChart" /> المصروفات حسب النوع</h3>
+                            </div>
+                        </div>
+                        <div class="fc-mix">
+                            @foreach (var (e, pct, col) in ExpenseMix)
+                            {
+                                <div class="fc-mix-row">
+                                    <div class="fc-mix-lb">
+                                        <i class="fc-dot" style="@Bg(col)"></i> @e.TypeName
+                                        <span class="fc-mix-pct">@Pct(pct)</span>
+                                    </div>
+                                    <div class="fc-mix-v">@Money(e.Total)</div>
+                                    <div class="fc-mix-bar"><i style="@W(pct); background:@col"></i></div>
+                                </div>
+                            }
+                            @if (_exp is null || _exp.Count == 0)
+                            {
+                                <div class="fc-empty" style="padding:26px">مافيش مصروفات في الفترة دي</div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fc-rep-sec">
+                    <div>
+                        <h3><MudIcon Icon="@Icons.Material.Filled.People" /> أرصدة العملاء</h3>
+                        <div class="fc-rep-sec-sub">مرتبة من الأكبر مديونية — أول 30 عميل</div>
+                    </div>
+                </div>
+
+                <div class="fc-table-wrap" style="max-height:420px">
+                    <table class="fc-table-pro2">
+                        <thead><tr><th>العميل</th><th class="num">المفوتر</th>
+                            <th class="num">المحصّل</th><th class="num">الرصيد</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in (_custs ?? NoCust).Take(30))
+                            {
+                                <tr>
+                                    <td class="id">@c.CustomerName</td>
+                                    <td class="num">@Money(c.Invoiced)</td>
+                                    <td class="num mut">@Money(c.Paid)</td>
+                                    <td class="num @NumClass(-c.Balance)">@Money(c.Balance)</td>
+                                </tr>
+                            }
+                            @if (_custs is null || _custs.Count == 0)
+                            {
+                                <tr><td colspan="4" class="fc-empty">مافيش أرصدة</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @* ══════════════════ الأسطول ══════════════════ *@
+            @if (_tab == 2 && CanFleet && _ft is not null)
+            {
+                <div class="fc-stats">
+                    <div class="fc-stat" style="--fc-accent:#16233A">
+                        <div class="fc-stat-head">
+                            <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.LocalShipping" /></div>
+                            <div class="fc-stat-lb">الرحلات</div>
+                        </div>
+                        <div class="fc-stat-num">@_ft.Trips</div>
+                        <div class="fc-stat-sub">مكتملة <b>@_ft.Completed</b></div>
+                    </div>
+                    <div class="fc-stat" style="--fc-accent:#2A6FB0">
+                        <div class="fc-stat-head">
+                            <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.Route" /></div>
+                            <div class="fc-stat-lb">المسافة</div>
+                        </div>
+                        <div class="fc-stat-num">@Num(_ft.TotalKm)</div>
+                        <div class="fc-stat-sub">كيلومتر</div>
+                    </div>
+                    <div class="fc-stat" style="--fc-accent:#B3261E">
+                        <div class="fc-stat-head">
+                            <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.Build" /></div>
+                            <div class="fc-stat-lb">الصيانة</div>
+                        </div>
+                        <div class="fc-stat-num">@Money(_ft.MaintCost)</div>
+                        <div class="fc-stat-sub">في الفترة</div>
+                    </div>
+                    <div class="fc-stat" style="--fc-accent:#C8860D">
+                        <div class="fc-stat-head">
+                            <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" /></div>
+                            <div class="fc-stat-lb">عهدة مفتوحة</div>
+                        </div>
+                        <div class="fc-stat-num">@_ft.Custodies</div>
+                        <div class="fc-stat-sub">بقيمة <b>@Money(_ft.CustodyOut)</b></div>
+                    </div>
+                </div>
+
+                <div class="fc-rep-sec">
+                    <div>
+                        <h3><MudIcon Icon="@Icons.Material.Filled.Badge" /> أداء السائقين</h3>
+                    </div>
+                </div>
+
+                <div class="fc-table-wrap" style="max-height:420px">
+                    <table class="fc-table-pro2">
+                        <thead><tr><th>السائق</th><th class="num">الرحلات</th><th class="num">مكتملة</th>
+                            <th class="num">المسافة</th><th class="num">متوسط الساعات</th>
+                            <th class="num">العهدة المصروفة</th><th class="num">عهد مفتوحة</th></tr></thead>
+                        <tbody>
+                            @foreach (var d in _drv ?? NoDrv)
+                            {
+                                <tr>
+                                    <td class="id">@d.DriverName</td>
+                                    <td class="num">@d.Trips</td>
+                                    <td class="num mut">@d.Completed</td>
+                                    <td class="num">@Num(d.TotalKm)</td>
+                                    <td class="num">@d.AvgHours</td>
+                                    <td class="num">@Money(d.CustodyIssued)</td>
+                                    <td class="num @NegClass(d.OpenCustodies)">@d.OpenCustodies</td>
+                                </tr>
+                            }
+                            @if (_drv is null || _drv.Count == 0)
+                            {
+                                <tr><td colspan="7" class="fc-empty">مافيش رحلات في الفترة دي</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="fc-rep-sec">
+                    <div>
+                        <h3><MudIcon Icon="@Icons.Material.Filled.DirectionsCar" /> أداء السيارات</h3>
+                        <div class="fc-rep-sec-sub">تكلفة التشغيل مقابل الإيراد</div>
+                    </div>
+                </div>
+
+                <div class="fc-table-wrap" style="max-height:420px">
+                    <table class="fc-table-pro2">
+                        <thead><tr><th>اللوحة</th><th class="num">الرحلات</th><th class="num">مكتملة</th>
+                            <th class="num">المسافة</th><th class="num">تكلفة التشغيل</th>
+                            <th class="num">الصيانة</th><th class="num">الإيراد</th>
+                            <th class="num">الربح</th><th class="num">تكلفة/كم</th></tr></thead>
+                        <tbody>
+                            @foreach (var v in _veh ?? NoVeh)
+                            {
+                                <tr>
+                                    <td class="id">@v.PlateNumber</td>
+                                    <td class="num">@v.Trips</td>
+                                    <td class="num mut">@v.Completed</td>
+                                    <td class="num">@Num(v.TotalKm)</td>
+                                    <td class="num mut">@Money(v.TripCost)</td>
+                                    <td class="num mut">@Money(v.MaintCost)</td>
+                                    <td class="num">@Money(v.Revenue)</td>
+                                    <td class="num @NumClass(v.Profit)">@Money(v.Profit)</td>
+                                    <td class="num mut">@Money(v.CostPerKm)</td>
+                                </tr>
+                            }
+                            @if (_veh is null || _veh.Count == 0)
+                            {
+                                <tr><td colspan="9" class="fc-empty">مافيش رحلات في الفترة دي</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    // ── صلاحيات ──
+    private bool CanOps, CanFin, CanFleet, CanExport;
+    private bool Any => CanOps || CanFin || CanFleet;
+
+    // ── حالة ──
+    private string _from = "";
+    private string _to   = "";
+    private int    _tab  = -1;
+    private int    _quick = 1;
+    private bool   _loading, _busy;
+    private string? _err;
+
+    // ── بيانات ──
+    private RangeDto?         _range;
+    private List<OpRow>?      _ops;
+    private OpTotals?         _ot;
+    private FinSummary?       _fs;
+    private List<MonthRow>?   _months;
+    private List<ExpenseRow>? _exp;
+    private List<CustomerRow>? _custs;
+    private List<DriverRow>?  _drv;
+    private List<VehicleRow>? _veh;
+    private FleetTotals?      _ft;
+
+    private static readonly List<OpRow>       NoOp    = new();
+    private static readonly List<MonthRow>    NoMonth = new();
+    private static readonly List<CustomerRow> NoCust  = new();
+    private static readonly List<DriverRow>   NoDrv   = new();
+    private static readonly List<VehicleRow>  NoVeh   = new();
+
+    private static readonly (int Kind, string Label)[] Quicks =
+        { (0, "الشهر ده"), (1, "3 شهور"), (2, "السنة دي") };
+
+    private int RowsCount => _tab switch
+    {
+        0 => _ops?.Count ?? 0,
+        1 => _custs?.Count ?? 0,
+        _ => (_drv?.Count ?? 0) + (_veh?.Count ?? 0)
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        Quick(1);
+        await LoadAsync();
+    }
+
+    private void Quick(int kind)
+    {
+        _quick = kind;
+        var today = DateTime.Today;
+        _to = today.ToString("yyyy-MM-dd");
+        _from = kind switch
+        {
+            0 => new DateTime(today.Year, today.Month, 1).ToString("yyyy-MM-dd"),
+            2 => new DateTime(today.Year, 1, 1).ToString("yyyy-MM-dd"),
+            _ => today.AddMonths(-3).ToString("yyyy-MM-dd")
+        };
+    }
+
+    private async Task Reload() { Quick(_quick); await LoadAsync(); }
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _err = null;
+        try
+        {
+            var q = $"from={_from}&to={_to}";
+
+            var can = await Http.GetFromJsonAsync<Perms>("api/reports/can");
+            if (can is not null)
+            {
+                CanOps = can.Operations; CanFin = can.Financial;
+                CanFleet = can.Fleet; CanExport = can.Export;
+            }
+
+            if (_tab < 0) _tab = CanOps ? 0 : (CanFin ? 1 : (CanFleet ? 2 : 0));
+
+            if (CanOps)
+            {
+                var o = await Http.GetFromJsonAsync<OpsRes>($"api/reports/operations?{q}");
+                _ops = o?.Rows; _ot = o?.Totals; _range ??= o?.Range;
+            }
+            if (CanFin)
+            {
+                var f = await Http.GetFromJsonAsync<FinRes>($"api/reports/financial?{q}");
+                _fs = f?.Summary; _months = f?.Months; _exp = f?.Expenses; _custs = f?.Customers;
+                _range ??= f?.Range;
+            }
+            if (CanFleet)
+            {
+                var fl = await Http.GetFromJsonAsync<FleetRes>($"api/reports/fleet?{q}");
+                _drv = fl?.Drivers; _veh = fl?.Vehicles; _ft = fl?.Totals;
+                _range ??= fl?.Range;
+            }
+        }
+        catch (Exception ex) { _err = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    private string CurrentReport => _tab == 0 ? "operations" : (_tab == 1 ? "financial" : "fleet");
+
+    private async Task Export()
+    {
+        _busy = true;
+        try
+        {
+            var bytes = await Http.GetByteArrayAsync($"api/reports/excel?report={CurrentReport}&from={_from}&to={_to}");
+            if (bytes is null || bytes.Length == 0) throw new Exception("السيرفر مرجّعش ملف");
+
+            var name = $"fastcom-{CurrentReport}-{_from}-{_to}.xlsx";
+            await JS.InvokeAsync<bool>("fastcom.downloadBase64", Convert.ToBase64String(bytes),
+                name, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            Snackbar.Add("✅ اتصدّر الملف", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add("فشل التصدير: " + ex.Message, Severity.Error); }
+        finally { _busy = false; }
+    }
+
+    // ══════════ تنسيق ══════════
+
+    private static readonly string[] MixColors =
+        { "#C8860D", "#2A6FB0", "#14804A", "#B3261E", "#6B4FA0", "#0E7C86", "#8A6D3B", "#5A6B85" };
+
+    /// <summary>أكبر 6 أنواع مصروفات + نسبتها من الإجمالي + لونها.</summary>
+    private IEnumerable<(ExpenseRow E, decimal Pct, string Col)> ExpenseMix
+    {
+        get
+        {
+            if (_exp is null || _exp.Count == 0) yield break;
+            var total = _exp.Sum(x => x.Total);
+            if (total <= 0) yield break;
+
+            var i = 0;
+            foreach (var e in _exp.OrderByDescending(x => x.Total).Take(6))
+            {
+                yield return (e, e.Total / total * 100m, MixColors[i % MixColors.Length]);
+                i++;
+            }
+        }
+    }
+
+    private decimal MonthPeak
+    {
+        get
+        {
+            if (_months is null || _months.Count == 0) return 1m;
+            var p = _months.Max(m => Math.Max(m.Invoiced, m.Collected));
+            return p > 0 ? p : 1m;
+        }
+    }
+
+    private string CostShare => _ot is null || _ot.Revenue <= 0 ? "—" : Pct(_ot.Cost / _ot.Revenue * 100m);
+
+    private string CollectionRate => _fs is null || _fs.Invoiced <= 0 ? "—" : Pct(_fs.Collected / _fs.Invoiced * 100m);
+
+    private static decimal Clamp(decimal v) => v < 0 ? 0 : (v > 100 ? 100 : v);
+
+    private static string W(decimal pct) => $"width:{Clamp(pct):F1}%";
+    private static string H(decimal v, decimal peak) =>
+        $"height:{(peak <= 0 ? 0 : Math.Max(2, v / peak * 100)):F1}%";
+    private static string BarH(decimal v, decimal peak) => H(v, peak);
+    private static string Bg(string col) => $"background:{col}";
+    private static string TipInv(decimal v) => $"مفوتر: {v:N2}";
+    private static string TipCol(decimal v) => $"محصّل: {v:N2}";
+    private static string ShortMonth(string m) => m.Length >= 7 ? m.Substring(5) : m;
+
+    private static string Money(decimal v) => v.ToString("N2");
+    private static string Num(decimal v)   => ((long)Math.Round(v)).ToString("N0");
+    private static string Pct(decimal v)   => $"{v:N1}%";
+
+    private static string NumClass(decimal v) => v > 0 ? "pos" : (v < 0 ? "neg" : "mut");
+    private static string NegClass(int v)     => v > 0 ? "neg" : "mut";
+    private static string MarginClass(decimal v) => v >= 20 ? "hi" : (v < 0 ? "lo" : "");
+
+    private string TabClass(int i)  => _tab == i ? "fc-rtab on" : "fc-rtab";
+    private string QuickClass(int k) => _quick == k ? "fc-quick on" : "fc-quick";
+
+    private static string StatusAr(string s) => s switch
+    {
+        "Pending"         => "منتظرة",
+        "Assigned"        => "متسندة",
+        "DriverReceived"  => "استلم السائق",
+        "InTransit"       => "في الطريق",
+        "Delivered"       => "اتسلّمت",
+        "ExpensesPending" => "مصاريف ناقصة",
+        "CustodyPending"  => "عهدة ناقصة",
+        "ReadyToClose"    => "جاهزة للإقفال",
+        "Closed"          => "مقفولة",
+        "Cancelled"       => "ملغاة",
+        _                 => s
+    };
+
+    private static string StatusChip(string s) => s switch
+    {
+        "Closed"          => "fc-chip-ok",
+        "Cancelled"       => "fc-chip-gray",
+        "InTransit"       => "fc-chip-blue",
+        "Delivered"       => "fc-chip-purple",
+        "ExpensesPending" => "fc-chip-warn",
+        "CustodyPending"  => "fc-chip-warn",
+        "ReadyToClose"    => "fc-chip-gold",
+        _                 => "fc-chip-gray"
+    };
+
+    // ══════════ DTOs (مطابقة حرفيًا لسجلات السيرفر) ══════════
+
+    public class Perms
+    {
+        public bool Operations { get; set; }
+        public bool Financial  { get; set; }
+        public bool Fleet      { get; set; }
+        public bool Export     { get; set; }
+    }
+
+    public class RangeDto
+    {
+        public string From { get; set; } = "";
+        public string To   { get; set; } = "";
+    }
+
+    public class OpsRes
+    {
+        public RangeDto? Range { get; set; }
+        public OpTotals Totals { get; set; } = new();
+        public List<OpRow> Rows { get; set; } = new();
+    }
+
+    public class FinRes
+    {
+        public RangeDto? Range { get; set; }
+        public FinSummary Summary { get; set; } = new();
+        public List<MonthRow> Months { get; set; } = new();
+        public List<ExpenseRow> Expenses { get; set; } = new();
+        public List<CustomerRow> Customers { get; set; } = new();
+        public decimal Receivable { get; set; }
+    }
+
+    public class FleetRes
+    {
+        public RangeDto? Range { get; set; }
+        public FleetTotals Totals { get; set; } = new();
+        public List<DriverRow> Drivers { get; set; } = new();
+        public List<VehicleRow> Vehicles { get; set; } = new();
+    }
+
+    public class OpTotals
+    {
+        public int Count { get; set; }
+        public decimal Revenue { get; set; }
+        public decimal Cost { get; set; }
+        public decimal Profit { get; set; }
+        public decimal MarginPct { get; set; }
+        public decimal Invoiced { get; set; }
+        public decimal Collected { get; set; }
+        public int Open { get; set; }
+        public int NotInvoiced { get; set; }
+    }
+
+    public class OpRow
+    {
+        public long OperationId { get; set; }
+        public string OperationNumber { get; set; } = "";
+        public string CustomerName { get; set; } = "";
+        public string Status { get; set; } = "";
+        public bool IsOpen { get; set; }
+        public string? PlannedDate { get; set; }
+        public string? DeliveredAt { get; set; }
+        public decimal Revenue { get; set; }
+        public decimal DirectCost { get; set; }
+        public decimal AllocatedTripCost { get; set; }
+        public decimal TotalCost { get; set; }
+        public decimal Profit { get; set; }
+        public decimal MarginPct { get; set; }
+        public decimal Invoiced { get; set; }
+        public decimal Collected { get; set; }
+        public decimal Due { get; set; }
+        public string? InvoiceNumber { get; set; }
+    }
+
+    public class FinSummary
+    {
+        public decimal Invoiced { get; set; }
+        public decimal Collected { get; set; }
+        public decimal Expenses { get; set; }
+        public decimal Receivable { get; set; }
+        public decimal NetCash { get; set; }
+        public int InvoiceCount { get; set; }
+        public int PaymentCount { get; set; }
+    }
+
+    public class MonthRow
+    {
+        public string Month { get; set; } = "";
+        public string MonthName { get; set; } = "";
+        public decimal Invoiced { get; set; }
+        public decimal Collected { get; set; }
+        public decimal Expenses { get; set; }
+        public decimal Net { get; set; }
+    }
+
+    public class ExpenseRow
+    {
+        public string TypeName { get; set; } = "";
+        public int Count { get; set; }
+        public decimal Total { get; set; }
+        public decimal Approved { get; set; }
+    }
+
+    public class CustomerRow
+    {
+        public int CustomerId { get; set; }
+        public string CustomerName { get; set; } = "";
+        public decimal Invoiced { get; set; }
+        public decimal Paid { get; set; }
+        public decimal Balance { get; set; }
+    }
+
+    public class DriverRow
+    {
+        public int DriverId { get; set; }
+        public string DriverName { get; set; } = "";
+        public int Trips { get; set; }
+        public int Completed { get; set; }
+        public decimal TotalKm { get; set; }
+        public decimal AvgHours { get; set; }
+        public decimal CustodyIssued { get; set; }
+        public int OpenCustodies { get; set; }
+    }
+
+    public class VehicleRow
+    {
+        public int VehicleId { get; set; }
+        public string PlateNumber { get; set; } = "";
+        public int Trips { get; set; }
+        public int Completed { get; set; }
+        public decimal TotalKm { get; set; }
+        public decimal TripCost { get; set; }
+        public int MaintCount { get; set; }
+        public decimal MaintCost { get; set; }
+        public decimal Revenue { get; set; }
+        public decimal Profit { get; set; }
+        public decimal CostPerKm { get; set; }
+    }
+
+    public class FleetTotals
+    {
+        public int Trips { get; set; }
+        public int Completed { get; set; }
+        public decimal TotalKm { get; set; }
+        public decimal MaintCost { get; set; }
+        public int Custodies { get; set; }
+        public decimal CustodyOut { get; set; }
+    }
+}

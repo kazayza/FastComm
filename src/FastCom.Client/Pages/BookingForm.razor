@@ -1,0 +1,418 @@
+@page "/bookings/new"
+@page "/bookings/new/{Id:long}"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_id is null ? "حجز جديد" : "تعديل حجز") — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">التشغيل · الحجوزات</div>
+                <h1 class="fc-hero-title">@(_id is null ? "حجز جديد" : $"تعديل حجز {BookingNumber}")</h1>
+                <p class="fc-hero-sub">سجّل طلب العميل بالحاويات المطلوبة — الرقم بيتولد تلقائيًا (BK-)</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudButton Variant="Variant.Outlined" OnClick="GoBack" Style="color:#9FB4CC">رجوع</MudButton>
+                @if (CanSave && !_locked)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving"
+                               StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="SaveAsync">حفظ</MudButton>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanCreate && _id is null)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية إنشاء حجز.</MudAlert>
+    }
+    else if (_loading)
+    {
+        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+
+            @if (_msg is not null)
+            {
+                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                          Class="mb-4">@_msg</MudAlert>
+            }
+            @if (_locked)
+            {
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
+                    الحجز حالته «@StatusAr(_status)» — التعديل مقفول. ارجعه لمسودة الأول من صفحة الحجوزات.
+                </MudAlert>
+            }
+
+            <div class="fc-panel-sub" style="margin-bottom:14px">بيانات العميل</div>
+            <div class="fc-form-grid">
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">العميل *</div>
+                    <select class="fc-sel fc-sel-lg" value="@_f.CustomerId" disabled="@_locked"
+                            @onchange="OnCustomerChanged">
+                        <option value="0">— اختار العميل —</option>
+                        @foreach (var c in _customers) { <option value="@c.Id">@c.Label</option> }
+                    </select>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">جهة الاتصال</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.ContactId" disabled="@_locked">
+                        <option value="">—</option>
+                        @foreach (var c in _contacts) { <option value="@c.Id">@c.Label</option> }
+                    </select>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">تاريخ التنفيذ المطلوب</div>
+                    <input type="date" class="fc-sel fc-sel-lg" value="@_f.RequestedDate" disabled="@_locked"
+                           @onchange="e => _f.RequestedDate = e.Value?.ToString()" />
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">مرجع العميل (أمر توريد / بيان جمركي)</div>
+                    <input class="fc-sel fc-sel-lg" value="@_f.CustomerReference" disabled="@_locked" maxlength="100"
+                           @onchange="e => _f.CustomerReference = e.Value?.ToString()" />
+                </div>
+            </div>
+
+            <div class="fc-panel-sub" style="margin:26px 0 14px">بيانات النقل</div>
+            <div class="fc-form-grid">
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">الخدمة</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.ServiceId" disabled="@_locked">
+                        <option value="">—</option>
+                        @foreach (var s in _services) { <option value="@s.Id">@s.Label</option> }
+                    </select>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">نوع الرحلة</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.TripTypeId" disabled="@_locked">
+                        <option value="">—</option>
+                        @foreach (var t in _tripTypes) { <option value="@t.Id">@t.Label</option> }
+                    </select>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">من (الميناء)</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.PortId" disabled="@_locked">
+                        <option value="">—</option>
+                        @foreach (var p in _ports) { <option value="@p.Id">@p.Label</option> }
+                    </select>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">إلى (الجهة)</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.DestinationId" disabled="@_locked">
+                        <option value="">—</option>
+                        @foreach (var d in _destinations) { <option value="@d.Id">@d.Label</option> }
+                    </select>
+                </div>
+            </div>
+
+            <div class="fc-panel-sub" style="margin:26px 0 10px">
+                الحاويات المطلوبة
+                <span class="fc-cell-sub" style="font-weight:600"> — بإجمالي @_lines.Sum(l => l.Qty) حاوية</span>
+            </div>
+
+            <div class="fc-lines">
+                <div class="fc-lines-head">
+                    <div>#</div><div>نوع الحاوية</div><div>العدد</div><div>الوزن (كجم)</div><div>ملاحظات</div><div></div>
+                </div>
+                @if (_lines.Count == 0)
+                {
+                    <div class="fc-lines-empty">مافيش سطور — ضيف حاوية واحدة على الأقل</div>
+                }
+                @foreach (var ln in _lines)
+                {
+                    var i = _lines.IndexOf(ln);
+                    <div class="fc-lines-row">
+                        <div class="fc-cell-sub">@(i + 1)</div>
+                        <div>
+                            <select class="fc-sel" @bind="ln.TypeId" disabled="@_locked">
+                                @foreach (var t in _containerTypes) { <option value="@t.Id">@t.Label</option> }
+                            </select>
+                        </div>
+                        <div>
+                            <input type="number" min="1" max="200" class="fc-sel" value="@ln.Qty" disabled="@_locked"
+                                   @onchange="e => ln.Qty = ParseInt(e.Value, 1)" />
+                        </div>
+                        <div>
+                            <input type="number" min="0" step="1" class="fc-sel" value="@ln.WeightKg" disabled="@_locked"
+                                   @onchange="e => ln.WeightKg = ParseDec(e.Value)" />
+                        </div>
+                        <div>
+                            <input class="fc-sel" value="@ln.Notes" disabled="@_locked" maxlength="500"
+                                   @onchange="e => ln.Notes = e.Value?.ToString()" />
+                        </div>
+                        <div>
+                            @if (!_locked)
+                            {
+                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
+                                               Color="Color.Error" OnClick="() => RemoveLine(i)" />
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (CanSave && !_locked)
+            {
+                <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-3"
+                           StartIcon="@Icons.Material.Filled.Add" OnClick="AddLine">ضيف سطر</MudButton>
+            }
+
+            <div class="fc-panel-sub" style="margin:26px 0 8px">ملاحظات</div>
+            <textarea class="fc-sel" rows="3" maxlength="1000" disabled="@_locked"
+                      @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
+
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:26px">
+                <MudButton Variant="Variant.Outlined" OnClick="GoBack">رجوع</MudButton>
+                @if (CanSave && !_locked)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveAsync">حفظ</MudButton>
+                }
+            </div>
+
+        </div></div>
+    }
+</div>
+
+@code {
+    [Parameter] public long? Id { get; set; }
+    private long? _id;
+    private string BookingNumber = "";
+    private string _status = "Draft";
+    private bool _locked;
+
+    private AuthUser? _user;
+    private bool CanCreate => _user?.Can("BOOKING.CREATE") ?? false;
+    private bool CanEdit   => _user?.Can("BOOKING.EDIT") ?? false;
+    private bool CanSave   => _id is null ? CanCreate : CanEdit;
+
+    private bool _loading; private bool _saving; private string? _msg; private bool _ok;
+
+    private List<Opt> _customers = new();
+    private List<Opt> _contacts = new();
+    private List<Opt> _services = new();
+    private List<Opt> _ports = new();
+    private List<Opt> _destinations = new();
+    private List<Opt> _tripTypes = new();
+    private List<Opt> _containerTypes = new();
+
+    private List<LineRow> _lines = new();
+    private Form _f = new();
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+
+    public class LineRow
+    {
+        public int TypeId { get; set; }
+        public int Qty { get; set; } = 1;
+        public decimal? WeightKg { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    public class Form
+    {
+        public int CustomerId { get; set; }
+        public int? ContactId { get; set; }
+        public string? RequestedDate { get; set; }
+        public int? ServiceId { get; set; }
+        public int? PortId { get; set; }
+        public int? DestinationId { get; set; }
+        public int? TripTypeId { get; set; }
+        public string? CustomerReference { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    public class DetailRow
+    {
+        public int ContainerTypeId { get; set; }
+        public int RequestedQty { get; set; }
+        public decimal? WeightKg { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    public class DetailBooking
+    {
+        public string BookingNumber { get; set; } = "";
+        public int CustomerId { get; set; }
+        public string? RequestedDate { get; set; }
+        public int? ServiceId { get; set; }
+        public int? PortId { get; set; }
+        public int? DestinationId { get; set; }
+        public int? TripTypeId { get; set; }
+        public string? CustomerReference { get; set; }
+        public int? ContactId { get; set; }
+        public string? Notes { get; set; }
+        public string Status { get; set; } = "Draft";
+    }
+
+    public class DetailResponse
+    {
+        public DetailBooking Booking { get; set; } = new();
+        public List<DetailRow> Lines { get; set; } = new();
+    }
+
+    private static string StatusAr(string s) => s switch
+    {
+        "Draft" => "مسودة", "Confirmed" => "مؤكد", "Assigned" => "متخصص",
+        "InProgress" => "قيد التنفيذ", "Completed" => "مكتمل", "Cancelled" => "ملغي", _ => s
+    };
+
+    private static int ParseInt(object? v, int fallback) =>
+        int.TryParse(v?.ToString(), out var n) && n > 0 ? n : fallback;
+
+    private static decimal? ParseDec(object? v) =>
+        decimal.TryParse(v?.ToString(), out var n) && n > 0 ? n : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        _id = Id;
+
+        if (!CanSave) return;
+
+        _loading = true;
+        try
+        {
+            _customers      = await SafeGet("api/options/customers");
+            _services       = await SafeGet("api/options/services");
+            _ports          = await SafeGet("api/options/ports");
+            _destinations   = await SafeGet("api/options/destinations");
+            _tripTypes      = await SafeGet("api/options/trip-types");
+            _containerTypes = await SafeGet("api/options/container-types");
+
+            if (_id is not null) await LoadBookingAsync(_id.Value);
+            else AddLine();
+        }
+        catch (Exception ex) { _msg = "فشل التحميل: " + ex.Message; _ok = false; }
+        finally { _loading = false; }
+    }
+
+    private async Task<List<Opt>> SafeGet(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<Opt>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    private async Task LoadBookingAsync(long id)
+    {
+        var d = await Http.GetFromJsonAsync<DetailResponse>($"api/bookings/{id}");
+        if (d is null) { _msg = "الحجز مش موجود"; _ok = false; return; }
+
+        BookingNumber = d.Booking.BookingNumber;
+        _status = d.Booking.Status;
+        _locked = _status is not ("Draft" or "Confirmed");
+
+        _f = new Form
+        {
+            CustomerId        = d.Booking.CustomerId,
+            ContactId         = d.Booking.ContactId,
+            RequestedDate     = d.Booking.RequestedDate,
+            ServiceId         = d.Booking.ServiceId,
+            PortId            = d.Booking.PortId,
+            DestinationId     = d.Booking.DestinationId,
+            TripTypeId        = d.Booking.TripTypeId,
+            CustomerReference = d.Booking.CustomerReference,
+            Notes             = d.Booking.Notes
+        };
+
+        _lines = d.Lines.Select(l => new LineRow
+        {
+            TypeId = l.ContainerTypeId, Qty = l.RequestedQty,
+            WeightKg = l.WeightKg, Notes = l.Notes
+        }).ToList();
+
+        if (_lines.Count == 0) AddLine();
+        await LoadContactsAsync(_f.CustomerId);
+    }
+
+    private void AddLine()
+    {
+        _lines.Add(new LineRow { TypeId = _containerTypes.FirstOrDefault()?.Id ?? 0, Qty = 1 });
+    }
+
+    private void RemoveLine(int idx)
+    {
+        if (idx >= 0 && idx < _lines.Count) _lines.RemoveAt(idx);
+    }
+
+    private async Task OnCustomerChanged(ChangeEventArgs e)
+    {
+        _f.CustomerId = int.TryParse(e.Value?.ToString(), out var n) ? n : 0;
+        _f.ContactId = null;
+        _contacts = new();
+        if (_f.CustomerId > 0) await LoadContactsAsync(_f.CustomerId);
+    }
+
+    private async Task LoadContactsAsync(int customerId)
+    {
+        try { _contacts = await Http.GetFromJsonAsync<List<Opt>>($"api/options/contacts?customerId={customerId}") ?? new(); }
+        catch { _contacts = new(); }
+    }
+
+    private void GoBack() => Nav.NavigateTo("/bookings");
+
+    private async Task SaveAsync()
+    {
+        _msg = null;
+        if (_f.CustomerId <= 0) { _ok = false; _msg = "لازم تختار العميل"; return; }
+        var lines = _lines.Where(l => l.TypeId > 0 && l.Qty > 0).ToList();
+        if (lines.Count == 0) { _ok = false; _msg = "ضيف حاوية واحدة على الأقل"; return; }
+
+        var payload = new
+        {
+            customerId        = _f.CustomerId,
+            requestedDate     = _f.RequestedDate,
+            serviceId         = _f.ServiceId,
+            portId            = _f.PortId,
+            destinationId     = _f.DestinationId,
+            tripTypeId        = _f.TripTypeId,
+            customerReference = _f.CustomerReference,
+            contactId         = _f.ContactId,
+            notes             = _f.Notes,
+            lines             = lines.Select(l => new
+            {
+                containerTypeId = l.TypeId, requestedQty = l.Qty,
+                weightKg = l.WeightKg, notes = l.Notes
+            })
+        };
+
+        _saving = true;
+        try
+        {
+            var res = _id is null
+                ? await Http.PostAsJsonAsync("api/bookings", payload)
+                : await Http.PutAsJsonAsync($"api/bookings/{_id}", payload);
+
+            var msg = await MsgOf(res);
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(msg, Severity.Success);
+                Nav.NavigateTo("/bookings");
+            }
+            else { _ok = false; _msg = msg; }
+        }
+        catch (Exception ex) { _ok = false; _msg = "مش قادر أوصل للسيرفر: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+    }
+}

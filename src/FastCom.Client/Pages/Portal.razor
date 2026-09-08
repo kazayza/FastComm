@@ -1,0 +1,501 @@
+@page "/portal/{Token}"
+@layout EmptyLayout
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject CompanyService Company
+@inject IJSRuntime JS
+
+<PageTitle>بوابة العميل — فاست كوم</PageTitle>
+
+@* ═══════════════════════════════════════════════════════════════════
+   🔗 بوابة العميل — صفحة مستقلة (من غير Layout) العميل بيفتحها من رابط.
+   مافيش تسجيل دخول ولا JWT: الرابط نفسه هو التصريح.
+   ═══════════════════════════════════════════════════════════════════ *@
+
+<div class="fc-portal">
+
+    <div class="fc-portal-head">
+        <div>
+            <div class="fc-portal-brand">@_co.DisplayName</div>
+            <div class="fc-portal-sub">بوابة العميل — الفواتير والإيصالات</div>
+        </div>
+        @if (_me is not null)
+        {
+            <div class="fc-portal-cust">
+                <div class="fc-portal-cust-name">@_me.CustomerName</div>
+                <div class="fc-portal-sub">كود العميل: @_me.CustomerCode</div>
+            </div>
+        }
+    </div>
+
+    @* ── الحالة ── *@
+    @if (_loading)
+    {
+        <div class="fc-portal-card"><div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div></div>
+    }
+    else if (_error is not null)
+    {
+        <div class="fc-portal-card">
+            <div class="fc-portal-bad">
+                <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Large" />
+                <h2>@_error</h2>
+                <p>لو عندك استفسار تواصل مع خدمة العملاء.</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="fc-portal-kpis">
+            <div class="fc-portal-kpi">
+                <div class="fc-kpi-lb">الرصيد المستحق</div>
+                <div class="fc-portal-num">@Money(_me!.Outstanding)</div>
+            </div>
+            <div class="fc-portal-kpi">
+                <div class="fc-kpi-lb">فاتورات غير مسدّدة</div>
+                <div class="fc-portal-num">@_inv.Count(i => i.Due > 0)</div>
+            </div>
+            <div class="fc-portal-kpi">
+                <div class="fc-kpi-lb">إجمالي الفواتير</div>
+                <div class="fc-portal-num">@_inv.Count</div>
+            </div>
+        </div>
+
+        <div class="fc-portal-tabs">
+            @foreach (var t in Tabs)
+            {
+                <button class='fc-portal-tab @(_tab == t.Key ? "on" : "")' @onclick="() => SetTab(t.Key)">@t.Value</button>
+            }
+        </div>
+
+        <div class="fc-portal-card">
+
+            @* ══════ قائمة الفواتير ══════ *@
+            @if (_tab == "invoices")
+            {
+                <div class="fc-portal-bar">
+                    <MudCheckBox T="bool" Value="_unpaidOnly" ValueChanged="ToggleUnpaid"
+                                 Label="غير المسدّدة بس" Color="Color.Primary" />
+                    <span class="fc-count">@_inv.Count فاتورة</span>
+                </div>
+                <table class="fc-table">
+                    <thead><tr>
+                        <th>رقم الفاتورة</th><th>النوع</th><th>التاريخ</th>
+                        <th>الاستحقاق</th><th>الإجمالي</th><th>المسدّد</th>
+                        <th>المتبقي</th><th>الحالة</th><th></th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach (var i in _inv)
+                        {
+                            <tr>
+                                <td><b>@i.InvoiceNumber</b></td>
+                                <td class="fc-cell-sub">@DocAr(i.DocumentTypeCode)</td>
+                                <td class="fc-cell-sub">@i.InvoiceDate</td>
+                                <td class="fc-cell-sub">@(i.DueDate?.ToString() ?? "—")</td>
+                                <td><b>@Money(i.GrandTotal)</b></td>
+                                <td class="fc-cell-sub">@Money(i.PaidAmount)</td>
+                                <td><b class='@(i.Due > 0 ? "fc-due" : "fc-paid")'>@Money(i.Due)</b></td>
+                                <td><span class="fc-chip @PayChip(i.PaymentStatus)"><i></i>@PayAr(i.PaymentStatus)</span></td>
+                                <td><MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                               OnClick="() => OpenInvoice(i.InvoiceId)">عرض</MudButton></td>
+                            </tr>
+                        }
+                        @if (!_inv.Any())
+                        {
+                            <tr><td colspan="9"><div class="fc-empty"><div>مافيش فواتير</div></div></td></tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            @* ══════ كشف الحساب ══════ *@
+            else if (_tab == "statement")
+            {
+                <div class="fc-portal-bar">
+                    <div>
+                        <div class="fc-panel-sub" style="margin-bottom:4px">من</div>
+                        <input type="date" class="fc-sel" value="@_from" @onchange="e => _from = e.Value?.ToString()" />
+                    </div>
+                    <div>
+                        <div class="fc-panel-sub" style="margin-bottom:4px">إلى</div>
+                        <input type="date" class="fc-sel" value="@_to" @onchange="e => _to = e.Value?.ToString()" />
+                    </div>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_loadingStmt"
+                               StartIcon="@Icons.Material.Filled.Search" OnClick="LoadStatement">عرض</MudButton>
+                </div>
+
+                @if (_stmt is null)
+                {
+                    <div class="fc-empty"><div>اختر الفترة واضغط «عرض»</div></div>
+                }
+                else
+                {
+                    <div class="fc-portal-sum">
+                        <span>رصيد افتتاحي: <b>@Money(_stmt.Opening)</b></span>
+                        <span>إجمالي المدين: <b>@Money(_stmt.TotalDebit)</b></span>
+                        <span>إجمالي الدائن: <b>@Money(_stmt.TotalCredit)</b></span>
+                        <span>الرصيد: <b>@Money(_stmt.Closing)</b></span>
+                    </div>
+                    <table class="fc-table">
+                        <thead><tr>
+                            <th>التاريخ</th><th>النوع</th><th>المرجع</th><th>البيان</th>
+                            <th>مدين</th><th>دائن</th><th>الرصيد</th>
+                        </tr></thead>
+                        <tbody>
+                            @foreach (var r in _stmt.Lines)
+                            {
+                                <tr>
+                                    <td class="fc-cell-sub">@r.Date</td>
+                                    <td><span class="fc-chip @KindChip(r.Kind)"><i></i>@KindAr(r.Kind)</span></td>
+                                    <td class="fc-cell-main">@r.Ref</td>
+                                    <td class="fc-cell-sub">@r.Description</td>
+                                    <td class="fc-cell-sub">@(r.Debit != 0 ? Money(r.Debit) : "")</td>
+                                    <td class="fc-cell-sub">@(r.Credit != 0 ? Money(r.Credit) : "")</td>
+                                    <td><b>@Money(r.Balance)</b></td>
+                                </tr>
+                            }
+                            @if (!_stmt.Lines.Any())
+                            {
+                                <tr><td colspan="7"><div class="fc-empty"><div>مافيش حركات في الفترة دي</div></div></td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            }
+
+            @* ══════ تفاصيل فاتورة ══════ *@
+            else if (_tab == "invoice" && _d is not null)
+            {
+                <div class="fc-portal-bar">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                               OnClick="BackToList">رجوع للقائمة</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.FactCheck" OnClick="Print">طباعة</MudButton>
+                </div>
+
+                <div class="fc-print-sheet" style="padding:0">
+                    <div class="fc-doc-head">
+                        <div>
+                            <div class="fc-doc-company">@_co.DisplayName</div>
+                            <div class="fc-cell-sub">
+                                @if (!string.IsNullOrWhiteSpace(_co.TaxNumber) && _co.TaxNumber != "000000000")
+                                {
+                                    <span>الرقم الضريبي: @_co.TaxNumber</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(_co.AddressAr)) { <span> · @_co.AddressAr</span> }
+                                @if (!string.IsNullOrWhiteSpace(_co.Phone))    { <span> · @_co.Phone</span> }
+                            </div>
+                        </div>
+                        <div style="text-align:left">
+                            <div class="fc-doc-title">@DocAr(_d.DocumentTypeCode)</div>
+                            <div class="fc-doc-no">@_d.InvoiceNumber</div>
+                        </div>
+                    </div>
+
+                    <div class="fc-doc-meta">
+                        <div><div class="fc-meta-lb">العميل</div><div class="fc-meta-num">@_d.CustomerName</div>
+                            <div class="fc-cell-sub">كود: @_d.CustomerCode</div></div>
+                        <div><div class="fc-meta-lb">تاريخ الإصدار</div><div class="fc-meta-num">@_d.InvoiceDate</div></div>
+                        <div><div class="fc-meta-lb">الاستحقاق</div><div class="fc-meta-num">@(_d.DueDate?.ToString() ?? "—")</div></div>
+                        <div><div class="fc-meta-lb">حالة السداد</div><div class="fc-meta-num">@PayAr(_d.PaymentStatus)</div></div>
+                    </div>
+
+                    <table class="fc-table fc-doc-table">
+                        <thead><tr>
+                            <th style="width:40px">م</th><th>البيان</th>
+                            <th style="width:80px">الكمية</th><th style="width:110px">سعر الوحدة</th>
+                            <th style="width:100px">الخصم</th><th style="width:80px">الضريبة</th>
+                            <th style="width:120px">الإجمالي</th>
+                        </tr></thead>
+                        <tbody>
+                            @{ var n = 0; }
+                            @foreach (var l in _d.Items)
+                            {
+                                n++;
+                                <tr>
+                                    <td class="fc-cell-sub">@n</td>
+                                    <td class="fc-cell-main">@l.Description</td>
+                                    <td class="fc-cell-sub">@l.Quantity.ToString("0.###")</td>
+                                    <td class="fc-cell-sub">@Money(l.UnitPrice)</td>
+                                    <td class="fc-cell-sub">@Money(l.Discount)</td>
+                                    <td class="fc-cell-sub">@l.TaxRate.ToString("0.##")%</td>
+                                    <td><b>@Money(l.LineTotal)</b></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+
+                    <div class="fc-doc-totals">
+                        <div class="fc-ov-row"><span>الإجمالي قبل الضريبة</span><b>@Money(_d.SubTotal)</b></div>
+                        <div class="fc-ov-row"><span>الخصم</span><b>@Money(_d.DiscountTotal)</b></div>
+                        <div class="fc-ov-row"><span>الضريبة</span><b>@Money(_d.TaxTotal)</b></div>
+                        <div class="fc-rev-total"><span>الإجمالي</span><b>@Money(_d.GrandTotal) @_d.CurrencyCode</b></div>
+                        <div class="fc-ov-row"><span>المسدّد</span><b>@Money(_d.PaidAmount)</b></div>
+                        <div class="fc-ov-row"><span>المتبقي</span><b>@Money(_d.Due)</b></div>
+                    </div>
+
+                    @if (_d.Allocations.Any())
+                    {
+                        <div class="fc-panel-sub" style="margin-top:18px">دفعات مرتبطة</div>
+                        <table class="fc-table">
+                            <thead><tr><th>رقم الإيصال</th><th>التاريخ</th><th>الطريقة</th><th>المبلغ</th></tr></thead>
+                            <tbody>
+                                @foreach (var a in _d.Allocations)
+                                {
+                                    <tr>
+                                        <td><b>@a.PaymentNumber</b></td>
+                                        <td class="fc-cell-sub">@a.PaymentDate</td>
+                                        <td class="fc-cell-sub">@(a.MethodName ?? "—")</td>
+                                        <td><b>@Money(a.AllocatedAmount)</b></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+
+                    @if (_d.Notes is not null)
+                    {
+                        <div class="fc-panel-sub" style="margin-top:18px">ملاحظات</div>
+                        <div class="fc-cell-main">@_d.Notes</div>
+                    }
+
+                    <div class="fc-doc-foot">
+                        <span>@_co.DisplayName</span>
+                        <span>طُبعت في @DateTime.Now.ToString("yyyy-MM-dd HH:mm")</span>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <div class="fc-portal-foot fc-no-print">
+        @_co.DisplayName @if (!string.IsNullOrWhiteSpace(_co.Phone)) { <span> · @_co.Phone</span> }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Token { get; set; }
+
+    private static readonly Dictionary<string, string> Tabs = new()
+    {
+        ["invoices"] = "الفواتير", ["statement"] = "كشف الحساب", ["invoice"] = "تفاصيل الفاتورة"
+    };
+
+    private CompanyInfo _co = new();
+    private Verify? _me;
+    private List<Inv> _inv = new();
+    private Statement? _stmt;
+    private Invoice? _d;
+    private bool _loading = true;
+    private bool _loadingStmt;
+    private string? _error;
+    private string _tab = "invoices";
+    private bool _unpaidOnly;
+    private string? _from, _to;
+
+    // ── DTOs (مطابقة للسيرفر حرفيًا) ──
+    public class Verify
+    {
+        public int CustomerId { get; set; }
+        public string CustomerName { get; set; } = "";
+        public string CustomerCode { get; set; } = "";
+        public string? Phone { get; set; }
+        public string Purpose { get; set; } = "";
+        public DateTime? ExpiresAt { get; set; }
+        public decimal Outstanding { get; set; }
+    }
+
+    public class Inv
+    {
+        public long InvoiceId { get; set; }
+        public string InvoiceNumber { get; set; } = "";
+        public string DocumentTypeCode { get; set; } = "";
+        public string InvoiceDate { get; set; } = "";
+        public string? DueDate { get; set; }
+        public decimal GrandTotal { get; set; }
+        public decimal PaidAmount { get; set; }
+        public decimal Due { get; set; }
+        public string Status { get; set; } = "";
+        public string PaymentStatus { get; set; } = "";
+        public string CurrencyCode { get; set; } = "EGP";
+    }
+
+    public class Line
+    {
+        public long InvoiceItemId { get; set; }
+        public string Description { get; set; } = "";
+        public decimal Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
+        public decimal TaxRate { get; set; }
+        public decimal LineSubtotal { get; set; }
+        public decimal LineTax { get; set; }
+        public decimal LineTotal { get; set; }
+    }
+
+    public class Alloc
+    {
+        public string PaymentNumber { get; set; } = "";
+        public string PaymentDate { get; set; } = "";
+        public string? MethodName { get; set; }
+        public decimal AllocatedAmount { get; set; }
+    }
+
+    public class Invoice
+    {
+        public string InvoiceNumber { get; set; } = "";
+        public string DocumentTypeCode { get; set; } = "";
+        public string InvoiceType { get; set; } = "";
+        public string InvoiceDate { get; set; } = "";
+        public string? DueDate { get; set; }
+        public string Status { get; set; } = "";
+        public string PaymentStatus { get; set; } = "";
+        public decimal SubTotal { get; set; }
+        public decimal DiscountTotal { get; set; }
+        public decimal TaxTotal { get; set; }
+        public decimal GrandTotal { get; set; }
+        public decimal PaidAmount { get; set; }
+        public decimal Due { get; set; }
+        public string CurrencyCode { get; set; } = "EGP";
+        public string? Notes { get; set; }
+        public string CustomerName { get; set; } = "";
+        public string CustomerCode { get; set; } = "";
+        public string? CustomerPhone { get; set; }
+        public List<Line> Items { get; set; } = new();
+        public List<Alloc> Allocations { get; set; } = new();
+    }
+
+    public class StmtLine
+    {
+        public string Date { get; set; } = "";
+        public string Kind { get; set; } = "";
+        public string Ref { get; set; } = "";
+        public string Description { get; set; } = "";
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+        public decimal Balance { get; set; }
+    }
+
+    public class Statement
+    {
+        public string CustomerName { get; set; } = "";
+        public decimal Opening { get; set; }
+        public List<StmtLine> Lines { get; set; } = new();
+        public decimal TotalDebit { get; set; }
+        public decimal TotalCredit { get; set; }
+        public decimal Closing { get; set; }
+    }
+
+    // ── عرض ──
+    private static string Money(decimal v) => v.ToString("N2");
+
+    private static string DocAr(string c) => c switch
+    {
+        "Invoice" => "فاتورة", "CreditNote" => "إشعار دائن", "DebitNote" => "إشعار مدين", _ => c
+    };
+
+    private static string PayAr(string s) => s switch
+    {
+        "Unpaid" => "غير مسدّدة", "PartiallyPaid" => "مسدّدة جزئيًا",
+        "Paid" => "مسدّدة", "Overpaid" => "زيادة", _ => s
+    };
+
+    private static string PayChip(string s) => s switch
+    {
+        "Unpaid" => "fc-chip-bad", "PartiallyPaid" => "fc-chip-warn",
+        "Paid" => "fc-chip-ok", "Overpaid" => "fc-chip-blue", _ => "fc-chip-gray"
+    };
+
+    private static string KindAr(string k) => k switch
+    {
+        "Invoice" => "فاتورة", "CreditNote" => "إشعار دائن", "Payment" => "إيصال", _ => k
+    };
+
+    private static string KindChip(string k) => k switch
+    {
+        "Invoice" => "fc-chip-bad", "CreditNote" => "fc-chip-ok", "Payment" => "fc-chip-ok", _ => "fc-chip-gray"
+    };
+
+    // ── تحميل ──
+    protected override async Task OnInitializedAsync()
+    {
+        _co = await Company.GetAsync();
+        _from = DateOnly.FromDateTime(DateTime.Today.AddMonths(-1)).ToString("yyyy-MM-dd");
+        _to   = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
+        await VerifyAsync();
+    }
+
+    private async Task VerifyAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            var res = await Http.GetAsync($"api/portal/verify?token={Uri.EscapeDataString(Token ?? "")}");
+            if (!res.IsSuccessStatusCode) { _error = await MsgOf(res); return; }
+            _me = await res.Content.ReadFromJsonAsync<Verify>();
+            if (_me is null) { _error = "مافيش بيانات"; return; }
+            await LoadInvoicesAsync();
+        }
+        catch (Exception ex) { _error = "تعذّر فتح البوابة: " + ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task LoadInvoicesAsync()
+    {
+        var list = await Http.GetFromJsonAsync<List<Inv>>(
+            $"api/portal/invoices?token={Uri.EscapeDataString(Token ?? "")}&unpaidOnly={(_unpaidOnly ? "true" : "false")}");
+        _inv = list ?? new();
+    }
+
+    private async Task ToggleUnpaid(bool v)
+    {
+        _unpaidOnly = v;
+        try { await LoadInvoicesAsync(); } catch { }
+    }
+
+    private async Task SetTab(string t)
+    {
+        _tab = t;
+        if (t == "statement" && _stmt is null) await LoadStatement();
+    }
+
+    private async Task BackToList() => await SetTab("invoices");
+
+    private async Task OpenInvoice(long id)
+    {
+        _tab = "invoice";
+        try
+        {
+            _d = await Http.GetFromJsonAsync<Invoice>(
+                $"api/portal/invoice?token={Uri.EscapeDataString(Token ?? "")}&invoiceId={id}");
+        }
+        catch { _d = null; }
+    }
+
+    private async Task LoadStatement()
+    {
+        _loadingStmt = true;
+        try
+        {
+            _stmt = await Http.GetFromJsonAsync<Statement>(
+                $"api/portal/statement?token={Uri.EscapeDataString(Token ?? "")}&from={_from}&to={_to}");
+        }
+        catch { _stmt = null; }
+        finally { _loadingStmt = false; }
+    }
+
+    private async Task Print()
+    {
+        try { await JS.InvokeAsync<bool>("fastcom.printPage"); } catch { }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? "الرابط غير صالح" : "الرابط غير صالح";
+        }
+        catch { return "الرابط غير صالح"; }
+    }
+}

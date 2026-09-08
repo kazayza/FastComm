@@ -1,0 +1,674 @@
+@page "/payments"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject ISnackbar Snackbar
+
+<PageTitle>التحصيل — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">المالية · تحصيل العملاء</div>
+                <h1 class="fc-hero-title">التحصيل</h1>
+                <p class="fc-hero-sub">دفعة واحدة ممكن تتوزّع على كذا فاتورة — والمديونية بتتحدّث أوتوماتيك</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                @if (CanCreate)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="New">دفعة جديدة</MudButton>
+                }
+            </div>
+        </div>
+        @if (CanView)
+        {
+            <div class="fc-kpis fc-kpis-glass">
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" /></div>
+                    <div><div class="fc-kpi-num">@Money(Posted.Sum(p => p.Amount))</div><div class="fc-kpi-lb">إجمالي المحصّل</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Payments" /></div>
+                    <div><div class="fc-kpi-num">@Money(ThisMonth)</div><div class="fc-kpi-lb">تحصيل الشهر ده</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
+                    <div><div class="fc-kpi-num">@Money(Unallocated)</div><div class="fc-kpi-lb">مش متوزّع على فواتير</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Close" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(p => p.Status == "Cancelled")</div><div class="fc-kpi-lb">دفعات ملغية</div></div></div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanView)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك  صلاحية عرض المدفوعات.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+            <div class="fc-toolbar">
+                <div class="fc-filters">
+                    @foreach (var t in Tabs)
+                    {
+                        <button class='fc-filter @(_tab == t.Key ? "on" : "")' @onclick="() => SetTab(t.Key)">@t.Value</button>
+                    }
+                </div>
+                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
+                              Placeholder="ابحث برقم الدفعة أو العميل أو الشيك..." Variant="Variant.Outlined" Dense="true"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Class="fc-search-box" Immediate="true" />
+                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+            }
+            else
+            {
+                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
+                    <thead><tr>
+                        <th>الرقم</th><th>التاريخ</th><th>العميل</th><th>الطريقة</th>
+                        <th>المبلغ</th><th>الموزّع</th><th>الفاضل</th><th>الحالة</th>
+                        <th style="width:180px; text-align:left">إجراءات</th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach (var p in Filtered)
+                        {
+                            <tr>
+                                <td><button class="fc-role-chip" style="border:0; background:none; cursor:pointer; font:inherit"
+                                            @onclick="() => Open(p)">@p.PaymentNumber</button></td>
+                                <td class="fc-cell-sub">@p.PaymentDate.ToString("yyyy-MM-dd")
+                                    @if (p.ChequeNumber is not null) { <div>شيك @p.ChequeNumber</div> }</td>
+                                <td class="fc-cell-main">@p.CustomerName</td>
+                                <td class="fc-cell-sub">@p.MethodName</td>
+                                <td><b>@Money(p.Amount)</b></td>
+                                <td class="fc-cell-sub">@Money(p.Allocated)
+                                    @if (p.AllocationsCount > 0) { <div>@p.AllocationsCount فاتورة</div> }</td>
+                                <td><b>@Money(p.Unallocated)</b></td>
+                                <td><span class="fc-chip @StatusChip(p.Status)"><i></i>@StatusAr(p.Status)</span></td>
+                                <td><div class="fc-row-actions">
+                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Info"
+                                                   title="التفاصيل" OnClick="() => Open(p)" />
+                                    @if (p.Status == "Posted" && CanEdit)
+                                    {
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
+                                                       Color="Color.Primary" title="تعديل" OnClick="() => Edit(p)" />
+                                    }
+                                    @if (p.Status == "Posted" && CanVoid)
+                                    {
+                                        @if (_confirmId == p.PaymentId)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                                                       OnClick="() => Void(p)">إلغاء؟</MudButton>
+                                        }
+                                        else
+                                        {
+                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Close"
+                                                           Color="Color.Error" title="إلغاء الدفعة"
+                                                           OnClick="() => _confirmId = p.PaymentId" />
+                                        }
+                                    }
+                                </div></td>
+                            </tr>
+                        }
+                        @if (!Filtered.Any())
+                        {
+                            <tr><td colspan="9"><div class="fc-empty"><div>مافيش دفعات في الفلتر ده</div></div></td></tr>
+                        }
+                    </tbody>
+                </table></div>
+            }
+        </div></div>
+    }
+
+    @* ═══════════ مودال: دفعة جديدة ═══════════ *@
+    @if (_modalOpen && CanCreate)
+    {
+        <div class="fc-modal-backdrop" @onclick="Close">
+            <div class="fc-modal" @onclick:stopPropagation="true">
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">دفعة جديدة</div>
+                        <div class="fc-modal-sub">الرقم بيتولد تلقائيًا (PAY-)</div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="Close" />
+                </div>
+                <div class="fc-modal-body">
+                    @if (_msg is not null)
+                    {
+                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                                  Class="mb-4">@_msg</MudAlert>
+                    }
+                    <div class="fc-form-grid">
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">العميل *</div>
+                            <select class="fc-sel fc-sel-lg" value="@_f.CustomerId" @onchange="OnCustomerChanged">
+                                <option value="0">— اختر عميل —</option>
+                                @foreach (var c in _customers) { <option value="@c.Id">@c.Label (@c.Code)</option> }
+                            </select>
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">تاريخ القبض</div>
+                            <input type="date" class="fc-sel fc-sel-lg" value="@_f.PaymentDate"
+                                   @onchange="e => _f.PaymentDate = e.Value?.ToString()" />
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">طريقة الدفع *</div>
+                            <select class="fc-sel fc-sel-lg" value="@_f.PaymentMethodId" @onchange="OnMethodChanged">
+                                <option value="0">— اختر —</option>
+                                @foreach (var m in _methods) { <option value="@m.Id">@m.Label</option> }
+                            </select>
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">المبلغ *</div>
+                            <input type="number" min="0.01" step="0.01" class="fc-sel fc-sel-lg" value="@_f.Amount"
+                                   @onchange="OnAmountChanged" />
+                        </div>
+                        @if (NeedCheque)
+                        {
+                            <div>
+                                <div class="fc-panel-sub" style="margin-bottom:6px">رقم الشيك *</div>
+                                <input class="fc-sel fc-sel-lg" value="@_f.ChequeNumber" maxlength="50"
+                                       @onchange="e => _f.ChequeNumber = e.Value?.ToString()" />
+                            </div>
+                            <div>
+                                <div class="fc-panel-sub" style="margin-bottom:6px">تاريخ الشيك</div>
+                                <input type="date" class="fc-sel fc-sel-lg" value="@_f.ChequeDate"
+                                       @onchange="e => _f.ChequeDate = e.Value?.ToString()" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div>
+                                <div class="fc-panel-sub" style="margin-bottom:6px">الحساب البنكي / المرجع</div>
+                                <input class="fc-sel fc-sel-lg" value="@_f.BankAccount" maxlength="100"
+                                       @onchange="e => _f.BankAccount = e.Value?.ToString()" />
+                            </div>
+                        }
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">ملاحظات</div>
+                            <input class="fc-sel fc-sel-lg" value="@_f.Notes" maxlength="500"
+                                   @onchange="e => _f.Notes = e.Value?.ToString()" />
+                        </div>
+                    </div>
+
+                    @if (_f.CustomerId > 0)
+                    {
+                        <div class="fc-toolbar" style="margin-top:18px">
+                            <div class="fc-panel-sub">توزيع على الفواتير — المتبقي @Money(Left) @(Left < 0 ? "· ⚠ وزّعت أكتر من المبلغ" : "")</div>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="AutoAllocate">توزيع تلقائي</MudButton>
+                        </div>
+                        <div class="fc-table-wrap"><table class="fc-table">
+                            <thead><tr><th>الفاتورة</th><th>التاريخ</th><th>الإجمالي</th><th>المتبقي</th><th style="width:140px">الموزّع</th></tr></thead>
+                            <tbody>
+                                @foreach (var inv in _open)
+                                {
+                                    <tr>
+                                        <td class="fc-cell-main">@inv.InvoiceNumber</td>
+                                        <td class="fc-cell-sub">@inv.InvoiceDate.ToString("yyyy-MM-dd")</td>
+                                        <td class="fc-cell-sub">@Money(inv.GrandTotal)</td>
+                                        <td>@Money(inv.Due)</td>
+                                        <td><input type="number" min="0" step="0.01" class="fc-sel"
+                                                   value="@AllocOf(inv.InvoiceId)"
+                                                   @onchange="e => SetAlloc(inv.InvoiceId, ParseDec(e.Value))" /></td>
+                                    </tr>
+                                }
+                                @if (!_open.Any())
+                                {
+                                    <tr><td colspan="5"><div class="fc-lines-empty">لايوجد فواتير مفتوحة لهذا العميل </div></td></tr>
+                                }
+                            </tbody>
+                        </table></div>
+                    }
+                </div>
+                <div class="fc-modal-foot">
+                    <MudButton OnClick="Close">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                               StartIcon="@Icons.Material.Filled.Payments" OnClick="SaveAsync">تسجيل الدفعة</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ═══════════ مودال: تعديل بيانات الدفعة ═══════════ *@
+    @if (_patchOpen && CanEdit && _patchTarget is not null)
+    {
+        <div class="fc-modal-backdrop" @onclick="ClosePatch">
+            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation="true">
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">تعديل @_patchTarget.PaymentNumber</div>
+                        <div class="fc-modal-sub">المبلغ والتوزيع مش بيتعدّلوا — الغِ الدفعة وسجّل جديدة</div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="ClosePatch" />
+                </div>
+                <div class="fc-modal-body">
+                    @if (_msg is not null)
+                    {
+                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                                  Class="mb-4">@_msg</MudAlert>
+                    }
+                    <div class="fc-form-grid">
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">رقم الشيك</div>
+                            <input class="fc-sel fc-sel-lg" value="@_patch.ChequeNumber" maxlength="50"
+                                   @onchange="e => _patch.ChequeNumber = e.Value?.ToString()" />
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">تاريخ الشيك</div>
+                            <input type="date" class="fc-sel fc-sel-lg" value="@_patch.ChequeDate"
+                                   @onchange="e => _patch.ChequeDate = e.Value?.ToString()" />
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">الحساب البنكي / المرجع</div>
+                            <input class="fc-sel fc-sel-lg" value="@_patch.BankAccount" maxlength="100"
+                                   @onchange="e => _patch.BankAccount = e.Value?.ToString()" />
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">ملاحظات</div>
+                            <input class="fc-sel fc-sel-lg" value="@_patch.Notes" maxlength="500"
+                                   @onchange="e => _patch.Notes = e.Value?.ToString()" />
+                        </div>
+                    </div>
+                </div>
+                <div class="fc-modal-foot">
+                    <MudButton OnClick="ClosePatch">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                               StartIcon="@Icons.Material.Filled.Edit" OnClick="SavePatch">حفظ</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ═══════════ مودال: تفاصيل ═══════════ *@
+    @if (_detailOpen && _detail is not null)
+    {
+        <div class="fc-modal-backdrop" @onclick="CloseDetail">
+            <div class="fc-modal" @onclick:stopPropagation="true">
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">الدفعة @_detail.Payment.PaymentNumber</div>
+                        <div class="fc-modal-sub">
+                            @_detail.Payment.CustomerName · @_detail.Payment.PaymentDate · @_detail.Payment.MethodName
+                            · <span class="fc-chip @StatusChip(_detail.Payment.Status)"><i></i>@StatusAr(_detail.Payment.Status)</span>
+                        </div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseDetail" />
+                </div>
+                <div class="fc-modal-body">
+                    <div class="fc-lines">
+                        <div class="fc-lines-head"><span>المبلغ</span><span>الموزّع</span><span>الفاضل</span></div>
+                        <div class="fc-lines-row">
+                            <b>@Money(_detail.Payment.Amount)</b>
+                            <span>@Money(_detail.Payment.Allocated)</span>
+                            <span>@Money(_detail.Payment.Unallocated)</span>
+                        </div>
+                    </div>
+
+                    @if (_detail.Payment.ChequeNumber is not null)
+                    {
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">
+                            شيك @_detail.Payment.ChequeNumber @( _detail.Payment.ChequeDate is null ? "" : "· استحقاق " + _detail.Payment.ChequeDate)
+                        </MudAlert>
+                    }
+
+                    <div class="fc-panel-sub" style="margin:18px 0 6px">التوزيع على الفواتير (@_detail.Allocations.Count)</div>
+                    <div class="fc-table-wrap"><table class="fc-table">
+                        <thead><tr><th>الفاتورة</th><th>إجمالي الفاتورة</th><th>مدفوع منها</th><th>من الدفعة دي</th></tr></thead>
+                        <tbody>
+                            @foreach (var a in _detail.Allocations)
+                            {
+                                <tr>
+                                    <td class="fc-cell-main">@a.InvoiceNumber</td>
+                                    <td class="fc-cell-sub">@Money(a.InvoiceTotal)</td>
+                                    <td class="fc-cell-sub">@Money(a.InvoicePaid)</td>
+                                    <td><b>@Money(a.AllocatedAmount)</b></td>
+                                </tr>
+                            }
+                            @if (!_detail.Allocations.Any())
+                            {
+                                <tr><td colspan="4"><div class="fc-lines-empty">الدفعة دي مش موزّعة على فواتير</div></td></tr>
+                            }
+                        </tbody>
+                    </table></div>
+
+                    @if (_detail.Payment.Notes is not null)
+                    {
+                        <div class="fc-panel-sub" style="margin:18px 0 6px">ملاحظات</div>
+                        <div class="fc-cell-main">@_detail.Payment.Notes</div>
+                    }
+                </div>
+                <div class="fc-modal-foot">
+                    <MudButton OnClick="CloseDetail">إغلاق</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private AuthUser? _user;
+    private bool CanView   => _user?.Can("PAYMENT.VIEW") ?? false;
+    private bool CanCreate => _user?.Can("PAYMENT.CREATE") ?? false;
+    private bool CanEdit   => _user?.Can("PAYMENT.EDIT") ?? false;
+    private bool CanVoid   => _user?.Can("PAYMENT.VOID") ?? false;
+
+    private static readonly Dictionary<string, string> Tabs = new()
+    {
+        ["all"] = "الكل", ["Posted"] = "مسجّلة", ["Cancelled"] = "ملغية", ["Returned"] = "مرتجعة"
+    };
+
+    private List<Item> _items = new();
+    private List<Cust> _customers = new();
+    private List<Method> _methods = new();
+    private List<OpenInv> _open = new();
+
+    private bool _loading; private string _search = ""; private string _tab = "all";
+    private long? _confirmId;
+    private bool _saving; private string? _msg; private bool _ok;
+
+    private bool _modalOpen; private Form _f = new(); private Dictionary<long, decimal> _alloc = new();
+    private bool _patchOpen; private Item? _patchTarget; private PatchForm _patch = new();
+    private bool _detailOpen; private Envelope? _detail;
+
+    public class Cust { public int Id { get; set; } public string Label { get; set; } = "";
+        public string Code { get; set; } = ""; }
+    public class Method { public int Id { get; set; } public string Label { get; set; } = "";
+        public string Code { get; set; } = ""; public bool RequiresChequeNo { get; set; }
+        public bool IsCashBased { get; set; } }
+    public class OpenInv { public long InvoiceId { get; set; } public string InvoiceNumber { get; set; } = "";
+        public DateOnly InvoiceDate { get; set; } public decimal GrandTotal { get; set; }
+        public decimal PaidAmount { get; set; } public decimal Due { get; set; } }
+
+    public class Item
+    {
+        public long PaymentId { get; set; }
+        public string PaymentNumber { get; set; } = "";
+        public DateOnly PaymentDate { get; set; }
+        public string CustomerName { get; set; } = "";
+        public string MethodName { get; set; } = "";
+        public decimal Amount { get; set; }
+        public decimal Allocated { get; set; }
+        public decimal Unallocated { get; set; }
+        public string Status { get; set; } = "";
+        public string? ChequeNumber { get; set; }
+        public int AllocationsCount { get; set; }
+    }
+
+    public class Detail
+    {
+        public long PaymentId { get; set; }
+        public string PaymentNumber { get; set; } = "";
+        public string? PaymentDate { get; set; }
+        public int CustomerId { get; set; }
+        public string CustomerName { get; set; } = "";
+        public int PaymentMethodId { get; set; }
+        public string MethodName { get; set; } = "";
+        public decimal Amount { get; set; }
+        public string? ChequeNumber { get; set; }
+        public string? ChequeDate { get; set; }
+        public string? BankAccount { get; set; }
+        public string? Notes { get; set; }
+        public string Status { get; set; } = "";
+        public decimal Allocated { get; set; }
+        public decimal Unallocated { get; set; }
+    }
+
+    public class AllocOut { public long PaymentAllocationId { get; set; } public long InvoiceId { get; set; }
+        public string InvoiceNumber { get; set; } = ""; public decimal AllocatedAmount { get; set; }
+        public decimal InvoiceTotal { get; set; } public decimal InvoicePaid { get; set; } }
+
+    public class Envelope
+    {
+        public Detail Payment { get; set; } = new();
+        public List<AllocOut> Allocations { get; set; } = new();
+    }
+
+    public class Form
+    {
+        public int CustomerId { get; set; }
+        public string? PaymentDate { get; set; }
+        public int PaymentMethodId { get; set; }
+        public decimal Amount { get; set; }
+        public string? ChequeNumber { get; set; }
+        public string? ChequeDate { get; set; }
+        public string? BankAccount { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    public class PatchForm
+    {
+        public string? ChequeNumber { get; set; }
+        public string? ChequeDate { get; set; }
+        public string? BankAccount { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    private bool NeedCheque => _methods.FirstOrDefault(m => m.Id == _f.PaymentMethodId)?.RequiresChequeNo == true;
+
+    private IEnumerable<Item> Posted => _items.Where(p => p.Status == "Posted");
+
+    private decimal Unallocated => Posted.Sum(p => p.Unallocated);
+
+    private decimal ThisMonth => Posted
+        .Where(p => p.PaymentDate.Year == DateTime.Now.Year && p.PaymentDate.Month == DateTime.Now.Month)
+        .Sum(p => p.Amount);
+
+    private decimal AllocTotal => _alloc.Values.Sum();
+    private decimal Left => _f.Amount - AllocTotal;
+
+    private decimal AllocOf(long invoiceId) =>
+        _alloc.TryGetValue(invoiceId, out var v) ? v : 0m;
+
+    private void SetAlloc(long invoiceId, decimal v)
+    {
+        if (v <= 0) _alloc.Remove(invoiceId);
+        else _alloc[invoiceId] = v;
+    }
+
+    /// <summary>يوزّع بالأقدم أولًا — لحد ما المبلغ يخلص.</summary>
+    private void AutoAllocate()
+    {
+        _alloc = new Dictionary<long, decimal>();
+        var left = _f.Amount;
+        foreach (var inv in _open.OrderBy(i => i.InvoiceDate).ThenBy(i => i.InvoiceId))
+        {
+            if (left <= 0) break;
+            var take = Math.Min(inv.Due, left);
+            if (take <= 0) continue;
+            _alloc[inv.InvoiceId] = take;
+            left -= take;
+        }
+    }
+
+    private static string StatusAr(string s) => s switch
+    {
+        "Posted" => "مسجّلة", "Cancelled" => "ملغية", "Returned" => "مرتجعة", _ => s
+    };
+
+    private static string StatusChip(string s) => s switch
+    {
+        "Posted" => "fc-chip-ok", "Cancelled" => "fc-chip-bad", "Returned" => "fc-chip-warn", _ => "fc-chip-gray"
+    };
+
+    private static string Money(decimal v) => v.ToString("N2");
+
+    private static decimal ParseDec(object? v) => decimal.TryParse(v?.ToString(), out var n) ? n : 0m;
+    private static int ParseInt(object? v) => int.TryParse(v?.ToString(), out var n) ? n : 0;
+
+    private IEnumerable<Item> Filtered => _items.Where(p =>
+        (_tab == "all" || p.Status == _tab) &&
+        (string.IsNullOrWhiteSpace(_search) ||
+         p.PaymentNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         p.CustomerName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         (p.ChequeNumber ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (!CanView) return;
+        await LoadAsync();
+        _customers = await SafeGetT<Cust>("api/payments/customers");
+        _methods   = await SafeGetT<Method>("api/options/payment-methods");
+    }
+
+    private async Task<List<T>> SafeGetT<T>(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<T>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    private async Task Reload() { await LoadAsync(); }
+
+    private void SetTab(string t) { _tab = t; _confirmId = null; }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/payments?take=300") ?? new(); }
+        catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
+        finally { _loading = false; }
+    }
+
+    // ── دفعة جديدة ──
+
+    private void New()
+    {
+        _f = new Form { PaymentDate = DateTime.Now.ToString("yyyy-MM-dd") };
+        _alloc = new(); _open = new();
+        _msg = null; _modalOpen = true;
+    }
+
+    private void Close() { _modalOpen = false; }
+
+    private async Task OnCustomerChanged(ChangeEventArgs e)
+    {
+        _f.CustomerId = ParseInt(e.Value);
+        _alloc = new();
+        _open = _f.CustomerId > 0
+            ? await SafeGetT<OpenInv>($"api/payments/open-invoices?customerId={_f.CustomerId}")
+            : new();
+        AutoAllocate();
+    }
+
+    private void OnMethodChanged(ChangeEventArgs e)
+    {
+        _f.PaymentMethodId = ParseInt(e.Value);
+        if (!NeedCheque) { _f.ChequeNumber = null; _f.ChequeDate = null; }
+    }
+
+    private void OnAmountChanged(ChangeEventArgs e)
+    {
+        _f.Amount = ParseDec(e.Value);
+        AutoAllocate();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_f.CustomerId <= 0)       { _ok = false; _msg = "اختار العميل"; return; }
+        if (_f.PaymentMethodId <= 0)  { _ok = false; _msg = "اختار طريقة الدفع"; return; }
+        if (_f.Amount <= 0)           { _ok = false; _msg = "اكتب مبلغ"; return; }
+        if (Left < 0)                 { _ok = false; _msg = $"الموزّع أكتر من المبلغ بـ {(-Left):N2}"; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/payments", new
+            {
+                customerId      = _f.CustomerId,
+                paymentDate     = _f.PaymentDate,
+                paymentMethodId = _f.PaymentMethodId,
+                amount          = _f.Amount,
+                chequeNumber    = _f.ChequeNumber,
+                chequeDate      = _f.ChequeDate,
+                bankAccount     = _f.BankAccount,
+                notes           = _f.Notes,
+                allocations     = _alloc.Select(a => new { invoiceId = a.Key, amount = a.Value }).ToList()
+            });
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); Close(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    // ── تعديل ──
+
+    private async Task Edit(Item p)
+    {
+        try
+        {
+            var e = await Http.GetFromJsonAsync<Envelope>($"api/payments/{p.PaymentId}");
+            if (e is null) return;
+            _patchTarget = p;
+            _patch = new PatchForm
+            {
+                ChequeNumber = e.Payment.ChequeNumber,
+                ChequeDate   = e.Payment.ChequeDate,
+                BankAccount  = e.Payment.BankAccount,
+                Notes        = e.Payment.Notes
+            };
+            _msg = null; _patchOpen = true;
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private void ClosePatch() { _patchOpen = false; _patchTarget = null; }
+
+    private async Task SavePatch()
+    {
+        if (_patchTarget is null) return;
+        _saving = true; _msg = null;
+        try
+        {
+            var res = await Http.PutAsJsonAsync($"api/payments/{_patchTarget.PaymentId}", new
+            {
+                chequeNumber = _patch.ChequeNumber,
+                chequeDate   = _patch.ChequeDate,
+                bankAccount  = _patch.BankAccount,
+                notes        = _patch.Notes
+            });
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); ClosePatch(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    // ── تفاصيل / إلغاء ──
+
+    private async Task Open(Item p)
+    {
+        try
+        {
+            _detail = await Http.GetFromJsonAsync<Envelope>($"api/payments/{p.PaymentId}");
+            if (_detail is null) return;
+            _msg = null; _detailOpen = true;
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private void CloseDetail() { _detailOpen = false; }
+
+    private async Task Void(Item p)
+    {
+        try
+        {
+            var res = await Http.PostAsync($"api/payments/{p.PaymentId}/void", null);
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            _confirmId = null;
+            if (res.IsSuccessStatusCode) { _detailOpen = false; await LoadAsync(); }
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+    }
+}

@@ -1,0 +1,435 @@
+@page "/vehicles"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject ISnackbar Snackbar
+
+<PageTitle>الأسطول — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">البيانات الأساسية · الأسطول</div>
+                <h1 class="fc-hero-title">الأسطول</h1>
+                <p class="fc-hero-sub">العربيات والمقطورات — الحالة والرخص والتأمين</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                @if (CanCreate)
+                {
+                    @if (_tab == "v")
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Add" OnClick="NewVehicle">عربية جديدة</MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Add" OnClick="NewTrailer">مقطورة جديدة</MudButton>
+                    }
+                }
+            </div>
+        </div>
+        <div class="fc-kpis fc-kpis-glass">
+            <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.DirectionsCar" /></div>
+                <div><div class="fc-kpi-num">@_vehicles.Count</div><div class="fc-kpi-lb">عربيات</div></div></div>
+            <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
+                <div><div class="fc-kpi-num">@_vehicles.Count(v => v.Status == "Available")</div><div class="fc-kpi-lb">متاحة</div></div></div>
+            <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.AirportShuttle" /></div>
+                <div><div class="fc-kpi-num">@_trailers.Count</div><div class="fc-kpi-lb">مقطورات</div></div></div>
+            <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Construction" /></div>
+                <div><div class="fc-kpi-num">@_vehicles.Count(v => v.Status == "Maintenance")</div><div class="fc-kpi-lb">في الصيانة</div></div></div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanView)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية FLEET.VIEW.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+            <div class="fc-toolbar">
+                <div class="fc-filters">
+                    <button class='fc-filter @(_tab == "v" ? "on" : "")' @onclick='() => _tab = "v"'>العربيات</button>
+                    <button class='fc-filter @(_tab == "t" ? "on" : "")' @onclick='() => _tab = "t"'>المقطورات</button>
+                </div>
+                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
+                              Placeholder="ابحث باللوحة أو الكود..." Variant="Variant.Outlined" Dense="true"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Class="fc-search-box" Immediate="true" />
+            </div>
+
+            @if (_loading)
+            {
+                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+            }
+            else if (_tab == "v")
+            {
+                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
+                    <thead><tr><th>الكود</th><th>اللوحة</th><th>النوع</th><th>الملكية</th><th>حمولة</th><th>الحالة</th>
+                        @if (CanEdit) { <th style="width:120px; text-align:left">إجراءات</th> }</tr></thead>
+                    <tbody>
+                        @foreach (var v in VehiclesFiltered)
+                        {
+                            <tr>
+                                <td><span class="fc-role-chip">@v.VehicleCode</span></td>
+                                <td><div class="fc-cell-main">@v.PlateNumber</div></td>
+                                <td class="fc-cell-sub">@v.VehicleType @(v.Brand is null ? "" : "· " + v.Brand)</td>
+                                <td>@(v.OwnershipType == "Company" ? "شركة" : "خارجي")</td>
+                                <td class="fc-cell-sub">@(v.CapacityTon?.ToString("0.##") ?? "—") طن</td>
+                                <td>@StatusAr(v.Status)</td>
+                                @if (CanEdit)
+                                {
+                                    <td><div class="fc-row-actions">
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="() => EditVehicle(v)" />
+                                        @if (_confirmV == v.VehicleId)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" OnClick="() => DeleteVehicle(v)">متأكد؟</MudButton>
+                                        }
+                                        else if (CanDelete)
+                                        {
+                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => _confirmV = v.VehicleId" />
+                                        }
+                                    </div></td>
+                                }
+                            </tr>
+                        }
+                        @if (!VehiclesFiltered.Any()) { <tr><td colspan="7"><div class="fc-empty"><div>لايوجد اى سيارات</div></div></td></tr> }
+                    </tbody>
+                </table></div>
+            }
+            else
+            {
+                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
+                    <thead><tr><th>الكود</th><th>اللوحة</th><th>النوع</th><th>المقاس</th><th>الحالة</th>
+                        @if (CanEdit) { <th style="width:120px; text-align:left">إجراءات</th> }</tr></thead>
+                    <tbody>
+                        @foreach (var t in TrailersFiltered)
+                        {
+                            <tr>
+                                <td><span class="fc-role-chip">@t.TrailerCode</span></td>
+                                <td><div class="fc-cell-main">@(t.PlateNumber ?? "—")</div></td>
+                                <td class="fc-cell-sub">@t.TrailerType</td>
+                                <td class="fc-cell-sub">@(t.SizeFeet?.ToString() ?? "—") قدم</td>
+                                <td>@StatusAr(t.Status)</td>
+                                @if (CanEdit)
+                                {
+                                    <td><div class="fc-row-actions">
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="() => EditTrailer(t)" />
+                                        @if (_confirmT == t.TrailerId)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" OnClick="() => DeleteTrailer(t)">متأكد؟</MudButton>
+                                        }
+                                        else if (CanDelete)
+                                        {
+                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => _confirmT = t.TrailerId" />
+                                        }
+                                    </div></td>
+                                }
+                            </tr>
+                        }
+                        @if (!TrailersFiltered.Any()) { <tr><td colspan="6"><div class="fc-empty"><div>مافيش مقطورات</div></div></td></tr> }
+                    </tbody>
+                </table></div>
+            }
+        </div></div>
+    }
+
+    @* ═══ مودال عربية ═══ *@
+    @if (_vOpen && CanCreate)
+    {
+        <div class="fc-modal-backdrop" @onclick="CloseAll">
+            <div class="fc-modal" @onclick:stopPropagation>
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">@(_vId is null ? "عربية جديدة" : "تعديل عربية")</div>
+                        <div class="fc-modal-sub">الكود بيتولد تلقائيًا (VEH-)</div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseAll" />
+                </div>
+                <div class="fc-modal-body">
+                    @if (_msg is not null)
+                    {
+                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
+                    }
+                    <div class="fc-form-grid">
+                        <MudTextField T="string" @bind-Value="_vf.PlateNumber" Label="رقم اللوحة *" Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_vf.VehicleType" Label="النوع (جرار/نقل/سطحة) *" Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_vf.Brand" Label="الماركة" Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_vf.Model" Label="الموديل" Variant="Variant.Outlined" />
+                        <div><div class="fc-panel-sub" style="margin-bottom:6px">الملكية</div>
+                            <select class="fc-sel fc-sel-lg" @bind="_vf.OwnershipType">
+                                <option value="Company">شركة</option><option value="External">خارجي</option>
+                            </select></div>
+                        @if (_vf.OwnershipType == "External")
+                        {
+                            <div><div class="fc-panel-sub" style="margin-bottom:6px">المورد</div>
+                                <select class="fc-sel fc-sel-lg" @bind="_vf.SupplierId">
+                                    <option value="">—</option>
+                                    @foreach (var s in _suppliers) { <option value="@s.Id">@s.Label</option> }
+                                </select></div>
+                        }
+                        <MudTextField T="decimal?" @bind-Value="_vf.CapacityTon" Label="الحمولة (طن)" Variant="Variant.Outlined" />
+                        <MudTextField T="byte" @bind-Value="_vf.ContainerSlots20" Label="عدد حاويات 20 قدم" Variant="Variant.Outlined" />
+                        <div><div class="fc-panel-sub" style="margin-bottom:6px">انتهاء الرخصة</div>
+                            <input type="date" class="fc-sel fc-sel-lg" value="@_vf.LicenseExpiryDate"
+                                   @onchange="e => _vf.LicenseExpiryDate = e.Value?.ToString()" /></div>
+                        <div><div class="fc-panel-sub" style="margin-bottom:6px">انتهاء التأمين</div>
+                            <input type="date" class="fc-sel fc-sel-lg" value="@_vf.InsuranceExpiryDate"
+                                   @onchange="e => _vf.InsuranceExpiryDate = e.Value?.ToString()" /></div>
+                        <div><div class="fc-panel-sub" style="margin-bottom:6px">الحالة</div>
+                            <select class="fc-sel fc-sel-lg" @bind="_vf.Status">
+                                <option value="Available">متاحة</option><option value="InTrip">في رحلة</option>
+                                <option value="Maintenance">صيانة</option><option value="OutOfService">خارج الخدمة</option>
+                            </select></div>
+                    </div>
+                </div>
+                <div class="fc-modal-foot">
+                    <MudButton Variant="Variant.Outlined" OnClick="CloseAll">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveVehicleAsync">حفظ</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ═══ مودال مقطورة ═══ *@
+    @if (_tOpen && CanCreate)
+    {
+        <div class="fc-modal-backdrop" @onclick="CloseAll">
+            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation>
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">@(_tId is null ? "مقطورة جديدة" : "تعديل مقطورة")</div>
+                        <div class="fc-modal-sub">الكود بيتولد تلقائيًا (TRL-)</div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseAll" />
+                </div>
+                <div class="fc-modal-body">
+                    @if (_msg is not null)
+                    {
+                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
+                    }
+                    <MudTextField T="string" @bind-Value="_tf.PlateNumber" Label="رقم اللوحة" Variant="Variant.Outlined" Class="mb-3" />
+                    <MudTextField T="string" @bind-Value="_tf.TrailerType" Label="النوع *" Variant="Variant.Outlined" Class="mb-3" />
+                    <div class="fc-form-grid">
+                        <div><div class="fc-panel-sub" style="margin-bottom:6px">المقاس (قدم)</div>
+                            <select class="fc-sel fc-sel-lg" @bind="_tf.SizeFeet">
+                                <option value="">—</option>
+                                <option value="20">20</option><option value="40">40</option>
+                                <option value="45">45</option><option value="53">53</option>
+                            </select></div>
+                        <div><div class="fc-panel-sub" style="margin-bottom:6px">الملكية</div>
+                            <select class="fc-sel fc-sel-lg" @bind="_tf.OwnershipType">
+                                <option value="Company">شركة</option><option value="External">خارجي</option>
+                            </select></div>
+                        <div><div class="fc-panel-sub" style="margin-bottom:6px">الحالة</div>
+                            <select class="fc-sel fc-sel-lg" @bind="_tf.Status">
+                                <option value="Available">متاحة</option><option value="InTrip">في رحلة</option>
+                                <option value="Maintenance">صيانة</option><option value="OutOfService">خارج الخدمة</option>
+                            </select></div>
+                    </div>
+                </div>
+                <div class="fc-modal-foot">
+                    <MudButton Variant="Variant.Outlined" OnClick="CloseAll">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveTrailerAsync">حفظ</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private AuthUser? _user;
+    private bool CanView => _user?.Can("FLEET.VIEW") ?? false;
+    private bool CanCreate => _user?.Can("FLEET.CREATE") ?? false;
+    private bool CanEdit => _user?.Can("FLEET.EDIT") ?? false;
+    private bool CanDelete => _user?.Can("FLEET.DELETE") ?? false;
+
+    private string _tab = "v";
+    private string _search = "";
+    private bool _loading;
+    private List<VItem> _vehicles = new();
+    private List<TItem> _trailers = new();
+    private List<Opt> _suppliers = new();
+    private int? _confirmV, _confirmT;
+
+    private bool _vOpen, _tOpen, _saving; private string? _msg; private bool _ok;
+    private int? _vId, _tId;
+    private VForm _vf = new(); private TForm _tf = new();
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+    public class VItem { public int VehicleId { get; set; } public string VehicleCode { get; set; } = "";
+        public string PlateNumber { get; set; } = ""; public string VehicleType { get; set; } = "";
+        public string? Brand { get; set; } public string OwnershipType { get; set; } = "";
+        public decimal? CapacityTon { get; set; } public string Status { get; set; } = ""; }
+    public class TItem { public int TrailerId { get; set; } public string TrailerCode { get; set; } = "";
+        public string? PlateNumber { get; set; } public string TrailerType { get; set; } = "";
+        public byte? SizeFeet { get; set; } public string Status { get; set; } = ""; }
+
+    public class VDetail { public string PlateNumber { get; set; } = ""; public string VehicleType { get; set; } = "";
+        public string? Brand { get; set; } public string? Model { get; set; } public short? ModelYear { get; set; }
+        public string OwnershipType { get; set; } = ""; public int? SupplierId { get; set; }
+        public decimal? CapacityTon { get; set; } public byte ContainerSlots20 { get; set; }
+        public DateOnly? LicenseExpiryDate { get; set; } public DateOnly? InsuranceExpiryDate { get; set; }
+        public string Status { get; set; } = ""; }
+    public class TDetail { public string? PlateNumber { get; set; } public string TrailerType { get; set; } = "";
+        public byte? SizeFeet { get; set; } public string OwnershipType { get; set; } = "";
+        public string Status { get; set; } = ""; }
+
+    public class VForm { public string PlateNumber { get; set; } = ""; public string VehicleType { get; set; } = "";
+        public string? Brand { get; set; } public string? Model { get; set; } public short? ModelYear { get; set; }
+        public string OwnershipType { get; set; } = "Company"; public int? SupplierId { get; set; }
+        public decimal? CapacityTon { get; set; } public byte ContainerSlots20 { get; set; } = 1;
+        public string? LicenseExpiryDate { get; set; } public string? InsuranceExpiryDate { get; set; }
+        public string Status { get; set; } = "Available"; public string? Notes { get; set; } }
+    public class TForm { public string? PlateNumber { get; set; } public string TrailerType { get; set; } = "";
+        public byte? SizeFeet { get; set; } public string OwnershipType { get; set; } = "Company";
+        public int? SupplierId { get; set; } public string? LicenseExpiryDate { get; set; }
+        public string? InsuranceExpiryDate { get; set; } public string Status { get; set; } = "Available";
+        public string? Notes { get; set; } }
+
+    private static string StatusAr(string s) => s switch
+    {
+        "Available" => "متاحة", "InTrip" => "في رحلة", "Maintenance" => "صيانة", _ => "خارج الخدمة"
+    };
+
+    private IEnumerable<VItem> VehiclesFiltered => string.IsNullOrWhiteSpace(_search) ? _vehicles :
+        _vehicles.Where(v => v.PlateNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                             v.VehicleCode.Contains(_search, StringComparison.OrdinalIgnoreCase));
+    private IEnumerable<TItem> TrailersFiltered => string.IsNullOrWhiteSpace(_search) ? _trailers :
+        _trailers.Where(t => (t.PlateNumber ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                             t.TrailerCode.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (CanView)
+        {
+            await LoadAsync();
+            if (CanCreate)
+                try { _suppliers = await Http.GetFromJsonAsync<List<Opt>>("api/options/suppliers") ?? new(); } catch { }
+        }
+    }
+
+    private async Task Reload() { await LoadAsync(); }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _vehicles = await Http.GetFromJsonAsync<List<VItem>>("api/fleet/vehicles") ?? new();
+            _trailers = await Http.GetFromJsonAsync<List<TItem>>("api/fleet/trailers") ?? new();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
+        finally { _loading = false; }
+    }
+
+    private void CloseAll() { _vOpen = false; _tOpen = false; }
+
+    private void NewVehicle() { _vId = null; _vf = new VForm(); _msg = null; _tOpen = false; _vOpen = true; }
+    private void NewTrailer() { _tId = null; _tf = new TForm(); _msg = null; _vOpen = false; _tOpen = true; }
+
+    private async Task EditVehicle(VItem v)
+    {
+        try
+        {
+            var d = await Http.GetFromJsonAsync<VDetail>($"api/fleet/vehicles/{v.VehicleId}");
+            if (d is null) return;
+            _vId = v.VehicleId;
+            _vf = new VForm { PlateNumber = d.PlateNumber, VehicleType = d.VehicleType, Brand = d.Brand,
+                Model = d.Model, ModelYear = d.ModelYear, OwnershipType = d.OwnershipType,
+                SupplierId = d.SupplierId, CapacityTon = d.CapacityTon, ContainerSlots20 = d.ContainerSlots20,
+                LicenseExpiryDate = d.LicenseExpiryDate?.ToString("yyyy-MM-dd"),
+                InsuranceExpiryDate = d.InsuranceExpiryDate?.ToString("yyyy-MM-dd"), Status = d.Status };
+            _msg = null; _tOpen = false; _vOpen = true;
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private async Task EditTrailer(TItem t)
+    {
+        try
+        {
+            var d = await Http.GetFromJsonAsync<TDetail>($"api/fleet/trailers/{t.TrailerId}");
+            if (d is null) return;
+            _tId = t.TrailerId;
+            _tf = new TForm { PlateNumber = d.PlateNumber, TrailerType = d.TrailerType, SizeFeet = d.SizeFeet,
+                OwnershipType = d.OwnershipType, Status = d.Status };
+            _msg = null; _vOpen = false; _tOpen = true;
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private async Task SaveVehicleAsync()
+    {
+        _saving = true; _msg = null;
+        try
+        {
+            var res = _vId is null
+                ? await Http.PostAsJsonAsync("api/fleet/vehicles", _vf)
+                : await Http.PutAsJsonAsync($"api/fleet/vehicles/{_vId}", _vf);
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); CloseAll(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task SaveTrailerAsync()
+    {
+        _saving = true; _msg = null;
+        try
+        {
+            var payload = new
+            {
+                plateNumber = _tf.PlateNumber, trailerType = _tf.TrailerType, sizeFeet = _tf.SizeFeet,
+                ownershipType = _tf.OwnershipType, supplierId = _tf.SupplierId,
+                licenseExpiryDate = _tf.LicenseExpiryDate, insuranceExpiryDate = _tf.InsuranceExpiryDate,
+                status = _tf.Status, notes = _tf.Notes
+            };
+            var res = _tId is null
+                ? await Http.PostAsJsonAsync("api/fleet/trailers", payload)
+                : await Http.PutAsJsonAsync($"api/fleet/trailers/{_tId}", payload);
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); CloseAll(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task DeleteVehicle(VItem v)
+    {
+        try
+        {
+            var res = await Http.DeleteAsync($"api/fleet/vehicles/{v.VehicleId}");
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            _confirmV = null;
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private async Task DeleteTrailer(TItem t)
+    {
+        try
+        {
+            var res = await Http.DeleteAsync($"api/fleet/trailers/{t.TrailerId}");
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            _confirmT = null;
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+    }
+}

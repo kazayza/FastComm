@@ -15,7 +15,7 @@
                      Value="_selected"
                      ValueChanged="OnSelected"
                      SearchFunc="SearchAsync"
-                     Placeholder="ابحث عن عميل، حجز، عملية، فاتورة، رحلة، حاوية..."
+                     Placeholder="@_placeholder"
                      AdornmentIcon="@Icons.Material.Filled.Search"
                      AdornmentColor="Color.Inherit"
                      MinCharacters="2"
@@ -48,7 +48,7 @@
         <NoItemsTemplate>
             <div class="fc-search-empty">
                 <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Small" />
-                <span>مفيش نتائج مطابقة</span>
+                <span>@(_emptyMessage ?? "مفيش نتائج مطابقة")</span>
             </div>
         </NoItemsTemplate>
 
@@ -62,17 +62,34 @@
 @code {
     private SearchResult? _selected;
     private string? _lastError;
+    private string? _emptyMessage;
 
-    /// <summary>الصفحة اللي كل وحدة بتفتح عليها — ⏳ هتتوصّل في Steps 5–9.</summary>
+    /// <summary>🔐 الوحدات اللي المستخدم يقدر يبحث فيها (بتيجي من الـ API).</summary>
+    private List<string> _searchableIn = new();
+
+    private string _placeholder => _searchableIn.Count > 0
+        ? $"ابحث في: {string.Join(" · ", _searchableIn)}"
+        : "ابحث عن عميل، حجز، عملية، فاتورة، رحلة، حاوية...";
+
+    /// <summary>
+    /// الصفحة اللي كل وحدة بتفتح عليها — + <c>?focus=</c> برقم السجل
+    /// عشان القائمة تفلتر عليه على طول.
+    /// 🔴 قبل كده كانت مسارات تفاصيل (<c>/customers/{0}</c>) — <b>مافيش صفحة واحدة منها موجودة</b>.
+    /// </summary>
     private static readonly Dictionary<string, string> Routes = new(StringComparer.Ordinal)
     {
-        ["عميل"]   = "/customers/{0}",
-        ["حجز"]    = "/bookings/{0}",
-        ["عملية"]  = "/operations/{0}",
-        ["فاتورة"] = "/invoices/{0}",
-        ["رحلة"]   = "/trips/{0}",
-        ["حاوية"]  = "/containers/{0}",
-        ["سيارة"]  = "/fleet/vehicles/{0}"
+        ["عميل"]   = "/customers",
+        ["حجز"]    = "/bookings",
+        ["عملية"]  = "/operations",
+        ["فاتورة"] = "/invoices",
+        ["رحلة"]   = "/trips",
+        ["حاوية"]  = "/containers",
+        ["سيارة"]  = "/vehicles",
+        ["سائق"]   = "/drivers",
+        ["مورد"]   = "/suppliers",
+        ["مصروف"]  = "/expenses",
+        ["عهدة"]   = "/custodies",
+        ["دفعة"]   = "/payments"
     };
 
     private async Task<IEnumerable<SearchResult>> SearchAsync(string term, CancellationToken ct)
@@ -87,11 +104,20 @@
 
             if (res is null) return Enumerable.Empty<SearchResult>();
 
+            // 🔐 نحدّث الوحدات المتاحة
+            if (res.SearchableIn is { Count: > 0 })
+                _searchableIn = res.SearchableIn;
+
             if (!string.IsNullOrEmpty(res.Error))
             {
                 _lastError = res.Error;
                 return Enumerable.Empty<SearchResult>();
             }
+
+            // 🔐 مافيش أي صلاحية بحث؟
+            _emptyMessage = res.Results.Count == 0 && res.SearchableIn.Count == 0
+                ? "ماعندكش صلاحية البحث في أي وحدة"
+                : null;
 
             _lastError = null;
             return res.Results;
@@ -113,12 +139,16 @@
             _lastError = null;
         }
 
-        // ⏳ لحد ما الوحدات تتبني، بنفتح صفحة البحث
-        var route = Routes.TryGetValue(hit.Entity, out var r)
-            ? string.Format(r, hit.Id)
-            : $"/search?q={Uri.EscapeDataString(hit.Code)}";
+        // 🎯 نفتح صفحة الوحدة نفسها ونفلتر على رقم السجل
+        if (Routes.TryGetValue(hit.Entity, out var r))
+        {
+            Nav.NavigateTo($"{r}?focus={Uri.EscapeDataString(hit.Code)}");
+            _selected = null;
+            return;
+        }
 
-        Nav.NavigateTo($"/search?entity={Uri.EscapeDataString(hit.Entity)}&id={hit.Id}&from={Uri.EscapeDataString(route)}");
+        // وحدة ملهاش صفحة — نفتح صفحة البحث بالرقم
+        Nav.NavigateTo($"/search?entity={Uri.EscapeDataString(hit.Entity)}&id={hit.Id}&from={Uri.EscapeDataString(hit.Code)}");
 
         _selected = null;   // نفضّي الـ input بعد الاختيار
     }

@@ -1,0 +1,817 @@
+@page "/customers"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<PageTitle>العملاء — فاست كوم</PageTitle>
+
+@* ═══════════════ الهيرو ═══════════════ *@
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">البيانات الأساسية · الأطراف</div>
+                <h1 class="fc-hero-title">العملاء</h1>
+                <p class="fc-hero-sub">شركات وأفراد — كل الحجوزات والفواتير بتتعمل منهم</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
+                               OnClick="Reload" Style="color:#9FB4CC" />
+                @if (CanCreate)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="NewCustomer">عميل جديد</MudButton>
+                }
+            </div>
+        </div>
+
+        @if (CanView)
+        {
+            <div class="fc-kpis fc-kpis-glass">
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.Groups" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي العملاء</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(c => c.IsActive)</div><div class="fc-kpi-lb">نشط</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.LocalOffer" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(c => c.CustomerType == "Company")</div><div class="fc-kpi-lb">شركات</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.PersonOutline" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(c => c.CustomerType == "Individual")</div><div class="fc-kpi-lb">أفراد</div></div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanView)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض العملاء.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap">
+            <div class="fc-card">
+                <div class="fc-toolbar">
+                    <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
+                                  Placeholder="دوّر بالاسم أو الكود أو الرقم الضريبي..."
+                                  Variant="Variant.Outlined" Dense="true"
+                                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                                  Class="fc-search-box" Immediate="true" />
+                    <div class="fc-filters">
+                        <button class='fc-filter @(_filter == "all" ? "on" : "")' @onclick='() => _filter = "all"'>الكل</button>
+                        <button class='fc-filter @(_filter == "co" ? "on" : "")' @onclick='() => _filter = "co"'>شركات</button>
+                        <button class='fc-filter @(_filter == "ind" ? "on" : "")' @onclick='() => _filter = "ind"'>أفراد</button>
+                    </div>
+                    <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+                </div>
+
+                @if (_loading)
+                {
+                    <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+                }
+                else if (_loadError is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="ma-4">@_loadError</MudAlert>
+                }
+                else
+                {
+                    <div class="fc-table-wrap">
+                        <table class="fc-table fc-table-pro">
+                            <thead>
+                                <tr>
+                                    <th>الكود</th>
+                                    <th>الاسم</th>
+                                    <th>النوع</th>
+                                    <th>التليفون</th>
+                                    <th>الرقم الضريبي</th>
+                                    <th>الحالة</th>
+                                    <th style="width:96px"></th>
+                                    @if (CanEdit)
+                                    {
+                                        <th style="width:150px; text-align:left">إجراءات</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in Filtered)
+                                {
+                                    <tr>
+                                        <td><span class="fc-role-chip">@c.CustomerCode</span></td>
+                                        <td>
+                                            <div class="fc-cell-main">@c.NameAr</div>
+                                            <div class="fc-cell-sub">@(c.CityAr ?? "—")</div>
+                                        </td>
+                                        <td>
+                                            @if (c.CustomerType == "Company")
+                                            {
+                                                <span class="fc-chip fc-chip-blue"><i></i>شركة</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="fc-chip fc-chip-purple"><i></i>فرد</span>
+                                            }
+                                        </td>
+                                        <td class="fc-cell-sub">@(c.Phone ?? "—")</td>
+                                        <td class="fc-cell-sub">@(c.TaxNumber ?? "—")</td>
+                                        <td>
+                                            @if (c.IsActive)
+                                            {
+                                                <span class="fc-chip fc-chip-ok"><i></i>نشط</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="fc-chip fc-chip-bad"><i></i>موقوف</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (CanStatement)
+                                            {
+                                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.FactCheck"
+                                                               Color="Color.Info" title="كشف حساب"
+                                                               OnClick="() => OpenStatement(c)" />
+                                            }
+                                            @if (CanPortal)
+                                            {
+                                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.LocalOffer"
+                                                               Color="Color.Success" title="رابط بوابة العميل"
+                                                               OnClick="() => OpenPortal(c)" />
+                                            }
+                                        </td>
+                                        @if (CanEdit)
+                                        {
+                                            <td>
+                                                <div class="fc-row-actions">
+                                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
+                                                                   Color="Color.Primary" title="تعديل" OnClick="() => Edit(c)" />
+                                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Refresh"
+                                                                   Color="@(c.IsActive ? Color.Error : Color.Success)"
+                                                                   title='@(c.IsActive ? "إيقاف" : "تفعيل")'
+                                                                   OnClick="() => ToggleActive(c)" />
+                                                    @if (_confirmId == c.CustomerId)
+                                                    {
+                                                        <MudButton Size="Size.Small" Variant="Variant.Filled"
+                                                                   Color="Color.Error" OnClick="() => Delete(c)">متأكد؟</MudButton>
+                                                    }
+                                                    else if (CanDelete)
+                                                    {
+                                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
+                                                                       Color="Color.Error" title="حذف"
+                                                                       OnClick="() => _confirmId = c.CustomerId" />
+                                                    }
+                                                </div>
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                                @if (!Filtered.Any())
+                                {
+                                    <tr><td colspan="7"><div class="fc-empty">
+                                        <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" />
+                                        <div>مافيش نتائج — ابدأ بإضافة أول عميل</div></div></td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @* ═══════════════ مودال العميل ═══════════════ *@
+    @if (_modalOpen && CanCreate)
+    {
+        <div class="fc-modal-backdrop" @onclick="CloseModal">
+            <div class="fc-modal" @onclick:stopPropagation>
+                <div class="fc-modal-head">
+                    <div>
+                        <div class="fc-modal-title">@(_editingId is null ? "عميل جديد" : $"تعديل: {_form.NameAr}")</div>
+                        <div class="fc-modal-sub">@(_editingId is null ? "الكود بيتولد تلقائيًا (CST-)" : _code)</div>
+                    </div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseModal" />
+                </div>
+
+                <div class="fc-modal-body">
+                    @if (_msg is not null)
+                    {
+                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)"
+                                  Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
+                    }
+
+                    <div class="fc-form-grid">
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">نوع العميل</div>
+                            <select class="fc-sel fc-sel-lg" @bind="_form.CustomerType" disabled="@(_editingId is not null)">
+                                <option value="Company">شركة</option>
+                                <option value="Individual">فرد</option>
+                            </select>
+                        </div>
+                        <MudTextField T="string" @bind-Value="_form.NameAr" Label="الاسم بالعربي *"
+                                      Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_form.NameEn" Label="الاسم بالإنجليزي"
+                                      Variant="Variant.Outlined" />
+                        @if (_form.CustomerType == "Company")
+                        {
+                            <MudTextField T="string" @bind-Value="_form.TaxNumber" Label="الرقم الضريبي *"
+                                          Variant="Variant.Outlined" />
+                            <MudTextField T="string" @bind-Value="_form.CommercialRegister" Label="السجل التجاري"
+                                          Variant="Variant.Outlined" />
+                        }
+                        else
+                        {
+                            <MudTextField T="string" @bind-Value="_form.NationalId" Label="الرقم القومي *"
+                                          Variant="Variant.Outlined" />
+                        }
+                        <MudTextField T="string" @bind-Value="_form.Phone" Label="التليفون"
+                                      Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_form.Email" Label="البريد الإلكتروني"
+                                      Variant="Variant.Outlined" InputType="InputType.Email" />
+                        <MudTextField T="string" @bind-Value="_form.CityAr" Label="المدينة"
+                                      Variant="Variant.Outlined" />
+                        <MudTextField T="decimal" @bind-Value="_form.CreditLimit" Label="حد الائتمان"
+                                      Variant="Variant.Outlined" />
+                        <MudTextField T="string" @bind-Value="_form.AddressAr" Label="العنوان"
+                                      Variant="Variant.Outlined" />
+                        <div class="fc-active-toggle">
+                            <MudCheckBox T="bool" @bind-Value="_form.PortalEnabled"
+                                         Label="تفعيل بورتال العملاء (يشوف فواتيره برابط)" Color="Color.Secondary" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fc-modal-foot">
+                    <MudButton Variant="Variant.Outlined" OnClick="CloseModal">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               Disabled="_saving" OnClick="SaveAsync">
+                        @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" /> }
+                        حفظ
+                    </MudButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ═══════════ مودال: روابط بوابة العميل ═══════════ *@
+    @if (_portalOpen && CanPortal && _pt is not null)
+    {
+        <div class="fc-modal-backdrop" @onclick="ClosePortal">
+            <div class="fc-modal" @onclick:stopPropagation="true">
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">بوابة العميل — @_pt.NameAr</div>
+                        <div class="fc-modal-sub">رابط يفتح فواتيره وإيصالاته من غير تسجيل دخول</div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="ClosePortal" />
+                </div>
+                <div class="fc-modal-body">
+                    @if (_pmsg is not null)
+                    {
+                        <MudAlert Severity="@(_pok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                                  Class="mb-4">@_pmsg</MudAlert>
+                    }
+                    @if (_pt.PortalEnabled == false)
+                    {
+                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
+                            البوابة مش مفعّلة للعميل ده — فعّلها من تعديل بيانات العميل الأول.
+                        </MudAlert>
+                    }
+
+                    <div class="fc-form-grid">
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">الغرض</div>
+                            <select class="fc-sel fc-sel-lg" @bind="_pf.Purpose">
+                                <option value="Portal">البوابة كاملة</option>
+                                <option value="Statement">كشف الحساب</option>
+                            </select>
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">مدة الصلاحية (يوم)</div>
+                            <input type="number" min="1" max="365" class="fc-sel fc-sel-lg" @bind="_pf.ExpiresInDays" />
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">عدد مرات الاستخدام</div>
+                            <input type="number" min="1" max="1000" class="fc-sel fc-sel-lg" @bind="_pf.MaxUses" />
+                        </div>
+                        <div style="align-self:end">
+                            <MudButton Variant="Variant.Filled" Color="Color.Success" Disabled="_psaving"
+                                       StartIcon="@Icons.Material.Filled.Add" OnClick="CreateToken">إنشاء رابط</MudButton>
+                        </div>
+                    </div>
+
+                    @if (_newToken is not null)
+                    {
+                        <MudAlert Severity="Severity.Success" Variant="Variant.Filled" Class="mt-4">
+                            <div style="font-weight:700;margin-bottom:6px">🔗 الرابط الجديد (بيتعرض مرة واحدة)</div>
+                            <div style="word-break:break-all;font-size:.8rem">@_newToken.FullUrl</div>
+                            <MudButton Size="Size.Small" Class="mt-2" Variant="Variant.Outlined"
+                                       StartIcon="@Icons.Material.Filled.LocalOffer"
+                                       OnClick="() => CopyLink(_newToken.FullUrl)">نسخ الرابط</MudButton>
+                        </MudAlert>
+                    }
+
+                    <div class="fc-panel-sub" style="margin:18px 0 8px">الروابط السابقة</div>
+                    <table class="fc-table">
+                        <thead><tr>
+                            <th>الغرض</th><th>إنشاء</th><th>الانتهاء</th>
+                            <th>الاستخدام</th><th>آخر استخدام</th><th>الحالة</th><th></th>
+                        </tr></thead>
+                        <tbody>
+                            @foreach (var t in _ptokens)
+                            {
+                                <tr>
+                                    <td>@PurposeAr(t.Purpose)</td>
+                                    <td class="fc-cell-sub">@t.CreatedAt.ToString("yyyy-MM-dd")</td>
+                                    <td class="fc-cell-sub">@(t.ExpiresAt?.ToString("yyyy-MM-dd") ?? "—")</td>
+                                    <td class="fc-cell-sub">@t.UsedCount@(t.MaxUses is null ? "" : " / " + t.MaxUses)</td>
+                                    <td class="fc-cell-sub">@(t.LastUsedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                                    <td>@TokenChip(t)</td>
+                                    <td>
+                                        @if (t.IsActive)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
+                                                       OnClick="() => Revoke(t)">إبطال</MudButton>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                            @if (!_ptokens.Any())
+                            {
+                                <tr><td colspan="7"><div class="fc-empty"><div>مافيش روابط</div></div></td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="fc-modal-foot">
+                    <MudButton OnClick="ClosePortal">إغلاق</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ═══════════ مودال: كشف حساب ═══════════ *@
+    @if (_stmtOpen && _stmt is not null)
+    {
+        <div class="fc-modal-backdrop" @onclick="CloseStatement">
+            <div class="fc-modal" @onclick:stopPropagation="true">
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">كشف حساب @_stmt.CustomerName</div>
+                        <div class="fc-modal-sub">
+                            رصيد أول المدة @Money(_stmt.Opening) · إجمالي المديونية @Money(_stmt.TotalDebit)
+                            · إجمالي المسدّد @Money(_stmt.TotalCredit)
+                        </div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseStatement" />
+                </div>
+                <div class="fc-modal-body">
+                    <div class="fc-toolbar">
+                        <input type="date" class="fc-sel" style="max-width:170px" value="@_stmtFrom"
+                               @onchange="e => _stmtFrom = e.Value?.ToString()" />
+                        <input type="date" class="fc-sel" style="max-width:170px" value="@_stmtTo"
+                               @onchange="e => _stmtTo = e.Value?.ToString()" />
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadStatement">تطبيق</MudButton>
+                    </div>
+                    <div class="fc-lines" style="margin-top:14px">
+                        <div class="fc-lines-head"><span>رصيد أول المدة</span><span>المديونية</span><span>المسدّد</span><span>الرصيد</span></div>
+                        <div class="fc-lines-row">
+                            <span>@Money(_stmt.Opening)</span>
+                            <span>@Money(_stmt.TotalDebit)</span>
+                            <span>@Money(_stmt.TotalCredit)</span>
+                            <b>@Money(_stmt.Closing)</b>
+                        </div>
+                    </div>
+                    <div class="fc-table-wrap" style="margin-top:14px"><table class="fc-table">
+                        <thead><tr><th>التاريخ</th><th>النوع</th><th>المرجع</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead>
+                        <tbody>
+                            @foreach (var l in _stmt.Lines)
+                            {
+                                <tr>
+                                    <td class="fc-cell-sub">@l.Date.ToString("yyyy-MM-dd")</td>
+                                    <td><span class="fc-chip @KindChip(l.Kind)"><i></i>@KindAr(l.Kind)</span></td>
+                                    <td class="fc-cell-main">@l.Ref
+                                        @if (l.Description is not null) { <div class="fc-cell-sub">@l.Description</div> }</td>
+                                    <td>@(l.Debit == 0 ? "—" : Money(l.Debit))</td>
+                                    <td>@(l.Credit == 0 ? "—" : Money(l.Credit))</td>
+                                    <td><b>@Money(l.Balance)</b></td>
+                                </tr>
+                            }
+                            @if (!_stmt.Lines.Any())
+                            {
+                                <tr><td colspan="6"><div class="fc-lines-empty">مافيش حركات في الفترة دي</div></td></tr>
+                            }
+                        </tbody>
+                    </table></div>
+                </div>
+                <div class="fc-modal-foot">
+                    <MudButton OnClick="CloseStatement">إغلاق</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private AuthUser? _user;
+    private bool CanView   => _user?.Can("CUSTOMER.VIEW") ?? false;
+    private bool CanCreate => _user?.Can("CUSTOMER.CREATE") ?? false;
+    private bool CanEdit   => _user?.Can("CUSTOMER.EDIT") ?? false;
+    private bool CanDelete => _user?.Can("CUSTOMER.DELETE") ?? false;
+    private bool CanStatement => _user?.Can("CUSTOMER.STATEMENT") ?? false;
+    private bool CanPortal    => _user?.Can("CUSTOMER.PORTAL_TOKEN") ?? false;
+
+    private bool _stmtOpen; private Statement? _stmt;
+    private int _stmtCustomerId; private string? _stmtFrom; private string? _stmtTo;
+
+    public class StmtLine
+    {
+        public DateTime Date { get; set; }
+        public string Kind { get; set; } = "";
+        public string Ref { get; set; } = "";
+        public string? Description { get; set; }
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+        public decimal Balance { get; set; }
+    }
+
+    public class Statement
+    {
+        public string CustomerName { get; set; } = "";
+        public decimal Opening { get; set; }
+        public List<StmtLine> Lines { get; set; } = new();
+        public decimal TotalDebit { get; set; }
+        public decimal TotalCredit { get; set; }
+        public decimal Closing { get; set; }
+    }
+
+    private static string Money(decimal v) => v.ToString("N2");
+
+    private static string KindAr(string k) => k switch
+    {
+        "Invoice" => "فاتورة", "CreditNote" => "إشعار دائن", "Payment" => "دفعة", _ => k
+    };
+
+    private static string KindChip(string k) => k switch
+    {
+        "Invoice" => "fc-chip-warn", "CreditNote" => "fc-chip-purple", "Payment" => "fc-chip-ok", _ => "fc-chip-gray"
+    };
+
+    private void OpenStatement(Item c)
+    {
+        _stmtCustomerId = c.CustomerId;
+        _stmtFrom = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1).ToString("yyyy-MM-dd");
+        _stmtTo = null;
+        _stmtOpen = true;
+        _ = LoadStatement();
+    }
+
+    private void CloseStatement() { _stmtOpen = false; _stmt = null; }
+
+    private async Task LoadStatement()
+    {
+        try
+        {
+            var url = $"api/treasury/customer-statement?customerId={_stmtCustomerId}";
+            if (!string.IsNullOrWhiteSpace(_stmtFrom)) url += "&from=" + Uri.EscapeDataString(_stmtFrom);
+            if (!string.IsNullOrWhiteSpace(_stmtTo))   url += "&to="   + Uri.EscapeDataString(_stmtTo);
+            _stmt = await Http.GetFromJsonAsync<Statement>(url);
+        }
+        catch (Exception ex) { Snackbar.Add("فشل تحميل الكشف: " + ex.Message, Severity.Error); }
+    }
+
+    private List<Item> _items = new();
+    private bool _loading;
+    private string? _loadError;
+    private string _search = "";
+    private string _filter = "all";
+    private int? _confirmId;
+
+    private bool _modalOpen;
+    private int? _editingId;
+    private string _code = "";
+    private Form _form = new();
+    private bool _saving;
+    private string? _msg;
+    private bool _ok;
+
+    public class Item
+    {
+        public int CustomerId { get; set; }
+        public string CustomerCode { get; set; } = "";
+        public string CustomerType { get; set; } = "";
+        public string NameAr { get; set; } = "";
+        public string? Phone { get; set; }
+        public string? TaxNumber { get; set; }
+        public string? CityAr { get; set; }
+        public bool IsActive { get; set; }
+        public decimal CreditLimit { get; set; }
+        public bool PortalEnabled { get; set; }
+    }
+
+    public class Detail
+    {
+        public int CustomerId { get; set; }
+        public string CustomerCode { get; set; } = "";
+        public string CustomerType { get; set; } = "";
+        public string NameAr { get; set; } = "";
+        public string? NameEn { get; set; }
+        public string? TaxNumber { get; set; }
+        public string? NationalId { get; set; }
+        public string? CommercialRegister { get; set; }
+        public string? Phone { get; set; }
+        public string? Email { get; set; }
+        public string? AddressAr { get; set; }
+        public string? CityAr { get; set; }
+        public decimal CreditLimit { get; set; }
+        public bool PortalEnabled { get; set; }
+    }
+
+    public class Form
+    {
+        public string CustomerType { get; set; } = "Company";
+        public string NameAr { get; set; } = "";
+        public string? NameEn { get; set; }
+        public string? TaxNumber { get; set; }
+        public string? NationalId { get; set; }
+        public string? CommercialRegister { get; set; }
+        public string? Phone { get; set; }
+        public string? Email { get; set; }
+        public string? AddressAr { get; set; }
+        public string? CityAr { get; set; }
+        public decimal CreditLimit { get; set; }
+        public bool PortalEnabled { get; set; }
+    }
+
+    private IEnumerable<Item> Filtered
+    {
+        get
+        {
+            var q = _items.AsEnumerable();
+            q = _filter switch
+            {
+                "co"  => q.Where(c => c.CustomerType == "Company"),
+                "ind" => q.Where(c => c.CustomerType == "Individual"),
+                _     => q
+            };
+            return string.IsNullOrWhiteSpace(_search)
+                ? q
+                : q.Where(c =>
+                    c.NameAr.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                    c.CustomerCode.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                    (c.TaxNumber ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (CanView) await LoadAsync();
+    }
+
+    private async Task Reload() { await LoadAsync(); Snackbar.Add("اتحدّثت القائمة", Severity.Success); }
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _loadError = null;
+        try
+        {
+            _items = await Http.GetFromJsonAsync<List<Item>>("api/customers") ?? new();
+        }
+        catch (Exception ex) { _loadError = "فشل التحميل: " + ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private void NewCustomer()
+    {
+        _editingId = null; _form = new Form(); _msg = null; _confirmId = null;
+        _modalOpen = true;
+    }
+
+    private async Task Edit(Item c)
+    {
+        _msg = null; _confirmId = null;
+        try
+        {
+            var d = await Http.GetFromJsonAsync<Detail>($"api/customers/{c.CustomerId}");
+            if (d is null) return;
+            _editingId = d.CustomerId;
+            _code = d.CustomerCode;
+            _form = new Form
+            {
+                CustomerType = d.CustomerType, NameAr = d.NameAr, NameEn = d.NameEn,
+                TaxNumber = d.TaxNumber, NationalId = d.NationalId,
+                CommercialRegister = d.CommercialRegister, Phone = d.Phone, Email = d.Email,
+                AddressAr = d.AddressAr, CityAr = d.CityAr,
+                CreditLimit = d.CreditLimit, PortalEnabled = d.PortalEnabled
+            };
+            _modalOpen = true;
+        }
+        catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
+    }
+
+    private void CloseModal() { _modalOpen = false; _editingId = null; }
+
+    private async Task SaveAsync()
+    {
+        _msg = null; _saving = true;
+        try
+        {
+            var payload = new
+            {
+                customerType = _form.CustomerType,
+                nameAr = _form.NameAr, nameEn = _form.NameEn,
+                taxNumber = _form.TaxNumber, nationalId = _form.NationalId,
+                commercialRegister = _form.CommercialRegister,
+                phone = _form.Phone, email = _form.Email,
+                addressAr = _form.AddressAr, cityAr = _form.CityAr,
+                creditLimit = _form.CreditLimit, portalEnabled = _form.PortalEnabled
+            };
+
+            var res = _editingId is null
+                ? await Http.PostAsJsonAsync("api/customers", payload)
+                : await Http.PutAsJsonAsync($"api/customers/{_editingId}", payload);
+
+            _msg = await MsgOf(res);
+            _ok = res.IsSuccessStatusCode;
+
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(_msg, Severity.Success);
+                CloseModal();
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex) { _ok = false; _msg = "مش قادر أوصل للسيرفر: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task ToggleActive(Item c)
+    {
+        try
+        {
+            var res = await Http.PostAsync($"api/customers/{c.CustomerId}/toggle-active", null);
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private async Task Delete(Item c)
+    {
+        try
+        {
+            var res = await Http.DeleteAsync($"api/customers/{c.CustomerId}");
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            _confirmId = null;
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  🔗 روابط بوابة العميل
+    // ══════════════════════════════════════════════════════════════
+
+    private bool _portalOpen;
+    private Item? _pt;
+    private List<PToken> _ptokens = new();
+    private PortalForm _pf = new();
+    private NewToken? _newToken;
+    private bool _psaving;
+    private string? _pmsg;
+    private bool _pok;
+
+    public class PortalForm
+    {
+        public string Purpose { get; set; } = "Portal";
+        public int ExpiresInDays { get; set; } = 7;
+        public int MaxUses { get; set; } = 50;
+    }
+
+    public class PToken
+    {
+        public long PortalTokenId { get; set; }
+        public string Purpose { get; set; } = "";
+        public long? InvoiceId { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime? ExpiresAt { get; set; }
+        public int? MaxUses { get; set; }
+        public int UsedCount { get; set; }
+        public DateTime? LastUsedAt { get; set; }
+        public bool IsActive { get; set; }
+        public DateTime? RevokedAt { get; set; }
+    }
+
+    public class NewToken
+    {
+        public long PortalTokenId { get; set; }
+        public string Token { get; set; } = "";
+        public string Path { get; set; } = "";
+        public DateTime? ExpiresAt { get; set; }
+
+        /// <summary>الرابط الكامل اللي يتبعت للعميل.</summary>
+        public string FullUrl { get; set; } = "";
+    }
+
+    private static string PurposeAr(string p) => p switch
+    {
+        "Portal" => "البوابة كاملة", "Statement" => "كشف الحساب",
+        "InvoiceView" => "فاتورة واحدة", _ => p
+    };
+
+    private static string TokenChip(PToken t)
+    {
+        if (!t.IsActive || t.RevokedAt is not null) return "مُبطل";
+        if (t.ExpiresAt is not null && t.ExpiresAt < DateTime.UtcNow) return "منتهي";
+        if (t.MaxUses is not null && t.UsedCount >= t.MaxUses) return "استُنفد";
+        return "نشط";
+    }
+
+    private async Task OpenPortal(Item c)
+    {
+        _pt = c; _pf = new PortalForm(); _newToken = null; _pmsg = null; _portalOpen = true;
+        await LoadTokensAsync();
+    }
+
+    private void ClosePortal() { _portalOpen = false; _pt = null; _newToken = null; }
+
+    private async Task LoadTokensAsync()
+    {
+        if (_pt is null) return;
+        try
+        {
+            _ptokens = await Http.GetFromJsonAsync<List<PToken>>(
+                $"api/portal/tokens?customerId={_pt.CustomerId}") ?? new();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل تحميل الروابط: " + ex.Message, Severity.Error); }
+    }
+
+    private async Task CreateToken()
+    {
+        if (_pt is null) return;
+        _psaving = true; _pmsg = null; _newToken = null;
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/portal/tokens", new
+            {
+                customerId   = _pt.CustomerId,
+                purpose      = _pf.Purpose,
+                invoiceId    = (long?)null,
+                expiresInDays = _pf.ExpiresInDays,
+                maxUses      = _pf.MaxUses
+            });
+            if (res.IsSuccessStatusCode)
+            {
+                var t = await res.Content.ReadFromJsonAsync<NewToken>();
+                if (t is not null) { t.FullUrl = Nav.BaseUri.TrimEnd('/') + t.Path; _newToken = t; }
+                _pok = true; _pmsg = "✅ اتعمل الرابط";
+                await LoadTokensAsync();
+            }
+            else { _pok = false; _pmsg = await MsgOf(res); }
+        }
+        catch (Exception ex) { _pok = false; _pmsg = "فشل: " + ex.Message; }
+        finally { _psaving = false; }
+    }
+
+    private async Task CopyLink(string url)
+    {
+        try
+        {
+            await JS.InvokeAsync<bool>("fastcom.copyText", url);
+            Snackbar.Add("اتنسخ الرابط", Severity.Success);
+        }
+        catch { Snackbar.Add("انسخ الرابط يدوي", Severity.Warning); }
+    }
+
+    private async Task Revoke(PToken t)
+    {
+        try
+        {
+            var res = await Http.PostAsync($"api/portal/tokens/{t.PortalTokenId}/revoke", null);
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) { _newToken = null; await LoadTokensAsync(); }
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var body = await res.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(body)) return res.IsSuccessStatusCode ? "تم" : "خطأ غير معروف";
+            var doc = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(body);
+            if (doc.TryGetProperty("message", out var m)) return m.GetString() ?? body;
+            return body;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ HTTP {(int)res.StatusCode}"; }
+    }
+}

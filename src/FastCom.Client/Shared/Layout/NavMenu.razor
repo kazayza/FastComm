@@ -12,6 +12,19 @@
 
 <MudNavMenu Class="fastcom-nav">
 
+    @* ── احتياطي: لو مافيش بيانات مستخدم (مش مسجّل دخول) ──────────────
+       بدل ما القائمة تفضل فاضية من غير أي تفسير *@
+    @if (_user is null)
+    {
+        <div class="fc-nav-empty">
+            <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Medium" />
+            <MudText Typo="Typo.body2">سجّل الدخول لعرض القائمة</MudText>
+            <MudButton Href="/login" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small">
+                تسجيل الدخول
+            </MudButton>
+        </div>
+    }
+
     @if (Can("DASHBOARD.VIEW"))
     {
         <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
@@ -84,9 +97,13 @@
         {
             <MudNavLink Href="/vehicles" Icon="@Icons.Material.Filled.DirectionsCar">السيارات</MudNavLink>
         }
+        @if (_canContainers)
+        {
+            <MudNavLink Href="/containers" Icon="@Icons.Material.Filled.List">الحاويات</MudNavLink>
+        }
         @if (_canCustody)
         {
-            <MudNavLink Href="/custodies" Icon="@Icons.Material.Filled.Savings">العهود</MudNavLink>
+            <MudNavLink Href="/custodies" Icon="@Icons.Material.Filled.Savings">العهد</MudNavLink>
         }
     }
 
@@ -109,9 +126,17 @@
         {
             <MudNavLink Href="/users" Icon="@Icons.Material.Filled.ManageAccounts">المستخدمين</MudNavLink>
         }
+        @if (_canRoles)
+        {
+            <MudNavLink Href="/roles" Icon="@Icons.Material.Filled.Badge">الأدوار والصلاحيات</MudNavLink>
+        }
         @if (_canSettings)
         {
             <MudNavLink Href="/settings" Icon="@Icons.Material.Filled.Settings">الإعدادات</MudNavLink>
+        }
+        @if (_canDocuments)
+        {
+            <MudNavLink Href="/documents" Icon="@Icons.Material.Filled.FactCheck">المستندات</MudNavLink>
         }
     }
 
@@ -137,14 +162,14 @@
     private bool _canBookView, _canBookCreate;
     private bool _canOpsView, _canTripView;
     private bool _canInvoice, _canPayments, _canExpense, _canTreasury;
-    private bool _canDrivers, _canFleet, _canCustody;
-    private bool _canCustomers, _canSuppliers, _canReports, _canUsers, _canSettings;
+    private bool _canDrivers, _canFleet, _canCustody, _canContainers;
+    private bool _canCustomers, _canSuppliers, _canReports, _canUsers, _canRoles, _canSettings, _canDocuments;
 
     // ── ظهور الأقسام (لو كل عناصره مخفيين القسم بيختفي) ───────────────────
     private bool _showOpsSection     => _canBookView  || _canBookCreate || _canOpsView   || _canTripView;
     private bool _showFinanceSection => _canInvoice   || _canPayments   || _canExpense   || _canTreasury;
-    private bool _showFleetSection   => _canDrivers   || _canFleet      || _canCustody;
-    private bool _showAdminSection   => _canCustomers || _canSuppliers  || _canReports || _canUsers || _canSettings;
+    private bool _showFleetSection   => _canDrivers   || _canFleet      || _canCustody  || _canContainers;
+    private bool _showAdminSection   => _canCustomers || _canSuppliers  || _canReports || _canUsers || _canRoles || _canSettings || _canDocuments;
 
     protected override async Task OnInitializedAsync()
     {
@@ -182,12 +207,15 @@
         _canDrivers    = Can("DRIVER.VIEW");
         _canFleet      = Can("FLEET.VIEW");
         _canCustody    = Can("CUSTODY.VIEW");
+        _canContainers = Can("MASTERDATA.VIEW");
 
         _canCustomers  = Can("CUSTOMER.VIEW");
         _canSuppliers  = Can("SUPPLIER.VIEW");
         _canReports    = Can("REPORT.OPERATIONS") || Can("REPORT.FINANCIAL") || Can("REPORT.FLEET");
         _canUsers      = Can("USER.VIEW");
+        _canRoles      = Can("ROLE.MANAGE");
         _canSettings   = Can("SETTINGS.VIEW");
+        _canDocuments  = Can("DOCUMENT.DOWNLOAD");
     }
 
     /// <summary>فحص مباشر في الـ markup (لوحة التحكم).</summary>

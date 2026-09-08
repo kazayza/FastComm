@@ -1,0 +1,53 @@
+@implements IDisposable
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+@if (_visible)
+{
+    <MudBadge Content="_unread" Visible="_unread > 0" Color="Color.Error" Overlap="true">
+        <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit"
+                       title="الإشعارات" OnClick="Go" />
+    </MudBadge>
+}
+
+@code {
+    private int _unread;
+    private bool _visible;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = await Auth.GetUserAsync();
+        _visible = user is not null;
+        if (!_visible) return;
+
+        await RefreshAsync();
+        Auth.OnStateChanged += OnAuthChanged;
+    }
+
+    private async void OnAuthChanged()
+    {
+        var user = await Auth.GetUserAsync();
+        _visible = user is not null;
+        if (_visible) await RefreshAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>بيجيب عدد اللي لسه مااتقراش — ولو فشل يسكت أحسن ما يزعّق.</summary>
+    private async Task RefreshAsync()
+    {
+        try
+        {
+            var r = await Http.GetFromJsonAsync<UnreadCount>("api/notifications/unread-count");
+            _unread = r?.Count ?? 0;
+        }
+        catch { _unread = 0; }
+    }
+
+    private void Go() => Nav.NavigateTo("/notifications");
+
+    private class UnreadCount { public int Count { get; set; } }
+
+    public void Dispose() => Auth.OnStateChanged -= OnAuthChanged;
+}

@@ -7,18 +7,17 @@
 @inject AuthenticationStateProvider AuthState
 @inject CompanyService Company
 @inject ISnackbar Snackbar
-@inject HttpClient Http
 
 <PageTitle>تسجيل الدخول — @_company.DisplayName</PageTitle>
 
 <div class="fc-login-page">
 
-    @* ── الشمال: لوحة البراند ─────────────────────────────────────── *@
+    @* ── لوحة البراند ──────────────────────────────────────────────── *@
     <div class="fc-login-brand">
         <div class="fc-brand-glow fc-brand-glow-1"></div>
         <div class="fc-brand-glow fc-brand-glow-2"></div>
 
-        <div class="fc-login-logo">FC</div>
+        <img src="img/logo.png" class="fc-login-logo" alt="FastCom" />
         <h1>@_company.DisplayName</h1>
         <p class="fc-brand-tagline">نظام إدارة مكتب نقل الحاويات والموانئ</p>
 
@@ -35,14 +34,14 @@
         </div>
     </div>
 
-    @* ── اليمين: بطاقة الدخول ─────────────────────────────────────── *@
+    @* ── بطاقة الدخول ──────────────────────────────────────────────── *@
     <div class="fc-login-side">
         <div class="fc-login-box">
 
-            <div class="fc-login-mark">FC</div>
+            <img src="img/logo-icon.png" class="fc-login-mark" alt="FastCom" />
 
             <div class="fc-login-welcome">
-                <h2>أهلًا بعودتك 👋</h2>
+                <h2>FastComm</h2>
                 <p>سجّل دخولك للمتابعة إلى لوحة التحكم</p>
             </div>
 
@@ -50,154 +49,69 @@
             {
                 <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="mb-4">
                     @_error
-                    @if (_envIsDev)
-                    {
-                        <div class="fc-error-hint">
-                            نسيت كلمة المرور؟ اضغط «نسيت كلمة المرور» وحطّ واحدة جديدة من أدوات المطور تحت.
-                        </div>
-                    }
                 </MudAlert>
             }
 
-        <EditForm Model="_model" OnValidSubmit="SubmitAsync">
-            <DataAnnotationsValidator />
+            <EditForm Model="_model" OnValidSubmit="SubmitAsync">
+                <DataAnnotationsValidator />
 
-            <MudTextField T="string"
-                          @bind-Value="_model.UserName"
-                          Label="اسم المستخدم"
-                          Variant="Variant.Outlined"
-                          Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Filled.PersonOutline"
-                          For="@(() => _model.UserName)"
-                          AutoFocus="true"
-                          Immediate="true"
-                          Class="mb-4" />
+                <MudTextField T="string"
+                              @bind-Value="_model.UserName"
+                              Label="اسم المستخدم"
+                              Variant="Variant.Outlined"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.PersonOutline"
+                              For="@(() => _model.UserName)"
+                              AutoFocus="true"
+                              Immediate="true"
+                              Class="mb-4" />
 
-            <MudTextField T="string"
-                          @bind-Value="_model.Password"
-                          Label="كلمة المرور"
-                          Variant="Variant.Outlined"
-                          InputType="@_pwdType"
-                          Adornment="Adornment.End"
-                          AdornmentIcon="@_pwdIcon"
-                          OnAdornmentClick="TogglePassword"
-                          For="@(() => _model.Password)"
-                          Immediate="true"
-                          Class="mb-2" />
+                <MudTextField T="string"
+                              @bind-Value="_model.Password"
+                              Label="كلمة المرور"
+                              Variant="Variant.Outlined"
+                              InputType="@_pwdType"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@_pwdIcon"
+                              OnAdornmentClick="TogglePassword"
+                              For="@(() => _model.Password)"
+                              Immediate="true"
+                              Class="mb-4" />
 
-            <div class="fc-login-row">
                 <MudCheckBox T="bool" @bind-Value="_model.RememberMe"
-                             Label="تذكّرني" Color="Color.Primary" Dense="true" />
+                             Label="تذكّرني" Color="Color.Primary" Dense="true"
+                             Class="mb-2" />
 
-                <button type="button" class="fc-link-btn" @onclick="OpenReset">
-                    نسيت كلمة المرور؟
-                </button>
-            </div>
+                <MudButton ButtonType="ButtonType.Submit"
+                           Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Size="Size.Large"
+                           FullWidth="true"
+                           Disabled="_busy"
+                           Class="fc-login-btn mt-4">
+                    @if (_busy)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                        <span>جارٍ التحقق...</span>
+                    }
+                    else
+                    {
+                        <span>دخول</span>
+                    }
+                </MudButton>
+            </EditForm>
 
-            <div class="muted fc-login-hint">"تذكّرني" بتمدّد مدة الجلسة ×3</div>
-
-            <MudButton ButtonType="ButtonType.Submit"
-                       Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       Size="Size.Large"
-                       FullWidth="true"
-                       Disabled="_busy"
-                       Class="fc-login-btn mt-4">
-                @if (_busy)
+            <div class="fc-login-foot">
+                <span>© @DateTime.Now.Year @_company.DisplayName</span>
+                @if (!string.IsNullOrWhiteSpace(_company.Phone))
                 {
-                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
-                    <span>جارٍ التحقق...</span>
-                }
-                else
-                {
-                    <span>دخول</span>
-                }
-            </MudButton>
-        </EditForm>
-
-        @* ── 🔧 Development: أدوات المطور — localhost فقط ────────────── *@
-        @if (_envIsDev)
-        {
-            <div class="fc-devtools">
-                <button type="button" class="fc-devtools-toggle" @onclick="() => _devOpen = !_devOpen">
-                    <span>🔧 أدوات المطور</span>
-                    <span>@(_devOpen ? "▲" : "▼")</span>
-                </button>
-
-                @if (_devOpen)
-                {
-                    <div class="fc-devtools-body">
-
-                        @* 1) إعادة تعيين كلمة مرور مستخدم *@
-                        <div class="fc-devtools-title">إعادة تعيين كلمة مرور</div>
-                        <p class="fc-devtools-note">
-                            لو نسيت الباسورد — حطّ واحد جديد من غير محاولات تخمين
-                            (بعد 5 محاولات غلط الحساب يتقفل 15 دقيقة).
-                        </p>
-
-                        @if (_resetMsg is not null)
-                        {
-                            <MudAlert Severity="@(_resetOk ? Severity.Success : Severity.Error)"
-                                      Variant="Variant.Filled" Class="mb-3">
-                                @_resetMsg
-                            </MudAlert>
-                        }
-
-                        <MudTextField T="string" @bind-Value="_resetUser"
-                                      Label="اسم المستخدم"
-                                      Variant="Variant.Outlined" Class="mb-3" />
-                        <MudTextField T="string" @bind-Value="_resetPassword"
-                                      Label="كلمة المرور الجديدة (8 حروف على الأقل)"
-                                      Variant="Variant.Outlined" InputType="InputType.Password"
-                                      Class="mb-3" />
-
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                                   OnClick="ResetPasswordAsync" Disabled="_resetBusy"
-                                   StartIcon="@Icons.Material.Filled.LockReset" Class="mb-4">
-                            @(_resetBusy ? "جارٍ التعيين..." : "تعيين كلمة المرور")
-                        </MudButton>
-
-                        <MudDivider Class="mb-4" />
-
-                        @* 2) إنشاء أول مستخدم مدير (لأول تشغيل على قاعدة فاضية) *@
-                        <div class="fc-devtools-title">إنشاء أول مستخدم مدير (admin)</div>
-                        <p class="fc-devtools-note">بيشتغل بس لو الاسم مش موجود — لو موجود هيقولك.</p>
-
-                        @if (_seedDone)
-                        {
-                            <MudAlert Severity="Severity.Success" Variant="Variant.Filled">
-                                @_seedMessage
-                            </MudAlert>
-                        }
-                        else
-                        {
-                            <MudTextField T="string" @bind-Value="_seedPassword"
-                                          Label="كلمة مرور المدير (8 حروف على الأقل)"
-                                          Variant="Variant.Outlined" InputType="InputType.Password"
-                                          Class="mb-3" />
-
-                            <MudButton Variant="Variant.Outlined" Color="Color.Warning"
-                                       OnClick="SeedAdminAsync" Disabled="_busy"
-                                       StartIcon="@Icons.Material.Filled.PersonAddAlt1">
-                                إنشاء مستخدم مدير
-                            </MudButton>
-                        }
-                    </div>
+                    <span>@_company.Phone</span>
                 }
             </div>
-        }
 
-        <div class="fc-login-foot">
-            <span>© @DateTime.Now.Year @_company.DisplayName</span>
-            @if (!string.IsNullOrWhiteSpace(_company.Phone))
-            {
-                <span>@_company.Phone</span>
-            }
         </div>
-
-        </div>  @* /fc-login-box *@
-    </div>      @* /fc-login-side *@
-</div>          @* /fc-login-page *@
+    </div>
+</div>
 
 @code {
     [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
@@ -211,22 +125,6 @@
     private bool _pwdVisible;
     private InputType _pwdType = InputType.Password;
     private string _pwdIcon = Icons.Material.Filled.Lock;
-
-    // 🔧 Development — أدوات المطور (localhost فقط)
-    private bool _envIsDev;
-    private bool _devOpen;
-
-    // إعادة تعيين كلمة المرور
-    private bool    _resetBusy;
-    private bool    _resetOk;
-    private string? _resetMsg;
-    private string  _resetUser     = "admin";
-    private string  _resetPassword = "";
-
-    // إنشاء أول مستخدم مدير
-    private bool   _seedDone;
-    private string _seedMessage  = "";
-    private string _seedPassword = "";
 
     public class LoginModel
     {
@@ -243,10 +141,6 @@
     {
         _company = await Company.GetAsync();
 
-        // ⚠️ الـ Development detection في WASM = من الـ URL
-        //    (NavigationManager مفيهوش BaseAddress — الموجود Uri)
-        _envIsDev = Nav.Uri.Contains("localhost", StringComparison.OrdinalIgnoreCase);
-
         // لو مسجّل دخول بالفعل، حوّله على طول
         var state = await AuthState.GetAuthenticationStateAsync();
         if (state.User.Identity?.IsAuthenticated == true)
@@ -262,69 +156,6 @@
             : Icons.Material.Filled.Lock;
     }
 
-    private void OpenReset()
-    {
-        _devOpen  = true;
-        _resetOk  = false;
-        _resetMsg = null;
-    }
-
-    private async Task ResetPasswordAsync()
-    {
-        if (string.IsNullOrWhiteSpace(_resetUser))
-        {
-            _resetOk  = false;
-            _resetMsg = "اكتب اسم المستخدم الأول";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(_resetPassword) || _resetPassword.Length < 8)
-        {
-            _resetOk  = false;
-            _resetMsg = "كلمة المرور الجديدة لازم تكون 8 حروف على الأقل";
-            return;
-        }
-
-        _resetBusy = true;
-        _resetOk   = false;
-        _resetMsg  = null;
-        StateHasChanged();
-
-        try
-        {
-            var res = await Http.PostAsJsonAsync("api/auth/reset-password", new
-            {
-                userName    = _resetUser.Trim(),
-                newPassword = _resetPassword
-            });
-
-            var body = await res.Content.ReadAsStringAsync();
-
-            if (res.IsSuccessStatusCode)
-            {
-                _resetOk        = true;
-                _resetMsg       = "✅ اتعيّنت كلمة المرور — جرّب تسجل دخول بالحقول فوق";
-                _model.UserName = _resetUser.Trim();
-                _model.Password = _resetPassword;
-                Snackbar.Add("تم تعيين كلمة المرور — سجّل دخول دلوقتي", Severity.Success);
-            }
-            else
-            {
-                _resetOk  = false;
-                _resetMsg = $"فشل التعيين (HTTP {(int)res.StatusCode}): {body}";
-            }
-        }
-        catch (Exception ex)
-        {
-            _resetOk  = false;
-            _resetMsg = "مش قادر أوصل للسيرفر: " + ex.Message;
-        }
-        finally
-        {
-            _resetBusy = false;
-        }
-    }
-
     private async Task SubmitAsync()
     {
         _busy  = true;
@@ -338,58 +169,12 @@
 
         if (ok)
         {
-            Snackbar.Add($"أهلًا @_model.UserName", Severity.Success);
+            Snackbar.Add($"أهلًا {_model.UserName}", Severity.Success);
             GoHome();
         }
         else
         {
             _error = msg;
-        }
-    }
-
-    private async Task SeedAdminAsync()
-    {
-        if (string.IsNullOrWhiteSpace(_seedPassword) || _seedPassword.Length < 8)
-        {
-            _error = "كلمة المرور لازم تكون 8 حروف على الأقل";
-            return;
-        }
-
-        _busy  = true;
-        _error = null;
-        StateHasChanged();
-
-        try
-        {
-            var res = await Http.PostAsJsonAsync("api/auth/seed-admin", new
-            {
-                userName = "admin",
-                password = _seedPassword,
-                fullName = "مدير النظام",
-                email    = (string?)null
-            });
-
-            var body = await res.Content.ReadAsStringAsync();
-
-            if (res.IsSuccessStatusCode)
-            {
-                _seedDone    = true;
-                _seedMessage = "✅ اتعمل المستخدم admin — سجّل دخول دلوقتي";
-                _model.UserName = "admin";
-                _model.Password = _seedPassword;
-            }
-            else
-            {
-                _error = $"فشل الإنشاء (HTTP {(int)res.StatusCode}): {body}";
-            }
-        }
-        catch (Exception ex)
-        {
-            _error = "مش قادر أوصل للسيرفر: " + ex.Message;
-        }
-        finally
-        {
-            _busy = false;
         }
     }
 

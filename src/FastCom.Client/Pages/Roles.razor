@@ -1,0 +1,493 @@
+@page "/roles"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject ISnackbar Snackbar
+
+<PageTitle>الأدوار والصلاحيات — فاست كوم</PageTitle>
+
+@* ═══════════════ الهيرو هيدر ═══════════════ *@
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">الإدارة · الأمن</div>
+                <h1 class="fc-hero-title">الأدوار والصلاحيات</h1>
+                <p class="fc-hero-sub">وزّع الصلاحيات على الأدوار — التغيير بيتفعّل خلال دقيقة من غير Logout</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
+                               OnClick="Reload" Style="color:#9FB4CC" />
+                @if (CanManage)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="OpenCreate">دور جديد</MudButton>
+                }
+            </div>
+        </div>
+
+        <div class="fc-kpis fc-kpis-glass">
+            <div class="fc-kpi">
+                <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.Badge" /></div>
+                <div><div class="fc-kpi-num">@_roles.Count</div><div class="fc-kpi-lb">الأدوار</div></div>
+            </div>
+            <div class="fc-kpi">
+                <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.Lock" /></div>
+                <div><div class="fc-kpi-num">@TotalPerms</div><div class="fc-kpi-lb">صلاحية في النظام</div></div>
+            </div>
+            <div class="fc-kpi">
+                <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Settings" /></div>
+                <div><div class="fc-kpi-num">@_roles.Count(r => r.IsSystem)</div><div class="fc-kpi-lb">أدوار أساسية</div></div>
+            </div>
+            <div class="fc-kpi">
+                <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Groups" /></div>
+                <div><div class="fc-kpi-num">@TotalUsersOnRoles</div><div class="fc-kpi-lb">مستخدمين على أدوار</div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanManage)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">
+            ليس لديك صلاحية إدارة الأدوار (ROLE.MANAGE).
+        </MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap">
+            <div class="fc-roles-wrap">
+
+                @* ── عمود الأدوار ── *@
+                <div class="fc-role-list">
+                    @foreach (var r in _roles)
+                    {
+                        <button class='fc-role-card @(_selId == r.Id ? "sel" : "")'
+                                @onclick="() => SelectRole(r)">
+                            <span class="fc-avatar fc-av-@(r.Id % 5)">@(r.NameAr.FirstOrDefault())</span>
+                            <span class="fc-role-card-txt">
+                                <b>@r.NameAr</b>
+                                <small>@r.RoleCode @(r.IsSystem ? "· أساسي" : "") @(r.IsActive ? "" : "· موقوف")</small>
+                            </span>
+                            <span class="fc-role-card-meta">
+                                <span class="fc-meta-num">@r.PermissionCount</span>
+                                <span class="fc-meta-lb">صلاحية · @r.UserCount مستخدم</span>
+                            </span>
+                        </button>
+                    }
+                    @if (!_roles.Any() && !_loading)
+                    {
+                        <div class="fc-empty"><div>مافيش أدوار</div></div>
+                    }
+                </div>
+
+                @* ── مصفوفة الصلاحيات ── *@
+                <div class="fc-card">
+                    @if (_loading)
+                    {
+                        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+                    }
+                    else if (_sel is null)
+                    {
+                        <div class="fc-empty">
+                            <MudIcon Icon="@Icons.Material.Filled.Badge" Size="Size.Large" />
+                            <div>اختار دور من القائمة عشان تعدّل صلاحياته</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="fc-matrix-head-bar">
+                            <div>
+                                <div class="fc-cell-main" style="font-size:16px">صلاحيات دور: @_sel.NameAr</div>
+                                <div class="fc-cell-sub">@_sel.RoleCode · @_sel.UserCount مستخدم · @SelCount صلاحية مختارة</div>
+                            </div>
+                            <div class="fc-head-actions">
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                           OnClick="OpenEdit">تعديل الدور</MudButton>
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                           Disabled="_saving" OnClick="SaveMatrixAsync">
+                                    @if (_saving)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                                    }
+                                    حفظ المصفوفة
+                                </MudButton>
+                            </div>
+                        </div>
+
+                        @if (_sel.IsSystem)
+                        {
+                            <MudAlert Severity="Severity.Info" Variant="Variant.Filled" Class="fc-locked-note">
+                                ده دور أساسي — صلاحياته كاملة ومقفولة من التعديل حمايةً للنظام من القفل الذاتي.
+                            </MudAlert>
+                        }
+                        else
+                        {
+                            @foreach (var mod in _catalog)
+                            {
+                                <details class="fc-matrix-mod" open="@(mod.Items.Any(i => _selIds.Contains(i.PermissionId)))">
+                                    <summary class="fc-matrix-mod-head">
+                                        <span>@mod.ModuleCode <small style="color:var(--fc-muted)">(@ModCount(mod) مختار)</small></span>
+                                        <button class="fc-mini-btn" type="button"
+                                                @onclick="() => ToggleModule(mod)" @onclick:stopPropagation>
+                                            @(ModCount(mod) == mod.Items.Count ? "إلغاء الكل" : "اختيار الكل")
+                                        </button>
+                                    </summary>
+                                    <div class="fc-matrix-mod-body">
+                                        @foreach (var p in mod.Items)
+                                        {
+                                            <div class="fc-matrix-item">
+                                                <MudCheckBox T="bool" Dense="true" Color="Color.Primary"
+                                                             Value="_selIds.Contains(p.PermissionId)"
+                                                             ValueChanged="@(v => TogglePerm(p.PermissionId, v))"
+                                                             Label="@p.NameAr" />
+                                            </div>
+                                        }
+                                    </div>
+                                </details>
+                            }
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ═══════════════ مودال دور جديد / تعديل ═══════════════ *@
+    @if (_roleModalOpen)
+    {
+        <div class="fc-modal-backdrop" @onclick="CloseRoleModal">
+            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation>
+                <div class="fc-modal-head">
+                    <div>
+                        <div class="fc-modal-title">@(_editId is null ? "دور جديد" : "تعديل دور")</div>
+                        <div class="fc-modal-sub">الدور الجديد بيبدأ بصفر صلاحيات — وزّعها من المصفوفة</div>
+                    </div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseRoleModal" />
+                </div>
+
+                <div class="fc-modal-body">
+                    @if (_roleMsg is not null)
+                    {
+                        <MudAlert Severity="@(_roleOk ? Severity.Success : Severity.Error)"
+                                  Variant="Variant.Outlined" Class="mb-4">@_roleMsg</MudAlert>
+                    }
+
+                    @if (_editId is null)
+                    {
+                        <MudTextField T="string" @bind-Value="_roleCode" Label="كود الدور (إنجليزي زي SALES)"
+                                      Variant="Variant.Outlined" Class="mb-3" />
+                    }
+                    <MudTextField T="string" @bind-Value="_roleNameAr" Label="الاسم بالعربي"
+                                  Variant="Variant.Outlined" Class="mb-3" />
+                    <MudTextField T="string" @bind-Value="_roleNameEn" Label="الاسم بالإنجليزي (اختياري)"
+                                  Variant="Variant.Outlined" Class="mb-3" />
+                    @if (_editId is not null)
+                    {
+                        <MudCheckBox T="bool" @bind-Value="_roleActive" Label="الدور مفعّل" Color="Color.Success" />
+                    }
+                </div>
+
+                <div class="fc-modal-foot">
+                    @if (_editId is not null && !_editIsSystem)
+                    {
+                        @if (_confirmDel)
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Error"
+                                       OnClick="DeleteRoleAsync">حذف نهائي — متأكد؟</MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Variant="Variant.Outlined" Color="Color.Error"
+                                       StartIcon="@Icons.Material.Filled.Delete"
+                                       OnClick="() => _confirmDel = true">حذف</MudButton>
+                        }
+                        <span style="flex:1"></span>
+                    }
+                    <MudButton Variant="Variant.Outlined" OnClick="CloseRoleModal">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               Disabled="_roleSaving" OnClick="SaveRoleAsync">حفظ</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private AuthUser? _user;
+    private bool CanManage => _user?.Can("ROLE.MANAGE") ?? false;
+
+    private List<RoleItem> _roles = new();
+    private List<PermModule> _catalog = new();
+    private bool _loading;
+    private string? _loadError;
+
+    private RoleItem? _sel;
+    private int? _selId;
+    private HashSet<int> _selIds = new();
+    private bool _saving;
+
+    // مودال الدور
+    private bool _roleModalOpen;
+    private int? _editId;
+    private bool _editIsSystem;
+    private string _roleCode = "";
+    private string _roleNameAr = "";
+    private string? _roleNameEn;
+    private bool _roleActive = true;
+    private bool _roleSaving;
+    private string? _roleMsg;
+    private bool _roleOk;
+    private bool _confirmDel;
+
+    public class RoleItem
+    {
+        public int Id { get; set; }
+        public string RoleCode { get; set; } = "";
+        public string NameAr { get; set; } = "";
+        public string? NameEn { get; set; }
+        public bool IsSystem { get; set; }
+        public bool IsActive { get; set; }
+        public int UserCount { get; set; }
+        public int PermissionCount { get; set; }
+    }
+
+    public class PermItem
+    {
+        public int PermissionId { get; set; }
+        public string PermissionCode { get; set; } = "";
+        public string NameAr { get; set; } = "";
+    }
+
+    public class PermModule
+    {
+        public string ModuleCode { get; set; } = "";
+        public List<PermItem> Items { get; set; } = new();
+    }
+
+    private int TotalPerms => _catalog.Sum(m => m.Items.Count);
+    private int TotalUsersOnRoles => _roles.Sum(r => r.UserCount);
+    private int SelCount => _selIds.Count;
+
+    private int ModCount(PermModule m) => m.Items.Count(i => _selIds.Contains(i.PermissionId));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (CanManage) await LoadAsync();
+    }
+
+    private async Task Reload() { await LoadAsync(); Snackbar.Add("اتحدّث", Severity.Success); }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _loadError = null;
+        try
+        {
+            _roles = await Http.GetFromJsonAsync<List<RoleItem>>("api/roles") ?? new();
+            _catalog = await Http.GetFromJsonAsync<List<PermModule>>("api/permissions") ?? new();
+
+            if (_selId is not null)
+            {
+                _sel = _roles.FirstOrDefault(r => r.Id == _selId);
+                if (_sel is not null) await LoadMatrix(_sel);
+            }
+            else if (_roles.Any())
+            {
+                await SelectRole(_roles.First());
+            }
+        }
+        catch (Exception ex)
+        {
+            _loadError = "فشل التحميل: " + ex.Message;
+            Snackbar.Add(_loadError, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SelectRole(RoleItem r)
+    {
+        _selId = r.Id;
+        _sel = r;
+        await LoadMatrix(r);
+    }
+
+    private async Task LoadMatrix(RoleItem r)
+    {
+        _selIds = new();
+        if (r.IsSystem) return;   // الأساسي مقفول — مش بنحمّل مصفوفته
+
+        try
+        {
+            var ids = await Http.GetFromJsonAsync<List<int>>($"api/roles/{r.Id}/permissions");
+            _selIds = ids is null ? new() : ids.ToHashSet();
+        }
+        catch
+        {
+            _selIds = new();
+        }
+    }
+
+    private void TogglePerm(int pid, bool v)
+    {
+        if (v) _selIds.Add(pid); else _selIds.Remove(pid);
+    }
+
+    private void ToggleModule(PermModule m)
+    {
+        if (ModCount(m) == m.Items.Count)
+            foreach (var i in m.Items) _selIds.Remove(i.PermissionId);
+        else
+            foreach (var i in m.Items) _selIds.Add(i.PermissionId);
+    }
+
+    private async Task SaveMatrixAsync()
+    {
+        if (_sel is null || _sel.IsSystem) return;
+        _saving = true;
+        try
+        {
+            var res = await Http.PutAsJsonAsync($"api/roles/{_sel.Id}/permissions", _selIds.ToList());
+            var msg = await MsgOf(res);
+            Snackbar.Add(msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("فشل الحفظ: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    // ═══════════════════════ مودال الدور ═══════════════════════
+
+    private void OpenCreate()
+    {
+        _editId = null;
+        _editIsSystem = false;
+        _roleCode = _roleNameAr = "";
+        _roleNameEn = null;
+        _roleActive = true;
+        _roleMsg = null;
+        _confirmDel = false;
+        _roleModalOpen = true;
+    }
+
+    private void OpenEdit()
+    {
+        if (_sel is null) return;
+        _editId = _sel.Id;
+        _editIsSystem = _sel.IsSystem;
+        _roleCode = _sel.RoleCode;
+        _roleNameAr = _sel.NameAr;
+        _roleNameEn = _sel.NameEn;
+        _roleActive = _sel.IsActive;
+        _roleMsg = null;
+        _confirmDel = false;
+        _roleModalOpen = true;
+    }
+
+    private void CloseRoleModal() { _roleModalOpen = false; }
+
+    private async Task SaveRoleAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_roleNameAr))
+        { _roleOk = false; _roleMsg = "الاسم العربي مطلوب"; return; }
+
+        _roleSaving = true;
+        _roleMsg = null;
+        try
+        {
+            HttpResponseMessage res;
+            if (_editId is null)
+            {
+                if (string.IsNullOrWhiteSpace(_roleCode))
+                { _roleOk = false; _roleMsg = "كود الدور مطلوب"; _roleSaving = false; return; }
+
+                res = await Http.PostAsJsonAsync("api/roles", new
+                {
+                    roleCode = _roleCode.Trim(),
+                    nameAr   = _roleNameAr.Trim(),
+                    nameEn   = _roleNameEn
+                });
+            }
+            else
+            {
+                res = await Http.PutAsJsonAsync($"api/roles/{_editId}", new
+                {
+                    nameAr   = _roleNameAr.Trim(),
+                    nameEn   = _roleNameEn,
+                    isActive = _roleActive
+                });
+            }
+
+            var msg = await MsgOf(res);
+            _roleOk = res.IsSuccessStatusCode;
+            _roleMsg = msg;
+
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(msg, Severity.Success);
+                CloseRoleModal();
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _roleOk = false;
+            _roleMsg = "فشل الحفظ: " + ex.Message;
+        }
+        finally
+        {
+            _roleSaving = false;
+        }
+    }
+
+    private async Task DeleteRoleAsync()
+    {
+        if (_editId is null) return;
+        try
+        {
+            var res = await Http.DeleteAsync($"api/roles/{_editId}");
+            var msg = await MsgOf(res);
+            Snackbar.Add(msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode)
+            {
+                CloseRoleModal();
+                _selId = null;
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("فشل الحذف: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var body = await res.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(body)) return res.IsSuccessStatusCode ? "تم" : "خطأ غير معروف";
+            var doc = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(body);
+            if (doc.TryGetProperty("message", out var m)) return m.GetString() ?? body;
+            return body;
+        }
+        catch
+        {
+            return res.IsSuccessStatusCode ? "تم" : $"خطأ HTTP {(int)res.StatusCode}";
+        }
+    }
+}

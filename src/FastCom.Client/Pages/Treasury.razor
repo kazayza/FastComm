@@ -1,0 +1,616 @@
+@page "/treasury"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject ISnackbar Snackbar
+
+<PageTitle>الخزينة — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">المالية · الخزينة</div>
+                <h1 class="fc-hero-title">الخزينة</h1>
+                <p class="fc-hero-sub">الصناديق النقدية وحركاتها — الأرصدة بتتحدّث أوتوماتيك من الحركات</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                @if (CanTransfer)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Class="mr-2"
+                               StartIcon="@Icons.Material.Filled.Route" OnClick="OpenTransfer">تحويل بين خزينتين</MudButton>
+                }
+                @if (CanPost)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="OpenPost">حركة جديدة</MudButton>
+                }
+            </div>
+        </div>
+        @if (CanView)
+        {
+            <div class="fc-kpis fc-kpis-glass">
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.AccountBalance" /></div>
+                    <div><div class="fc-kpi-num">@Money(TotalBalance)</div><div class="fc-kpi-lb">إجمالي الأرصدة</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Payments" /></div>
+                    <div><div class="fc-kpi-num">@Money(TodayIn)</div><div class="fc-kpi-lb">وارد النهاردة</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
+                    <div><div class="fc-kpi-num">@Money(TodayOut)</div><div class="fc-kpi-lb">صادر النهاردة</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.FactCheck" /></div>
+                    <div><div class="fc-kpi-num">@_txs.Count(t => t.Status == "Posted")</div><div class="fc-kpi-lb">حركة سارية</div></div></div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanView)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض الخزينة.</MudAlert>
+    }
+    else
+    {
+        @if (_boxes.Any())
+        {
+            <div class="fc-overlap"><div class="fc-card">
+                <div class="fc-panel-sub" style="margin-bottom:10px">الصناديق النقدية</div>
+                <div class="fc-kpis">
+                    @foreach (var b in _boxes)
+                    {
+                        <div class="fc-kpi">
+                            <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" /></div>
+                            <div>
+                                <div class="fc-kpi-num">@Money(b.CurrentBalance)</div>
+                                <div class="fc-kpi-lb">@b.NameAr · @b.TxCount حركة</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div></div>
+        }
+
+        <div class="fc-card" style="margin-top:18px">
+            <div class="fc-toolbar">
+                <div class="fc-filters">
+                    @foreach (var t in Tabs)
+                    {
+                        <button class='fc-filter @(_tab == t.Key ? "on" : "")' @onclick="() => SetTab(t.Key)">@t.Value</button>
+                    }
+                </div>
+                <select class="fc-sel" style="max-width:190px" @bind="_boxFilter">
+                    <option value="0">كل الخزائن</option>
+                    @foreach (var b in _boxes) { <option value="@b.CashBoxId">@b.NameAr</option> }
+                </select>
+                <input type="date" class="fc-sel" style="max-width:160px" value="@_from"
+                       @onchange="e => _from = e.Value?.ToString()" />
+                <input type="date" class="fc-sel" style="max-width:160px" value="@_to"
+                       @onchange="e => _to = e.Value?.ToString()" />
+                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
+                              Placeholder="دوّر بالبيان أو المرجع أو الشيك..." Variant="Variant.Outlined" Dense="true"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Class="fc-search-box" Immediate="true" />
+                <span class="fc-count">عرض @Filtered.Count() من @_txs.Count</span>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+            }
+            else
+            {
+                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
+                    <thead><tr>
+                        <th>التاريخ</th><th>النوع</th><th>الخزينة</th><th>المبلغ</th>
+                        <th>الطريقة</th><th>الطرف</th><th>المرجع</th><th>الحالة</th>
+                        <th style="width:80px; text-align:left">إجراءات</th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach (var t in Filtered)
+                        {
+                            <tr>
+                                <td class="fc-cell-sub">@t.TransactionDate.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td><span class="fc-chip @TxChip(t.TransactionType)"><i></i>@TxAr(t.TransactionType)</span></td>
+                                <td class="fc-cell-main">@t.CashBoxName
+                                    @if (t.CounterpartName is not null) { <div class="fc-cell-sub">⇄ @t.CounterpartName</div> }</td>
+                                <td><b>@Money(t.Amount)</b></td>
+                                <td class="fc-cell-sub">@(t.MethodName ?? "—")</td>
+                                <td class="fc-cell-sub">
+                                    @(t.CustomerName ?? t.SupplierName ?? "—")
+                                    @if (t.InvoiceNumber is not null) { <div>فاتورة @t.InvoiceNumber</div> }
+                                    @if (t.CustodyNumber is not null) { <div>عهدة @t.CustodyNumber</div> }
+                                </td>
+                                <td class="fc-cell-sub">
+                                    @(t.ReferenceNumber ?? t.Description ?? "—")
+                                    @if (t.ChequeNumber is not null) { <div>شيك @t.ChequeNumber</div> }
+                                </td>
+                                <td><span class='fc-chip @(t.Status == "Posted" ? "fc-chip-ok" : "fc-chip-bad")'><i></i>@(t.Status == "Posted" ? "سارية" : "ملغية")</span></td>
+                                <td><div class="fc-row-actions">
+                                    @if (t.Status == "Posted" && CanVoid)
+                                    {
+                                        @if (_confirmId == t.CashTransactionId)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                                                       OnClick="() => Void(t)">إلغاء؟</MudButton>
+                                        }
+                                        else
+                                        {
+                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Close"
+                                                           Color="Color.Error" title="إلغاء الحركة"
+                                                           OnClick="() => _confirmId = t.CashTransactionId" />
+                                        }
+                                    }
+                                </div></td>
+                            </tr>
+                        }
+                        @if (!Filtered.Any())
+                        {
+                            <tr><td colspan="9"><div class="fc-empty"><div>مافيش حركات في الفلتر ده</div></div></td></tr>
+                        }
+                    </tbody>
+                </table></div>
+            }
+        </div>
+    }
+
+    @* ═══════════ مودال: حركة جديدة ═══════════ *@
+    @if (_postOpen && CanPost)
+    {
+        <div class="fc-modal-backdrop" @onclick="ClosePost">
+            <div class="fc-modal" @onclick:stopPropagation="true">
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">حركة خزينة جديدة</div>
+                        <div class="fc-modal-sub">الرصيد بيتحدّث أوتوماتيك بعد الحفظ</div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="ClosePost" />
+                </div>
+                <div class="fc-modal-body">
+                    @if (_msg is not null)
+                    {
+                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                                  Class="mb-4">@_msg</MudAlert>
+                    }
+                    <div class="fc-form-grid">
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">نوع الحركة *</div>
+                            <select class="fc-sel fc-sel-lg" value="@_pf.Type" @onchange="OnTypeChanged">
+                                <option value="Receipt">قبض (وارد)</option>
+                                <option value="Payment">صرف (صادر)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">الخزينة *</div>
+                            <select class="fc-sel fc-sel-lg" value="@_pf.CashBoxId" @onchange="e => _pf.CashBoxId = ParseInt(e.Value)">
+                                <option value="0">— اختر —</option>
+                                @foreach (var b in _boxes) { <option value="@b.CashBoxId">@b.NameAr (@Money(b.CurrentBalance))</option> }
+                            </select>
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">المبلغ *</div>
+                            <input type="number" min="0.01" step="0.01" class="fc-sel fc-sel-lg" value="@_pf.Amount"
+                                   @onchange="e => _pf.Amount = ParseDec(e.Value)" />
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">التاريخ</div>
+                            <input type="datetime-local" class="fc-sel fc-sel-lg" value="@_pf.TxDate"
+                                   @onchange="e => _pf.TxDate = e.Value?.ToString()" />
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">طريقة الدفع</div>
+                            <select class="fc-sel fc-sel-lg" value="@_pf.PaymentMethodId" @onchange="e => _pf.PaymentMethodId = ParseInt(e.Value)">
+                                <option value="0">—</option>
+                                @foreach (var m in _methods) { <option value="@m.Id">@m.Label</option> }
+                            </select>
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">
+                                @(_pf.Type == "Receipt" ? "العميل *" : "العميل (اختياري)")
+                            </div>
+                            <select class="fc-sel fc-sel-lg" value="@_pf.CustomerId" @onchange="OnCustomerChanged">
+                                <option value="0">—</option>
+                                @foreach (var c in _customers) { <option value="@c.Id">@c.Label</option> }
+                            </select>
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">المورد</div>
+                            <select class="fc-sel fc-sel-lg" value="@_pf.SupplierId" @onchange="e => _pf.SupplierId = ParseInt(e.Value)">
+                                <option value="0">—</option>
+                                @foreach (var s in _suppliers) { <option value="@s.Id">@s.Label</option> }
+                            </select>
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">فاتورة (اختياري)</div>
+                            @if (_pf.CustomerId > 0 && _openInvoices.Any())
+                            {
+                                <select class="fc-sel fc-sel-lg" value="@_pf.InvoiceId" @onchange="e => _pf.InvoiceId = ParseLong(e.Value)">
+                                    <option value="0">—</option>
+                                    @foreach (var i in _openInvoices)
+                                    {
+                                        <option value="@i.InvoiceId">@i.InvoiceNumber — متبقي @Money(i.Due)</option>
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                <div class="fc-cell-sub" style="padding:12px 0">اختار العميل الأول</div>
+                            }
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">رقم الشيك</div>
+                            <input class="fc-sel fc-sel-lg" value="@_pf.ChequeNumber" maxlength="50"
+                                   @onchange="e => _pf.ChequeNumber = e.Value?.ToString()" />
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">مرجع</div>
+                            <input class="fc-sel fc-sel-lg" value="@_pf.ReferenceNumber" maxlength="100"
+                                   @onchange="e => _pf.ReferenceNumber = e.Value?.ToString()" />
+                        </div>
+                        <div style="grid-column:1/-1">
+                            <div class="fc-panel-sub" style="margin-bottom:6px">البيان</div>
+                            <input class="fc-sel fc-sel-lg" value="@_pf.Description" maxlength="500"
+                                   @onchange="e => _pf.Description = e.Value?.ToString()" />
+                        </div>
+                    </div>
+                </div>
+                <div class="fc-modal-foot">
+                    <MudButton OnClick="ClosePost">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                               StartIcon="@Icons.Material.Filled.Payments" OnClick="SavePost">تسجيل الحركة</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ═══════════ مودال: تحويل ═══════════ *@
+    @if (_transferOpen && CanTransfer)
+    {
+        <div class="fc-modal-backdrop" @onclick="CloseTransfer">
+            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation="true">
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">تحويل بين خزينتين</div>
+                        <div class="fc-modal-sub">بيتسجّل كحركتين مربوطتين — والإلغاء بيلغيهم مع بعض</div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseTransfer" />
+                </div>
+                <div class="fc-modal-body">
+                    @if (_msg is not null)
+                    {
+                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                                  Class="mb-4">@_msg</MudAlert>
+                    }
+                    <div class="fc-form-grid">
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">من خزينة *</div>
+                            <select class="fc-sel fc-sel-lg" value="@_tf.FromCashBoxId" @onchange="e => _tf.FromCashBoxId = ParseInt(e.Value)">
+                                <option value="0">— اختر —</option>
+                                @foreach (var b in _boxes) { <option value="@b.CashBoxId">@b.NameAr (@Money(b.CurrentBalance))</option> }
+                            </select>
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">إلى خزينة *</div>
+                            <select class="fc-sel fc-sel-lg" value="@_tf.ToCashBoxId" @onchange="e => _tf.ToCashBoxId = ParseInt(e.Value)">
+                                <option value="0">— اختر —</option>
+                                @foreach (var b in _boxes) { <option value="@b.CashBoxId">@b.NameAr</option> }
+                            </select>
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">المبلغ *</div>
+                            <input type="number" min="0.01" step="0.01" class="fc-sel fc-sel-lg" value="@_tf.Amount"
+                                   @onchange="e => _tf.Amount = ParseDec(e.Value)" />
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">التاريخ</div>
+                            <input type="datetime-local" class="fc-sel fc-sel-lg" value="@_tf.TxDate"
+                                   @onchange="e => _tf.TxDate = e.Value?.ToString()" />
+                        </div>
+                        <div style="grid-column:1/-1">
+                            <div class="fc-panel-sub" style="margin-bottom:6px">البيان</div>
+                            <input class="fc-sel fc-sel-lg" value="@_tf.Description" maxlength="500"
+                                   @onchange="e => _tf.Description = e.Value?.ToString()" />
+                        </div>
+                    </div>
+                </div>
+                <div class="fc-modal-foot">
+                    <MudButton OnClick="CloseTransfer">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                               StartIcon="@Icons.Material.Filled.Route" OnClick="SaveTransfer">تحويل</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private AuthUser? _user;
+    private bool CanView     => _user?.Can("TREASURY.VIEW") ?? false;
+    private bool CanPost     => _user?.Can("TREASURY.POST") ?? false;
+    private bool CanVoid     => _user?.Can("TREASURY.VOID") ?? false;
+    private bool CanTransfer => _user?.Can("TREASURY.TRANSFER") ?? false;
+
+    private static readonly Dictionary<string, string> Tabs = new()
+    {
+        ["all"] = "الكل", ["Receipt"] = "وارد", ["Payment"] = "صادر",
+        ["TransferIn"] = "تحويل وارد", ["TransferOut"] = "تحويل صادر", ["Void"] = "ملغية"
+    };
+
+    private List<Box> _boxes = new();
+    private List<Tx> _txs = new();
+    private List<Cust> _customers = new();
+    private List<Opt> _suppliers = new();
+    private List<Method> _methods = new();
+    private List<OpenInv> _openInvoices = new();
+
+    private bool _loading; private string _search = ""; private string _tab = "all";
+    private int _boxFilter; private string? _from; private string? _to;
+    private long? _confirmId;
+    private bool _saving; private string? _msg; private bool _ok;
+
+    private bool _postOpen; private PostForm _pf = new();
+    private bool _transferOpen; private TransferForm _tf = new();
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+    public class Cust { public int Id { get; set; } public string Label { get; set; } = ""; }
+    public class Method { public int Id { get; set; } public string Label { get; set; } = "";
+        public bool RequiresChequeNo { get; set; } }
+    public class OpenInv { public long InvoiceId { get; set; } public string InvoiceNumber { get; set; } = "";
+        public decimal GrandTotal { get; set; } public decimal PaidAmount { get; set; }
+        public decimal Due { get; set; } }
+
+    public class Box
+    {
+        public int CashBoxId { get; set; }
+        public string Code { get; set; } = "";
+        public string NameAr { get; set; } = "";
+        public decimal OpeningBalance { get; set; }
+        public decimal CurrentBalance { get; set; }
+        public string CurrencyCode { get; set; } = "EGP";
+        public int TxCount { get; set; }
+    }
+
+    public class Tx
+    {
+        public long CashTransactionId { get; set; }
+        public DateTime TransactionDate { get; set; }
+        public string TransactionType { get; set; } = "";
+        public int CashBoxId { get; set; }
+        public string CashBoxName { get; set; } = "";
+        public decimal Amount { get; set; }
+        public string? MethodName { get; set; }
+        public string? CustomerName { get; set; }
+        public string? SupplierName { get; set; }
+        public string? InvoiceNumber { get; set; }
+        public string? CustodyNumber { get; set; }
+        public string? CounterpartName { get; set; }
+        public string? ChequeNumber { get; set; }
+        public string? ReferenceNumber { get; set; }
+        public string? Description { get; set; }
+        public string Status { get; set; } = "";
+    }
+
+    public class PostForm
+    {
+        public string Type { get; set; } = "Receipt";
+        public int CashBoxId { get; set; }
+        public string? TxDate { get; set; }
+        public decimal Amount { get; set; }
+        public int PaymentMethodId { get; set; }
+        public int CustomerId { get; set; }
+        public int SupplierId { get; set; }
+        public long InvoiceId { get; set; }
+        public string? ChequeNumber { get; set; }
+        public string? ReferenceNumber { get; set; }
+        public string? Description { get; set; }
+    }
+
+    public class TransferForm
+    {
+        public int FromCashBoxId { get; set; }
+        public int ToCashBoxId { get; set; }
+        public string? TxDate { get; set; }
+        public decimal Amount { get; set; }
+        public string? Description { get; set; }
+    }
+
+    private decimal TotalBalance => _boxes.Sum(b => b.CurrentBalance);
+
+    private IEnumerable<Tx> Posted => _txs.Where(t => t.Status == "Posted");
+
+    private decimal TodayIn => Posted
+        .Where(t => t.TransactionType == "Receipt" && t.TransactionDate.Date == DateTime.Now.Date)
+        .Sum(t => t.Amount);
+
+    private decimal TodayOut => Posted
+        .Where(t => t.TransactionType == "Payment" && t.TransactionDate.Date == DateTime.Now.Date)
+        .Sum(t => t.Amount);
+
+    private static string TxAr(string t) => t switch
+    {
+        "Receipt" => "وارد", "Payment" => "صادر",
+        "TransferIn" => "تحويل وارد", "TransferOut" => "تحويل صادر", _ => t
+    };
+
+    private static string TxChip(string t) => t switch
+    {
+        "Receipt" => "fc-chip-ok", "Payment" => "fc-chip-warn",
+        "TransferIn" => "fc-chip-blue", "TransferOut" => "fc-chip-purple", _ => "fc-chip-gray"
+    };
+
+    private static string Money(decimal v) => v.ToString("N2");
+
+    private static decimal ParseDec(object? v) => decimal.TryParse(v?.ToString(), out var n) ? n : 0m;
+    private static int ParseInt(object? v) => int.TryParse(v?.ToString(), out var n) ? n : 0;
+    private static long ParseLong(object? v) => long.TryParse(v?.ToString(), out var n) ? n : 0;
+
+    private IEnumerable<Tx> Filtered => _txs.Where(t =>
+        (_tab switch
+        {
+            "all" => true,
+            "Void" => t.Status == "Void",
+            _ => t.Status == "Posted" && t.TransactionType == _tab
+        }) &&
+        (_boxFilter == 0 || t.CashBoxId == _boxFilter) &&
+        (string.IsNullOrWhiteSpace(_search) ||
+         (t.Description ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         (t.ReferenceNumber ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         (t.ChequeNumber ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         (t.CustomerName ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (!CanView) return;
+        await LoadAsync();
+        _customers = await SafeGetT<Cust>("api/treasury/customers");
+        _suppliers = await SafeGetT<Opt>("api/options/suppliers");
+        _methods   = await SafeGetT<Method>("api/options/payment-methods");
+    }
+
+    private async Task<List<T>> SafeGetT<T>(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<T>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    private async Task Reload() { await LoadAsync(); }
+
+    private void SetTab(string t) { _tab = t; _confirmId = null; }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _boxes = await Http.GetFromJsonAsync<List<Box>>("api/treasury/boxes") ?? new();
+
+            var url = "api/treasury/transactions?take=300";
+            if (!string.IsNullOrWhiteSpace(_from)) url += "&from=" + Uri.EscapeDataString(_from);
+            if (!string.IsNullOrWhiteSpace(_to))   url += "&to="   + Uri.EscapeDataString(_to);
+            _txs = await Http.GetFromJsonAsync<List<Tx>>(url) ?? new();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
+        finally { _loading = false; }
+    }
+
+    // ── حركة جديدة ──
+
+    private void OpenPost()
+    {
+        _pf = new PostForm
+        {
+            TxDate    = DateTime.Now.ToString("yyyy-MM-ddTHH:mm"),
+            CashBoxId = _boxes.FirstOrDefault()?.CashBoxId ?? 0
+        };
+        _openInvoices = new();
+        _msg = null; _postOpen = true;
+    }
+
+    private void ClosePost() { _postOpen = false; }
+
+    private void OnTypeChanged(ChangeEventArgs e)
+    {
+        _pf.Type = e.Value?.ToString() == "Payment" ? "Payment" : "Receipt";
+        if (_pf.Type == "Payment") _pf.CustomerId = 0;
+        _openInvoices = new();
+    }
+
+    private async Task OnCustomerChanged(ChangeEventArgs e)
+    {
+        _pf.CustomerId = ParseInt(e.Value);
+        _pf.InvoiceId  = 0;
+        _openInvoices = _pf.CustomerId > 0
+            ? await SafeGetT<OpenInv>($"api/payments/open-invoices?customerId={_pf.CustomerId}")
+            : new();
+    }
+
+    private async Task SavePost()
+    {
+        if (_pf.CashBoxId <= 0) { _ok = false; _msg = "اختار الخزينة"; return; }
+        if (_pf.Amount <= 0)    { _ok = false; _msg = "اكتب مبلغ"; return; }
+        if (_pf.Type == "Receipt" && _pf.CustomerId <= 0)
+        { _ok = false; _msg = "القبض لازم يكون من عميل"; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/treasury/transactions", new
+            {
+                type            = _pf.Type,
+                cashBoxId       = _pf.CashBoxId,
+                txDate          = _pf.TxDate,
+                amount          = _pf.Amount,
+                paymentMethodId = _pf.PaymentMethodId == 0 ? (int?)null : _pf.PaymentMethodId,
+                customerId      = _pf.CustomerId == 0 ? (int?)null : _pf.CustomerId,
+                supplierId      = _pf.SupplierId == 0 ? (int?)null : _pf.SupplierId,
+                invoiceId       = _pf.InvoiceId == 0 ? (long?)null : _pf.InvoiceId,
+                custodyId       = (long?)null,
+                chequeNumber    = _pf.ChequeNumber,
+                chequeDate      = (string?)null,
+                bankAccount     = (string?)null,
+                referenceNumber = _pf.ReferenceNumber,
+                description     = _pf.Description
+            });
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); ClosePost(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    // ── تحويل ──
+
+    private void OpenTransfer()
+    {
+        _tf = new TransferForm { TxDate = DateTime.Now.ToString("yyyy-MM-ddTHH:mm") };
+        _msg = null; _transferOpen = true;
+    }
+
+    private void CloseTransfer() { _transferOpen = false; }
+
+    private async Task SaveTransfer()
+    {
+        if (_tf.FromCashBoxId <= 0 || _tf.ToCashBoxId <= 0) { _ok = false; _msg = "اختار الخزينتين"; return; }
+        if (_tf.Amount <= 0) { _ok = false; _msg = "اكتب مبلغ"; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/treasury/transfer", new
+            {
+                fromCashBoxId = _tf.FromCashBoxId,
+                toCashBoxId   = _tf.ToCashBoxId,
+                txDate        = _tf.TxDate,
+                amount        = _tf.Amount,
+                description   = _tf.Description
+            });
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); CloseTransfer(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    // ── إلغاء ──
+
+    private async Task Void(Tx t)
+    {
+        try
+        {
+            var res = await Http.PostAsync($"api/treasury/transactions/{t.CashTransactionId}/void", null);
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            _confirmId = null;
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+    }
+}
