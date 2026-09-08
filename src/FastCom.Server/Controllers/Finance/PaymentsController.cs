@@ -204,33 +204,46 @@ public class PaymentsController : ControllerBase
             Notes           = B(req.Notes),
             CreatedBy       = CurrentUserId()
         };
-        _db.Payments.Add(p);
-        await _db.SaveChangesAsync(ct);
-
-        var allocated = 0m;
-        foreach (var a in req.Allocations!)
+        // 🔴 Atomicity: الدفعة + التوزيع في معاملة واحدة — لو فشل أي جزء،
+        //    كل حاجة بترجع (بما فيها تأثير الـ Trigger اللي بيحسب المديونية).
+        await _db.Database.BeginTransactionAsync(ct);
+        try
         {
-            _db.PaymentAllocations.Add(new PaymentAllocation
+            _db.Payments.Add(p);
+            await _db.SaveChangesAsync(ct);
+
+            var allocated = 0m;
+            foreach (var a in req.Allocations!)
             {
-                PaymentId       = p.PaymentId,
-                InvoiceId       = a.InvoiceId,
-                AllocatedAmount = a.Amount,
-                CreatedAt       = DateTime.UtcNow,
-                CreatedBy       = CurrentUserId()
-            });
-            allocated += a.Amount;
-        }
-        await _db.SaveChangesAsync(ct);
+                _db.PaymentAllocations.Add(new PaymentAllocation
+                {
+                    PaymentId       = p.PaymentId,
+                    InvoiceId       = a.InvoiceId,
+                    AllocatedAmount = a.Amount,
+                    CreatedAt       = DateTime.UtcNow,
+                    CreatedBy       = CurrentUserId()
+                });
+                allocated += a.Amount;
+            }
+            await _db.SaveChangesAsync(ct);
 
-        var left = req.Amount - allocated;
-        return Ok(new
+            await _db.Database.CommitTransactionAsync(ct);
+
+            var left = req.Amount - allocated;
+            return Ok(new
+            {
+                id = p.PaymentId,
+                number = p.PaymentNumber,
+                message = left > 0
+                    ? $"✅ اتسجّلت الدفعة {p.PaymentNumber} — فاضل {left:N2} مش متوزّع على فواتير"
+                    : $"✅ اتسجّلت الدفعة {p.PaymentNumber}"
+            });
+        }
+        catch (Exception)
         {
-            id = p.PaymentId,
-            number = p.PaymentNumber,
-            message = left > 0
-                ? $"✅ اتسجّلت الدفعة {p.PaymentNumber} — فاضل {left:N2} مش متوزّع على فواتير"
-                : $"✅ اتسجّلت الدفعة {p.PaymentNumber}"
-        });
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
     }
 
     // ═══════════════ UPDATE — بيانات الدفعة بس ═══════════════
@@ -277,12 +290,25 @@ public class PaymentsController : ControllerBase
         // لازم التوزيع يتشال — عشان الترِجر يعيد حساب المديونية على الفواتير
         var allocs = await _db.PaymentAllocations
             .Where(a => a.PaymentId == id).ToListAsync(ct);
-        _db.PaymentAllocations.RemoveRange(allocs);
 
-        p.Status    = "Cancelled";
-        p.UpdatedAt = DateTime.UtcNow;
-        p.UpdatedBy = CurrentUserId();
-        await _db.SaveChangesAsync(ct);
+        // 🔴 Atomicity: حذف التوزيع + إلغاء الدفعة لازم يتحصلوا مع بعض
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            _db.PaymentAllocations.RemoveRange(allocs);
+
+            p.Status    = "Cancelled";
+            p.UpdatedAt = DateTime.UtcNow;
+            p.UpdatedBy = CurrentUserId();
+            await _db.SaveChangesAsync(ct);
+
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
 
         return Ok(new { message = $"❌ اتلغت الدفعة {p.PaymentNumber} ورجعت المديونية على الفواتير" });
     }

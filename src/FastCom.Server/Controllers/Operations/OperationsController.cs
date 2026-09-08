@@ -269,14 +269,25 @@ public class OperationsController : ControllerBase
             Status          = "Pending",
             CreatedBy       = CurrentUserId()
         };
-        _db.Operations.Add(o);
-        await _db.SaveChangesAsync(ct);
+        // 🔴 Atomicity: العملية + سطور الإيراد في معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            _db.Operations.Add(o);
+            await _db.SaveChangesAsync(ct);
 
-        AddRevenueLines(o.OperationId, req.RevenueLines!, CurrentUserId());
-        await FillTaxRateSnapshotsAsync(ct);
-        await _db.SaveChangesAsync(ct);
+            AddRevenueLines(o.OperationId, req.RevenueLines!, CurrentUserId());
+            await FillTaxRateSnapshotsAsync(ct);
+            await _db.SaveChangesAsync(ct);
 
-        await TouchBookingAsync(req.BookingId, ct);
+            await TouchBookingAsync(req.BookingId, ct);
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
 
         return Ok(new { id = o.OperationId, number = o.OperationNumber,
             message = $"✅ اتفتحت العملية برقم {o.OperationNumber}" });
@@ -308,18 +319,31 @@ public class OperationsController : ControllerBase
         o.UpdatedAt     = DateTime.UtcNow;
         o.UpdatedBy     = CurrentUserId();
 
-        if (req.RevenueLines is not null)
+        // 🔴 Atomicity: التعديل (حذف السطور القديمة + بناء الجديدة) في معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
         {
-            var old = await _db.OperationRevenueItems
-                .Where(r => r.OperationId == id).ToListAsync(ct);
-            _db.OperationRevenueItems.RemoveRange(old);
-            await _db.SaveChangesAsync(ct);          // الـ trigger بيصفّر الإيراد
+            if (req.RevenueLines is not null)
+            {
+                var old = await _db.OperationRevenueItems
+                    .Where(r => r.OperationId == id).ToListAsync(ct);
+                _db.OperationRevenueItems.RemoveRange(old);
+                await _db.SaveChangesAsync(ct);          // الـ trigger بيصفّر الإيراد
 
-            AddRevenueLines(id, req.RevenueLines, CurrentUserId());
-            await FillTaxRateSnapshotsAsync(ct);
+                AddRevenueLines(id, req.RevenueLines, CurrentUserId());
+                await FillTaxRateSnapshotsAsync(ct);
+            }
+
+            await _db.SaveChangesAsync(ct);            // الـ trigger بيعيد حساب RevenueNet
+
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
         }
 
-        await _db.SaveChangesAsync(ct);            // الـ trigger بيعيد حساب RevenueNet
         return Ok(new { message = "✅ اتحفظ التعديل" });
     }
 
@@ -507,17 +531,29 @@ public class OperationsController : ControllerBase
         var hasTrip = await _db.TripOperations.AnyAsync(t => t.OperationId == id, ct);
         if (hasTrip) return BadRequest(new { message = "العملية مربوطة برحلة — ماينفعش تتحذف" });
 
-        var lines = await _db.OperationRevenueItems
-            .Where(r => r.OperationId == id).ToListAsync(ct);
-        _db.OperationRevenueItems.RemoveRange(lines);
+        // 🔴 Atomicity: حذف العملية + السطور + تحديث الحجز في معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            var lines = await _db.OperationRevenueItems
+                .Where(r => r.OperationId == id).ToListAsync(ct);
+            _db.OperationRevenueItems.RemoveRange(lines);
 
-        o.IsDeleted = true;
-        o.DeletedAt = DateTime.UtcNow;
-        o.DeletedBy = CurrentUserId();
-        await _db.SaveChangesAsync(ct);
+            o.IsDeleted = true;
+            o.DeletedAt = DateTime.UtcNow;
+            o.DeletedBy = CurrentUserId();
+            await _db.SaveChangesAsync(ct);
 
-        await TouchBookingAsync(o.BookingId, ct);
-        await _db.SaveChangesAsync(ct);
+            await TouchBookingAsync(o.BookingId, ct);
+            await _db.SaveChangesAsync(ct);
+
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
 
         return Ok(new { message = "✅ اتحذفت العملية" });
     }

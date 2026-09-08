@@ -236,22 +236,34 @@ public class CustodiesController : ControllerBase
             Notes         = B(req.Notes),
             CreatedBy     = CurrentUserId()
         };
-        _db.DriverCustodies.Add(c);
-        await _db.SaveChangesAsync(ct);
-
-        // سطر «صرف» في الدفتر — للتوثيق بس، الأرقام بيحسبها الـ trigger من حركات الصرف والرد
-        if (req.AmountIssued > 0)
+        // 🔴 Atomicity: العهدة + سطر «صرف» في الدفتر — معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
         {
-            _db.CustodyTransactions.Add(new CustodyTransaction
-            {
-                CustodyId       = c.CustodyId,
-                TransactionType = "Issue",
-                Amount          = req.AmountIssued,
-                TransactionDate = c.CustodyDate,
-                Notes           = "صرف العهدة",
-                CreatedBy       = CurrentUserId()
-            });
+            _db.DriverCustodies.Add(c);
             await _db.SaveChangesAsync(ct);
+
+            // سطر «صرف» في الدفتر — للتوثيق بس، الأرقام بيحسبها الـ trigger من حركات الصرف والرد
+            if (req.AmountIssued > 0)
+            {
+                _db.CustodyTransactions.Add(new CustodyTransaction
+                {
+                    CustodyId       = c.CustodyId,
+                    TransactionType = "Issue",
+                    Amount          = req.AmountIssued,
+                    TransactionDate = c.CustodyDate,
+                    Notes           = "صرف العهدة",
+                    CreatedBy       = CurrentUserId()
+                });
+                await _db.SaveChangesAsync(ct);
+            }
+
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
         }
 
         return Ok(new { id = c.CustodyId, number = c.CustodyNumber,
@@ -354,32 +366,44 @@ public class CustodiesController : ControllerBase
             return BadRequest(new { message = "العهدة مش مقدّمة للتسوية" });
 
         var extra = c.AmountSpent + c.AmountReturned - (c.AmountIssued + c.AdditionalDue);
-        if (extra > 0)
-        {
-            if (req?.AddAdditional != true)
-                return BadRequest(new
-                {
-                    message = $"السائق صرف أكتر من العهدة بـ {extra:N2} — علّم «سجّل الفرق كمبلغ إضافي» واعتمد تاني"
-                });
-
-            _db.CustodyTransactions.Add(new CustodyTransaction
+        if (extra > 0 && req?.AddAdditional != true)
+            return BadRequest(new
             {
-                CustodyId       = c.CustodyId,
-                TransactionType = "Additional",
-                Amount          = extra,
-                TransactionDate = DateTime.UtcNow,
-                Notes           = "فرق مصروفات اتسجل وقت الاعتماد",
-                CreatedBy       = CurrentUserId()
+                message = $"السائق صرف أكتر من العهدة بـ {extra:N2} — علّم «سجّل الفرق كمبلغ إضافي» واعتمد تاني"
             });
-            await _db.SaveChangesAsync(ct);
-            // الـ trigger هيحدّث AdditionalDue — نقرا من جديد
-            c = await _db.DriverCustodies.FirstAsync(x => x.CustodyId == id, ct);
-        }
 
-        c.Status    = "Approved";
-        c.UpdatedAt = DateTime.UtcNow;
-        c.UpdatedBy = CurrentUserId();
-        await _db.SaveChangesAsync(ct);
+        // 🔴 Atomicity: حركة الفرق الإضافي + اعتماد التسوية — معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            if (extra > 0)
+            {
+                _db.CustodyTransactions.Add(new CustodyTransaction
+                {
+                    CustodyId       = c.CustodyId,
+                    TransactionType = "Additional",
+                    Amount          = extra,
+                    TransactionDate = DateTime.UtcNow,
+                    Notes           = "فرق مصروفات اتسجل وقت الاعتماد",
+                    CreatedBy       = CurrentUserId()
+                });
+                await _db.SaveChangesAsync(ct);
+                // الـ trigger هيحدّث AdditionalDue — نقرا من جديد
+                c = await _db.DriverCustodies.FirstAsync(x => x.CustodyId == id, ct);
+            }
+
+            c.Status    = "Approved";
+            c.UpdatedAt = DateTime.UtcNow;
+            c.UpdatedBy = CurrentUserId();
+            await _db.SaveChangesAsync(ct);
+
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
 
         return Ok(new { message = "✅ اعتمدتت التسوية — جاهزة للإغلاق" });
     }

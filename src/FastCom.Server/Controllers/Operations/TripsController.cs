@@ -219,16 +219,28 @@ public class TripsController : ControllerBase
             Status        = "Planned",
             CreatedBy     = CurrentUserId()
         };
-        _db.Trips.Add(t);
-        await _db.SaveChangesAsync(ct);
+        // 🔴 Atomicity: الرحلة + ربط العمليات في معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            _db.Trips.Add(t);
+            await _db.SaveChangesAsync(ct);
 
-        if (req.Operations is { Count: > 0 })
-            await AttachOperationsAsync(t.TripId, req.Operations, ct);
+            if (req.Operations is { Count: > 0 })
+                await AttachOperationsAsync(t.TripId, req.Operations, ct);
 
-        await _db.SaveChangesAsync(ct);
+            await _db.SaveChangesAsync(ct);
 
-        return Ok(new { id = t.TripId, number = t.TripNumber,
-            message = $"✅ اتفتحت الرحلة برقم {t.TripNumber}" });
+            await _db.Database.CommitTransactionAsync(ct);
+
+            return Ok(new { id = t.TripId, number = t.TripNumber,
+                message = $"✅ اتفتحت الرحلة برقم {t.TripNumber}" });
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
     }
 
     // ═══════════════ UPDATE ═══════════════
@@ -255,25 +267,38 @@ public class TripsController : ControllerBase
         t.UpdatedAt     = DateTime.UtcNow;
         t.UpdatedBy     = CurrentUserId();
 
-        if (req.Operations is not null)
+        // 🔴 Atomicity: تعديل الرحلة كامل (الربط + الترتيب) في معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
         {
-            var keep = req.Operations.Select(o => o.OperationId).ToList();
-
-            // اللي اتشال من الرحلة → يرجع قيد الانتظار
-            var removed = await _db.TripOperations
-                .Where(to => to.TripId == id && !keep.Contains(to.OperationId))
-                .ToListAsync(ct);
-            if (removed.Count > 0)
+            if (req.Operations is not null)
             {
-                _db.TripOperations.RemoveRange(removed);
-                await _db.SaveChangesAsync(ct);
-                await SetOperationsStatusAsync(removed.Select(r => r.OperationId).ToList(), "Pending", ct);
+                var keep = req.Operations.Select(o => o.OperationId).ToList();
+
+                // اللي اتشال من الرحلة → يرجع قيد الانتظار
+                var removed = await _db.TripOperations
+                    .Where(to => to.TripId == id && !keep.Contains(to.OperationId))
+                    .ToListAsync(ct);
+                if (removed.Count > 0)
+                {
+                    _db.TripOperations.RemoveRange(removed);
+                    await _db.SaveChangesAsync(ct);
+                    await SetOperationsStatusAsync(removed.Select(r => r.OperationId).ToList(), "Pending", ct);
+                }
+
+                await AttachOperationsAsync(id, req.Operations, ct);
             }
 
-            await AttachOperationsAsync(id, req.Operations, ct);
+            await _db.SaveChangesAsync(ct);
+
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
         }
 
-        await _db.SaveChangesAsync(ct);
         return Ok(new { message = "✅ اتحفظ التعديل" });
     }
 
@@ -344,17 +369,29 @@ public class TripsController : ControllerBase
         var start = Dt(req?.ActualStartAt) ?? DateTime.UtcNow;
         var odo = Dec(req?.StartOdometer);
 
-        t.ActualStartAt  = start;
-        t.StartOdometer  = odo;
-        t.Status         = "Started";
-        t.UpdatedAt      = DateTime.UtcNow;
-        t.UpdatedBy      = CurrentUserId();
-        await _db.SaveChangesAsync(ct);
+        // 🔴 Atomicity: تحريك الرحلة + تحديث حالة العمليات في معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            t.ActualStartAt  = start;
+            t.StartOdometer  = odo;
+            t.Status         = "Started";
+            t.UpdatedAt      = DateTime.UtcNow;
+            t.UpdatedBy      = CurrentUserId();
+            await _db.SaveChangesAsync(ct);
 
-        var ids = await _db.TripOperations.Where(to => to.TripId == id)
-            .Select(to => to.OperationId).ToListAsync(ct);
-        await SetOperationsStatusAsync(ids, "InTransit", ct);
-        await _db.SaveChangesAsync(ct);
+            var ids = await _db.TripOperations.Where(to => to.TripId == id)
+                .Select(to => to.OperationId).ToListAsync(ct);
+            await SetOperationsStatusAsync(ids, "InTransit", ct);
+            await _db.SaveChangesAsync(ct);
+
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
 
         return Ok(new { message = "✅ الرحلة اتحركت" });
     }
@@ -377,19 +414,31 @@ public class TripsController : ControllerBase
         if (odo is not null && t.StartOdometer is not null && odo < t.StartOdometer)
             return BadRequest(new { message = "عداد النهاية أقل من البداية" });
 
-        t.ActualEndAt = end;
-        t.EndOdometer = odo;
-        if (odo is not null && t.StartOdometer is not null)
-            t.TotalDistanceKm = odo.Value - t.StartOdometer.Value;
-        t.Status    = "Completed";
-        t.UpdatedAt = DateTime.UtcNow;
-        t.UpdatedBy = CurrentUserId();
-        await _db.SaveChangesAsync(ct);
+        // 🔴 Atomicity: إتمام الرحلة + تسليم العمليات في معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            t.ActualEndAt = end;
+            t.EndOdometer = odo;
+            if (odo is not null && t.StartOdometer is not null)
+                t.TotalDistanceKm = odo.Value - t.StartOdometer.Value;
+            t.Status    = "Completed";
+            t.UpdatedAt = DateTime.UtcNow;
+            t.UpdatedBy = CurrentUserId();
+            await _db.SaveChangesAsync(ct);
 
-        var ids = await _db.TripOperations.Where(to => to.TripId == id)
-            .Select(to => to.OperationId).ToListAsync(ct);
-        await SetOperationsStatusAsync(ids, "Delivered", ct);
-        await _db.SaveChangesAsync(ct);
+            var ids = await _db.TripOperations.Where(to => to.TripId == id)
+                .Select(to => to.OperationId).ToListAsync(ct);
+            await SetOperationsStatusAsync(ids, "Delivered", ct);
+            await _db.SaveChangesAsync(ct);
+
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
 
         return Ok(new { message = "✅ الرحلة خلصت — العمليات بقت مسلّمة" });
     }
@@ -407,15 +456,27 @@ public class TripsController : ControllerBase
             .AnyAsync(c => c.TripId == id && !c.IsDeleted, ct);
         if (hasCustody) return BadRequest(new { message = "فيه عهدة على الرحلة — سوّيها الأول" });
 
-        t.Status    = "Cancelled";
-        t.UpdatedAt = DateTime.UtcNow;
-        t.UpdatedBy = CurrentUserId();
-        await _db.SaveChangesAsync(ct);
+        // 🔴 Atomicity: إلغاء الرحلة + إرجاع العمليات قيد الانتظار في معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            t.Status    = "Cancelled";
+            t.UpdatedAt = DateTime.UtcNow;
+            t.UpdatedBy = CurrentUserId();
+            await _db.SaveChangesAsync(ct);
 
-        var ids = await _db.TripOperations.Where(to => to.TripId == id)
-            .Select(to => to.OperationId).ToListAsync(ct);
-        await SetOperationsStatusAsync(ids, "Pending", ct);
-        await _db.SaveChangesAsync(ct);
+            var ids = await _db.TripOperations.Where(to => to.TripId == id)
+                .Select(to => to.OperationId).ToListAsync(ct);
+            await SetOperationsStatusAsync(ids, "Pending", ct);
+            await _db.SaveChangesAsync(ct);
+
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
 
         return Ok(new { message = "✅ اتلغت الرحلة والعمليات رجعت قيد الانتظار" });
     }
@@ -501,23 +562,35 @@ public class TripsController : ControllerBase
             running += amounts[i];
         }
 
-        var old = await _db.TripCostAllocations.Where(a => a.TripId == id).ToListAsync(ct);
-        _db.TripCostAllocations.RemoveRange(old);
-        await _db.SaveChangesAsync(ct);      // الـ trigger بيصفّر ActualCost
-
-        for (var i = 0; i < ops.Count; i++)
+        // 🔴 Atomicity: توزيع التكلفة (حذف القديم + إضافة الجديد) في معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
         {
-            _db.TripCostAllocations.Add(new TripCostAllocation
+            var old = await _db.TripCostAllocations.Where(a => a.TripId == id).ToListAsync(ct);
+            _db.TripCostAllocations.RemoveRange(old);
+            await _db.SaveChangesAsync(ct);      // الـ trigger بيصفّر ActualCost
+
+            for (var i = 0; i < ops.Count; i++)
             {
-                TripId            = id,
-                OperationId       = ops[i].OperationId,
-                AllocationBasis   = basis!,
-                AllocationPercent = Math.Round(weights[i] / wSum * 100m, 4, MidpointRounding.AwayFromZero),
-                AllocatedAmount   = amounts[i] < 0 ? 0 : amounts[i],
-                CreatedBy         = CurrentUserId()
-            });
+                _db.TripCostAllocations.Add(new TripCostAllocation
+                {
+                    TripId            = id,
+                    OperationId       = ops[i].OperationId,
+                    AllocationBasis   = basis!,
+                    AllocationPercent = Math.Round(weights[i] / wSum * 100m, 4, MidpointRounding.AwayFromZero),
+                    AllocatedAmount   = amounts[i] < 0 ? 0 : amounts[i],
+                    CreatedBy         = CurrentUserId()
+                });
+            }
+            await _db.SaveChangesAsync(ct);      // الـ trigger بيحدّث ActualCost لكل عملية
+
+            await _db.Database.CommitTransactionAsync(ct);
         }
-        await _db.SaveChangesAsync(ct);      // الـ trigger بيحدّث ActualCost لكل عملية
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
 
         return Ok(new { message = $"✅ اتوزّعت {total:N2} على {ops.Count} عملية", total });
     }
@@ -536,19 +609,31 @@ public class TripsController : ControllerBase
         if (await _db.DriverCustodies.AnyAsync(c => c.TripId == id && !c.IsDeleted, ct))
             return BadRequest(new { message = "فيه عهدة على الرحلة" });
 
-        var links = await _db.TripOperations.Where(to => to.TripId == id).ToListAsync(ct);
-        _db.TripOperations.RemoveRange(links);
+        // 🔴 Atomicity: حذف الرحلة + روابطها + توزيعاتها + إرجاع العمليات في معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            var links = await _db.TripOperations.Where(to => to.TripId == id).ToListAsync(ct);
+            _db.TripOperations.RemoveRange(links);
 
-        var allocs = await _db.TripCostAllocations.Where(a => a.TripId == id).ToListAsync(ct);
-        _db.TripCostAllocations.RemoveRange(allocs);
+            var allocs = await _db.TripCostAllocations.Where(a => a.TripId == id).ToListAsync(ct);
+            _db.TripCostAllocations.RemoveRange(allocs);
 
-        t.IsDeleted = true;
-        t.DeletedAt = DateTime.UtcNow;
-        t.DeletedBy = CurrentUserId();
-        await _db.SaveChangesAsync(ct);
+            t.IsDeleted = true;
+            t.DeletedAt = DateTime.UtcNow;
+            t.DeletedBy = CurrentUserId();
+            await _db.SaveChangesAsync(ct);
 
-        await SetOperationsStatusAsync(links.Select(l => l.OperationId).ToList(), "Pending", ct);
-        await _db.SaveChangesAsync(ct);
+            await SetOperationsStatusAsync(links.Select(l => l.OperationId).ToList(), "Pending", ct);
+            await _db.SaveChangesAsync(ct);
+
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
 
         return Ok(new { message = "✅ اتحذفت الرحلة" });
     }

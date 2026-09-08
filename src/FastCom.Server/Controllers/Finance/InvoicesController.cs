@@ -313,20 +313,32 @@ public class InvoicesController : ControllerBase
             Notes            = B(req.Notes),
             CreatedBy        = CurrentUserId()
         };
-        _db.Invoices.Add(inv);
-        await _db.SaveChangesAsync(ct);
+        // 🔴 Atomicity: الفاتورة + البنود + الربط بالعمليات في معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            _db.Invoices.Add(inv);
+            await _db.SaveChangesAsync(ct);
 
-        var rates = await RatesAsync(req.Items!, ct);
-        AddLines(inv, req.Items!, rates);
-        await AddOperationLinksAsync(inv, req, ct);
-        RecalcTotals(inv, req.Items!, rates);
-        inv.InvoiceType = inv.TaxTotal > 0 ? "Tax" : "NonTax";
-        inv.UpdatedAt   = DateTime.UtcNow;
-        inv.UpdatedBy   = CurrentUserId();
-        await _db.SaveChangesAsync(ct);
+            var rates = await RatesAsync(req.Items!, ct);
+            AddLines(inv, req.Items!, rates);
+            await AddOperationLinksAsync(inv, req, ct);
+            RecalcTotals(inv, req.Items!, rates);
+            inv.InvoiceType = inv.TaxTotal > 0 ? "Tax" : "NonTax";
+            inv.UpdatedAt   = DateTime.UtcNow;
+            inv.UpdatedBy   = CurrentUserId();
+            await _db.SaveChangesAsync(ct);
 
-        return Ok(new { id = inv.InvoiceId, number = inv.InvoiceNumber,
-            message = $"✅ اتحفظت الفاتورة برقم {inv.InvoiceNumber}" });
+            await _db.Database.CommitTransactionAsync(ct);
+
+            return Ok(new { id = inv.InvoiceId, number = inv.InvoiceNumber,
+                message = $"✅ اتحفظت الفاتورة برقم {inv.InvoiceNumber}" });
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
     }
 
     // ═══════════════ UPDATE ═══════════════
@@ -345,27 +357,39 @@ public class InvoicesController : ControllerBase
         if (await _db.PaymentAllocations.AnyAsync(a => a.InvoiceId == id, ct))
             return BadRequest(new { message = "في دفعات متربطة بالفاتورة — الغِ الدفعات الأول" });
 
-        var old = await _db.InvoiceItems.Where(x => x.InvoiceId == id).ToListAsync(ct);
-        _db.InvoiceItems.RemoveRange(old);
-        var oldOps = await _db.InvoiceOperations.Where(x => x.InvoiceId == id).ToListAsync(ct);
-        _db.InvoiceOperations.RemoveRange(oldOps);
-        await _db.SaveChangesAsync(ct);
+        // 🔴 Atomicity: تعديل الفاتورة كامل (حذف البنود القديمة + بناء الجديدة) في معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            var old = await _db.InvoiceItems.Where(x => x.InvoiceId == id).ToListAsync(ct);
+            _db.InvoiceItems.RemoveRange(old);
+            var oldOps = await _db.InvoiceOperations.Where(x => x.InvoiceId == id).ToListAsync(ct);
+            _db.InvoiceOperations.RemoveRange(oldOps);
+            await _db.SaveChangesAsync(ct);
 
-        inv.CustomerId  = req.CustomerId;
-        inv.InvoiceDate = D(req.InvoiceDate);
-        inv.DueDate     = Dn(req.DueDate) ?? inv.DueDate;
-        inv.Notes       = B(req.Notes);
+            inv.CustomerId  = req.CustomerId;
+            inv.InvoiceDate = D(req.InvoiceDate);
+            inv.DueDate     = Dn(req.DueDate) ?? inv.DueDate;
+            inv.Notes       = B(req.Notes);
 
-        var rates = await RatesAsync(req.Items!, ct);
-        AddLines(inv, req.Items!, rates);
-        await AddOperationLinksAsync(inv, req, ct);
-        RecalcTotals(inv, req.Items!, rates);
-        inv.InvoiceType = inv.TaxTotal > 0 ? "Tax" : "NonTax";
-        inv.UpdatedAt   = DateTime.UtcNow;
-        inv.UpdatedBy   = CurrentUserId();
-        await _db.SaveChangesAsync(ct);
+            var rates = await RatesAsync(req.Items!, ct);
+            AddLines(inv, req.Items!, rates);
+            await AddOperationLinksAsync(inv, req, ct);
+            RecalcTotals(inv, req.Items!, rates);
+            inv.InvoiceType = inv.TaxTotal > 0 ? "Tax" : "NonTax";
+            inv.UpdatedAt   = DateTime.UtcNow;
+            inv.UpdatedBy   = CurrentUserId();
+            await _db.SaveChangesAsync(ct);
 
-        return Ok(new { message = "✅ اتعدّلت الفاتورة" });
+            await _db.Database.CommitTransactionAsync(ct);
+
+            return Ok(new { message = "✅ اتعدّلت الفاتورة" });
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
     }
 
     // ═══════════════ إشعار دائن ═══════════════
@@ -420,16 +444,28 @@ public class InvoicesController : ControllerBase
             Notes             = B(req.Notes),
             CreatedBy         = CurrentUserId()
         };
-        _db.Invoices.Add(inv);
-        await _db.SaveChangesAsync(ct);
+        // 🔴 Atomicity: الإشعار الدائن + بنوده في معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            _db.Invoices.Add(inv);
+            await _db.SaveChangesAsync(ct);
 
-        AddLines(inv, lines, rates);
-        RecalcTotals(inv, lines, rates);
-        inv.InvoiceType = inv.TaxTotal < 0 ? "Tax" : "NonTax";
-        await _db.SaveChangesAsync(ct);
+            AddLines(inv, lines, rates);
+            RecalcTotals(inv, lines, rates);
+            inv.InvoiceType = inv.TaxTotal < 0 ? "Tax" : "NonTax";
+            await _db.SaveChangesAsync(ct);
 
-        return Ok(new { id = inv.InvoiceId, number = inv.InvoiceNumber,
-            message = $"✅ اتعمل إشعار دائن برقم {inv.InvoiceNumber} على {original.InvoiceNumber}" });
+            await _db.Database.CommitTransactionAsync(ct);
+
+            return Ok(new { id = inv.InvoiceId, number = inv.InvoiceNumber,
+                message = $"✅ اتعمل إشعار دائن برقم {inv.InvoiceNumber} على {original.InvoiceNumber}" });
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
     }
 
     // ═══════════════ تغيير الحالة ═══════════════

@@ -270,22 +270,34 @@ public class TreasuryController : ControllerBase
         var desc  = B(req.Description) ?? $"تحويل من {from.NameAr} إلى {to.NameAr}";
         var uid   = CurrentUserId();
 
-        _db.CashTransactions.AddRange(
-            new CashTransaction
-            {
-                BranchId = branchId.Value, CashBoxId = from.CashBoxId, TransactionDate = when,
-                TransactionType = "TransferOut", Amount = req.Amount,
-                TransferGroupId = group, CounterpartCashBoxId = to.CashBoxId,
-                Description = desc, Status = "Posted", CreatedBy = uid
-            },
-            new CashTransaction
-            {
-                BranchId = branchId.Value, CashBoxId = to.CashBoxId, TransactionDate = when,
-                TransactionType = "TransferIn", Amount = req.Amount,
-                TransferGroupId = group, CounterpartCashBoxId = from.CashBoxId,
-                Description = desc, Status = "Posted", CreatedBy = uid
-            });
-        await _db.SaveChangesAsync(ct);
+        // 🔴 Atomicity: حركتي التحويل (TransferOut + TransferIn) لازم يتحصلوا مع بعض
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            _db.CashTransactions.AddRange(
+                new CashTransaction
+                {
+                    BranchId = branchId.Value, CashBoxId = from.CashBoxId, TransactionDate = when,
+                    TransactionType = "TransferOut", Amount = req.Amount,
+                    TransferGroupId = group, CounterpartCashBoxId = to.CashBoxId,
+                    Description = desc, Status = "Posted", CreatedBy = uid
+                },
+                new CashTransaction
+                {
+                    BranchId = branchId.Value, CashBoxId = to.CashBoxId, TransactionDate = when,
+                    TransactionType = "TransferIn", Amount = req.Amount,
+                    TransferGroupId = group, CounterpartCashBoxId = from.CashBoxId,
+                    Description = desc, Status = "Posted", CreatedBy = uid
+                });
+            await _db.SaveChangesAsync(ct);
+
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
 
         return Ok(new { message = $"✅ اتحوّل {req.Amount:N2} من {from.NameAr} إلى {to.NameAr}" });
     }
@@ -310,8 +322,20 @@ public class TreasuryController : ControllerBase
                 .ToListAsync(ct);
         }
 
-        foreach (var x in targets) x.Status = "Void";
-        await _db.SaveChangesAsync(ct);
+        // 🔴 Atomicity: كل حركات التحويل (أو الحركة الواحدة) بتتلغي مع بعض
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            foreach (var x in targets) x.Status = "Void";
+            await _db.SaveChangesAsync(ct);
+
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
 
         return Ok(new
         {

@@ -185,11 +185,23 @@ public class BookingsController : ControllerBase
             Status          = "Draft",
             CreatedBy       = CurrentUserId()
         };
-        _db.Bookings.Add(b);
-        await _db.SaveChangesAsync(ct);
+        // 🔴 Atomicity: الحجز + بنوده في معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            _db.Bookings.Add(b);
+            await _db.SaveChangesAsync(ct);
 
-        AddLines(b.BookingId, req.Lines!, CurrentUserId());
-        await _db.SaveChangesAsync(ct);
+            AddLines(b.BookingId, req.Lines!, CurrentUserId());
+            await _db.SaveChangesAsync(ct);
+
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
 
         return Ok(new { id = b.BookingId, number = b.BookingNumber,
             message = $"✅ اتسجل الحجز برقم {b.BookingNumber}" });
@@ -222,28 +234,47 @@ public class BookingsController : ControllerBase
         b.UpdatedAt       = DateTime.UtcNow;
         b.UpdatedBy       = CurrentUserId();
 
-        // السطور بتتبدّل بالكامل — بس لو مافيش حاويات فعلية متسجلة عليها
+        // الفحص (قراءة فقط) قبل المعاملة — عشان مفيش معاملة تفتح لتحقق يرفضها
+        var lockedLines = false;
         if (req.Lines is not null)
         {
-            var oldLines = await _db.BookingContainerLines
+            var checkLines = await _db.BookingContainerLines
                 .Where(l => l.BookingId == id).ToListAsync(ct);
-
-            if (oldLines.Count > 0)
+            if (checkLines.Count > 0)
             {
-                var lineIds = oldLines.Select(l => l.BookingContainerLineId).ToList();
-                var hasDetails = await _db.BookingContainerDetails
+                var lineIds = checkLines.Select(l => l.BookingContainerLineId).ToList();
+                lockedLines = await _db.BookingContainerDetails
                     .AnyAsync(d => lineIds.Contains(d.BookingContainerLineId), ct);
-                if (hasDetails)
-                    return BadRequest(new { message = "فيه حاويات فعلية متسجلة على الحجز — السطور مقفولة" });
-
-                _db.BookingContainerLines.RemoveRange(oldLines);
-                await _db.SaveChangesAsync(ct);
             }
-
-            AddLines(id, req.Lines, CurrentUserId());
         }
 
-        await _db.SaveChangesAsync(ct);
+        if (lockedLines)
+            return BadRequest(new { message = "فيه حاويات فعلية متسجلة على الحجز — السطور مقفولة" });
+
+        // 🔴 Atomicity: استبدال السطور بالكامل — معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            // السطور بتتبدّل بالكامل — بس لو مافيش حاويات فعلية متسجلة عليها
+            if (req.Lines is not null)
+            {
+                var oldLines = await _db.BookingContainerLines
+                    .Where(l => l.BookingId == id).ToListAsync(ct);
+                _db.BookingContainerLines.RemoveRange(oldLines);
+
+                AddLines(id, req.Lines, CurrentUserId());
+            }
+
+            await _db.SaveChangesAsync(ct);
+
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
+
         return Ok(new { message = "✅ اتحفظ التعديل" });
     }
 
