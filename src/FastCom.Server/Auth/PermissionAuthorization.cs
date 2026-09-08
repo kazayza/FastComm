@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 
 namespace FastCom.Server.Auth;
@@ -33,18 +32,15 @@ public class PermissionRequirement : IAuthorizationRequirement
 /// </summary>
 public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionRequirement>
 {
-    private readonly TokenService _tokens;
-    private readonly IMemoryCache _cache;
+    private readonly IPermissionService _permissions;
     private readonly ILogger<PermissionAuthorizationHandler> _logger;
 
     public PermissionAuthorizationHandler(
-        TokenService tokens,
-        IMemoryCache cache,
+        IPermissionService permissions,
         ILogger<PermissionAuthorizationHandler> logger)
     {
-        _tokens = tokens;
-        _cache  = cache;
-        _logger = logger;
+        _permissions = permissions;
+        _logger      = logger;
     }
 
     protected override async Task HandleRequirementAsync(
@@ -53,7 +49,16 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
     {
         try
         {
-            // 🔴 A5: الـ UserId عدد صحيح في الـ claim
+            // ── 1) ADMIN بياخد كل حاجة — مافيش داعي نستعلم ───────────────
+            //    (AppRolePermissions بيدي ADMIN كل الـ 107 بـ CROSS JOIN،
+            //     بس الـ bypass ده بيوفّر استعلام وبيضمن إنه مايتقفلش أبدًا)
+            if (context.User.IsInRole("ADMIN"))
+            {
+                context.Succeed(requirement);
+                return;
+            }
+
+            // ── 2) 🔴 A5: الـ UserId عدد صحيح في الـ claim ────────────────
             var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (!int.TryParse(userIdStr, out var userId))
             {
@@ -61,19 +66,23 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
                 return;   // رفض صامت → 403
             }
 
-            // ── الصلاحيات من DB مع كاش 60 ثانية ────────────────────────────
-            var perms = await _cache.GetOrCreateAsync(
-                $"fc:perms:{userId}",
-                entry =>
-                {
-                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60);
-                    return _tokens.GetPermissionsAsync(userId);
-                });
+            // ── 3) الفحص (من الكاش أو الـ DB) ─────────────────────────────
+            // ⚠️ AuthorizationHandlerContext مفيهوش HttpContext —
+            //    الـ HttpContext هو context.Resource نفسه.
+            var httpContext = context.Resource as Microsoft.AspNetCore.Http.HttpContext;
 
-            if (perms is not null &&
-                perms.Contains(requirement.Code, StringComparer.OrdinalIgnoreCase))
+            if (await _permissions.HasAsync(userId, requirement.Code, httpContext?.RequestAborted ?? default))
             {
                 context.Succeed(requirement);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "🔒 رفض: المستخدم {User} (Id={UserId}) ماعندوش صلاحية {Code} — {Path}",
+                    context.User.Identity?.Name ?? "?",
+                    userId,
+                    requirement.Code,
+                    httpContext?.Request.Path.Value ?? "?");
             }
         }
         catch (Exception ex)
@@ -105,7 +114,8 @@ public class PermissionPolicyProvider : IAuthorizationPolicyProvider
 
     public Task<AuthorizationPolicy?> GetPolicyAsync(string policyName)
     {
-        if (policyName.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrEmpty(policyName) &&
+            policyName.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase))
         {
             var code = policyName[Prefix.Length..];
 

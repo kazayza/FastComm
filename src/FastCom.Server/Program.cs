@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Diagnostics;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -93,14 +94,24 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization();
-
 /* ==========================================================
    4.5) 🔐 Step 3.5: Authorization بالصلاحيات من قاعدة البيانات
         [Authorize(Policy = "PERM:BOOKING.VIEW")] → فحص حي من
         AppUserPermissions مع كاش 60 ثانية — fail-closed عند أي خطأ
    ========================================================== */
+builder.Services.AddAuthorization(options =>
+{
+    // 🔴 الحماية الافتراضية: أي endpoint من غير [AllowAnonymous]
+    //    هيتطلب تسجيل دخول تلقائيًا — عشان أي Controller جديد
+    //    في Step 4+ مايخرجش مفتوح بالغلط.
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
+
 builder.Services.AddMemoryCache();
+builder.Services.AddScoped<IPermissionService, PermissionService>();
+builder.Services.AddScoped<FastCom.Server.Services.INumberingService, FastCom.Server.Services.NumberingService>();
 builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
@@ -181,12 +192,29 @@ app.UseExceptionHandler(errorApp =>
 {
     errorApp.Run(async context =>
     {
+        // 🔴 من غير السطر ده الـ Exception كان بيروح من غير ما يتسجل —
+        //    والمستخدم كان بيشوف «حدث خطأ» من غير أي تفصيلة.
+        var feature = context.Features.Get<IExceptionHandlerFeature>();
+        var ex = feature?.Error;
+
+        Log.Error(ex, "❌ Unhandled exception on {Method} {Path}",
+                  context.Request.Method, context.Request.Path);
+
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsJsonAsync(new
         {
             success = false,
-            message = "حدث خطأ أثناء تنفيذ العملية. برجاء المحاولة مرة أخرى."
+            message = "حدث خطأ أثناء تنفيذ العملية. برجاء المحاولة مرة أخرى.",
+
+            // للتشخيص في Development بس — نوع الاستثناء والرسالة (من غير stack trace)
+            error     = context.RequestServices
+                            .GetService<IHostEnvironment>()?.IsDevelopment() == true
+                        ? ex?.GetType().Name : null,
+            detail    = context.RequestServices
+                            .GetService<IHostEnvironment>()?.IsDevelopment() == true
+                        ? ex?.Message : null,
+            path      = context.Request.Path.Value
         });
     });
 });
@@ -206,12 +234,30 @@ app.UseHttpsRedirection();
 app.UseCors("AllowClient");
 
 app.UseBlazorFrameworkFiles();   // 🔗 Blazor WASM static assets
+// 🔴 حماية: المستندات متخزنة تحت wwwroot/App_Data — من غير السطر ده
+//    أي حد يعرف الرابط ينزّلها من غير DOCUMENT.DOWNLOAD.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/App_Data", StringComparison.OrdinalIgnoreCase))
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+    await next();
+});
+
 app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapFallbackToFile("index.html");   // 🔗 SPA routing — أي route مش /api يروح للـ Client
+
+// 🔗 SPA routing — أي route مش /api يروح للـ Client
+// 🔴 AllowAnonymous إلزامي: الـ FallbackPolicy كان هيرفض يرجّع index.html
+//    لمستخدم مش مسجّل دخول → التطبيق كله كان هيقع على 401
+//    وشاشة الدخول مش هتظهر أصلًا.
+//    الحماية الحقيقية على الـ API، والـ Client بيحوّل لـ /login بنفسه.
+app.MapFallbackToFile("index.html").AllowAnonymous();
 
 app.Run();
