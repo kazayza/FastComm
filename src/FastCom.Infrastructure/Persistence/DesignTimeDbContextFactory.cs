@@ -38,7 +38,7 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<FastComDbC
         if (!string.IsNullOrWhiteSpace(fromEnv))
             return fromEnv;
 
-        // ── 2) ندوّر على appsettings.json ──
+        // ── 2) نابحث على appsettings.json ──
         var start = AppContext.BaseDirectory;   // bin/Debug/net8.0/
         var dir = new DirectoryInfo(start);
 

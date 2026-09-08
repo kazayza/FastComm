@@ -18,7 +18,7 @@ public partial class Operation
 
     public int BranchId { get; set; }
 
-    public long BookingId { get; set; }
+    public long? BookingId { get; set; }
 
     public int CustomerId { get; set; }
 
@@ -81,7 +81,7 @@ public partial class Operation
 
     [ForeignKey("BookingId")]
     [InverseProperty("Operations")]
-    public virtual Booking Booking { get; set; } = null!;
+    public virtual Booking? Booking { get; set; }
 
     [ForeignKey("BranchId")]
     [InverseProperty("Operations")]
