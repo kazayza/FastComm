@@ -296,13 +296,8 @@ public class CustodiesController : ControllerBase
         }
 
         if (req.ExpenseId is not null)
-        {
-            var ex = await _db.Expenses.AsNoTracking()
-                .FirstOrDefaultAsync(e => e.ExpenseId == req.ExpenseId && !e.IsDeleted, ct);
-            if (ex is null) return BadRequest(new { message = "المصروف مش موجود" });
-            if (ex.TripId != c.TripId)
-                return BadRequest(new { message = "المصروف ده على رحلة تانية — مش مرتبط بالعهدة دي" });
-        }
+            return BadRequest(new { message =
+                "ربط المصروفات بالعهدة بيتعمل تلقائيًا من شاشة المصروفات — حركة «رد باقي» مالهاش مصروف" });
 
         _db.CustodyTransactions.Add(new CustodyTransaction
         {
@@ -322,6 +317,45 @@ public class CustodiesController : ControllerBase
         return Ok(new
         {
             message = req.Type == "Refund" ? "✅ اتسجل رد الباقي" : "✅ اتسجلت الإضافة",
+            spent    = now.AmountSpent,
+            returned = now.AmountReturned,
+            due      = now.AdditionalDue,
+            remaining = now.AmountIssued + now.AdditionalDue - now.AmountSpent - now.AmountReturned,
+            status   = now.Status
+        });
+    }
+
+    /// <summary>
+    /// 🗑️ حذف حركة غلط من دفتر العهدة (رد/إضافة) — والـ trigger بيعيد حساب الأرصدة.
+    /// حركات المصروفات بتتدار من شاشة المصروفات (ExpenseId → ممنوع الحذف من هنا).
+    /// </summary>
+    [HttpDelete("{id:long}/transactions/{txId:long}")]
+    [Authorize(Policy = "PERM:CUSTODY.SETTLE")]
+    public async Task<IActionResult> DeleteTransaction(long id, long txId, CancellationToken ct)
+    {
+        var c = await _db.DriverCustodies.FirstOrDefaultAsync(x => x.CustodyId == id && !x.IsDeleted, ct);
+        if (c is null) return NotFound(new { message = "العهدة مش موجودة" });
+        if (c.Status is not ("Open" or "PartiallySettled"))
+            return BadRequest(new { message = "العهدة اتقدّمت للتسوية — مافيش حذف حركات" });
+
+        var tx = await _db.CustodyTransactions
+            .FirstOrDefaultAsync(t => t.CustodyTransactionId == txId && t.CustodyId == id, ct);
+        if (tx is null) return NotFound(new { message = "الحركة مش موجودة" });
+
+        if (tx.TransactionType == "Issue")
+            return BadRequest(new { message = "حركة الصرف الأساسية بتتشال مع حذف العهدة نفسها" });
+        if (tx.ExpenseId is not null)
+            return BadRequest(new { message = "الحركة دي مربوطة بمصروف — الغِها أو عدّلها من شاشة المصروفات" });
+
+        _db.CustodyTransactions.Remove(tx);
+        await _db.SaveChangesAsync(ct);
+
+        var now = await _db.DriverCustodies.AsNoTracking()
+            .FirstAsync(x => x.CustodyId == id, ct);
+
+        return Ok(new
+        {
+            message = "🗑️ اتحذفت الحركة والأرصدة اتظبطت",
             spent    = now.AmountSpent,
             returned = now.AmountReturned,
             due      = now.AdditionalDue,
@@ -372,40 +406,15 @@ public class CustodiesController : ControllerBase
                 message = $"السائق صرف أكتر من العهدة بـ {extra:N2} — علّم «سجّل الفرق كمبلغ إضافي» واعتمد تاني"
             });
 
-        // 🔴 Atomicity: حركة الفرق الإضافي + اعتماد التسوية — معاملة واحدة
-        await _db.Database.BeginTransactionAsync(ct);
-        try
-        {
-            if (extra > 0)
-            {
-                _db.CustodyTransactions.Add(new CustodyTransaction
-                {
-                    CustodyId       = c.CustodyId,
-                    TransactionType = "Additional",
-                    Amount          = extra,
-                    TransactionDate = DateTime.UtcNow,
-                    Notes           = "فرق مصروفات اتسجل وقت الاعتماد",
-                    CreatedBy       = CurrentUserId()
-                });
-                await _db.SaveChangesAsync(ct);
-                // الـ trigger هيحدّث AdditionalDue — نقرا من جديد
-                c = await _db.DriverCustodies.FirstAsync(x => x.CustodyId == id, ct);
-            }
+        // 🔴 الفرق الزيادة عن العهدة بيتسجل أصلًا في AdditionalDue بـ الـ trigger
+        //    (Spent − Issued) — مفيش حركة منفصلة محتاجة هنا: الحركة كانت بتفضل معزولة
+        //    مش بتتحسب في أي مكان. القيمة بتظهر في AdditionalDue على العهدة نفسها.
+        c.Status    = "Approved";
+        c.UpdatedAt = DateTime.UtcNow;
+        c.UpdatedBy = CurrentUserId();
+        await _db.SaveChangesAsync(ct);
 
-            c.Status    = "Approved";
-            c.UpdatedAt = DateTime.UtcNow;
-            c.UpdatedBy = CurrentUserId();
-            await _db.SaveChangesAsync(ct);
-
-            await _db.Database.CommitTransactionAsync(ct);
-        }
-        catch (Exception)
-        {
-            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
-            throw;
-        }
-
-        return Ok(new { message = "✅ اعتمدتت التسوية — جاهزة للإغلاق" });
+        return Ok(new { message = "✅ اعتمدت التسوية — جاهزة للإغلاق" });
     }
 
     // ═══════════════ إغلاق ═══════════════

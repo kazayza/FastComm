@@ -153,12 +153,42 @@ public class ExpensesController : ControllerBase
             CreatedBy       = CurrentUserId()
         };
 
-        _db.Expenses.Add(e);
-        await FillTaxSnapshotAsync(ct);
-        await _db.SaveChangesAsync(ct);
+        // 🔴 Atomicity + ربط العهدة: المصروف المربوط بعهدة مفتوحة بيسجّل
+        //    حركة «صرف» في دفتر العهدة تلقائيًا — والـ trigger بيعيد حساب AmountSpent.
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            _db.Expenses.Add(e);
+            await FillTaxSnapshotAsync(ct);
+            await _db.SaveChangesAsync(ct);
+
+            if (e.CustodyId is not null && e.Status == "Posted")
+            {
+                _db.CustodyTransactions.Add(new CustodyTransaction
+                {
+                    CustodyId       = e.CustodyId.Value,
+                    TransactionType = "Expense",
+                    Amount          = e.Amount,
+                    TransactionDate = e.ExpenseDate,
+                    ExpenseId       = e.ExpenseId,
+                    Notes           = $"مصروف مربوط: {e.ExpenseNumber}",
+                    CreatedBy       = CurrentUserId()
+                });
+                await _db.SaveChangesAsync(ct);
+            }
+
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
 
         return Ok(new { id = e.ExpenseId, number = e.ExpenseNumber,
-            message = $"✅ اتسجل المصروف برقم {e.ExpenseNumber}" });
+            message = e.CustodyId is not null && e.Status == "Posted"
+                ? $"✅ اتسجل المصروف برقم {e.ExpenseNumber} — واتحسب على العهدة"
+                : $"✅ اتسجل المصروف برقم {e.ExpenseNumber}" });
     }
 
     // ═══════════════ UPDATE ═══════════════
@@ -167,12 +197,21 @@ public class ExpensesController : ControllerBase
     [Authorize(Policy = "PERM:EXPENSE.EDIT")]
     public async Task<IActionResult> Update(long id, [FromBody] ExpenseUpsert req, CancellationToken ct)
     {
-        var err = await ValidateAsync(req, ct);
-        if (err is not null) return BadRequest(new { message = err });
-
         var e = await _db.Expenses.FirstOrDefaultAsync(x => x.ExpenseId == id && !x.IsDeleted, ct);
         if (e is null) return NotFound(new { message = "المصروف مش موجود" });
         if (e.Status == "Cancelled") return BadRequest(new { message = "المصروف ملغي — مش قابل للتعديل" });
+
+        var err = await ValidateAsync(req, ct, e.CustodyId);
+        if (err is not null) return BadRequest(new { message = err });
+
+        // 🔴 العهدة مقدّمة/معتمدة + نفس الربط → تغيير المبلغ هيعبث بأرقام التسوية
+        if (e.CustodyId is not null && e.CustodyId == req.CustodyId && e.Amount != req.Amount)
+        {
+            var cus = await _db.DriverCustodies.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.CustodyId == e.CustodyId && !c.IsDeleted, ct);
+            if (cus is not null && cus.Status is not ("Open" or "PartiallySettled"))
+                return BadRequest(new { message = "العهدة مقدّمة للتسوية أو معتمدة — فك ربط المصروف أو ألغِه قبل تغيير المبلغ" });
+        }
 
         var type = await _db.ExpenseTypes.AsNoTracking()
             .FirstAsync(t => t.ExpenseTypeId == req.ExpenseTypeId, ct);
@@ -194,6 +233,9 @@ public class ExpensesController : ControllerBase
         e.UpdatedBy       = CurrentUserId();
 
         await FillTaxSnapshotAsync(ct);
+
+        // 🔴 مزامنة حركة العهدة مع المصروف (إنشاء/تعديل/فك ربط) — مصدر واحد للحقيقة
+        await SyncCustodyTransactionAsync(e, ct);
         await _db.SaveChangesAsync(ct);
 
         return Ok(new { message = "✅ اتحفظ التعديل" });
@@ -222,6 +264,52 @@ public class ExpensesController : ControllerBase
             e.TaxRate = e.TaxRateId is not null && rates.TryGetValue(e.TaxRateId.Value, out var v) ? v : 0m;
     }
 
+    /// <summary>
+    /// 🔴 مصدر واحد للحقيقة: حركة «صرف» في دفتر العهدة لازم تطابق المصروف.
+    /// بتتنادى بعد أي تغيير على المصروف (إنشاء/تعديل/حالة) — والـ trigger بيعيد حساب AmountSpent.
+    /// </summary>
+    private async Task SyncCustodyTransactionAsync(Expense e, CancellationToken ct)
+    {
+        var existing = await _db.CustodyTransactions
+            .Where(t => t.ExpenseId == e.ExpenseId)
+            .OrderBy(t => t.CustodyTransactionId)
+            .ToListAsync(ct);
+
+        var shouldExist = e.CustodyId is not null && e.Status == "Posted" && !e.IsDeleted;
+
+        if (!shouldExist)
+        {
+            if (existing.Count > 0)
+                _db.CustodyTransactions.RemoveRange(existing);
+            return;
+        }
+
+        if (existing.Count == 0)
+        {
+            _db.CustodyTransactions.Add(new CustodyTransaction
+            {
+                CustodyId       = e.CustodyId!.Value,
+                TransactionType = "Expense",
+                Amount          = e.Amount,
+                TransactionDate = e.ExpenseDate,
+                ExpenseId       = e.ExpenseId,
+                Notes           = $"مصروف مربوط: {e.ExpenseNumber}",
+                CreatedBy       = CurrentUserId()
+            });
+            return;
+        }
+
+        // لو فيه أكتر من حركة لنفس المصروف (بيانات قديمة) — نسيب الأولى ونشيل الباقي
+        if (existing.Count > 1)
+            _db.CustodyTransactions.RemoveRange(existing.Skip(1));
+
+        var tx = existing[0];
+        tx.CustodyId       = e.CustodyId!.Value;
+        tx.Amount          = e.Amount;
+        tx.TransactionDate = e.ExpenseDate;
+        tx.Notes           = $"مصروف مربوط: {e.ExpenseNumber}";
+    }
+
     // ═══════════════ STATUS ═══════════════
 
     public record StatusRequest(string? To);
@@ -242,15 +330,27 @@ public class ExpensesController : ControllerBase
         if (to == "Posted" && e.PaymentStatus == "Paid")
             return BadRequest(new { message = "المصروف اتدفع — مش هيتلغى التأكيد" });
 
+        // 🔴 رجوع للمؤكد وعليه عهدة → لازم العهدة لسه مفتوحة
+        if (to == "Posted" && e.CustodyId is not null)
+        {
+            var cus = await _db.DriverCustodies.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.CustodyId == e.CustodyId && !c.IsDeleted, ct);
+            if (cus is null || cus.Status is not ("Open" or "PartiallySettled"))
+                return BadRequest(new { message = "العهدة المرتبطة مش مفتوحة — راجع حالتها الأول" });
+        }
+
         e.Status    = to;
         e.UpdatedAt = DateTime.UtcNow;
         e.UpdatedBy = CurrentUserId();
+
+        // 🔴 الإلغاء بيشيل حركة الصرف من دفتر العهدة — والرجوع للمؤكد بيعيدها
+        await SyncCustodyTransactionAsync(e, ct);
         await _db.SaveChangesAsync(ct);
 
         return Ok(new { message = to switch
         {
-            "Posted"    => "✅ اتأكد المصروف",
-            "Cancelled" => "✅ اتلغى المصروف",
+            "Posted"    => "✅ تم تاكيد المصروف",
+            "Cancelled" => "✅ تم الغاء المصروف",
             _           => "✅ رجع مسودة"
         }});
     }
@@ -262,7 +362,7 @@ public class ExpensesController : ControllerBase
     public async Task<IActionResult> Approve(long id, CancellationToken ct)
     {
         var e = await _db.Expenses.FirstOrDefaultAsync(x => x.ExpenseId == id && !x.IsDeleted, ct);
-        if (e is null) return NotFound(new { message = "المصروف مش موجود" });
+        if (e is null) return NotFound(new { message = "المصروف غير موجود" });
         if (e.Status != "Posted") return BadRequest(new { message = "أكّد المصروف الأول" });
         if (e.IsApproved) return BadRequest(new { message = "المصروف معتمد بالفعل" });
 
@@ -300,7 +400,8 @@ public class ExpensesController : ControllerBase
 
     // ═══════════════ validation ═══════════════
 
-    private async Task<string?> ValidateAsync(ExpenseUpsert? r, CancellationToken ct)
+    private async Task<string?> ValidateAsync(ExpenseUpsert? r, CancellationToken ct,
+        long? currentCustodyId = null)
     {
         if (r is null) return "البيانات مش كاملة";
         if (r.Amount <= 0) return "المبلغ لازم يكون أكتر من صفر";
@@ -343,8 +444,16 @@ public class ExpensesController : ControllerBase
                 .FirstOrDefaultAsync(c => c.CustodyId == r.CustodyId, ct);
             if (cus is null) return "العهدة مش موجودة";
             if (cus.IsDeleted) return "العهدة محذوفة";
-            if (cus.Status == "Closed") return "العهدة مقفولة — مش هتربط بيها مصروف جديد";
-            if (r.TripId is not null && r.TripId != cus.TripId)
+
+            // 🔴 ربط جديد على عهدة مجمّدة ممنوع — لكن تعديل مصروف مربوط أصلًا مسموح
+            //    (غير المبلغ — ده متحقق في Update) عشان متبوظش أرقام تسوية اتقدّمت.
+            var linkChanged = r.CustodyId != currentCustodyId;
+            if (linkChanged && cus.Status is not ("Open" or "PartiallySettled"))
+                return "العهدة مقدّمة للتسوية أو مقفولة — مش هتربط بيها مصروف جديد";
+
+            if (r.TripId is null)
+                return "المصروف المربوط بعهدة لازم يكون على رحلة العهدة نفسها";
+            if (r.TripId != cus.TripId)
                 return "العهدة على رحلة تانية — اختار رحلة العهدة نفسها";
         }
 
