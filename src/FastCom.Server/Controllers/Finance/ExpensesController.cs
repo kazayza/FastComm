@@ -108,7 +108,7 @@ public class ExpensesController : ControllerBase
     {
         var e = await _db.Expenses.AsNoTracking()
             .FirstOrDefaultAsync(x => x.ExpenseId == id && !x.IsDeleted, ct);
-        if (e is null) return NotFound(new { message = "المصروف مش موجود" });
+        if (e is null) return NotFound(new { message = "المصروف غير موجود" });
 
         return Ok(new Detail(e.ExpenseId, e.ExpenseNumber, e.ExpenseTypeId,
             e.ExpenseDate.ToString("yyyy-MM-ddTHH:mm"), e.Description, e.Amount,
@@ -125,7 +125,7 @@ public class ExpensesController : ControllerBase
         if (err is not null) return BadRequest(new { message = err });
 
         var branchId = await ResolveBranchIdAsync(ct);
-        if (branchId is null) return BadRequest(new { message = "مافيش فرع معرّف في النظام" });
+        if (branchId is null) return BadRequest(new { message = "لايوجد فرع معرّف في النظام" });
 
         var type = await _db.ExpenseTypes.AsNoTracking()
             .FirstAsync(t => t.ExpenseTypeId == req.ExpenseTypeId, ct);
@@ -187,8 +187,8 @@ public class ExpensesController : ControllerBase
 
         return Ok(new { id = e.ExpenseId, number = e.ExpenseNumber,
             message = e.CustodyId is not null && e.Status == "Posted"
-                ? $"✅ اتسجل المصروف برقم {e.ExpenseNumber} — واتحسب على العهدة"
-                : $"✅ اتسجل المصروف برقم {e.ExpenseNumber}" });
+                ? $"✅ تم تسجيل المصروف برقم {e.ExpenseNumber} — واتحسب على العهدة"
+                : $"✅ تم تسجيل المصروف برقم {e.ExpenseNumber}" });
     }
 
     // ═══════════════ UPDATE ═══════════════
@@ -198,8 +198,8 @@ public class ExpensesController : ControllerBase
     public async Task<IActionResult> Update(long id, [FromBody] ExpenseUpsert req, CancellationToken ct)
     {
         var e = await _db.Expenses.FirstOrDefaultAsync(x => x.ExpenseId == id && !x.IsDeleted, ct);
-        if (e is null) return NotFound(new { message = "المصروف مش موجود" });
-        if (e.Status == "Cancelled") return BadRequest(new { message = "المصروف ملغي — مش قابل للتعديل" });
+        if (e is null) return NotFound(new { message = "المصروف غير موجود" });
+        if (e.Status == "Cancelled") return BadRequest(new { message = "المصروف ملغي — غير قابل للتعديل" });
 
         var err = await ValidateAsync(req, ct, e.CustodyId);
         if (err is not null) return BadRequest(new { message = err });
@@ -293,7 +293,7 @@ public class ExpensesController : ControllerBase
                 Amount          = e.Amount,
                 TransactionDate = e.ExpenseDate,
                 ExpenseId       = e.ExpenseId,
-                Notes           = $"مصروف مربوط: {e.ExpenseNumber}",
+                Notes           = $"مصروف مرتبط: {e.ExpenseNumber}",
                 CreatedBy       = CurrentUserId()
             });
             return;
@@ -307,7 +307,7 @@ public class ExpensesController : ControllerBase
         tx.CustodyId       = e.CustodyId!.Value;
         tx.Amount          = e.Amount;
         tx.TransactionDate = e.ExpenseDate;
-        tx.Notes           = $"مصروف مربوط: {e.ExpenseNumber}";
+        tx.Notes           = $"مصروف مرتبط: {e.ExpenseNumber}";
     }
 
     // ═══════════════ STATUS ═══════════════
@@ -320,15 +320,15 @@ public class ExpensesController : ControllerBase
     {
         var to = req?.To?.Trim();
         if (to is not ("Draft" or "Posted" or "Cancelled"))
-            return BadRequest(new { message = "الحالة مش صالحة" });
+            return BadRequest(new { message = "الحالة غير صالحة" });
 
         var e = await _db.Expenses.FirstOrDefaultAsync(x => x.ExpenseId == id && !x.IsDeleted, ct);
-        if (e is null) return NotFound(new { message = "المصروف مش موجود" });
+        if (e is null) return NotFound(new { message = "المصروف غير موجود" });
 
         if (e.Status == to) return BadRequest(new { message = "المصروف في الحالة دي بالفعل" });
 
         if (to == "Posted" && e.PaymentStatus == "Paid")
-            return BadRequest(new { message = "المصروف اتدفع — مش هيتلغى التأكيد" });
+            return BadRequest(new { message = "المصروف مدفوع — مش هيتلغى التأكيد" });
 
         // 🔴 رجوع للمؤكد وعليه عهدة → لازم العهدة لسه مفتوحة
         if (to == "Posted" && e.CustodyId is not null)
@@ -336,7 +336,7 @@ public class ExpensesController : ControllerBase
             var cus = await _db.DriverCustodies.AsNoTracking()
                 .FirstOrDefaultAsync(c => c.CustodyId == e.CustodyId && !c.IsDeleted, ct);
             if (cus is null || cus.Status is not ("Open" or "PartiallySettled"))
-                return BadRequest(new { message = "العهدة المرتبطة مش مفتوحة — راجع حالتها الأول" });
+                return BadRequest(new { message = "العهدة المرتبطة غير مفتوحة — راجع حالتها الأول" });
         }
 
         e.Status    = to;
@@ -383,19 +383,19 @@ public class ExpensesController : ControllerBase
     public async Task<IActionResult> Delete(long id, CancellationToken ct)
     {
         var e = await _db.Expenses.FirstOrDefaultAsync(x => x.ExpenseId == id && !x.IsDeleted, ct);
-        if (e is null) return NotFound(new { message = "المصروف مش موجود" });
+        if (e is null) return NotFound(new { message = "المصروف غير موجود" });
 
         if (e.PaymentStatus != "Unpaid")
-            return BadRequest(new { message = "المصروف اتدفع جزئيًا أو كليًا — ماينفعش يتحذف" });
+            return BadRequest(new { message = "المصروف مدفوع جزئيًا أو كليًا — لايمكن حذفه " });
         if (await _db.CustodyTransactions.AnyAsync(t => t.ExpenseId == id, ct))
-            return BadRequest(new { message = "المصروف مربوط بعهدة — ماينفعش يتحذف" });
+            return BadRequest(new { message = "المصروف مربوط بعهدة — لايمكن حذفه " });
 
         e.IsDeleted = true;
         e.DeletedAt = DateTime.UtcNow;
         e.DeletedBy = CurrentUserId();
         await _db.SaveChangesAsync(ct);
 
-        return Ok(new { message = "✅ اتحذف المصروف" });
+        return Ok(new { message = "✅ تم حذف المصروف" });
     }
 
     // ═══════════════ validation ═══════════════
@@ -403,58 +403,58 @@ public class ExpensesController : ControllerBase
     private async Task<string?> ValidateAsync(ExpenseUpsert? r, CancellationToken ct,
         long? currentCustodyId = null)
     {
-        if (r is null) return "البيانات مش كاملة";
+        if (r is null) return "البيانات غير كاملة";
         if (r.Amount <= 0) return "المبلغ لازم يكون أكتر من صفر";
         if (r.Amount > 10_000_000m) return "المبلغ كبير بشكل غير منطقي";
 
         var type = await _db.ExpenseTypes.AsNoTracking()
             .FirstOrDefaultAsync(t => t.ExpenseTypeId == r.ExpenseTypeId && !t.IsDeleted, ct);
-        if (type is null) return "نوع المصروف مش موجود";
+        if (type is null) return "نوع المصروف غير موجود";
 
         if (r.OperationId is not null)
         {
             if (!type.IsOperationCost)
-                return $"«{type.NameAr}» مش بتتحمل على عملية — شيل ربط العملية";
+                return $"«{type.NameAr}» غير مخصص للتكاليف التشغيلية — الغى ربط العملية";
 
             var op = await _db.Operations.AsNoTracking()
                 .FirstOrDefaultAsync(o => o.OperationId == r.OperationId && !o.IsDeleted, ct);
-            if (op is null) return "العملية مش موجودة";
-            if (op.Status == "Closed") return "العملية مقفولة — مش هتضيف عليها مصروفات";
+            if (op is null) return "العملية غير موجودة";
+            if (op.Status == "Closed") return "العملية مقفولة — لايمكن إضافة مصروفات عليها";
         }
 
         if (r.TripId is not null &&
             !await _db.Trips.AnyAsync(t => t.TripId == r.TripId && !t.IsDeleted, ct))
-            return "الرحلة مش موجودة";
+            return "الرحلة غير موجودة";
 
         if (r.DriverId is not null &&
             !await _db.Drivers.AnyAsync(d => d.DriverId == r.DriverId && !d.IsDeleted, ct))
-            return "السائق مش موجود";
+            return "السائق غير موجود";
 
         if (r.SupplierId is not null &&
             !await _db.Suppliers.AnyAsync(s => s.SupplierId == r.SupplierId && !s.IsDeleted, ct))
-            return "المورد مش موجود";
+            return "المورد غير موجود";
 
         if (r.TaxRateId is not null &&
             !await _db.TaxRates.AnyAsync(t => t.TaxRateId == r.TaxRateId && t.IsActive, ct))
-            return "نسبة الضريبة مش موجودة";
+            return "نسبة الضريبة غير موجودة";
 
         if (r.CustodyId is not null)
         {
             var cus = await _db.DriverCustodies.AsNoTracking()
                 .FirstOrDefaultAsync(c => c.CustodyId == r.CustodyId, ct);
-            if (cus is null) return "العهدة مش موجودة";
+            if (cus is null) return "العهدة غير موجودة";
             if (cus.IsDeleted) return "العهدة محذوفة";
 
             // 🔴 ربط جديد على عهدة مجمّدة ممنوع — لكن تعديل مصروف مربوط أصلًا مسموح
             //    (غير المبلغ — ده متحقق في Update) عشان متبوظش أرقام تسوية اتقدّمت.
             var linkChanged = r.CustodyId != currentCustodyId;
             if (linkChanged && cus.Status is not ("Open" or "PartiallySettled"))
-                return "العهدة مقدّمة للتسوية أو مقفولة — مش هتربط بيها مصروف جديد";
+                return "العهدة مقدّمة للتسوية أو مغلقة — لايمكن ربطها بمصروف جديد";
 
             if (r.TripId is null)
-                return "المصروف المربوط بعهدة لازم يكون على رحلة العهدة نفسها";
+                return "المصروف المربوط بعهدة لابد ان يكون على رحلة العهدة نفسها";
             if (r.TripId != cus.TripId)
-                return "العهدة على رحلة تانية — اختار رحلة العهدة نفسها";
+                return "العهدة على رحلة اخرى — اختار رحلة العهدة نفسها";
         }
 
         if (r.OperationId is null && r.TripId is null && r.SupplierId is null)

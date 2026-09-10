@@ -62,6 +62,24 @@ public class OptionsController : ControllerBase
             .Select(e => new Opt(e.EmployeeId, e.FullNameAr))
             .ToListAsync(ct));
 
+    [HttpGet("departments")]
+    [Authorize(Policy = "PERM:EMPLOYEE.VIEW")]
+    public async Task<IActionResult> Departments(CancellationToken ct) =>
+        Ok(await _db.Departments.AsNoTracking()
+            .Where(d => d.IsActive && !d.IsDeleted)
+            .OrderBy(d => d.NameAr)
+            .Select(d => new Opt(d.DepartmentId, d.NameAr))
+            .ToListAsync(ct));
+
+    [HttpGet("job-titles")]
+    [Authorize(Policy = "PERM:EMPLOYEE.VIEW")]
+    public async Task<IActionResult> JobTitles(CancellationToken ct) =>
+        Ok(await _db.JobTitles.AsNoTracking()
+            .Where(j => j.IsActive && !j.IsDeleted)
+            .OrderBy(j => j.NameAr)
+            .Select(j => new Opt(j.JobTitleId, j.NameAr))
+            .ToListAsync(ct));
+
     [HttpGet("vehicles")]
     [Authorize(Policy = "PERM:FLEET.VIEW")]
     public async Task<IActionResult> Vehicles(CancellationToken ct) =>
