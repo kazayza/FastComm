@@ -7,317 +7,244 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
-<PageTitle>@(_id is null ? "رحلة جديدة" : "تعديل رحلة") — فاست كوم</PageTitle>
+<PageTitle>الرحلات — فاست كوم</PageTitle>
 
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
             <div>
                 <div class="fc-crumb">التشغيل · الرحلات</div>
-                <h1 class="fc-hero-title">@(_id is null ? "رحلة جديدة" : $"تعديل {TripNumber}")</h1>
-                <p class="fc-hero-sub">اختار السائق والعربية، واربط العمليات اللي هتتنفذ في الخروج ده — الرقم بيتولد (TR-)</p>
+                <h1 class="fc-hero-title">الرحلات</h1>
+                <p class="fc-hero-sub">سائق وعربية وخروج واحد — ممكن ينفّذ كذا عملية، وتكلفته بتتوزّع عليهم</p>
             </div>
             <div class="fc-head-actions">
-                <MudButton Variant="Variant.Outlined" OnClick="GoBack" Style="color:#9FB4CC">رجوع</MudButton>
-                @if (CanSave && !_locked)
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                @if (CanCreate)
                 {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving"
-                               StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="SaveAsync">حفظ</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="GoNew">رحلة جديدة</MudButton>
                 }
             </div>
         </div>
+        @if (CanView)
+        {
+            <div class="fc-kpis fc-kpis-glass">
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.AirportShuttle" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي الرحلات</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.HourglassTop" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(t => t.Status == "Planned")</div><div class="fc-kpi-lb">مخططة</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.LocalShipping" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(t => t.Status == "Started")</div><div class="fc-kpi-lb">في الطريق</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
+                    <div><div class="fc-kpi-num">@Money(_items.Sum(t => t.DirectCost))</div><div class="fc-kpi-lb">مصروفات الرحلات</div></div></div>
+            </div>
+        }
     </div>
 </div>
 
 <div class="fc-page">
-    @if (!CanCreate && _id is null)
+    @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديكصلاحية إنشاء رحلة.</MudAlert>
-    }
-    else if (_loading)
-    {
-        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض الرحلات.
+</MudAlert>
     }
     else
     {
         <div class="fc-overlap"><div class="fc-card">
-
-            @if (_msg is not null)
-            {
-                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
-            }
-            @if (_locked)
-            {
-                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
-                    الرحلة حالتها «@StatusAr(_status)» — التعديل مقفول.
-                </MudAlert>
-            }
-
-            <div class="fc-panel-sub" style="margin-bottom:14px">بيانات الرحلة</div>
-            <div class="fc-form-grid">
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">السائق *</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.DriverId" disabled="@_locked">
-                        <option value="0">— اختار السائق —</option>
-                        @foreach (var d in _drivers) { <option value="@d.Id">@d.Label</option> }
-                    </select>
+            <div class="fc-toolbar">
+                <div class="fc-filters">
+                    @foreach (var t in Tabs)
+                    {
+                        <button class='fc-filter @(_tab == t.Key ? "on" : "")' @onclick="() => SetTab(t.Key)">@t.Value</button>
+                    }
                 </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">العربية *</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.VehicleId" disabled="@_locked">
-                        <option value="0">— اختار العربية —</option>
-                        @foreach (var v in _vehicles) { <option value="@v.Id">@v.Label</option> }
-                    </select>
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">المقطورة</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.TrailerId" disabled="@_locked">
-                        <option value="">— من غير مقطورة —</option>
-                        @foreach (var t in _trailers) { <option value="@t.Id">@t.Label</option> }
-                    </select>
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">نوع الرحلة</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.TripTypeId" disabled="@_locked">
-                        <option value="">—</option>
-                        @foreach (var t in _tripTypes) { <option value="@t.Id">@t.Label</option> }
-                    </select>
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">التحرك المخطط</div>
-                    <input type="datetime-local" class="fc-sel fc-sel-lg" value="@_f.PlannedStartAt" disabled="@_locked"
-                           @onchange="e => _f.PlannedStartAt = e.Value?.ToString()" />
-                </div>
+                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
+                              Placeholder="دوّر برقم الرحلة أو السائق أو اللوحة..." Variant="Variant.Outlined" Dense="true"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Class="fc-search-box" Immediate="true" />
+                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
             </div>
 
-            <div class="fc-panel-sub" style="margin:26px 0 10px">
-                العمليات على الرحلة
-                <span class="fc-cell-sub" style="font-weight:600"> — @_ops.Count عملية · إيراد @TotalRevenue.ToString("N2")</span>
-            </div>
-
-            <div class="fc-lines">
-                <div class="fc-lines-head" style="grid-template-columns: 44px minmax(240px, 2fr) 190px 190px 46px">
-                    <div>#</div><div>العملية</div><div>استلام من الميناء</div><div>تسليم للعميل</div><div></div>
-                </div>
-                @if (_ops.Count == 0)
-                {
-                    <div class="fc-lines-empty">لايوجد عمليات — الرحلة لازم يكون عليها عملية واحدة على الأقل قبل التحرك</div>
-                }
-                @foreach (var op in _ops)
-                {
-                    <div class="fc-lines-row" style="grid-template-columns: 44px minmax(240px, 2fr) 190px 190px 46px">
-                        <div class="fc-cell-sub">@(_ops.IndexOf(op) + 1)</div>
-                        <div>
-                            <select class="fc-sel" @bind="op.OperationId" disabled="@_locked">
-                                <option value="0">— اختار عملية —</option>
-                                @foreach (var a in _available)
-                                {
-                                    <option value="@a.OperationId">@a.OperationNumber — @a.CustomerName (@a.Route)</option>
-                                }
-                            </select>
-                        </div>
-                        <div>
-                            <input type="datetime-local" class="fc-sel" value="@op.PickupAt" disabled="@_locked"
-                                   @onchange="e => op.PickupAt = e.Value?.ToString()" />
-                        </div>
-                        <div>
-                            <input type="datetime-local" class="fc-sel" value="@op.DeliveryAt" disabled="@_locked"
-                                   @onchange="e => op.DeliveryAt = e.Value?.ToString()" />
-                        </div>
-                        <div>
-                            @if (!_locked)
-                            {
-                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
-                                               Color="Color.Error" OnClick="() => _ops.Remove(op)" />
-                            }
-                        </div>
-                    </div>
-                }
-            </div>
-
-            @if (CanSave && !_locked)
+            @if (_loading)
             {
-                <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-3"
-                           StartIcon="@Icons.Material.Filled.Add" OnClick="AddOp">ضيف عملية</MudButton>
+                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
             }
-
-            @if (_id is not null)
+            else
             {
-                <div class="fc-panel-sub" style="margin:30px 0 10px">
-                    توزيع تكلفة الرحلة على العمليات
-                    <span class="fc-cell-sub" style="font-weight:600">
-                        — مصروفات الرحلة @_directCost.ToString("N2") · اللي اتوزّع @_allocRows.Sum(a => a.Amount).ToString("N2")
-                    </span>
-                </div>
-
-                @if (_directCost <= 0)
-                {
-                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-                        مافيش مصروفات مسجلة على الرحلة لسه — سجّل المصروفات الأول (Step 8) وبعدين وزّع.
-                    </MudAlert>
-                }
-                else if (_allocRows.Count == 0)
-                {
-                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-                        لايوجد عمليات مربوطة — احفظ الرحلة بعملياتها الأول.
-                    </MudAlert>
-                }
-                else
-                {
-                    <div class="fc-form-grid" style="max-width:560px; margin-bottom:14px">
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">طريقة التوزيع</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_basis">
-                                <option value="Manual">متساوي</option>
-                                <option value="RevenueShare">على حسب الإيراد</option>
-                                <option value="ContainerCount">على حسب عدد الحاويات</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="fc-lines">
-                        <div class="fc-lines-head" style="grid-template-columns: minmax(180px, 2fr) 130px 130px 140px">
-                            <div>العملية</div><div>الإيراد</div><div>النسبة %</div><div>المبلغ</div>
-                        </div>
-                        @foreach (var a in _allocRows)
+                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
+                    <thead><tr>
+                        <th>رقم الرحلة</th><th>السائق</th><th>العربية</th><th>المخطط</th>
+                        <th>عمليات</th><th>المصروفات</th><th>الموزّع</th><th>الحالة</th>
+                        <th style="width:180px; text-align:left">إجراءات</th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach (var t in Filtered)
                         {
-                            <div class="fc-lines-row" style="grid-template-columns: minmax(180px, 2fr) 130px 130px 140px">
-                                <div class="fc-cell-main">@a.OperationNumber</div>
-                                <div class="fc-cell-sub">@a.Revenue.ToString("N2")</div>
-                                <div class="fc-cell-sub">@a.Percent.ToString("0.##")%</div>
-                                <div class="fc-rev-total">@a.Amount.ToString("N2")</div>
-                            </div>
+                            <tr>
+                                <td><span class="fc-role-chip">@t.TripNumber</span></td>
+                                <td><div class="fc-cell-main">@t.DriverName</div></td>
+                                <td class="fc-cell-sub">@t.VehiclePlate
+                                    @if (t.TrailerPlate is not null) { <div class="fc-cell-sub">+ @t.TrailerPlate</div> }</td>
+                                <td class="fc-cell-sub">@(t.PlannedStartAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                                <td><b>@t.OperationsCount</b></td>
+                                <td class="fc-cell-sub">@Money(t.DirectCost)</td>
+                                <td class="fc-cell-sub">@Money(t.AllocatedCost)</td>
+                                <td><span class="fc-chip @ChipClass(t.Status)"><i></i>@StatusAr(t.Status)</span></td>
+                                <td><div class="fc-row-actions">
+                                    @if (t.Status is not ("Completed" or "Cancelled") && CanEdit)
+                                    {
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
+                                                       Color="Color.Primary" title="تعديل" OnClick="() => GoEdit(t)" />
+                                    }
+                                    @if (t.Status is ("Planned" or "Assigned") && CanEdit)
+                                    {
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Route"
+                                                       Color="Color.Success" title="الرحلة اتحركت" OnClick="() => Start(t)" />
+                                    }
+                                    @if (t.Status is ("Started" or "Planned" or "Assigned") && CanEdit)
+                                    {
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle"
+                                                       Color="Color.Primary" title="إنهاء الرحلة" OnClick="() => Complete(t)" />
+                                    }
+                                    @if (t.Status is not ("Completed" or "Cancelled") && CanCancel)
+                                    {
+                                        @if (_confirmId == t.TripId)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                                                       OnClick='() => Post(t, "cancel")'>إلغاء؟</MudButton>
+                                        }
+                                        else
+                                        {
+                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Close"
+                                                           Color="Color.Error" title="إلغاء" OnClick="() => _confirmId = t.TripId" />
+                                        }
+                                    }
+                                    else if (t.Status is ("Planned" or "Cancelled") && CanCancel)
+                                    {
+                                        @if (_confirmId == t.TripId)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                                                       OnClick="() => Delete(t)">حذف؟</MudButton>
+                                        }
+                                        else
+                                        {
+                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
+                                                           Color="Color.Error" title="حذف" OnClick="() => _confirmId = t.TripId" />
+                                        }
+                                    }
+                                </div></td>
+                            </tr>
                         }
-                    </div>
-
-                    <div style="display:flex; gap:10px; align-items:center; margin-top:14px; flex-wrap:wrap">
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_distributing"
-                                   StartIcon="@Icons.Material.Filled.Savings" OnClick="DistributeAsync">وزّع التكلفة</MudButton>
-                        <span class="fc-cell-sub">باقي التوزيع على آخر عملية — فالمجموع بيطابق المصروفات بالظبط</span>
-                    </div>
-                }
+                        @if (!Filtered.Any())
+                        {
+                            <tr><td colspan="9"><div class="fc-empty"><div>مافيش رحلات في الفلتر ده</div></div></td></tr>
+                        }
+                    </tbody>
+                </table></div>
             }
-
-            <div class="fc-panel-sub" style="margin:26px 0 8px">ملاحظات</div>
-            <textarea class="fc-sel" rows="3" maxlength="1000" disabled="@_locked"
-                      @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
-
-            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:26px">
-                <MudButton Variant="Variant.Outlined" OnClick="GoBack">رجوع</MudButton>
-                @if (CanSave && !_locked)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveAsync">حفظ</MudButton>
-                }
-            </div>
-
         </div></div>
+    }
+
+    @* ═══ مودال التحرك ═══ *@
+    @if (_startFor is not null)
+    {
+        <div class="fc-modal-backdrop" @onclick="() => _startFor = null">
+            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation>
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">الرحلة اتحركت</div>
+                        <div class="fc-modal-sub">سجّل وقت التحرك وعداد البداية</div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _startFor = null" />
+                </div>
+                <div class="fc-modal-body">
+                    <div class="fc-form-grid">
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">وقت التحرك</div>
+                            <input type="datetime-local" class="fc-sel fc-sel-lg" value="@_startAt"
+                                   @onchange="e => _startAt = e.Value?.ToString()" />
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">عداد البداية (كم)</div>
+                            <input type="number" min="0" step="0.1" class="fc-sel fc-sel-lg" value="@_startOdo"
+                                   @onchange="e => _startOdo = e.Value?.ToString()" />
+                        </div>
+                    </div>
+                </div>
+                <div class="fc-modal-foot">
+                    <MudButton Variant="Variant.Outlined" OnClick="() => _startFor = null">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmStart">تحرك</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ═══ مودال الإنهاء ═══ *@
+    @if (_endFor is not null)
+    {
+        <div class="fc-modal-backdrop" @onclick="() => _endFor = null">
+            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation>
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">إنهاء الرحلة</div>
+                        <div class="fc-modal-sub">العمليات المرتبطة هتبقى «تم التسليم»</div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _endFor = null" />
+                </div>
+                <div class="fc-modal-body">
+                    <div class="fc-form-grid">
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">وقت الوصول</div>
+                            <input type="datetime-local" class="fc-sel fc-sel-lg" value="@_endAt"
+                                   @onchange="e => _endAt = e.Value?.ToString()" />
+                        </div>
+                        <div>
+                            <div class="fc-panel-sub" style="margin-bottom:6px">عداد النهاية (كم)</div>
+                            <input type="number" min="0" step="0.1" class="fc-sel fc-sel-lg" value="@_endOdo"
+                                   @onchange="e => _endOdo = e.Value?.ToString()" />
+                        </div>
+                    </div>
+                </div>
+                <div class="fc-modal-foot">
+                    <MudButton Variant="Variant.Outlined" OnClick="() => _endFor = null">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmComplete">إنهاء</MudButton>
+                </div>
+            </div>
+        </div>
     }
 </div>
 
 @code {
-    [Parameter] public long? Id { get; set; }
-    private long? _id;
-    private string TripNumber = "";
-    private string _status = "Planned";
-    private bool _locked;
-
     private AuthUser? _user;
+    private bool CanView   => _user?.Can("TRIP.VIEW") ?? false;
     private bool CanCreate => _user?.Can("TRIP.CREATE") ?? false;
     private bool CanEdit   => _user?.Can("TRIP.EDIT") ?? false;
-    private bool CanSave   => _id is null ? CanCreate : CanEdit;
+    private bool CanCancel => _user?.Can("TRIP.CANCEL") ?? false;
 
-    private bool _loading; private bool _saving; private bool _distributing;
-    private string? _msg; private bool _ok;
-
-    private List<Opt> _drivers = new();
-    private List<Opt> _vehicles = new();
-    private List<Opt> _trailers = new();
-    private List<Opt> _tripTypes = new();
-    private List<Avail> _available = new();
-
-    private List<OpRow> _ops = new();
-    private List<AllocRow> _allocRows = new();
-    private decimal _directCost;
-    private string _basis = "Manual";
-    private Form _f = new();
-
-    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
-
-    public class Avail
+    private static readonly Dictionary<string, string> Tabs = new()
     {
-        public long OperationId { get; set; }
-        public string OperationNumber { get; set; } = "";
-        public string CustomerName { get; set; } = "";
-        public string Route { get; set; } = "";
-        public decimal RevenueNet { get; set; }
-    }
+        ["all"] = "الكل", ["Planned"] = "مخططة", ["Assigned"] = "متعين",
+        ["Started"] = "في الطريق", ["Completed"] = "خلصت", ["Cancelled"] = "ملغاة"
+    };
 
-    public class OpRow
-    {
-        public long OperationId { get; set; }
-        public string OperationNumber { get; set; } = "";
-        public string? PickupAt { get; set; }
-        public string? DeliveryAt { get; set; }
-    }
+    private List<Item> _items = new();
+    private bool _loading; private string _search = ""; private string _tab = "all";
 
-    public class AllocRow
-    {
-        public long OperationId { get; set; }
-        public string OperationNumber { get; set; } = "";
-        public decimal Revenue { get; set; }
-        public decimal Percent { get; set; }
-        public decimal Amount { get; set; }
-    }
+    private long? _confirmId;
 
-    public class Form
-    {
-        public int DriverId { get; set; }
-        public int VehicleId { get; set; }
-        public int? TrailerId { get; set; }
-        public int? TripTypeId { get; set; }
-        public string? PlannedStartAt { get; set; }
-        public string? Notes { get; set; }
-    }
+    private long? _startFor; private string? _startAt; private string? _startOdo;
+    private long? _endFor;   private string? _endAt;   private string? _endOdo;
 
-    public class OpDto
+    public class Item
     {
-        public long OperationId { get; set; }
-        public string OperationNumber { get; set; } = "";
-        public string CustomerName { get; set; } = "";
-        public string Route { get; set; } = "";
-        public decimal RevenueNet { get; set; }
-        public int SequenceNo { get; set; }
-        public string? PickupAt { get; set; }
-        public string? DeliveryAt { get; set; }
-    }
-
-    public class AllocDto
-    {
-        public long OperationId { get; set; }
-        public string OperationNumber { get; set; } = "";
-        public decimal AllocationPercent { get; set; }
-        public decimal AllocatedAmount { get; set; }
-        public decimal RevenueNet { get; set; }
-    }
-
-    public class DetailTrip
-    {
+        public long TripId { get; set; }
         public string TripNumber { get; set; } = "";
-        public int DriverId { get; set; }
-        public int VehicleId { get; set; }
-        public int? TrailerId { get; set; }
-        public int? TripTypeId { get; set; }
-        public string? PlannedStartAt { get; set; }
-        public string? Notes { get; set; }
-        public string Status { get; set; } = "Planned";
+        public string DriverName { get; set; } = "";
+        public string VehiclePlate { get; set; } = "";
+        public string? TrailerPlate { get; set; }
+        public int OperationsCount { get; set; }
         public decimal DirectCost { get; set; }
-    }
-
-    public class DetailResponse
-    {
-        public DetailTrip Trip { get; set; } = new();
-        public List<OpDto> Operations { get; set; } = new();
-        public List<AllocDto> Allocations { get; set; } = new();
+        public decimal AllocatedCost { get; set; }
+        public string Status { get; set; } = "";
+        public DateTime? PlannedStartAt { get; set; }
+        public DateTime? ActualStartAt { get; set; }
+        public DateTime? ActualEndAt { get; set; }
     }
 
     private static string StatusAr(string s) => s switch
@@ -326,173 +253,111 @@
         "Completed" => "خلصت", "Cancelled" => "ملغاة", _ => s
     };
 
-    private decimal TotalRevenue =>
-        _ops.Sum(o => _available.FirstOrDefault(a => a.OperationId == o.OperationId)?.RevenueNet ?? 0m);
+    private static string ChipClass(string s) => s switch
+    {
+        "Planned" => "fc-chip-gray", "Assigned" => "fc-chip-blue",
+        "Started" => "fc-chip-warn", "Completed" => "fc-chip-ok",
+        "Cancelled" => "fc-chip-bad", _ => "fc-chip-gray"
+    };
+
+    private static string Money(decimal v) => v.ToString("N0");
+
+    private IEnumerable<Item> Filtered => _items.Where(t =>
+        (_tab == "all" || t.Status == _tab) &&
+        (string.IsNullOrWhiteSpace(_search) ||
+         t.TripNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         t.DriverName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         t.VehiclePlate.Contains(_search, StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>🔎 لما تيجي من البحث العام: <c>/customers?focus=CUST-001</c> — بنفلتر عليه.</summary>
+    [SupplyParameterFromQuery(Name = "focus")] public string? Focus { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        if (!string.IsNullOrWhiteSpace(Focus)) _search = Focus.Trim();
         _user = await Auth.GetUserAsync();
-        _id = Id;
-        if (!CanSave) return;
+        if (CanView) await LoadAsync();
+    }
 
+    private async Task Reload() { await LoadAsync(); }
+
+    private void SetTab(string t) { _tab = t; _confirmId = null; }
+
+    private async Task LoadAsync()
+    {
         _loading = true;
-        try
-        {
-            _drivers   = await SafeGet("api/options/drivers");
-            _vehicles  = await SafeGet("api/options/vehicles");
-            _trailers  = await SafeGet("api/options/trailers");
-            _tripTypes = await SafeGet("api/options/trip-types");
-
-            if (_id is not null)
-            {
-                _available = await SafeAvail($"api/trips/available-operations?exceptTripId={_id}");
-                await LoadTripAsync(_id.Value);
-            }
-            else
-            {
-                _available = await SafeAvail("api/trips/available-operations");
-            }
-        }
-        catch (Exception ex) { _msg = "فشل التحميل: " + ex.Message; _ok = false; }
+        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/trips?take=300") ?? new(); }
+        catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
         finally { _loading = false; }
     }
 
-    private async Task<List<Opt>> SafeGet(string url)
+    private void GoNew() => Nav.NavigateTo("/trips/new");
+    private void GoEdit(Item t) => Nav.NavigateTo($"/trips/new/{t.TripId}");
+
+    private void Start(Item t)
     {
-        try { return await Http.GetFromJsonAsync<List<Opt>>(url) ?? new(); }
-        catch { return new(); }
+        _startFor = t.TripId;
+        _startAt = (t.PlannedStartAt ?? DateTime.Now).ToString("yyyy-MM-ddTHH:mm");
+        _startOdo = null;
     }
 
-    private async Task<List<Avail>> SafeAvail(string url)
+    private void Complete(Item t)
     {
-        try { return await Http.GetFromJsonAsync<List<Avail>>(url) ?? new(); }
-        catch { return new(); }
+        _endFor = t.TripId;
+        _endAt = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
+        _endOdo = null;
     }
 
-    private async Task LoadTripAsync(long id)
+    private async Task ConfirmStart()
     {
-        var d = await Http.GetFromJsonAsync<DetailResponse>($"api/trips/{id}");
-        if (d is null) { _msg = "الرحلة مش موجودة"; _ok = false; return; }
-
-        TripNumber = d.Trip.TripNumber;
-        _status = d.Trip.Status;
-        _locked = _status is "Completed" or "Cancelled";
-        _directCost = d.Trip.DirectCost;
-
-        _f = new Form
-        {
-            DriverId = d.Trip.DriverId, VehicleId = d.Trip.VehicleId,
-            TrailerId = d.Trip.TrailerId, TripTypeId = d.Trip.TripTypeId,
-            PlannedStartAt = d.Trip.PlannedStartAt, Notes = d.Trip.Notes
-        };
-
-        _ops = d.Operations.Select(o => new OpRow
-        {
-            OperationId = o.OperationId, OperationNumber = o.OperationNumber,
-            PickupAt = o.PickupAt, DeliveryAt = o.DeliveryAt
-        }).ToList();
-
-        // عمليات الرحلة نفسها مش في قائمة "المتاح" — ضيفها عشان الدروبداون يعرض اسمها
-        foreach (var o in d.Operations)
-        {
-            if (_available.Any(a => a.OperationId == o.OperationId)) continue;
-            _available.Add(new Avail
-            {
-                OperationId = o.OperationId, OperationNumber = o.OperationNumber,
-                CustomerName = o.CustomerName, Route = o.Route, RevenueNet = o.RevenueNet
-            });
-        }
-
-        _allocRows = d.Allocations.Select(a => new AllocRow
-        {
-            OperationId = a.OperationId, OperationNumber = a.OperationNumber,
-            Revenue = a.RevenueNet, Percent = a.AllocationPercent, Amount = a.AllocatedAmount
-        }).ToList();
-
-        // لو مافيش توزيع لسه، ابنى الصفوف من عمليات الرحلة
-        if (_allocRows.Count == 0)
-        {
-            _allocRows = _ops.Select(o =>
-            {
-                var av = _available.FirstOrDefault(a => a.OperationId == o.OperationId);
-                return new AllocRow
-                {
-                    OperationId = o.OperationId,
-                    OperationNumber = av?.OperationNumber ?? o.OperationNumber,
-                    Revenue = av?.RevenueNet ?? 0m
-                };
-            }).ToList();
-        }
-    }
-
-    private void AddOp() => _ops.Add(new OpRow());
-
-    private void GoBack() => Nav.NavigateTo("/trips");
-
-    private async Task SaveAsync()
-    {
-        _msg = null;
-        if (_f.DriverId <= 0) { _ok = false; _msg = "لازم تختار السائق"; return; }
-        if (_f.VehicleId <= 0) { _ok = false; _msg = "لازم تختار العربية"; return; }
-
-        var ops = _ops.Where(o => o.OperationId > 0).ToList();
-        if (_id is not null && ops.Count == 0)
-        { _ok = false; _msg = "الرحلة لازم يكون عليها عملية واحدة على الأقل"; return; }
-
-        var payload = new
-        {
-            driverId    = _f.DriverId,
-            vehicleId   = _f.VehicleId,
-            trailerId   = _f.TrailerId,
-            tripTypeId  = _f.TripTypeId,
-            plannedStartAt = _f.PlannedStartAt,
-            notes       = _f.Notes,
-            operations  = ops.Select((o, i) => new
-            {
-                operationId = o.OperationId, sequenceNo = i + 1,
-                pickupAt = o.PickupAt, deliveryAt = o.DeliveryAt, notes = (string?)null
-            })
-        };
-
-        _saving = true;
+        var id = _startFor; _startFor = null;
+        if (id is null) return;
         try
         {
-            var res = _id is null
-                ? await Http.PostAsJsonAsync("api/trips", payload)
-                : await Http.PutAsJsonAsync($"api/trips/{_id}", payload);
-
-            var msg = await MsgOf(res);
-            if (res.IsSuccessStatusCode)
-            {
-                Snackbar.Add(msg, Severity.Success);
-                if (_id is null)
-                {
-                    // فاضل على الصفحة — عشان المستخدم يوزّع تكلفة الرحلة
-                    var body = await res.Content.ReadAsStringAsync();
-                    var json = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(body);
-                    var newId = json.TryGetProperty("id", out var idEl) ? idEl.GetInt64() : (long?)null;
-                    Nav.NavigateTo(newId is null ? "/trips" : $"/trips/new/{newId}");
-                }
-                else await LoadTripAsync(_id.Value);
-            }
-            else { _ok = false; _msg = msg; }
+            var res = await Http.PostAsJsonAsync($"api/trips/{id}/start",
+                new { actualStartAt = _startAt, startOdometer = _startOdo });
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) await LoadAsync();
         }
-        catch (Exception ex) { _ok = false; _msg = "مش قادر أوصل للسيرفر: " + ex.Message; }
-        finally { _saving = false; }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
     }
 
-    private async Task DistributeAsync()
+    private async Task ConfirmComplete()
     {
-        _distributing = true;
+        var id = _endFor; _endFor = null;
+        if (id is null) return;
         try
         {
-            var res = await Http.PostAsJsonAsync($"api/trips/{_id}/distribute", new { basis = _basis });
-            var msg = await MsgOf(res);
-            if (res.IsSuccessStatusCode) { Snackbar.Add(msg, Severity.Success); await LoadTripAsync(_id!.Value); }
-            else { _ok = false; _msg = msg; }
+            var res = await Http.PostAsJsonAsync($"api/trips/{id}/complete",
+                new { actualEndAt = _endAt, endOdometer = _endOdo });
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) await LoadAsync();
         }
-        catch (Exception ex) { _ok = false; _msg = "فشل التوزيع: " + ex.Message; }
-        finally { _distributing = false; }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private async Task Post(Item t, string action)
+    {
+        try
+        {
+            var res = await Http.PostAsync($"api/trips/{t.TripId}/{action}", null);
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            _confirmId = null;
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private async Task Delete(Item t)
+    {
+        try
+        {
+            var res = await Http.DeleteAsync($"api/trips/{t.TripId}");
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            _confirmId = null;
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
     }
 
     private static async Task<string> MsgOf(HttpResponseMessage res)
