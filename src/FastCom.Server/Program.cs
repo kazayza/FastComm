@@ -110,6 +110,8 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddMemoryCache();
+builder.Services.AddHttpContextAccessor();                       // 🔐 لأغراض الـ Audit (IUserContext)
+builder.Services.AddScoped<FastCom.Infrastructure.Persistence.IUserContext, FastCom.Server.Auth.HttpUserContext>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
 builder.Services.AddScoped<FastCom.Server.Services.INumberingService, FastCom.Server.Services.NumberingService>();
 builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
