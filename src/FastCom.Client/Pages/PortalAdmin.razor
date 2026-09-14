@@ -1,0 +1,430 @@
+@page "/portal-admin"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>بوابة العملاء — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">الإدارة</div>
+                <h1 class="fc-hero-title">بوابة العملاء</h1>
+                <p class="fc-hero-sub">روابط مؤقّتة يشوف بيها العميل فواتيره وكشف حسابه من غير ما يسجّل دخول</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="LoadTokensAsync" Style="color:#9FB4CC" />
+                @if (Can)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="OpenNew"
+                               Disabled="@(_cust == 0)">رابط جديد</MudButton>
+                }
+            </div>
+        </div>
+
+        <div class="fc-kpis-glass">
+            <div class="fc-kpi"><div class="fc-kpi-lb">الروابط</div><div class="fc-kpi-num">@_tokens.Count</div></div>
+            <div class="fc-kpi"><div class="fc-kpi-lb">نشطة</div><div class="fc-kpi-num">@_tokens.Count(t => t.IsActive)</div></div>
+            <div class="fc-kpi"><div class="fc-kpi-lb">مرات الاستخدام</div>
+                <div class="fc-kpi-num">@_tokens.Sum(t => t.UsedCount)</div></div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!Can)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية إدارة بوابة العملاء.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+
+            @if (_msg is not null)
+            {
+                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                          Class="mb-4">@_msg</MudAlert>
+            }
+
+            @* ── الرابط الجديد (يظهر مرة واحدة بس) ── *@
+            @if (_newLink is not null)
+            {
+                <div class="fc-alert fc-alert-info">
+                    <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Key" /></div>
+                    <div class="fc-alert-body">
+                        <div class="fc-alert-title">الرابط جاهز — انسخه وابعته للعميل</div>
+                        <div class="fc-link-box" @onclick="CopyAsync">
+                            @_newLink
+                            <span class="fc-cell-sub">اضغط للنسخ</span>
+                        </div>
+                        <div style="margin-top:6px">🔴 الرابط ده <b>مش بيتحفظ</b> — بنخزّن البصمة بس.
+                            لو ضاع، اعمل رابط جديد.</div>
+                    </div>
+                </div>
+            }
+
+            <div class="fc-fsec">
+                <div class="fc-fsec-head">
+                    <span class="fc-fsec-n">1</span>
+                    <div>
+                        <div class="fc-fsec-t">روابط العميل</div>
+                        <div class="fc-fsec-d">اختار العميل الأول — الروابط بتظهر له</div>
+                    </div>
+                    <span class="fc-fsec-ic"><MudIcon Icon="@Icons.Material.Filled.Key" Size="Size.Small" /></span>
+                </div>
+
+                <div class="fc-filters">
+                    <select class="fc-sel" @bind="_cust" style="max-width:340px">
+                        <option value="0">— اختار العميل —</option>
+                        @foreach (var c in _customers) { <option value="@c.Id">@c.Label</option> }
+                    </select>
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                               OnClick="LoadTokensAsync" Disabled="@(_cust == 0)">عرض الروابط</MudButton>
+                </div>
+
+                <div class="fc-table-wrap"><table class="fc-table">
+                    <thead><tr>
+                        <th>الغرض</th><th>اتعمل</th><th>ينتهي</th>
+                        <th>الاستخدام</th><th>آخر استخدام</th><th>الحالة</th><th style="width:120px"></th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach (var t in _tokens)
+                        {
+                            <tr>
+                                <td class="fc-cell-main">
+                                    @PurposeAr(t.Purpose)
+                                    @if (t.InvoiceId is not null)
+                                    {
+                                        <div class="fc-cell-sub">فاتورة #@t.InvoiceId</div>
+                                    }
+                                </td>
+                                <td class="fc-cell-sub">@t.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>
+                                    @if (t.ExpiresAt is null)
+                                    {
+                                        <span class="fc-cell-sub">مفتوح</span>
+                                    }
+                                    else
+                                    {
+                                        @t.ExpiresAt.Value.ToString("yyyy-MM-dd")
+                                    }
+                                </td>
+                                <td>
+                                    @t.UsedCount
+                                    @if (t.MaxUses is not null)
+                                    {
+                                        <span class="fc-cell-sub"> / @t.MaxUses</span>
+                                    }
+                                </td>
+                                <td class="fc-cell-sub">
+                                    @(t.LastUsedAt is null ? "لم يُستخدم" : t.LastUsedAt.Value.ToString("yyyy-MM-dd HH:mm"))
+                                </td>
+                                <td><span class="fc-chip @ChipCls(t)">@ChipTxt(t)</span></td>
+                                <td>
+                                    <div class="fc-row-actions">
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.FactCheck"
+                                                       Color="Color.Primary" title="سجل الدخول" OnClick="() => ShowLogs(t)" />
+                                        @if (t.IsActive)
+                                        {
+                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Close"
+                                                           Color="Color.Error" title="إبطال" OnClick="() => RevokeAsync(t)" />
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        @if (_tokens.Count == 0)
+                        {
+                            <tr><td colspan="7">
+                                <div class="fc-empty">@(_cust == 0 ? "اختار العميل الأول" : "مافيش روابط للعميل ده")</div>
+                            </td></tr>
+                        }
+                    </tbody>
+                </table></div>
+            </div>
+
+            @* ── سجل الدخول ── *@
+            @if (_logsToken is not null)
+            {
+                <div class="fc-fsec" style="margin-top:26px">
+                    <div class="fc-fsec-head">
+                        <span class="fc-fsec-n">2</span>
+                        <div>
+                            <div class="fc-fsec-t">سجل دخول العميل</div>
+                            <div class="fc-fsec-d">رابط #@_logsToken · آخر 200 حركة</div>
+                        </div>
+                    </div>
+
+                    <div class="fc-table-wrap"><table class="fc-table">
+                        <thead><tr>
+                            <th>الوقت</th><th>الحركة</th><th>العنصر</th><th>IP</th>
+                        </tr></thead>
+                        <tbody>
+                            @foreach (var l in _logs)
+                            {
+                                <tr>
+                                    <td class="fc-cell-sub">@l.AccessedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                    <td>@l.Action</td>
+                                    <td class="fc-cell-sub">
+                                        @(string.IsNullOrWhiteSpace(l.EntityType) ? "—" : $"{l.EntityType} #{l.EntityId}")
+                                    </td>
+                                    <td class="fc-cell-sub">@(l.IpAddress ?? "—")</td>
+                                </tr>
+                            }
+                            @if (_logs.Count == 0)
+                            {
+                                <tr><td colspan="4"><div class="fc-empty">العميل لسه مادخلش بالرابط ده</div></td></tr>
+                            }
+                        </tbody>
+                    </table></div>
+                </div>
+            }
+
+        </div></div>
+    }
+</div>
+
+@* ═══════════ مودال: رابط جديد ═══════════ *@
+@if (_open && Can)
+{
+    <div class="fc-modal-backdrop" @onclick="Close">
+        <div class="fc-modal fc-modal-sm" @onclick:stopPropagation="true">
+            <div class="fc-modal-head">
+                <div>
+                    <div class="fc-modal-title">رابط بوابة جديد</div>
+                    <div class="fc-modal-sub">للعميل: @_custName</div>
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="Close" />
+            </div>
+            <div class="fc-modal-body">
+
+                <div class="fc-alert fc-alert-warn">
+                    <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
+                    <div class="fc-alert-body">
+                        <div class="fc-alert-title">العميل لازم يكون مفعّل البوابة</div>
+                        <div>لو مش مفعّلة، هترفض. فعّلها من بيانات العميل (خانة «البوابة»).</div>
+                    </div>
+                </div>
+
+                <div class="fc-form-grid" style="margin-top:14px">
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">الغرض<i>*</i></div>
+                        <select class="fc-sel fc-sel-lg" @bind="_purpose">
+                            <option value="Portal">البوابة كاملة (فواتير + كشف حساب)</option>
+                            <option value="Statement">كشف الحساب بس</option>
+                            <option value="InvoiceView">فاتورة واحدة بس</option>
+                        </select>
+                    </div>
+                    @if (_purpose == "InvoiceView")
+                    {
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">رقم الفاتورة<i>*</i></div>
+                            <input type="number" min="1" class="fc-sel fc-sel-lg" value="@_invoiceId"
+                                   @onchange="e => _invoiceId = Lng(e.Value)" />
+                        </div>
+                    }
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">صالح لمدة (أيام)</div>
+                        <input type="number" min="1" max="365" class="fc-sel fc-sel-lg" value="@_days"
+                               @onchange="e => _days = (int)Lng(e.Value)" />
+                        <div class="fc-fld-hint">من يوم لـ 365</div>
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">أقصى عدد استخدامات</div>
+                        <input type="number" min="1" max="1000" class="fc-sel fc-sel-lg" value="@_maxUses"
+                               @onchange="e => _maxUses = (int)Lng(e.Value)" />
+                        <div class="fc-fld-hint">فاضي = من غير حد</div>
+                    </div>
+                </div>
+            </div>
+            <div class="fc-modal-foot">
+                <MudButton Variant="Variant.Text" OnClick="Close">إلغاء</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                           StartIcon="@Icons.Material.Filled.Key" OnClick="CreateAsync">إنشاء الرابط</MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private AuthUser? _user;
+    private bool Can => _user?.Can("CUSTOMER.PORTAL_TOKEN") ?? false;
+
+    private List<Opt> _customers = new();
+    private List<Tok> _tokens = new();
+    private List<Log> _logs = new();
+    private int _cust;
+    private long? _logsToken;
+    private string? _newLink;
+
+    private bool _open, _saving;
+    private string? _msg; private bool _ok = true;
+    private string _purpose = "Portal";
+    private long _invoiceId;
+    private int _days = 7;
+    private int _maxUses = 20;
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+
+    /// <summary>مطابق لـ <c>PortalController.TokenRow</c> — 10 حقول.</summary>
+    public class Tok
+    {
+        public long PortalTokenId { get; set; }
+        public string Purpose { get; set; } = "";
+        public long? InvoiceId { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime? ExpiresAt { get; set; }
+        public int? MaxUses { get; set; }
+        public int UsedCount { get; set; }
+        public DateTime? LastUsedAt { get; set; }
+        public bool IsActive { get; set; }
+        public DateTime? RevokedAt { get; set; }
+    }
+
+    /// <summary>مطابق لـ <c>PortalController.LogRow</c> — 5 حقول.</summary>
+    public class Log
+    {
+        public DateTime AccessedAt { get; set; }
+        public string Action { get; set; } = "";
+        public string? EntityType { get; set; }
+        public long? EntityId { get; set; }
+        public string? IpAddress { get; set; }
+    }
+
+    /// <summary>مطابق لـ <c>PortalController.NewToken</c> — 4 حقول.</summary>
+    public class NewTok
+    {
+        public long PortalTokenId { get; set; }
+        public string Token { get; set; } = "";
+        public string Path { get; set; } = "";
+        public DateTime? ExpiresAt { get; set; }
+    }
+
+    private string _custName => _customers.FirstOrDefault(c => c.Id == _cust)?.Label ?? "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (!Can) return;
+        try { _customers = await Http.GetFromJsonAsync<List<Opt>>("api/options/customers") ?? new(); }
+        catch { _customers = new(); }
+    }
+
+    private async Task LoadTokensAsync()
+    {
+        if (_cust == 0) return;
+        try { _tokens = await Http.GetFromJsonAsync<List<Tok>>($"api/portal/tokens?customerId={_cust}") ?? new(); }
+        catch (Exception ex) { _ok = false; _msg = "فشل التحميل: " + ex.Message; }
+    }
+
+    private void OpenNew() { _msg = null; _newLink = null; _open = true; }
+    private void Close() { _open = false; _msg = null; }
+
+    private async Task CreateAsync()
+    {
+        if (_saving) return;
+        if (_cust == 0) { _ok = false; _msg = "اختار العميل"; return; }
+        if (_purpose == "InvoiceView" && _invoiceId <= 0) { _ok = false; _msg = "رقم الفاتورة مطلوب"; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/portal/tokens", new
+            {
+                customerId = _cust,
+                purpose = _purpose,
+                invoiceId = _purpose == "InvoiceView" ? _invoiceId : (long?)null,
+                expiresInDays = _days,
+                maxUses = _maxUses > 0 ? _maxUses : (int?)null
+            });
+
+            if (res.IsSuccessStatusCode)
+            {
+                var nt = await res.Content.ReadFromJsonAsync<NewTok>();
+                _newLink = nt is null ? null : Base() + nt.Path;
+                _msg = "✅ الرابط اتعمل — انسخه دلوقتي، مش هيظهر تاني";
+                _ok = true;
+                _open = false;
+                await LoadTokensAsync();
+            }
+            else
+            {
+                _msg = await MsgOf(res); _ok = false;
+            }
+            Snackbar.Add(_msg ?? "", _ok ? Severity.Success : Severity.Error);
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task RevokeAsync(Tok t)
+    {
+        try
+        {
+            var res = await Http.PostAsync($"api/portal/tokens/{t.PortalTokenId}/revoke", null);
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            Snackbar.Add(_msg, _ok ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) await LoadTokensAsync();
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+    }
+
+    private async Task ShowLogs(Tok t)
+    {
+        _logsToken = t.PortalTokenId;
+        try { _logs = await Http.GetFromJsonAsync<List<Log>>($"api/portal/tokens/{t.PortalTokenId}/logs") ?? new(); }
+        catch { _logs = new(); }
+    }
+
+    private async Task CopyAsync()
+    {
+        if (_newLink is null) return;
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", _newLink); }
+        catch { }
+        Snackbar.Add("اتنسخ", Severity.Success);
+    }
+
+    /* 🔴 أي `"` جوه attribute = RZ1010 — فالـ class من helper */
+    private static string ChipCls(Tok t)
+    {
+        if (!t.IsActive) return "fc-chip-gray";
+        if (t.ExpiresAt is not null && t.ExpiresAt < DateTime.UtcNow) return "fc-chip-bad";
+        return "fc-chip-ok";
+    }
+
+    private static string ChipTxt(Tok t)
+    {
+        if (!t.IsActive) return "مُبطل";
+        if (t.ExpiresAt is not null && t.ExpiresAt < DateTime.UtcNow) return "منتهي";
+        if (t.MaxUses is not null && t.UsedCount >= t.MaxUses) return "وصل للحد";
+        return "نشط";
+    }
+
+    private static string PurposeAr(string p) => p switch
+    {
+        "Portal" => "البوابة كاملة", "Statement" => "كشف الحساب",
+        "InvoiceView" => "فاتورة واحدة", _ => p
+    };
+
+    private string Base() => Nav.BaseUri.TrimEnd('/');
+
+    private static long Lng(object? v) => long.TryParse(v?.ToString(), out var n) && n > 0 ? n : 0;
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "✅ تم" : "حصل خطأ — حاول تاني"; }
+    }
+}

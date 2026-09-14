@@ -1,0 +1,296 @@
+@page "/employees"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>الموظفين — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">البيانات الأساسية · الأطراف</div>
+                <h1 class="fc-hero-title">الموظفين</h1>
+                <p class="fc-hero-sub">سجل العاملين بالشركة — الأساس لعهدة الموظفين وربط السائقين الداخليين</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                @if (CanCreate)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="GoNew">موظف جديد</MudButton>
+                }
+            </div>
+        </div>
+        @if (CanView)
+        {
+            <div class="fc-kpis fc-kpis-glass">
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.PeopleAlt" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي الموظفين</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(e => e.EmploymentStatus == "Active")</div><div class="fc-kpi-lb">نشط</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.Event" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(e => e.EmploymentStatus == "OnLeave")</div><div class="fc-kpi-lb">في إجازة</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(e => e.EmploymentStatus == "Suspended")</div><div class="fc-kpi-lb">موقوف</div></div></div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanView)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض الموظفين.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+            <div class="fc-toolbar">
+                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
+                              Placeholder="ابحث بالاسم أو الكود أو الموبايل..." Variant="Variant.Outlined" Dense="true"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Class="fc-search-box" Immediate="true" />
+                <select class="fc-sel" style="max-width:150px" @bind="_fStatus">
+                    <option value="all">كل الحالات</option>
+                    <option value="Active">نشط</option>
+                    <option value="OnLeave">في إجازة</option>
+                    <option value="Suspended">موقوف</option>
+                    <option value="Terminated">منتهي الخدمة</option>
+                </select>
+                <select class="fc-sel" style="max-width:170px" @bind="_fDept">
+                    <option value="0">كل الأقسام</option>
+                    @foreach (var d in _depts) { <option value="@d.Id">@d.Label</option> }
+                </select>
+                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+            }
+            else
+            {
+                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
+                    <thead><tr>
+                        <th>الكود</th><th>الاسم</th><th>القسم</th><th>المسمى الوظيفي</th>
+                        <th>الموبايل</th><th>تاريخ التعيين</th><th>الحالة</th>
+                        @if (CanEdit || CanDelete) { <th style="width:170px; text-align:left">إجراءات</th> }
+                    </tr></thead>
+                    <tbody>
+                        @if (Filtered.Count() == 0)
+                        {
+                            <tr><td colspan="@ColCount"><div class="fc-empty">
+                                <div>مافيش موظفين في الفلتر ده</div>
+                                <div class="fc-cell-sub">ضيف أول موظف عشان تقدر تفتح عهدة لموظف أو تربط سائق داخلي</div>
+                            </div></td></tr>
+                        }
+                        @foreach (var e in Filtered)
+                        {
+                            <tr>
+                                <td><span class="fc-role-chip">@e.EmployeeCode</span></td>
+                                <td><div class="fc-cell-main">@e.FullNameAr</div></td>
+                                <td class="fc-cell-sub">@(e.DepartmentName ?? "—")</td>
+                                <td class="fc-cell-sub">@(e.JobTitleName ?? "—")</td>
+                                <td class="fc-cell-sub">@(e.Mobile ?? "—")</td>
+                                <td class="fc-cell-sub">@(e.HireDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+                                <td><span class="@StatusCls(e.EmploymentStatus)"><i></i>@StatusName(e.EmploymentStatus)</span></td>
+                                @if (CanEdit || CanDelete)
+                                {
+                                    <td style="text-align:left">
+                                        @if (CanEdit)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                                           title="تعديل" OnClick="() => GoEdit(e)" />
+                                        }
+                                        @if (CanDelete && e.EmploymentStatus != "Terminated")
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small"
+                                                           title="إنهاء خدمة" Color="Color.Error" OnClick="() => _confirmId = e.EmployeeId" />
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table></div>
+            }
+        </div></div>
+    }
+
+    @* ═══════════ تأكيد إنهاء الخدمة ═══════════ *@
+    @if (_confirmId is not null)
+    {
+        var target = _items.FirstOrDefault(x => x.EmployeeId == _confirmId);
+        <div class="fc-modal-backdrop" @onclick="() => _confirmId = null">
+            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation>
+                <div class="fc-modal-head">
+                    <div><div class="fc-modal-title">إنهاء خدمة</div>
+                        <div class="fc-modal-sub">الموظف مش بيتحذف — حالته بس بتتحول لـ«منتهي الخدمة»</div></div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _confirmId = null" />
+                </div>
+                <div class="fc-modal-body">
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+                        @(target is null ? "—" : $"هتنهي خدمة «{target.FullNameAr}» ({target.EmployeeCode}). تكمل؟")
+                    </MudAlert>
+                </div>
+                <div class="fc-modal-foot">
+                    <MudButton Variant="Variant.Outlined" OnClick="() => _confirmId = null">إلغاء</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Error"
+                               OnClick="() => DeleteAsync(_confirmId!.Value)">تأكيد</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ═══════════ مودال: إضافة / تعديل ═══════════ *@
+</div>
+
+@code {
+    private AuthUser? _user;
+    private bool CanView   => _user?.Can("EMPLOYEE.VIEW")   ?? false;
+    private bool CanCreate => _user?.Can("EMPLOYEE.CREATE") ?? false;
+    private bool CanEdit   => _user?.Can("EMPLOYEE.EDIT")   ?? false;
+    private bool CanDelete => _user?.Can("EMPLOYEE.DELETE") ?? false;
+
+    private List<Item> _items = new();
+    private List<Opt> _depts = new();
+    private List<Opt> _titles = new();
+
+    private bool _loading;
+    private string _search = "";
+    private string _fStatus = "all";
+    private int _fDept;
+
+    private int? _confirmId;
+
+    /// <summary>عدد أعمدة الجدول — عمود الإجراءات بيظهر حسب الصلاحية.</summary>
+    private int ColCount => (CanEdit || CanDelete) ? 8 : 7;
+
+    // ═══════════════ Helpers ═══════════════
+
+    private static string StatusName(string s) => s switch
+    {
+        "Active"     => "نشط",
+        "OnLeave"    => "في إجازة",
+        "Suspended"  => "موقوف",
+        "Terminated" => "منتهي الخدمة",
+        _            => s
+    };
+
+    private static string StatusCls(string s) => s switch
+    {
+        "Active"     => "fc-chip fc-chip-ok",
+        "OnLeave"    => "fc-chip fc-chip-gold",
+        "Suspended"  => "fc-chip fc-chip-bad",
+        "Terminated" => "fc-chip fc-chip-gray",
+        _            => "fc-chip fc-chip-gray"
+    };
+
+    private IEnumerable<Item> Filtered
+    {
+        get
+        {
+            IEnumerable<Item> q = _items;
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                var s = _search.Trim();
+                q = q.Where(e => e.FullNameAr.Contains(s, StringComparison.OrdinalIgnoreCase)
+                              || e.EmployeeCode.Contains(s, StringComparison.OrdinalIgnoreCase)
+                              || (e.Mobile != null && e.Mobile.Contains(s, StringComparison.OrdinalIgnoreCase)));
+            }
+            if (_fDept > 0)
+            {
+                var name = _depts.FirstOrDefault(d => d.Id == _fDept)?.Label;
+                if (name is not null) q = q.Where(e => e.DepartmentName == name);
+            }
+            return q;
+        }
+    }
+
+    // ═══════════════ Lifecycle ═══════════════
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (CanView) await LoadAsync();
+    }
+
+    private async Task Reload() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var url = "api/employees?take=500";
+            if (!string.IsNullOrWhiteSpace(_fStatus) && _fStatus != "all") url += $"&status={_fStatus}";
+            if (_fDept > 0) url += $"&departmentId={_fDept}";
+
+            _items = await Http.GetFromJsonAsync<List<Item>>(url) ?? new();
+
+            if (_depts.Count == 0)  _depts  = await SafeOpts("api/options/departments");
+            if (_titles.Count == 0) _titles = await SafeOpts("api/options/job-titles");
+        }
+        catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
+        finally { _loading = false; }
+    }
+
+    private async Task<List<Opt>> SafeOpts(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<Opt>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    // ═══════════════ CRUD ═══════════════
+
+
+    private async Task DeleteAsync(int id)
+    {
+        try
+        {
+            var res = await Http.DeleteAsync($"api/employees/{id}");
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            _confirmId = null;
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+    }
+
+    /* 🔴 الفورم بقى شاشة مستقلة — `/employees/new` */
+    private void GoNew() => Nav.NavigateTo("/employees/new");
+    private void GoEdit(Item e) => Nav.NavigateTo($"/employees/new/{e.EmployeeId}");
+
+    // ═══════════════ DTOs — مطابقة للسيرفر بالظبط ═══════════════
+
+    public record Opt(int Id, string Label);
+
+    /// <summary>مطابق لـ <c>EmployeesController.ListItem</c> (8 حقول).</summary>
+    public class Item
+    {
+        public int EmployeeId { get; set; }
+        public string EmployeeCode { get; set; } = "";
+        public string FullNameAr { get; set; } = "";
+        public string? DepartmentName { get; set; }
+        public string? JobTitleName { get; set; }
+        public string? Mobile { get; set; }
+        public DateOnly? HireDate { get; set; }
+        public string EmploymentStatus { get; set; } = "";
+    }
+
+}

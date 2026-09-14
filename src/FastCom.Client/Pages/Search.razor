@@ -1,72 +1,319 @@
 @page "/search"
-@* 🔴 البحث محتاج توكن — والـ API بقى [Authorize] في Step 3.5 *@
 @attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Models
+@inject HttpClient Http
 @inject NavigationManager Nav
+@inject ISnackbar Snackbar
 
-<PageTitle>نتيجة البحث</PageTitle>
+<PageTitle>البحث العام — فاست كوم</PageTitle>
 
-<div class="fc-container">
-<MudText Typo="Typo.h4">نتيجة البحث</MudText>
-<MudText Typo="Typo.body1" Class="muted mt-1">
-    اخترت عنصرًا من البحث العام.
-</MudText>
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">الرئيسية</div>
+                <h1 class="fc-hero-title">البحث العام</h1>
+                <p class="fc-hero-sub">ابحث برقم أو اسم في كل الوحدات اللي ليك صلاحية عليها</p>
+            </div>
+        </div>
 
-<MudPaper Class="pa-8 mt-6 text-center" Elevation="0" Outlined="true">
+        <div class="fc-kpis-glass">
+            <div class="fc-kpi"><div class="fc-kpi-lb">نتائج</div><div class="fc-kpi-num">@_res.Count</div></div>
+            <div class="fc-kpi"><div class="fc-kpi-lb">وحدات بتدور فيها</div><div class="fc-kpi-num">@_searchable.Count</div></div>
+            <div class="fc-kpi"><div class="fc-kpi-lb">محجوبة عنك</div><div class="fc-kpi-num">@_denied.Count</div></div>
+        </div>
+    </div>
+</div>
 
-    <MudIcon Icon="@Icons.Material.Filled.Construction"
-             Size="Size.Large" Color="Color.Warning" />
+<div class="fc-page">
+    <div class="fc-overlap"><div class="fc-card">
 
-    <MudText Typo="Typo.h5" Class="mt-4">الوحدة دي لسه ما اتبنتش</MudText>
+        @* ══════════ صندوق البحث ══════════ *@
+        <div class="fc-fsec">
+            <div class="fc-fsec-head">
+                <span class="fc-fsec-n">1</span>
+                <div>
+                    <div class="fc-fsec-t">ابحث</div>
+                    <div class="fc-fsec-d">اكتب رقم أو جزء من الاسم — البحث بيشتغل على كل الوحدات مرة واحدة</div>
+                </div>
+                <span class="fc-fsec-ic"><MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" /></span>
+            </div>
 
-    <table class="fc-table mt-6" style="max-width:520px; margin-inline:auto;">
-        <tbody>
-            <tr><th>النوع</th><td><strong>@_entity</strong></td></tr>
-            <tr><th>الرقم التعريفي</th><td>@_id</td></tr>
-            <tr><th>هيفتح على</th><td><code>@_target</code></td></tr>
-            <tr><th>هتتوصّل في</th><td>@_step</td></tr>
-        </tbody>
-    </table>
+            <div class="fc-search-bar">
+                <input class="fc-search-box" placeholder="مثال: OP-2026-000042 · أحمد · INV-2026…"
+                       value="@_q" @oninput="OnInput" autofocus />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy"
+                           StartIcon="@Icons.Material.Filled.Search" OnClick="() => RunAsync(_q)">بحث</MudButton>
+                @if (!string.IsNullOrWhiteSpace(_q))
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" title="مسح" OnClick="Clear" />
+                }
+            </div>
 
-    <MudText Typo="Typo.body2" Class="muted mt-6">
-        البحث العام شغال على قاعدة البيانات فعلًا — بس صفحات العرض لسه جاية
-        مع كل وحدة في خطواتها.
-    </MudText>
+            @if (_denied.Count > 0)
+            {
+                <div class="fc-alert fc-alert-warn" style="margin-top:14px">
+                    <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Lock" /></div>
+                    <div class="fc-alert-body">
+                        <div class="fc-alert-title">وحدات مش بتدور فيها</div>
+                        <div>ماعندكش صلاحية على: <b>@string.Join(" · ", _denied)</b></div>
+                    </div>
+                </div>
+            }
 
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-6"
-               StartIcon="@Icons.Material.Filled.Home"
-               OnClick="@(() => Nav.NavigateTo("/"))">
-        الرجوع للرئيسية
-    </MudButton>
+            @if (_err is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mt-4">@_err</MudAlert>
+            }
+        </div>
 
-</MudPaper>
+        @* ══════════ النتائج ══════════ *@
+        @if (_searched)
+        {
+            <div class="fc-fsec" style="margin-top:26px">
+                <div class="fc-fsec-head">
+                    <span class="fc-fsec-n">2</span>
+                    <div>
+                        <div class="fc-fsec-t">النتائج</div>
+                        <div class="fc-fsec-d">
+                            @if (_busy)
+                            {
+                                <text>جارٍ البحث…</text>
+                            }
+                            else
+                            {
+                                <text>@_res.Count نتيجة عن «@_lastQ»</text>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                @if (_busy)
+                {
+                    <div class="fc-loading"><MudProgressCircular Indeterminate="true" Size="Size.Small" /> جارٍ البحث…</div>
+                }
+                else if (_res.Count == 0)
+                {
+                    <div class="fc-empty">مافيش نتائج مطابقة — جرّب رقم تاني أو جزء أقصر من الاسم</div>
+                }
+                else
+                {
+                    @foreach (var g in Grouped)
+                    {
+                        <div class="fc-search-grp">
+                            <div class="fc-search-grp-t">
+                                <MudIcon Icon="@IconOf(g.Key)" />
+                                <span>@g.Key</span>
+                                <span class="fc-search-grp-n">@g.Count()</span>
+                            </div>
+
+                            <div class="fc-table-wrap"><table class="fc-table">
+                                <thead><tr>
+                                    <th>الرقم</th><th>الاسم</th><th>تفاصيل</th><th style="width:60px"></th>
+                                </tr></thead>
+                                <tbody>
+                                    @foreach (var r in g)
+                                    {
+                                        <tr>
+                                            <td><span class="fc-role-chip">@r.Code</span></td>
+                                            <td class="fc-cell-main">
+                                                @r.Title
+                                                @if (!string.IsNullOrWhiteSpace(r.Badge))
+                                                {
+                                                    <span class="fc-chip fc-chip-blue">@r.Badge</span>
+                                                }
+                                            </td>
+                                            <td class="fc-cell-sub">@(string.IsNullOrWhiteSpace(r.Subtitle) ? "—" : r.Subtitle)</td>
+                                            <td>
+                                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
+                                                               Color="Color.Primary" title="افتح" OnClick="() => Open(r)" />
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table></div>
+                        </div>
+                    }
+                }
+            </div>
+        }
+        else
+        {
+            <div class="fc-empty" style="margin-top:26px">
+                اكتب في الصندوق فوق وابدأ البحث
+            </div>
+        }
+
+    </div></div>
 </div>
 
 @code {
-    [SupplyParameterFromQuery(Name = "entity")] public string? Entity { get; set; }
-    [SupplyParameterFromQuery(Name = "id")]     public string? Id     { get; set; }
-    [SupplyParameterFromQuery(Name = "from")]   public string? From   { get; set; }
+    /* 🔴 `[SupplyParameterFromQuery]` — عشان `/search?q=...` يشتغل من أي مكان */
+    [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
 
-    private string _entity = "";
-    private string _id     = "";
-    private string _target = "";
-    private string _step   = "";
+    /* 🔴 الروابط القديمة `/search?entity=X&id=Y&from=CODE` — بنحوّلها لصفحة الوحدة */
+    [SupplyParameterFromQuery(Name = "entity")] public string? LegacyEntity { get; set; }
+    [SupplyParameterFromQuery(Name = "id")]     public string? LegacyId     { get; set; }
+    [SupplyParameterFromQuery(Name = "from")]   public string? LegacyFrom   { get; set; }
 
-    private static readonly Dictionary<string, string> Steps = new(StringComparer.Ordinal)
+    private string _q = "";
+    private string _lastQ = "";
+    private bool _busy, _searched;
+    private string? _err;
+
+    private List<SearchResult> _res = new();
+    private List<string> _searchable = new();
+    private List<string> _denied = new();
+
+    /// <summary>مطابق لـ <c>SearchController.Modules</c> — للترتيب والأيقونات.</summary>
+    private static readonly string[] Order =
+        { "عميل", "حجز", "عملية", "رحلة", "حاوية", "فاتورة", "سيارة" };
+
+    /* 🔴 نفس خريطة GlobalSearch — عشان النتيجة تفتح صح */
+    private static readonly Dictionary<string, string> Routes = new(StringComparer.Ordinal)
     {
-        ["عميل"]   = "Step 5 — البيانات الأساسية",
-        ["حجز"]    = "Step 6 — الحجوزات",
-        ["عملية"]  = "Step 7 — العمليات والرحلات",
-        ["رحلة"]   = "Step 7 — العمليات والرحلات",
-        ["حاوية"]  = "Step 7 — العمليات والرحلات",
-        ["فاتورة"] = "Step 9 — الفواتير والتحصيل",
-        ["سيارة"]  = "Step 5 — البيانات الأساسية"
+        ["عميل"]   = "/customers",
+        ["حجز"]    = "/bookings",
+        ["عملية"]  = "/operations",
+        ["فاتورة"] = "/invoices",
+        ["رحلة"]   = "/trips",
+        ["حاوية"]  = "/containers",
+        ["سيارة"]  = "/vehicles",
+        ["سائق"]   = "/drivers",
+        ["مورد"]   = "/suppliers",
+        ["مصروف"]  = "/expenses",
+        ["عهدة"]   = "/custodies",
     };
 
-    protected override void OnInitialized()
+    /// <summary>مرتّبة حسب <see cref="Order"/> — الباقي في الآخر أبجديًا.</summary>
+    private IEnumerable<IGrouping<string, SearchResult>> Grouped =>
+        _res.GroupBy(r => r.Entity)
+            .OrderBy(g =>
+            {
+                var i = Array.IndexOf(Order, g.Key);
+                return i < 0 ? int.MaxValue : i;
+            })
+            .ThenBy(g => g.Key);
+
+    protected override async Task OnInitializedAsync()
     {
-        _entity = Entity ?? "—";
-        _id     = Id ?? "—";
-        _target = From ?? "—";
-        _step   = Steps.TryGetValue(_entity, out var s) ? s : "—";
+        /* ── الروابط القديمة: نحوّلها لصفحة الوحدة على طول ── */
+        if (!string.IsNullOrWhiteSpace(LegacyEntity))
+        {
+            if (Routes.TryGetValue(LegacyEntity, out var route))
+            {
+                var focus = string.IsNullOrWhiteSpace(LegacyFrom) ? "" : $"?focus={Uri.EscapeDataString(LegacyFrom)}";
+                Nav.NavigateTo(route + focus, replace: true);
+                return;
+            }
+            /* وحدة ملهاش صفحة — نعرض الرسالة القديمة */
+            _q = LegacyFrom ?? "";
+            _lastQ = _q;
+            _searched = true;
+            _err = $"مافيش صفحة لوحدة «{LegacyEntity}» لسه.";
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(Q))
+        {
+            _q = Q;
+            await RunAsync(_q);
+        }
     }
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        _q = e.Value?.ToString() ?? "";
+        /* 🔴 بحث مع كل ضغطة (مافيش debounce) — الكنترولر بياخد `take=50`
+              فالاستعلام خفيف. لو حسيت إنه تقيل، نضيف debounce. */
+        if (_q.Trim().Length >= 2) await RunAsync(_q);
+        else if (_q.Trim().Length == 0) { _res = new(); _searched = false; }
+    }
+
+
+
+    private async Task RunAsync(string term)
+    {
+        var t = term.Trim();
+        if (t.Length < 2)
+        {
+            _err = "اكتب حرفين على الأقل";
+            return;
+        }
+
+        _busy = true; _err = null; _searched = true; _lastQ = t;
+        try
+        {
+            var url = $"api/search?q={Uri.EscapeDataString(t)}&take=50";
+            var res = await Http.GetAsync(url);
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+            {
+                _err = $"السيرفر رجّع {(int)res.StatusCode}";
+                _res = new();
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(body) || body.TrimStart().StartsWith("<"))
+            {
+                _err = "السيرفر رجّع صفحة HTML مش بيانات — اتأكد إن السيرفر شغال ومتبني.";
+                _res = new();
+                return;
+            }
+
+            var r = System.Text.Json.JsonSerializer.Deserialize<SearchResponse>(body, JsonOpts);
+            _res        = r?.Results ?? new();
+            _searchable = r?.SearchableIn ?? new();
+            _denied     = r?.DeniedEntities ?? new();
+
+            if (!string.IsNullOrWhiteSpace(r?.Error)) _err = r!.Error;
+        }
+        catch (Exception ex)
+        {
+            _err = "فشل البحث: " + ex.Message;
+            _res = new();
+        }
+        finally { _busy = false; }
+    }
+
+    private void Clear()
+    {
+        _q = ""; _lastQ = ""; _res = new(); _searched = false; _err = null;
+    }
+
+    /// <summary>🎯 يفتح صفحة الوحدة ويفلتر على الرقم — نفس سلوك GlobalSearch.</summary>
+    private void Open(SearchResult r)
+    {
+        if (Routes.TryGetValue(r.Entity, out var route))
+        {
+            Nav.NavigateTo($"{route}?focus={Uri.EscapeDataString(r.Code)}");
+        }
+        else
+        {
+            Snackbar.Add($"مافيش صفحة لوحدة «{r.Entity}» لسه", Severity.Warning);
+        }
+    }
+
+    /* 🔴 أي `"` جوه attribute = RZ1010 — فالأيقونة من helper */
+    private static string IconOf(string entity) => entity switch
+    {
+        "عميل"   => Icons.Material.Filled.Business,
+        "حجز"    => Icons.Material.Filled.BookOnline,
+        "عملية"  => Icons.Material.Filled.LocalShipping,
+        "رحلة"   => Icons.Material.Filled.AirportShuttle,
+        "حاوية"  => Icons.Material.Filled.Storage,
+        "فاتورة" => Icons.Material.Filled.ReceiptLong,
+        "سيارة"  => Icons.Material.Filled.DirectionsCar,
+        "سائق"   => Icons.Material.Filled.Badge,
+        "مورد"   => Icons.Material.Filled.LocalOffer,
+        "مصروف"  => Icons.Material.Filled.AccountBalanceWallet,
+        "عهدة"   => Icons.Material.Filled.Savings,
+        _        => Icons.Material.Filled.Search
+    };
+
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOpts = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 }

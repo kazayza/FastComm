@@ -20,11 +20,12 @@ namespace FastCom.Server.Controllers.Operations;
 public class OperationsController : ControllerBase
 {
     private readonly FastComDbContext _db;
+    private readonly IAuditService _audit;
     private readonly INumberingService _numbers;
     private readonly IPermissionService _perms;
 
-    public OperationsController(FastComDbContext db, INumberingService numbers, IPermissionService perms)
-    { _db = db; _numbers = numbers; _perms = perms; }
+    public OperationsController(FastComDbContext db, INumberingService numbers, IPermissionService perms, IAuditService audit)
+    { _db = db; _audit = audit; _numbers = numbers; _perms = perms; }
 
     private int CurrentUserId() =>
         int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : -1;
@@ -289,6 +290,8 @@ public class OperationsController : ControllerBase
             throw;
         }
 
+        await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "Operation", null, description: "إنشاء عملية", ct: ct);
+
         return Ok(new { id = o.OperationId, number = o.OperationNumber,
             message = $"✅ اتفتحت العملية برقم {o.OperationNumber}" });
     }
@@ -306,7 +309,10 @@ public class OperationsController : ControllerBase
         if (o is null) return NotFound(new { message = "العملية مش موجودة" });
 
         if (o.Status is "Closed" or "Cancelled")
-            return BadRequest(new { message = "العملية مقفولة — افتحها الأول" });
+            {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Update, "Operation", null, description: "تعديل عملية", ct: ct);
+            
+            }
 
         o.CustomerId    = req.CustomerId;
         o.ServiceId     = req.ServiceId;
@@ -408,7 +414,7 @@ public class OperationsController : ControllerBase
             _           => null
         };
         if (policy is null)
-            return BadRequest(new { message = "الحالة المطلوبة مش صالحة من هنا" });
+            return BadRequest(new { message = "طلب غير صالح" });
 
         if (!await _perms.HasAsync(CurrentUserId(), policy, ct))
             return StatusCode(403, new { message = "ليس لديكصلاحية للحركة دي" });
@@ -423,7 +429,9 @@ public class OperationsController : ControllerBase
         o.UpdatedAt = DateTime.UtcNow;
         o.UpdatedBy = CurrentUserId();
         if (to == "Delivered") o.ActualDeliveryAt ??= DateTime.UtcNow;
-        if (to == "Cancelled") await TouchBookingAsync(o.BookingId, ct);
+        /* 🔴 أي تغيير حالة عملية → إعادة اشتقاق حالة الحجز
+              (كان بيتنادى بس عند الإلغاء — عشان كده الحجوزات ما كانتش بتتحرك) */
+        await TouchBookingAsync(o.BookingId, ct);
         await _db.SaveChangesAsync(ct);
 
         return Ok(new { message = $"✅ الحالة بقت {Ar(to!)}" });
@@ -439,7 +447,10 @@ public class OperationsController : ControllerBase
         if (o.Status is "Closed")  return BadRequest(new { message = "العملية مقفولة بالفعل" });
         if (o.Status is "Cancelled") return BadRequest(new { message = "العملية ملغاة — ماينفعش تتقفل" });
         if (o.Status is not ("Delivered" or "ExpensesPending" or "CustodyPending" or "ReadyToClose"))
-            return BadRequest(new { message = "العملية لازم تكون اتسلّمت الأول" });
+            {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Close, "Operation", null, description: "إقفال عملية", ct: ct);
+            
+            }
 
         // CK_Expenses_Status: Draft / Posted / Cancelled — الـ Draft لسه مااتأكدش
         var draftExpenses = await _db.Expenses.CountAsync(
@@ -460,6 +471,10 @@ public class OperationsController : ControllerBase
         o.ClosedBy = CurrentUserId();
         o.UpdatedAt = DateTime.UtcNow;
         o.UpdatedBy = CurrentUserId();
+
+        /* 🔴 إغلاق العملية ممكن يخلّي الحجز **مكتمل** */
+        await TouchBookingAsync(o.BookingId, ct);
+
         await _db.SaveChangesAsync(ct);
 
         return Ok(new { message = "✅ اتقفلت العملية" });
@@ -478,7 +493,13 @@ public class OperationsController : ControllerBase
         o.ClosedBy = null;
         o.UpdatedAt = DateTime.UtcNow;
         o.UpdatedBy = CurrentUserId();
+
+        /* 🔴 فتح عملية مقفولة → الحجز يرجع «قيد التنفيذ» بدل «مكتمل» */
+        await TouchBookingAsync(o.BookingId, ct);
+
         await _db.SaveChangesAsync(ct);
+
+        await _audit.LogAsync(FastCom.Server.Services.AuditActions.Reopen, "Operation", null, description: "إعادة فتح عملية", ct: ct);
 
         return Ok(new { message = "✅ اتفتحت العملية تاني" });
     }
@@ -503,15 +524,47 @@ public class OperationsController : ControllerBase
         "Closed" => "مغلقة", "Cancelled" => "ملغاة", _ => s
     };
 
+    /* 🔴 حالات الحجز **مشروقة من العمليات المرتبطة بيه** — مش بتتغيّر بإيد:
+          Draft      → المستخدم (مسودة)
+          Confirmed  → المستخدم (تأكيد)  ·  Cancelled → المستخدم (إلغاء)
+          Assigned   → فيه عمليات لسه ما بدأتش
+          InProgress → فيه عملية اشتغلت فعلًا
+          Completed  → كل العمليات اتقفلت                                          */
+    private static readonly string[] StartedOp =
+        { "DriverReceived", "InTransit", "Delivered", "ExpensesPending",
+          "CustodyPending", "ReadyToClose" };
+
     private async Task TouchBookingAsync(long? bookingId, CancellationToken ct)
     {
         if (bookingId is null) return;
-        var b = await _db.Bookings.FirstOrDefaultAsync(x => x.BookingId == bookingId, ct);
-        if (b is null || b.Status is not ("Confirmed" or "Draft")) return;
 
-        var stillOpen = await _db.Operations.AnyAsync(
-            o => o.BookingId == bookingId && o.Status != "Cancelled" && !o.IsDeleted, ct);
-        b.Status = stillOpen ? "InProgress" : "Confirmed";
+        var b = await _db.Bookings.FirstOrDefaultAsync(x => x.BookingId == bookingId, ct);
+        if (b is null) return;
+
+        /* 🔴 الحجز الملغي أو المكتمل **مايتحرّكش من هنا** — عشان
+              إلغاء عملية ما يعيدش حجز مقفول للحياة. */
+        if (b.Status is "Cancelled" or "Completed") return;
+
+        /* استعلام واحد — والتقييم في الذاكرة عشان ما ندخلش في مشاكل
+              ترجمة GroupBy/Any المتداخلة (مسجّلة في §EF translation). */
+        var ops = await _db.Operations.AsNoTracking()
+            .Where(o => o.BookingId == bookingId && !o.IsDeleted && o.Status != "Cancelled")
+            .Select(o => o.Status)
+            .ToListAsync(ct);
+
+        var next = ops.Count == 0
+            ? "Confirmed"
+            : ops.All(st => st == "Closed")
+                ? "Completed"
+                : ops.Any(st => StartedOp.Contains(st))
+                    ? "InProgress"
+                    : "Assigned";
+
+        /* مافيش عملية أصلاً → نرجّعه مؤكد (اللى أكده المستخدم) */
+        if (ops.Count == 0 && b.Status is not ("Draft" or "Confirmed")) next = "Confirmed";
+        if (b.Status == next) return;
+
+        b.Status    = next;
         b.UpdatedAt = DateTime.UtcNow;
         b.UpdatedBy = CurrentUserId();
     }
@@ -526,7 +579,10 @@ public class OperationsController : ControllerBase
         if (o is null) return NotFound(new { message = "العملية مش موجودة" });
 
         if (o.Status is not ("Pending" or "Cancelled"))
-            return BadRequest(new { message = "العملية اللي اشتغلت بتتلغى مش بتتحذف" });
+            {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Delete, "Operation", null, description: "حذف عملية", ct: ct);
+            
+            }
 
         var hasTrip = await _db.TripOperations.AnyAsync(t => t.OperationId == id, ct);
         if (hasTrip) return BadRequest(new { message = "العملية مربوطة برحلة — ماينفعش تتحذف" });

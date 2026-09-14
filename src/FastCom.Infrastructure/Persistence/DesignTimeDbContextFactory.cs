@@ -21,11 +21,11 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<FastComDbC
     {
         var connectionString = ResolveConnectionString();
 
+        /* 🔴 EnableRetryOnFailure اتشال — توحيدًا مع Program.cs.
+           مش لازم للـ design-time tools، وشيله بيمنع أي تعارض مع الـ transactions.
+           التفاصيل الكاملة في Program.cs. */
         var options = new DbContextOptionsBuilder<FastComDbContext>()
-            .UseSqlServer(connectionString, sql =>
-            {
-                sql.EnableRetryOnFailure(3);
-            })
+            .UseSqlServer(connectionString)
             .Options;
 
         return new FastComDbContext(options);

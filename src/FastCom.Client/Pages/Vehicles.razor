@@ -198,7 +198,7 @@
     @if (_tOpen && CanCreate)
     {
         <div class="fc-modal-backdrop" @onclick="CloseAll">
-            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation>
+            <div class="fc-modal" @onclick:stopPropagation>
                 <div class="fc-modal-head">
                     <div><div class="fc-modal-title">@(_tId is null ? "مقطورة جديدة" : "تعديل مقطورة")</div>
                         <div class="fc-modal-sub">الكود بيتولد تلقائيًا (TRL-)</div></div>
@@ -222,11 +222,29 @@
                             <select class="fc-sel fc-sel-lg" @bind="_tf.OwnershipType">
                                 <option value="Company">شركة</option><option value="External">خارجي</option>
                             </select></div>
+                        @if (_tf.OwnershipType == "External")
+                        {
+                            <div><div class="fc-panel-sub" style="margin-bottom:6px">المورد</div>
+                                <select class="fc-sel fc-sel-lg" @bind="_tf.SupplierId">
+                                    <option value="">—</option>
+                                    @foreach (var s in _suppliers) { <option value="@s.Id">@s.Label</option> }
+                                </select></div>
+                        }
+                        <div><div class="fc-panel-sub" style="margin-bottom:6px">انتهاء الرخصة</div>
+                            <input type="date" class="fc-sel fc-sel-lg" value="@_tf.LicenseExpiryDate"
+                                   @onchange="e => _tf.LicenseExpiryDate = e.Value?.ToString()" /></div>
+                        <div><div class="fc-panel-sub" style="margin-bottom:6px">انتهاء التأمين</div>
+                            <input type="date" class="fc-sel fc-sel-lg" value="@_tf.InsuranceExpiryDate"
+                                   @onchange="e => _tf.InsuranceExpiryDate = e.Value?.ToString()" /></div>
                         <div><div class="fc-panel-sub" style="margin-bottom:6px">الحالة</div>
                             <select class="fc-sel fc-sel-lg" @bind="_tf.Status">
                                 <option value="Available">متاحة</option><option value="InTrip">في رحلة</option>
                                 <option value="Maintenance">صيانة</option><option value="OutOfService">خارج الخدمة</option>
                             </select></div>
+                    </div>
+                    <div style="margin-top:14px">
+                        <div class="fc-panel-sub" style="margin-bottom:6px">ملاحظات</div>
+                        <textarea class="fc-sel fc-sel-lg" rows="2" @bind="_tf.Notes"></textarea>
                     </div>
                 </div>
                 <div class="fc-modal-foot">
@@ -272,9 +290,13 @@
         public decimal? CapacityTon { get; set; } public byte ContainerSlots20 { get; set; }
         public DateOnly? LicenseExpiryDate { get; set; } public DateOnly? InsuranceExpiryDate { get; set; }
         public string Status { get; set; } = ""; }
+    /* 🔴 كانت ناقصة SupplierId / التواريخ / Notes — والسيرفر بيرجّعهم في TrailerDetail.
+     *    نقصهم كان بيخلي EditTrailer يبعتهم null فـ UpdateTrailer يمسحهم من القاعدة. */
     public class TDetail { public string? PlateNumber { get; set; } public string TrailerType { get; set; } = "";
         public byte? SizeFeet { get; set; } public string OwnershipType { get; set; } = "";
-        public string Status { get; set; } = ""; }
+        public int? SupplierId { get; set; }
+        public DateOnly? LicenseExpiryDate { get; set; } public DateOnly? InsuranceExpiryDate { get; set; }
+        public string Status { get; set; } = ""; public string? Notes { get; set; } }
 
     public class VForm { public string PlateNumber { get; set; } = ""; public string VehicleType { get; set; } = "";
         public string? Brand { get; set; } public string? Model { get; set; } public short? ModelYear { get; set; }
@@ -355,7 +377,10 @@
             if (d is null) return;
             _tId = t.TrailerId;
             _tf = new TForm { PlateNumber = d.PlateNumber, TrailerType = d.TrailerType, SizeFeet = d.SizeFeet,
-                OwnershipType = d.OwnershipType, Status = d.Status };
+                OwnershipType = d.OwnershipType, SupplierId = d.SupplierId,
+                LicenseExpiryDate = d.LicenseExpiryDate?.ToString("yyyy-MM-dd"),
+                InsuranceExpiryDate = d.InsuranceExpiryDate?.ToString("yyyy-MM-dd"),
+                Status = d.Status, Notes = d.Notes };
             _msg = null; _vOpen = false; _tOpen = true;
         }
         catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }

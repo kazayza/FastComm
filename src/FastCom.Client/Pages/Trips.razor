@@ -9,6 +9,10 @@
 
 <PageTitle>الرحلات — فاست كوم</PageTitle>
 
+
+@* ═══════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════ *@
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
@@ -18,246 +22,1248 @@
                 <p class="fc-hero-sub">سائق وعربية وخروج واحد — ممكن ينفّذ كذا عملية، وتكلفته بتتوزّع عليهم</p>
             </div>
             <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
+                               OnClick="Reload" Style="color:#9FB4CC" />
                 @if (CanCreate)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="GoNew">رحلة جديدة</MudButton>
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="GoNew">رحلة جديدة</MudButton>
                 }
             </div>
         </div>
+
         @if (CanView)
         {
             <div class="fc-kpis fc-kpis-glass">
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.AirportShuttle" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي الرحلات</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.HourglassTop" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(t => t.Status == "Planned")</div><div class="fc-kpi-lb">مخططة</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.LocalShipping" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(t => t.Status == "Started")</div><div class="fc-kpi-lb">في الطريق</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
-                    <div><div class="fc-kpi-num">@Money(_items.Sum(t => t.DirectCost))</div><div class="fc-kpi-lb">مصروفات الرحلات</div></div></div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.AirportShuttle" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي الرحلات</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.HourglassTop" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(t => t.Status == "Planned")</div><div class="fc-kpi-lb">مخططة</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.LocalShipping" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(t => t.Status == "Started")</div><div class="fc-kpi-lb">في الطريق</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
+                    <div><div class="fc-kpi-num">@Money(_items.Sum(t => t.DirectCost))</div><div class="fc-kpi-lb">مصروفات الرحلات</div></div>
+                </div>
             </div>
         }
     </div>
 </div>
 
-<div class="fc-page">
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="tr-body">
+
     @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض الرحلات.
-</MudAlert>
+        <div class="tr-state-box">
+            <div class="tr-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليس لديك صلاحية عرض الرحلات — تواصل مع المسؤول</p>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
-            <div class="fc-toolbar">
-                <div class="fc-filters">
-                    @foreach (var t in Tabs)
+        <div class="tr-card">
+
+            @* ── Toolbar ── *@
+            <div class="tr-toolbar">
+
+                <div class="tr-search-wrap">
+                    <svg class="tr-search-icon" viewBox="0 0 24 24"
+                         width="16" height="16" fill="none" stroke="currentColor"
+                         stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                    </svg>
+                    <input class="tr-search-input"
+                           placeholder="ابحث برقم الرحلة أو السائق أو اللوحة..."
+                           @bind="_search"
+                           @bind:event="oninput"
+                           aria-label="بحث" />
+                    @if (!string.IsNullOrWhiteSpace(_search))
                     {
-                        <button class='fc-filter @(_tab == t.Key ? "on" : "")' @onclick="() => SetTab(t.Key)">@t.Value</button>
+                        <button class="tr-search-clear"
+                                @onclick="() => _search = string.Empty"
+                                aria-label="مسح البحث">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
                     }
                 </div>
-                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
-                              Placeholder="دوّر برقم الرحلة أو السائق أو اللوحة..." Variant="Variant.Outlined" Dense="true"
-                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                              Class="fc-search-box" Immediate="true" />
-                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+
+                <div class="tr-results-badge">
+                    عرض <strong>@Filtered.Count()</strong> من <strong>@_items.Count</strong>
+                </div>
+
             </div>
 
+
+            @* ── Status Filter Tabs ── *@
+            <div class="tr-status-bar">
+                <div class="tr-status-tabs" role="group" aria-label="فلتر الحالة">
+                    @foreach (var t in _statusTabs)
+                    {
+                        var count = t.Key == "all"
+                            ? _items.Count
+                            : _items.Count(x => x.Status == t.Key);
+
+                        <button class="tr-status-tab @(_tab == t.Key ? "active" : "")"
+                                @onclick="() => SetTab(t.Key)"
+                                aria-pressed="@(_tab == t.Key)">
+                            <span class="tr-tab-dot @StatusDotColor(t.Key)" aria-hidden="true"></span>
+                            <span>@t.Value</span>
+                            <span class="tr-tab-count">@count</span>
+                        </button>
+                    }
+                </div>
+            </div>
+
+
+            @* ── Content ── *@
             @if (_loading)
             {
-                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+                <div class="tr-loading">
+                    <div class="tr-spinner" aria-label="جاري التحميل"></div>
+                    <span>جاري تحميل الرحلات...</span>
+                </div>
+            }
+            else if (!Filtered.Any())
+            {
+                <div class="tr-empty">
+                    <div class="tr-empty-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="42" height="42"
+                             fill="none" stroke="currentColor" stroke-width="1.4">
+                            <rect x="1" y="3" width="15" height="13" rx="2"/>
+                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                        </svg>
+                    </div>
+                    <div class="tr-empty-title">
+                        @(string.IsNullOrWhiteSpace(_search) ? "لا توجد رحلات في هذا الفلتر" : "لا توجد نتائج")
+                    </div>
+                    <div class="tr-empty-sub">
+                        @(string.IsNullOrWhiteSpace(_search)
+                            ? "جرّب فلتر مختلف أو أنشئ رحلة جديدة"
+                            : "جرّب كلمة بحث مختلفة")
+                    </div>
+                    @if (CanCreate && string.IsNullOrWhiteSpace(_search))
+                    {
+                        <button class="tr-add-btn" @onclick="GoNew">
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2.5"
+                                 aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                            رحلة جديدة
+                        </button>
+                    }
+                </div>
             }
             else
             {
-                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
-                    <thead><tr>
-                        <th>رقم الرحلة</th><th>السائق</th><th>العربية</th><th>المخطط</th>
-                        <th>عمليات</th><th>المصروفات</th><th>الموزّع</th><th>الحالة</th>
-                        <th style="width:180px; text-align:left">إجراءات</th>
-                    </tr></thead>
-                    <tbody>
-                        @foreach (var t in Filtered)
-                        {
+                <div class="tr-table-wrap">
+                    <table class="tr-table" aria-label="قائمة الرحلات">
+                        <thead>
                             <tr>
-                                <td><span class="fc-role-chip">@t.TripNumber</span></td>
-                                <td><div class="fc-cell-main">@t.DriverName</div></td>
-                                <td class="fc-cell-sub">@t.VehiclePlate
-                                    @if (t.TrailerPlate is not null) { <div class="fc-cell-sub">+ @t.TrailerPlate</div> }</td>
-                                <td class="fc-cell-sub">@(t.PlannedStartAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
-                                <td><b>@t.OperationsCount</b></td>
-                                <td class="fc-cell-sub">@Money(t.DirectCost)</td>
-                                <td class="fc-cell-sub">@Money(t.AllocatedCost)</td>
-                                <td><span class="fc-chip @ChipClass(t.Status)"><i></i>@StatusAr(t.Status)</span></td>
-                                <td><div class="fc-row-actions">
-                                    @if (t.Status is not ("Completed" or "Cancelled") && CanEdit)
-                                    {
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
-                                                       Color="Color.Primary" title="تعديل" OnClick="() => GoEdit(t)" />
-                                    }
-                                    @if (t.Status is ("Planned" or "Assigned") && CanEdit)
-                                    {
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Route"
-                                                       Color="Color.Success" title="الرحلة اتحركت" OnClick="() => Start(t)" />
-                                    }
-                                    @if (t.Status is ("Started" or "Planned" or "Assigned") && CanEdit)
-                                    {
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle"
-                                                       Color="Color.Primary" title="إنهاء الرحلة" OnClick="() => Complete(t)" />
-                                    }
-                                    @if (t.Status is not ("Completed" or "Cancelled") && CanCancel)
-                                    {
-                                        @if (_confirmId == t.TripId)
-                                        {
-                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
-                                                       OnClick='() => Post(t, "cancel")'>إلغاء؟</MudButton>
-                                        }
-                                        else
-                                        {
-                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Close"
-                                                           Color="Color.Error" title="إلغاء" OnClick="() => _confirmId = t.TripId" />
-                                        }
-                                    }
-                                    else if (t.Status is ("Planned" or "Cancelled") && CanCancel)
-                                    {
-                                        @if (_confirmId == t.TripId)
-                                        {
-                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
-                                                       OnClick="() => Delete(t)">حذف؟</MudButton>
-                                        }
-                                        else
-                                        {
-                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
-                                                           Color="Color.Error" title="حذف" OnClick="() => _confirmId = t.TripId" />
-                                        }
-                                    }
-                                </div></td>
+                                <th scope="col" class="th-start">الرحلة</th>
+                                <th scope="col">العربية</th>
+                                <th scope="col">المخطط</th>
+                                <th scope="col">عمليات</th>
+                                <th scope="col">المصروفات</th>
+                                <th scope="col">الموزّع</th>
+                                <th scope="col">الحالة</th>
+                                <th scope="col" style="width:200px">إجراءات</th>
                             </tr>
-                        }
-                        @if (!Filtered.Any())
-                        {
-                            <tr><td colspan="9"><div class="fc-empty"><div>مافيش رحلات في الفلتر ده</div></div></td></tr>
-                        }
-                    </tbody>
-                </table></div>
+                        </thead>
+                        <tbody>
+                            @foreach (var t in Filtered)
+                            {
+                                <tr class="@(t.Status == "Cancelled" ? "row-cancelled" : "")
+                                           @(t.Status == "Completed" ? "row-completed" : "")">
+
+                                    @* ── الرحلة: رقم + سائق ── *@
+                                    <td class="td-start">
+                                        <div class="tr-trip-cell">
+                                            <div class="tr-trip-avatar @AvatarClass(t.Status)"
+                                                 aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="16" height="16"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                                                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                                                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                                                </svg>
+                                            </div>
+                                            <div class="tr-trip-info">
+                                                <div class="tr-trip-num">
+                                                    <span class="tr-code-chip">@t.TripNumber</span>
+                                                </div>
+                                                <div class="tr-driver-name">
+                                                    <svg viewBox="0 0 24 24" width="11" height="11"
+                                                         fill="none" stroke="currentColor" stroke-width="2"
+                                                         aria-hidden="true">
+                                                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                                        <circle cx="12" cy="7" r="4"/>
+                                                    </svg>
+                                                    @t.DriverName
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    @* ── العربية ── *@
+                                    <td>
+                                        <div class="tr-vehicle-cell">
+                                            <span class="tr-plate-chip">
+                                                <svg viewBox="0 0 24 24" width="12" height="12"
+                                                     fill="none" stroke="currentColor" stroke-width="2"
+                                                     aria-hidden="true">
+                                                    <rect x="2" y="7" width="20" height="10" rx="2"/>
+                                                    <path d="M6 7V5M18 7V5" stroke-linecap="round"/>
+                                                </svg>
+                                                @t.VehiclePlate
+                                            </span>
+                                            @if (t.TrailerPlate is not null)
+                                            {
+                                                <span class="tr-trailer-chip">
+                                                    + @t.TrailerPlate
+                                                </span>
+                                            }
+                                        </div>
+                                    </td>
+
+                                    @* ── المخطط ── *@
+                                    <td class="td-muted">
+                                        @if (t.PlannedStartAt.HasValue)
+                                        {
+                                            <div class="tr-date-cell">
+                                                <svg viewBox="0 0 16 16" width="11" height="11"
+                                                     fill="none" stroke="currentColor" stroke-width="1.7"
+                                                     aria-hidden="true">
+                                                    <rect x="2" y="3" width="12" height="11" rx="2"/>
+                                                    <path d="M5 1v3M11 1v3M2 7h12" stroke-linecap="round"/>
+                                                </svg>
+                                                <div>
+                                                    <div>@t.PlannedStartAt.Value.ToString("yyyy-MM-dd")</div>
+                                                    <div class="tr-time">@t.PlannedStartAt.Value.ToString("HH:mm")</div>
+                                                </div>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span>—</span>
+                                        }
+                                    </td>
+
+                                    @* ── عمليات ── *@
+                                    <td>
+                                        <span class="tr-ops-badge">
+                                            <svg viewBox="0 0 24 24" width="12" height="12"
+                                                 fill="none" stroke="currentColor" stroke-width="2"
+                                                 aria-hidden="true">
+                                                <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                            </svg>
+                                            <strong>@t.OperationsCount</strong>
+                                        </span>
+                                    </td>
+
+                                    @* ── المصروفات ── *@
+                                    <td>
+                                        <div class="tr-money-cell">
+                                            <span class="tr-money-main">@Money(t.DirectCost)</span>
+                                            <span class="tr-money-label">ج.م</span>
+                                        </div>
+                                    </td>
+
+                                    @* ── الموزّع ── *@
+                                    <td>
+                                        @if (t.AllocatedCost > 0)
+                                        {
+                                            <div class="tr-money-cell">
+                                                <span class="tr-money-main allocated">@Money(t.AllocatedCost)</span>
+                                                <span class="tr-money-label">ج.م</span>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="td-muted">—</span>
+                                        }
+                                    </td>
+
+                                    @* ── الحالة ── *@
+                                    <td>
+                                        <span class="tr-chip @ChipClass(t.Status)">
+                                            <span class="tr-chip-dot @ChipDotClass(t.Status)"
+                                                  aria-hidden="true"></span>
+                                            @StatusAr(t.Status)
+                                        </span>
+                                    </td>
+
+                                    @* ── إجراءات ── *@
+                                    <td>
+                                        <div class="tr-actions">
+
+                                            @* تعديل *@
+                                            @if (t.Status is not ("Completed" or "Cancelled") && CanEdit)
+                                            {
+                                                <button class="tr-act-btn act-edit"
+                                                        @onclick="() => GoEdit(t)"
+                                                        title="تعديل"
+                                                        aria-label="تعديل @t.TripNumber">
+                                                    <svg viewBox="0 0 24 24" width="15" height="15"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @* الرحلة اتحركت *@
+                                            @if (t.Status is ("Planned" or "Assigned") && CanEdit)
+                                            {
+                                                <button class="tr-act-btn act-start"
+                                                        @onclick="() => Start(t)"
+                                                        title="الرحلة اتحركت"
+                                                        aria-label="تحرك @t.TripNumber">
+                                                    <svg viewBox="0 0 24 24" width="15" height="15"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M5 12h14M12 5l7 7-7 7"
+                                                              stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @* إنهاء الرحلة *@
+                                            @if (t.Status is ("Started" or "Planned" or "Assigned") && CanEdit)
+                                            {
+                                                <button class="tr-act-btn act-complete"
+                                                        @onclick="() => Complete(t)"
+                                                        title="إنهاء الرحلة"
+                                                        aria-label="إنهاء @t.TripNumber">
+                                                    <svg viewBox="0 0 24 24" width="15" height="15"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M22 11.08V12a10 10 0 11-5.93-9.14"
+                                                              stroke-linecap="round"/>
+                                                        <path d="M22 4L12 14.01l-3-3"
+                                                              stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @* إلغاء *@
+                                            @if (t.Status is not ("Completed" or "Cancelled") && CanCancel)
+                                            {
+                                                @if (_confirmId == t.TripId)
+                                                {
+                                                    <button class="tr-confirm-del"
+                                                            @onclick='() => Post(t, "cancel")'>
+                                                        إلغاء؟
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button class="tr-act-btn act-cancel"
+                                                            @onclick="() => _confirmId = t.TripId"
+                                                            title="إلغاء"
+                                                            aria-label="إلغاء @t.TripNumber">
+                                                        <svg viewBox="0 0 24 24" width="15" height="15"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <circle cx="12" cy="12" r="10"/>
+                                                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+                                            }
+
+                                            @* حذف *@
+                                            @if (t.Status is ("Planned" or "Cancelled") && CanCancel)
+                                            {
+                                                @if (_confirmId == t.TripId)
+                                                {
+                                                    <button class="tr-confirm-del"
+                                                            @onclick="() => Delete(t)">
+                                                        حذف؟
+                                                    </button>
+                                                }
+                                                else if (t.Status == "Cancelled")
+                                                {
+                                                    <button class="tr-act-btn act-delete"
+                                                            @onclick="() => _confirmId = t.TripId"
+                                                            title="حذف"
+                                                            aria-label="حذف @t.TripNumber">
+                                                        <svg viewBox="0 0 24 24" width="15" height="15"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+                                            }
+
+                                        </div>
+                                    </td>
+
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
-        </div></div>
-    }
 
-    @* ═══ مودال التحرك ═══ *@
-    @if (_startFor is not null)
-    {
-        <div class="fc-modal-backdrop" @onclick="() => _startFor = null">
-            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation>
-                <div class="fc-modal-head">
-                    <div><div class="fc-modal-title">الرحلة اتحركت</div>
-                        <div class="fc-modal-sub">سجّل وقت التحرك وعداد البداية</div></div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _startFor = null" />
-                </div>
-                <div class="fc-modal-body">
-                    <div class="fc-form-grid">
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">وقت التحرك</div>
-                            <input type="datetime-local" class="fc-sel fc-sel-lg" value="@_startAt"
-                                   @onchange="e => _startAt = e.Value?.ToString()" />
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">عداد البداية (كم)</div>
-                            <input type="number" min="0" step="0.1" class="fc-sel fc-sel-lg" value="@_startOdo"
-                                   @onchange="e => _startOdo = e.Value?.ToString()" />
-                        </div>
-                    </div>
-                </div>
-                <div class="fc-modal-foot">
-                    <MudButton Variant="Variant.Outlined" OnClick="() => _startFor = null">إلغاء</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmStart">تحرك</MudButton>
-                </div>
-            </div>
-        </div>
-    }
-
-    @* ═══ مودال الإنهاء ═══ *@
-    @if (_endFor is not null)
-    {
-        <div class="fc-modal-backdrop" @onclick="() => _endFor = null">
-            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation>
-                <div class="fc-modal-head">
-                    <div><div class="fc-modal-title">إنهاء الرحلة</div>
-                        <div class="fc-modal-sub">العمليات المرتبطة هتبقى «تم التسليم»</div></div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _endFor = null" />
-                </div>
-                <div class="fc-modal-body">
-                    <div class="fc-form-grid">
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">وقت الوصول</div>
-                            <input type="datetime-local" class="fc-sel fc-sel-lg" value="@_endAt"
-                                   @onchange="e => _endAt = e.Value?.ToString()" />
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">عداد النهاية (كم)</div>
-                            <input type="number" min="0" step="0.1" class="fc-sel fc-sel-lg" value="@_endOdo"
-                                   @onchange="e => _endOdo = e.Value?.ToString()" />
-                        </div>
-                    </div>
-                </div>
-                <div class="fc-modal-foot">
-                    <MudButton Variant="Variant.Outlined" OnClick="() => _endFor = null">إلغاء</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmComplete">إنهاء</MudButton>
-                </div>
-            </div>
         </div>
     }
 </div>
 
+
+@* ═══════════════════════════════════════════
+   MODAL — الرحلة اتحركت
+═══════════════════════════════════════════ *@
+@if (_startFor is not null)
+{
+    <div class="tr-modal-backdrop" @onclick="() => _startFor = null"
+         role="dialog" aria-modal="true" aria-label="تسجيل تحرك الرحلة">
+        <div class="tr-modal" @onclick:stopPropagation="true">
+
+            <div class="tr-modal-head">
+                <div class="tr-modal-icon start-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="tr-modal-title">الرحلة اتحركت 🚛</div>
+                    <div class="tr-modal-sub">سجّل وقت التحرك وعداد البداية</div>
+                </div>
+                <button class="tr-modal-close" @onclick="() => _startFor = null" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="tr-modal-body">
+
+                <div class="tr-modal-form-grid">
+
+                    <div class="tr-modal-field">
+                        <label class="tr-field-label">وقت التحرك</label>
+                        <div class="tr-field-input-group">
+                            <span class="tr-field-prefix" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <path d="M12 6v6l4 2" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            <input type="datetime-local"
+                                   class="tr-field-input with-prefix"
+                                   value="@_startAt"
+                                   @onchange="e => _startAt = e.Value?.ToString()" />
+                        </div>
+                    </div>
+
+                    <div class="tr-modal-field">
+                        <label class="tr-field-label">عداد البداية (كم)</label>
+                        <div class="tr-field-input-group">
+                            <span class="tr-field-prefix" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2a10 10 0 100 20A10 10 0 0012 2z"/>
+                                    <path d="M12 12l4-4" stroke-linecap="round"/>
+                                    <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+                                </svg>
+                            </span>
+                            <input type="number" min="0" step="0.1"
+                                   class="tr-field-input with-prefix"
+                                   value="@_startOdo"
+                                   placeholder="0.0"
+                                   @onchange="e => _startOdo = e.Value?.ToString()" />
+                        </div>
+                        <div class="tr-field-hint">
+                            <svg viewBox="0 0 16 16" width="10" height="10"
+                                 fill="none" stroke="currentColor" stroke-width="1.8"
+                                 aria-hidden="true">
+                                <circle cx="8" cy="8" r="6"/>
+                                <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                            </svg>
+                            اختياري — للتتبع والمقارنة
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="tr-modal-foot">
+                <button class="tr-modal-cancel" @onclick="() => _startFor = null">إلغاء</button>
+                <button class="tr-modal-confirm start-confirm" @onclick="ConfirmStart">
+                    <svg viewBox="0 0 24 24" width="16" height="16"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         aria-hidden="true">
+                        <path d="M5 12h14M12 5l7 7-7 7"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    تحرّكت!
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+@* ═══════════════════════════════════════════
+   MODAL — إنهاء الرحلة
+═══════════════════════════════════════════ *@
+@if (_endFor is not null)
+{
+    <div class="tr-modal-backdrop" @onclick="() => _endFor = null"
+         role="dialog" aria-modal="true" aria-label="إنهاء الرحلة">
+        <div class="tr-modal" @onclick:stopPropagation="true">
+
+            <div class="tr-modal-head">
+                <div class="tr-modal-icon complete-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                        <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="tr-modal-title">إنهاء الرحلة ✅</div>
+                    <div class="tr-modal-sub">العمليات المرتبطة هتبقى «تم التسليم»</div>
+                </div>
+                <button class="tr-modal-close" @onclick="() => _endFor = null" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="tr-modal-body">
+
+                <div class="tr-modal-form-grid">
+
+                    <div class="tr-modal-field">
+                        <label class="tr-field-label">وقت الوصول</label>
+                        <div class="tr-field-input-group">
+                            <span class="tr-field-prefix" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <path d="M12 6v6l4 2" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            <input type="datetime-local"
+                                   class="tr-field-input with-prefix"
+                                   value="@_endAt"
+                                   @onchange="e => _endAt = e.Value?.ToString()" />
+                        </div>
+                    </div>
+
+                    <div class="tr-modal-field">
+                        <label class="tr-field-label">عداد النهاية (كم)</label>
+                        <div class="tr-field-input-group">
+                            <span class="tr-field-prefix" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2a10 10 0 100 20A10 10 0 0012 2z"/>
+                                    <path d="M12 12l4-4" stroke-linecap="round"/>
+                                    <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+                                </svg>
+                            </span>
+                            <input type="number" min="0" step="0.1"
+                                   class="tr-field-input with-prefix"
+                                   value="@_endOdo"
+                                   placeholder="0.0"
+                                   @onchange="e => _endOdo = e.Value?.ToString()" />
+                        </div>
+                        <div class="tr-field-hint">
+                            <svg viewBox="0 0 16 16" width="10" height="10"
+                                 fill="none" stroke="currentColor" stroke-width="1.8"
+                                 aria-hidden="true">
+                                <circle cx="8" cy="8" r="6"/>
+                                <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                            </svg>
+                            اختياري — لحساب المسافة الفعلية
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="tr-end-warning" role="alert">
+                    <svg viewBox="0 0 24 24" width="16" height="16"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         aria-hidden="true">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                        <path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
+                    </svg>
+                    <span>
+                        بعد الإنهاء كل العمليات المرتبطة هتتحول لـ «تم التسليم» تلقائياً
+                    </span>
+                </div>
+
+            </div>
+
+            <div class="tr-modal-foot">
+                <button class="tr-modal-cancel" @onclick="() => _endFor = null">إلغاء</button>
+                <button class="tr-modal-confirm complete-confirm" @onclick="ConfirmComplete">
+                    <svg viewBox="0 0 24 24" width="16" height="16"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         aria-hidden="true">
+                        <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                        <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    إنهاء الرحلة
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+@* ═══════════════════════════════════════════
+   CSS
+═══════════════════════════════════════════ *@
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-orange:    #e06520;
+        --fc-orange-lt: #fff3ec;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-teal:      #0d9488;
+        --fc-teal-lt:   #e6faf8;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    .tr-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 200px);
+        padding: 16px 20px 32px;
+        max-width: 1350px; width: 100%;
+        margin: 0 auto;
+    }
+
+    /* ================================================================
+       STATES
+    ================================================================ */
+    .tr-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .tr-state-icon {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .tr-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+
+    .tr-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .tr-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    /* ================================================================
+       CARD
+    ================================================================ */
+    .tr-card {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden;
+    }
+
+    /* ================================================================
+       TOOLBAR
+    ================================================================ */
+    .tr-toolbar {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7; flex-wrap: wrap;
+    }
+
+    .tr-search-wrap {
+        position: relative; display: flex; align-items: center;
+        flex: 1; min-width: 200px; max-width: 400px;
+    }
+
+    .tr-search-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; }
+
+    .tr-search-input {
+        width: 100%; height: 38px;
+        padding: 0 36px 0 12px;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .tr-search-input:focus {
+        border-color: var(--fc-blue);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.10);
+    }
+    .tr-search-input::placeholder { color: #b0bcc8; }
+
+    .tr-search-clear {
+        position: absolute; left: 10px;
+        display: flex; align-items: center; justify-content: center;
+        width: 22px; height: 22px; border-radius: 50%;
+        border: none; background: #edf1f7; color: #8899ae;
+        cursor: pointer; transition: all .12s ease;
+    }
+    .tr-search-clear:hover { background: #dde5f0; color: var(--fc-text); }
+
+    .tr-results-badge {
+        display: flex; align-items: center; gap: 5px;
+        margin-right: auto;
+        font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap;
+    }
+    .tr-results-badge strong { color: #5a6e88; }
+
+    /* ================================================================
+       STATUS TABS
+    ================================================================ */
+    .tr-status-bar {
+        padding: 10px 18px;
+        background: #f9fafd; border-bottom: 1px solid #edf1f7;
+        overflow-x: auto;
+    }
+
+    .tr-status-tabs {
+        display: flex; gap: 4px;
+        padding: 3px; border-radius: 10px; background: #f0f3f8;
+        width: fit-content;
+    }
+
+    .tr-status-tab {
+        display: flex; align-items: center; gap: 5px;
+        height: 32px; padding: 0 10px;
+        border: none; border-radius: 7px;
+        background: transparent; color: #6b7d95;
+        font-family: inherit; font-size: 10.5px; font-weight: 700;
+        cursor: pointer; white-space: nowrap; transition: all .15s ease;
+    }
+    .tr-status-tab:hover:not(.active) { color: var(--fc-text); background: rgba(255,255,255,.6); }
+    .tr-status-tab.active {
+        background: var(--fc-card); color: var(--fc-text);
+        box-shadow: 0 1px 4px rgba(15,41,82,.10); font-weight: 800;
+    }
+
+    .tr-tab-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px; }
+
+    .tr-tab-count {
+        min-width: 16px; height: 16px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 4px; padding: 0 3px;
+        font-size: 9px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+    .tr-status-tab.active .tr-tab-count { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .tr-status-tab:not(.active) .tr-tab-count { background: #e4eaf3; color: #8899ae; }
+
+    /* Dots */
+    .tdot-all       { background: var(--fc-blue); }
+    .tdot-planned   { background: #9aaabb; }
+    .tdot-assigned  { background: var(--fc-blue); }
+    .tdot-started   { background: var(--fc-orange); }
+    .tdot-completed { background: var(--fc-green); }
+    .tdot-cancelled { background: var(--fc-red); }
+
+    /* ================================================================
+       LOADING / EMPTY
+    ================================================================ */
+    .tr-loading {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 200px;
+        color: var(--fc-muted); font-size: 12px; font-weight: 600;
+    }
+
+    .tr-spinner {
+        width: 32px; height: 32px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: tr-spin .75s linear infinite;
+    }
+    @@keyframes tr-spin { to { transform: rotate(360deg); } }
+
+    .tr-empty {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 10px; min-height: 240px; padding: 40px 20px; text-align: center;
+    }
+    .tr-empty-icon {
+        width: 72px; height: 72px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: #f0f4fa; color: #b0c4d8;
+    }
+    .tr-empty-title { font-size: 15px; font-weight: 800; color: var(--fc-text); }
+    .tr-empty-sub   { font-size: 12px; color: var(--fc-muted); }
+
+    .tr-add-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 16px; margin-top: 6px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; transition: all .15s ease;
+    }
+    .tr-add-btn:hover { background: var(--fc-blue); color: #fff; }
+
+    /* ================================================================
+       TABLE
+    ================================================================ */
+    .tr-table-wrap { overflow-x: auto; }
+
+    .tr-table {
+        width: 100%; border-collapse: collapse; font-size: 12.5px;
+    }
+
+    .tr-table thead th {
+        padding: 10px 12px;
+        background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 10.5px; font-weight: 800;
+        text-align: center; border-bottom: 2px solid #e4eaf3;
+        white-space: nowrap; position: sticky; top: 0; z-index: 1;
+    }
+    .tr-table .th-start { text-align: right; }
+
+    .tr-table tbody tr {
+        border-bottom: 1px solid #f0f3f8; transition: background .12s ease;
+    }
+    .tr-table tbody tr:last-child { border-bottom: none; }
+    .tr-table tbody tr:hover { background: #fafcff; }
+    .tr-table tbody tr.row-cancelled { opacity: .55; }
+    .tr-table tbody tr.row-completed { background: #fafbff; }
+
+    .tr-table tbody td {
+        padding: 11px 12px; color: #526070; text-align: center; vertical-align: middle;
+    }
+
+    .td-start { text-align: right !important; }
+    .td-muted { color: #8899ae; font-size: 11px; }
+
+    /* ── Trip Cell ── */
+    .tr-trip-cell { display: flex; align-items: center; gap: 10px; }
+
+    .tr-trip-avatar {
+        width: 36px; height: 36px; flex: 0 0 36px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.10);
+    }
+
+    .av-planned   { background: linear-gradient(135deg, #7a8a9a, #5c6e80); }
+    .av-assigned  { background: linear-gradient(135deg, #1558d6, #1e6ef5); }
+    .av-started   { background: linear-gradient(135deg, #c0501a, #e06520); }
+    .av-completed { background: linear-gradient(135deg, #0d8a48, #16a35b); }
+    .av-cancelled { background: linear-gradient(135deg, #b02040, #e03048); }
+
+    .tr-trip-info { min-width: 0; }
+
+    .tr-trip-num { display: flex; align-items: center; gap: 6px; }
+
+    .tr-code-chip {
+        display: inline-flex; align-items: center;
+        padding: 2px 8px; border-radius: 6px;
+        background: #f0f4fa; border: 1px solid #e0e8f4;
+        font-size: 10.5px; font-weight: 800; color: #5a6e88;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .tr-driver-name {
+        display: flex; align-items: center; gap: 4px;
+        font-size: 12px; font-weight: 700; color: #344563;
+        margin-top: 4px;
+    }
+
+    /* ── Vehicle Cell ── */
+    .tr-vehicle-cell {
+        display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+
+    .tr-plate-chip {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 3px 9px; border-radius: 7px;
+        background: #f0f4fa; border: 1px solid #e0e8f4;
+        font-size: 11px; font-weight: 800; color: #344563;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .tr-trailer-chip {
+        display: inline-flex; align-items: center;
+        padding: 2px 7px; border-radius: 5px;
+        background: var(--fc-amber-lt); border: 1px solid #f0d898;
+        font-size: 9.5px; font-weight: 700; color: #9a6d08;
+    }
+
+    /* ── Date Cell ── */
+    .tr-date-cell {
+        display: flex; align-items: flex-start; gap: 4px;
+        justify-content: center; color: #6b7d95; font-size: 11px;
+    }
+    .tr-time { font-size: 9.5px; color: #9aaabb; margin-top: 1px; }
+
+    /* ── Ops Badge ── */
+    .tr-ops-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 4px 10px; border-radius: 8px;
+        background: var(--fc-blue-lt); border: 1px solid #c0d4fb;
+        color: var(--fc-blue); font-size: 12px;
+    }
+    .tr-ops-badge strong { font-size: 14px; font-weight: 900; font-family: "Inter", Arial, sans-serif; }
+
+    /* ── Money ── */
+    .tr-money-cell { display: flex; align-items: baseline; gap: 3px; justify-content: center; }
+    .tr-money-main {
+        font-family: "Inter", Arial, sans-serif;
+        font-size: 13px; font-weight: 800; color: var(--fc-text);
+    }
+    .tr-money-main.allocated { color: var(--fc-green); }
+    .tr-money-label { font-size: 9px; color: #9aaabb; font-weight: 600; }
+
+    /* ── Chips ── */
+    .tr-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 3px 9px; border-radius: 7px;
+        font-size: 10px; font-weight: 800; white-space: nowrap;
+    }
+
+    .tr-chip-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
+
+    .chip-planned   { background: #f0f3f8; color: #6b7d95; border: 1px solid #dde5f0; }
+    .chip-assigned  { background: var(--fc-blue-lt); color: var(--fc-blue); border: 1px solid #c0d4fb; }
+    .chip-started   { background: var(--fc-orange-lt); color: var(--fc-orange); border: 1px solid #f0c8a8; }
+    .chip-completed { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .chip-cancelled { background: var(--fc-red-lt); color: var(--fc-red); border: 1px solid #ffc8cf; }
+
+    .cdot-planned   { background: #9aaabb; }
+    .cdot-assigned  { background: var(--fc-blue); }
+    .cdot-started   { background: var(--fc-orange); }
+    .cdot-completed { background: var(--fc-green); }
+    .cdot-cancelled { background: var(--fc-red); }
+
+    /* ── Actions ── */
+    .tr-actions { display: flex; align-items: center; gap: 3px; justify-content: center; }
+
+    .tr-act-btn {
+        width: 30px; height: 30px; border-radius: 7px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; cursor: pointer;
+        transition: all .15s ease; background: transparent;
+    }
+
+    .act-edit     { color: var(--fc-blue); }
+    .act-start    { color: var(--fc-orange); }
+    .act-complete { color: var(--fc-green); }
+    .act-cancel   { color: var(--fc-red); }
+    .act-delete   { color: var(--fc-red); }
+
+    .act-edit:hover     { background: var(--fc-blue-lt);   border-color: #c0d4fb; }
+    .act-start:hover    { background: var(--fc-orange-lt); border-color: #f0c8a8; }
+    .act-complete:hover { background: var(--fc-green-lt);  border-color: #b0e0c5; }
+    .act-cancel:hover   { background: var(--fc-red-lt);    border-color: #ffc8cf; }
+    .act-delete:hover   { background: var(--fc-red-lt);    border-color: #ffc8cf; }
+
+    .tr-confirm-del {
+        height: 26px; padding: 0 9px;
+        border: none; border-radius: 6px;
+        background: linear-gradient(135deg, #e03048, #c0182e);
+        color: #fff; font-family: inherit;
+        font-size: 9.5px; font-weight: 800; cursor: pointer;
+        animation: tr-pulse-del 1s ease infinite; white-space: nowrap;
+    }
+    @@keyframes tr-pulse-del {
+        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.35); }
+        50%     { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
+    }
+
+    /* ================================================================
+       MODALS
+    ================================================================ */
+    .tr-modal-backdrop {
+        position: fixed; inset: 0; z-index: 1000;
+        background: rgba(10,20,40,.55); backdrop-filter: blur(4px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px; animation: tr-fade-in .2s ease;
+    }
+    @@keyframes tr-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+    .tr-modal {
+        width: 100%; max-width: 480px;
+        background: var(--fc-card); border: 1px solid rgba(0,0,0,.08);
+        border-radius: 18px;
+        box-shadow: 0 8px 30px rgba(10,20,50,.15), 0 30px 80px rgba(10,20,50,.20);
+        overflow: hidden;
+        animation: tr-modal-in .25s cubic-bezier(.34,1.3,.64,1);
+    }
+    @@keyframes tr-modal-in {
+        from { opacity: 0; transform: scale(.95) translateY(10px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .tr-modal-head {
+        display: flex; align-items: center; gap: 12px;
+        padding: 18px 20px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .tr-modal-icon {
+        width: 44px; height: 44px; flex: 0 0 44px; border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .start-icon    { background: var(--fc-orange-lt); color: var(--fc-orange); border: 1px solid #f0c8a8; }
+    .complete-icon { background: var(--fc-green-lt);  color: var(--fc-green);  border: 1px solid #b0e0c5; }
+
+    .tr-modal-title { font-size: 15px; font-weight: 900; color: #1c2b43; }
+    .tr-modal-sub   { font-size: 11px; color: var(--fc-muted); margin-top: 2px; }
+
+    .tr-modal-close {
+        margin-right: auto; width: 32px; height: 32px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid #e4eaf2; border-radius: 8px;
+        background: none; color: #9aaabb; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .tr-modal-close:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .tr-modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+
+    .tr-modal-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+    .tr-modal-field { display: flex; flex-direction: column; gap: 6px; }
+
+    .tr-field-label { font-size: 12px; font-weight: 800; color: #344258; }
+
+    .tr-field-input-group { position: relative; display: flex; align-items: center; }
+
+    .tr-field-prefix {
+        position: absolute; right: 12px;
+        display: flex; align-items: center;
+        color: #9aaabb; pointer-events: none; z-index: 1;
+    }
+
+    .tr-field-input {
+        height: 42px; width: 100%;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 13px; padding: 0 12px;
+        outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .tr-field-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .tr-field-input.with-prefix { padding-right: 36px; }
+    .tr-field-input::placeholder { color: #b0bcc8; }
+
+    .tr-field-hint {
+        display: flex; align-items: center; gap: 5px;
+        font-size: 10px; color: #9aaabb; font-weight: 500;
+    }
+
+    .tr-end-warning {
+        display: flex; align-items: flex-start; gap: 10px;
+        padding: 12px 14px; border-radius: 10px;
+        background: #fffbeb; border: 1px solid #fde68a;
+        color: #92400e; font-size: 11.5px; font-weight: 600;
+    }
+
+    .tr-modal-foot {
+        display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+        padding: 14px 20px;
+        background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%);
+        border-top: 1px solid #edf1f7;
+    }
+
+    .tr-modal-cancel {
+        height: 38px; padding: 0 18px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .tr-modal-cancel:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .tr-modal-confirm {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 38px; padding: 0 18px;
+        border: 0; border-radius: 9px; color: #fff;
+        font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .tr-modal-confirm:hover { transform: translateY(-1px); }
+
+    .start-confirm    { background: linear-gradient(135deg, #e06520, #c0501a); box-shadow: 0 3px 10px rgba(224,101,32,.28); }
+    .complete-confirm { background: linear-gradient(135deg, #16a35b, #0d8a48); box-shadow: 0 3px 10px rgba(22,163,91,.28); }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 1100px) {
+        .tr-driver-name { font-size: 11px; }
+    }
+
+    @@media (max-width: 900px) {
+        .tr-toolbar { flex-direction: column; align-items: stretch; }
+        .tr-search-wrap { max-width: 100%; }
+        .tr-results-badge { margin-right: 0; }
+        .tr-status-tabs { flex-wrap: wrap; }
+        .tr-modal-form-grid { grid-template-columns: 1fr; }
+    }
+
+    @@media (max-width: 680px) {
+        .tr-body { padding: 10px 12px 24px; }
+        .tr-toolbar { padding: 10px 12px; }
+        .tr-trip-avatar { display: none; }
+        .tr-status-bar { padding: 8px 12px; }
+        .tr-trailer-chip { display: none; }
+    }
+
+    @@media (max-width: 480px) {
+        .tr-status-tabs { gap: 2px; }
+        .tr-status-tab { padding: 0 7px; font-size: 9.5px; }
+        .tr-tab-dot { display: none; }
+        .tr-modal-backdrop { padding: 10px; }
+        .tr-modal { border-radius: 14px; }
+    }
+
+</style>
+
+
 @code {
     private AuthUser? _user;
-    private bool CanView   => _user?.Can("TRIP.VIEW") ?? false;
+    private bool CanView   => _user?.Can("TRIP.VIEW")   ?? false;
     private bool CanCreate => _user?.Can("TRIP.CREATE") ?? false;
-    private bool CanEdit   => _user?.Can("TRIP.EDIT") ?? false;
+    private bool CanEdit   => _user?.Can("TRIP.EDIT")   ?? false;
     private bool CanCancel => _user?.Can("TRIP.CANCEL") ?? false;
 
-    private static readonly Dictionary<string, string> Tabs = new()
+    private static readonly (string Key, string Value)[] _statusTabs =
     {
-        ["all"] = "الكل", ["Planned"] = "مخططة", ["Assigned"] = "متعين",
-        ["Started"] = "في الطريق", ["Completed"] = "خلصت", ["Cancelled"] = "ملغاة"
+        ("all",       "الكل"),
+        ("Planned",   "مخططة"),
+        ("Assigned",  "متعين"),
+        ("Started",   "في الطريق"),
+        ("Completed", "خلصت"),
+        ("Cancelled", "ملغاة")
     };
 
     private List<Item> _items = new();
-    private bool _loading; private string _search = ""; private string _tab = "all";
+    private bool   _loading;
+    private string _search = "";
+    private string _tab    = "all";
+    private long?  _confirmId;
 
-    private long? _confirmId;
+    private long?   _startFor; private string? _startAt; private string? _startOdo;
+    private long?   _endFor;   private string? _endAt;   private string? _endOdo;
 
-    private long? _startFor; private string? _startAt; private string? _startOdo;
-    private long? _endFor;   private string? _endAt;   private string? _endOdo;
+    [SupplyParameterFromQuery(Name = "focus")] public string? Focus { get; set; }
 
     public class Item
     {
-        public long TripId { get; set; }
-        public string TripNumber { get; set; } = "";
-        public string DriverName { get; set; } = "";
-        public string VehiclePlate { get; set; } = "";
-        public string? TrailerPlate { get; set; }
-        public int OperationsCount { get; set; }
-        public decimal DirectCost { get; set; }
-        public decimal AllocatedCost { get; set; }
-        public string Status { get; set; } = "";
-        public DateTime? PlannedStartAt { get; set; }
-        public DateTime? ActualStartAt { get; set; }
-        public DateTime? ActualEndAt { get; set; }
+        public long      TripId          { get; set; }
+        public string    TripNumber      { get; set; } = "";
+        public string    DriverName      { get; set; } = "";
+        public string    VehiclePlate    { get; set; } = "";
+        public string?   TrailerPlate    { get; set; }
+        public int       OperationsCount { get; set; }
+        public decimal   DirectCost      { get; set; }
+        public decimal   AllocatedCost   { get; set; }
+        public string    Status          { get; set; } = "";
+        public DateTime? PlannedStartAt  { get; set; }
+        public DateTime? ActualStartAt   { get; set; }
+        public DateTime? ActualEndAt     { get; set; }
     }
 
+    /* ── Helpers ── */
     private static string StatusAr(string s) => s switch
     {
-        "Planned" => "مخططة", "Assigned" => "متعين", "Started" => "في الطريق",
-        "Completed" => "خلصت", "Cancelled" => "ملغاة", _ => s
+        "Planned"   => "مخططة",
+        "Assigned"  => "متعين",
+        "Started"   => "في الطريق",
+        "Completed" => "خلصت",
+        "Cancelled" => "ملغاة",
+        _           => s
     };
 
     private static string ChipClass(string s) => s switch
     {
-        "Planned" => "fc-chip-gray", "Assigned" => "fc-chip-blue",
-        "Started" => "fc-chip-warn", "Completed" => "fc-chip-ok",
-        "Cancelled" => "fc-chip-bad", _ => "fc-chip-gray"
+        "Planned"   => "chip-planned",
+        "Assigned"  => "chip-assigned",
+        "Started"   => "chip-started",
+        "Completed" => "chip-completed",
+        "Cancelled" => "chip-cancelled",
+        _           => "chip-planned"
+    };
+
+    private static string ChipDotClass(string s) => s switch
+    {
+        "Planned"   => "cdot-planned",
+        "Assigned"  => "cdot-assigned",
+        "Started"   => "cdot-started",
+        "Completed" => "cdot-completed",
+        "Cancelled" => "cdot-cancelled",
+        _           => "cdot-planned"
+    };
+
+    private static string AvatarClass(string s) => s switch
+    {
+        "Planned"   => "av-planned",
+        "Assigned"  => "av-assigned",
+        "Started"   => "av-started",
+        "Completed" => "av-completed",
+        "Cancelled" => "av-cancelled",
+        _           => "av-planned"
+    };
+
+    private static string StatusDotColor(string s) => s switch
+    {
+        "all"       => "tdot-all",
+        "Planned"   => "tdot-planned",
+        "Assigned"  => "tdot-assigned",
+        "Started"   => "tdot-started",
+        "Completed" => "tdot-completed",
+        "Cancelled" => "tdot-cancelled",
+        _           => "tdot-all"
     };
 
     private static string Money(decimal v) => v.ToString("N0");
@@ -269,9 +1275,7 @@
          t.DriverName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
          t.VehiclePlate.Contains(_search, StringComparison.OrdinalIgnoreCase)));
 
-    /// <summary>🔎 لما تيجي من البحث العام: <c>/customers?focus=CUST-001</c> — بنفلتر عليه.</summary>
-    [SupplyParameterFromQuery(Name = "focus")] public string? Focus { get; set; }
-
+    /* ── Init ── */
     protected override async Task OnInitializedAsync()
     {
         if (!string.IsNullOrWhiteSpace(Focus)) _search = Focus.Trim();
@@ -286,25 +1290,25 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/trips?take=300") ?? new(); }
+        try   { _items = await Http.GetFromJsonAsync<List<Item>>("api/trips?take=300") ?? new(); }
         catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
         finally { _loading = false; }
     }
 
-    private void GoNew() => Nav.NavigateTo("/trips/new");
+    private void GoNew()        => Nav.NavigateTo("/trips/new");
     private void GoEdit(Item t) => Nav.NavigateTo($"/trips/new/{t.TripId}");
 
     private void Start(Item t)
     {
         _startFor = t.TripId;
-        _startAt = (t.PlannedStartAt ?? DateTime.Now).ToString("yyyy-MM-ddTHH:mm");
+        _startAt  = (t.PlannedStartAt ?? DateTime.Now).ToString("yyyy-MM-ddTHH:mm");
         _startOdo = null;
     }
 
     private void Complete(Item t)
     {
         _endFor = t.TripId;
-        _endAt = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
+        _endAt  = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
         _endOdo = null;
     }
 

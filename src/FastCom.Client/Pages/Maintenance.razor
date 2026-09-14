@@ -1,0 +1,473 @@
+@page "/maintenance"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject ISnackbar Snackbar
+
+<PageTitle>صيانة العربات — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">الأسطول</div>
+                <h1 class="fc-hero-title">صيانة العربات</h1>
+                <p class="fc-hero-sub">سجل الصيانة وتكلفة الشهر والعربيات اللي صيانتها جاية</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="LoadAsync" Style="color:#9FB4CC" />
+                @if (CanCreate)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="New">سجل صيانة</MudButton>
+                }
+            </div>
+        </div>
+
+        <div class="fc-kpis-glass">
+            <div class="fc-kpi"><div class="fc-kpi-lb">مفتوح</div><div class="fc-kpi-num">@_s.Open</div></div>
+            <div class="fc-kpi"><div class="fc-kpi-lb">متأخر</div><div class="fc-kpi-num">@_s.Overdue</div></div>
+            <div class="fc-kpi"><div class="fc-kpi-lb">صيانة جاية (30 يوم)</div><div class="fc-kpi-num">@_s.DueSoon</div></div>
+            <div class="fc-kpi"><div class="fc-kpi-lb">تكلفة الشهر</div>
+                <div class="fc-kpi-num">@_s.MonthCost.ToString("N0")</div></div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanView)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض الصيانة.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+
+            @if (_s.Overdue > 0)
+            {
+                <div class="fc-alert fc-alert-warn">
+                    <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
+                    <div class="fc-alert-body">
+                        <div class="fc-alert-title">فيه @_s.Overdue عربة صيانتها اتأخرت</div>
+                        <div>فلتر بـ «متأخرة» تحت عشان تشوفهم.</div>
+                    </div>
+                </div>
+            }
+
+            @if (_msg is not null)
+            {
+                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                          Class="mb-4">@_msg</MudAlert>
+            }
+
+            <div class="fc-fsec">
+                <div class="fc-fsec-head">
+                    <span class="fc-fsec-n">1</span>
+                    <div>
+                        <div class="fc-fsec-t">سجل الصيانة</div>
+                        <div class="fc-fsec-d">التكلفة هنا سجل بس — عايزها تدخل الخزينة؟ اعمل مصروف من شاشة المصروفات</div>
+                    </div>
+                    <span class="fc-fsec-ic"><MudIcon Icon="@Icons.Material.Filled.Build" Size="Size.Small" /></span>
+                </div>
+
+                <div class="fc-filters">
+                    <select class="fc-sel" value="@_fStatus" @onchange="e => _fStatus = e.Value?.ToString()">
+                        <option value="">كل الحالات</option>
+                        <option value="Scheduled">مجدولة</option>
+                        <option value="InProgress">شغالة</option>
+                        <option value="Completed">خلصت</option>
+                        <option value="Cancelled">ملغاة</option>
+                    </select>
+                    <select class="fc-sel" value="@_fVehicle" @onchange="e => _fVehicle = Nul(e.Value)">
+                        <option value="">كل العربات</option>
+                        @foreach (var v in _vehicles) { <option value="@v.Id">@v.Label</option> }
+                    </select>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                               OnClick="LoadAsync">تطبيق</MudButton>
+                </div>
+
+                <div class="fc-table-wrap"><table class="fc-table">
+                    <thead><tr>
+                        <th>الرقم</th><th>العربة</th><th>التاريخ</th><th>النوع</th>
+                        <th>المورد</th><th>التكلفة</th><th>الصيانة القادمة</th>
+                        <th>الحالة</th><th style="width:90px"></th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach (var m in _items)
+                        {
+                            <tr>
+                                <td><span class="fc-role-chip">@m.MaintenanceNumber</span></td>
+                                <td class="fc-cell-main">
+                                    @m.VehiclePlate
+                                    @if (!string.IsNullOrWhiteSpace(m.VehicleModel))
+                                    {
+                                        <div class="fc-cell-sub">@m.VehicleModel</div>
+                                    }
+                                </td>
+                                <td>@m.MaintenanceDate.ToString("yyyy-MM-dd")</td>
+                                <td>@TypeAr(m.MaintenanceType)</td>
+                                <td class="fc-cell-sub">@(m.SupplierName ?? "—")</td>
+                                <td><b>@m.Cost.ToString("N2")</b></td>
+                                <td>@DueCell(m)</td>
+                                <td><span class="fc-chip @StatusCls(m.Status)">@StatusAr(m.Status)</span></td>
+                                <td>
+                                    @if (CanEdit)
+                                    {
+                                        <div class="fc-row-actions">
+                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
+                                                           Color="Color.Primary" title="تعديل" OnClick="() => Edit(m)" />
+                                            @if (CanDelete)
+                                            {
+                                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
+                                                               Color="Color.Error" title="حذف" OnClick="() => DeleteAsync(m)" />
+                                            }
+                                        </div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (_items.Count == 0)
+                        {
+                            <tr><td colspan="9"><div class="fc-empty">مافيش سجلات صيانة</div></td></tr>
+                        }
+                    </tbody>
+                </table></div>
+            </div>
+
+        </div></div>
+    }
+</div>
+
+@* ═══════════ مودال ═══════════ *@
+@if (_open && CanCreate)
+{
+    <div class="fc-modal-backdrop" @onclick="Close">
+        <div class="fc-modal" @onclick:stopPropagation="true">
+            <div class="fc-modal-head">
+                <div>
+                    <div class="fc-modal-title">@ModalTitle</div>
+                    <div class="fc-modal-sub">الرقم بيتولّد تلقائيًا من سلسلة MAINTENANCE</div>
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="Close" />
+            </div>
+            <div class="fc-modal-body">
+
+                @if (_msg is not null)
+                {
+                    <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                              Class="mb-4">@_msg</MudAlert>
+                }
+
+                <div class="fc-form-grid">
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">العربة<i>*</i></div>
+                        <select class="fc-sel fc-sel-lg" @bind="_f.VehicleId">
+                            <option value="0">— اختار —</option>
+                            @foreach (var v in _vehicles) { <option value="@v.Id">@v.Label</option> }
+                        </select>
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">الفرع<i>*</i></div>
+                        <select class="fc-sel fc-sel-lg" @bind="_f.BranchId">
+                            <option value="0">— اختار —</option>
+                            @foreach (var b in _branches) { <option value="@b.Id">@b.Label</option> }
+                        </select>
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">تاريخ الصيانة<i>*</i></div>
+                        <input type="date" class="fc-sel fc-sel-lg" value="@_f.MaintenanceDate"
+                               @onchange="e => _f.MaintenanceDate = e.Value?.ToString()" />
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">نوع الصيانة<i>*</i></div>
+                        <select class="fc-sel fc-sel-lg" @bind="_f.MaintenanceType">
+                            @foreach (var t in Types) { <option value="@t">@TypeAr(t)</option> }
+                        </select>
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">المورد / الورشة</div>
+                        <select class="fc-sel fc-sel-lg" value="@_f.SupplierId" @onchange="e => _f.SupplierId = Nul(e.Value)">
+                            <option value="">— بدون —</option>
+                            @foreach (var s in _suppliers) { <option value="@s.Id">@s.Label</option> }
+                        </select>
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">الحالة<i>*</i></div>
+                        <select class="fc-sel fc-sel-lg" @bind="_f.Status">
+                            <option value="Scheduled">مجدولة</option>
+                            <option value="InProgress">شغالة</option>
+                            <option value="Completed">خلصت</option>
+                            <option value="Cancelled">ملغاة</option>
+                        </select>
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">قراءة العداد</div>
+                        <input type="number" min="0" step="0.1" class="fc-sel fc-sel-lg" value="@_f.Odometer"
+                               @onchange="e => _f.Odometer = DecN(e.Value)" />
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">التكلفة</div>
+                        <input type="number" min="0" step="0.01" class="fc-sel fc-sel-lg" value="@_f.Cost"
+                               @onchange="e => _f.Cost = Dec(e.Value)" />
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">الصيانة القادمة — تاريخ</div>
+                        <input type="date" class="fc-sel fc-sel-lg" value="@_f.NextDueDate"
+                               @onchange="e => _f.NextDueDate = e.Value?.ToString()" />
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">الصيانة القادمة — عداد</div>
+                        <input type="number" min="0" step="0.1" class="fc-sel fc-sel-lg" value="@_f.NextDueOdometer"
+                               @onchange="e => _f.NextDueOdometer = DecN(e.Value)" />
+                    </div>
+                    <div class="fc-fld fc-field-full">
+                        <div class="fc-fld-lb">الوصف</div>
+                        <input class="fc-sel fc-sel-lg" @bind="_f.Description" maxlength="1000" />
+                    </div>
+                </div>
+            </div>
+            <div class="fc-modal-foot">
+                <MudButton Variant="Variant.Text" OnClick="Close">إلغاء</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                           StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">حفظ</MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private AuthUser? _user;
+    private bool CanView   => _user?.Can("MAINTENANCE.VIEW") ?? false;
+    private bool CanCreate => _user?.Can("MAINTENANCE.CREATE") ?? false;
+    private bool CanEdit   => _user?.Can("MAINTENANCE.EDIT") ?? false;
+    private bool CanDelete => _user?.Can("MAINTENANCE.DELETE") ?? false;
+
+    private static readonly string[] Types =
+    {
+        "Oil", "Filter", "Brake", "Tire", "Battery", "Coolant",
+        "Transmission", "Electrical", "Body", "Inspection", "Other"
+    };
+
+    private List<Item> _items = new();
+    private Sum _s = new();
+    private List<Opt> _vehicles = new(), _branches = new(), _suppliers = new();
+    private string? _fStatus; private int? _fVehicle;
+
+    private bool _open, _saving;
+    private string? _msg; private bool _ok = true;
+    private long? _editId;
+    private Form _f = new();
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+
+    public class Sum
+    {
+        public int Total { get; set; }
+        public int Open { get; set; }
+        public int Overdue { get; set; }
+        public int DueSoon { get; set; }
+        public decimal MonthCost { get; set; }
+    }
+
+    /// <summary>مطابق لـ <c>MaintenanceController.Item</c> — 18 حقل.</summary>
+    public class Item
+    {
+        public long MaintenanceId { get; set; }
+        public string MaintenanceNumber { get; set; } = "";
+        public int VehicleId { get; set; }
+        public string VehiclePlate { get; set; } = "";
+        public string? VehicleModel { get; set; }
+        public int BranchId { get; set; }
+        public DateOnly MaintenanceDate { get; set; }
+        public string MaintenanceType { get; set; } = "";
+        public int? SupplierId { get; set; }
+        public string? SupplierName { get; set; }
+        public decimal? Odometer { get; set; }
+        public decimal Cost { get; set; }
+        public DateOnly? NextDueDate { get; set; }
+        public decimal? NextDueOdometer { get; set; }
+        public string? Description { get; set; }
+        public string Status { get; set; } = "";
+        public int DaysToDue { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    /// <summary>مطابق لـ <c>MaintenanceController.Upsert</c> — 11 حقل.</summary>
+    public class Form
+    {
+        public int VehicleId { get; set; }
+        public int BranchId { get; set; }
+        public string? MaintenanceDate { get; set; }
+        public string MaintenanceType { get; set; } = "Oil";
+        public int? SupplierId { get; set; }
+        public decimal? Odometer { get; set; }
+        public decimal Cost { get; set; }
+        public string? NextDueDate { get; set; }
+        public decimal? NextDueOdometer { get; set; }
+        public string? Description { get; set; }
+        public string Status { get; set; } = "Completed";
+        public string MaintenanceNumber { get; set; } = "";   /* للـ UI بس */
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (!CanView) return;
+        _vehicles = await SafeOpts("api/options/vehicles");
+        _branches = await SafeOpts("api/options/branches");
+        _suppliers = await SafeOpts("api/options/suppliers");
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var qs = "";
+            if (!string.IsNullOrWhiteSpace(_fStatus)) qs += $"status={_fStatus}&";
+            if (_fVehicle is not null) qs += $"vehicleId={_fVehicle}&";
+            _items = await Http.GetFromJsonAsync<List<Item>>("api/fleet/maintenance?" + qs) ?? new();
+            _s = await Http.GetFromJsonAsync<Sum>("api/fleet/maintenance/summary") ?? new();
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل التحميل: " + ex.Message; }
+    }
+
+    private async Task<List<Opt>> SafeOpts(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<Opt>>(url) ?? new(); }
+        catch (Exception ex)
+        {
+            /* 🔴 كان بيبلع الخطأ بصمت — فالدروبداون يفضى من غير أي سبب ظاهر.
+                  دلوقتي بيقول إيه اللي فشل بالظبط. */
+            _ok = false;
+            _msg = $"تعذّر تحميل القوائم ({url}): {ex.Message}";
+            return new();
+        }
+    }
+
+    private void New()
+    {
+        _editId = null;
+        _f = new Form { MaintenanceDate = DateTime.Now.ToString("yyyy-MM-dd") };
+        _msg = null; _open = true;
+    }
+
+    private void Edit(Item m)
+    {
+        _editId = m.MaintenanceId;
+        _f = new Form
+        {
+            VehicleId = m.VehicleId, BranchId = m.BranchId,
+            MaintenanceDate = m.MaintenanceDate.ToString("yyyy-MM-dd"),
+            MaintenanceType = m.MaintenanceType, SupplierId = m.SupplierId,
+            Odometer = m.Odometer, Cost = m.Cost,
+            NextDueDate = m.NextDueDate?.ToString("yyyy-MM-dd"),
+            NextDueOdometer = m.NextDueOdometer, Description = m.Description,
+            Status = m.Status, MaintenanceNumber = m.MaintenanceNumber
+        };
+        _msg = null; _open = true;
+    }
+
+    private void Close() { _open = false; _msg = null; }
+
+    private async Task SaveAsync()
+    {
+        if (_saving) return;
+        if (_f.VehicleId <= 0) { _ok = false; _msg = "اختار العربة"; return; }
+        if (_f.BranchId <= 0)  { _ok = false; _msg = "اختار الفرع"; return; }
+        if (string.IsNullOrWhiteSpace(_f.MaintenanceDate)) { _ok = false; _msg = "التاريخ مطلوب"; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var payload = new
+            {
+                vehicleId = _f.VehicleId, branchId = _f.BranchId,
+                maintenanceDate = _f.MaintenanceDate, maintenanceType = _f.MaintenanceType,
+                supplierId = _f.SupplierId, odometer = _f.Odometer, cost = _f.Cost,
+                nextDueDate = _f.NextDueDate, nextDueOdometer = _f.NextDueOdometer,
+                description = _f.Description, status = _f.Status
+            };
+            var res = _editId is null
+                ? await Http.PostAsJsonAsync("api/fleet/maintenance", payload)
+                : await Http.PutAsJsonAsync($"api/fleet/maintenance/{_editId}", payload);
+
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) { Close(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task DeleteAsync(Item m)
+    {
+        try
+        {
+            var res = await Http.DeleteAsync($"api/fleet/maintenance/{m.MaintenanceId}");
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+    }
+
+    /* 🔴 أي `"` جوه attribute = RZ1010 — فالـ helpers بتخرج الـ class */
+
+    private string ModalTitle => _editId is null ? "سجل صيانة جديد" : "تعديل: " + _f.MaintenanceNumber;
+    /* 🔴 أي `"` جوه attribute = RZ1010 — فالـ helpers بتخرج الـ class */
+
+    /// <summary>خلية «الصيانة القادمة» — بتحمر لو متأخرة.</summary>
+    private RenderFragment DueCell(Item m) => __builder =>
+    {
+        @if (m.NextDueDate is null)
+        {
+            <span class="fc-cell-sub">—</span>
+        }
+        else if (m.DaysToDue < 0)
+        {
+            <b class="fc-txt-bad">@m.NextDueDate.Value.ToString("yyyy-MM-dd")</b>
+            <span class="fc-cell-sub"> (متأخرة @(-m.DaysToDue) يوم)</span>
+        }
+        else
+        {
+            <text>@m.NextDueDate.Value.ToString("yyyy-MM-dd")</text>
+            <span class="fc-cell-sub"> (بعد @m.DaysToDue يوم)</span>
+        }
+    };
+
+    private static string StatusCls(string s) => s switch
+    {
+        "Scheduled" => "fc-chip-blue", "InProgress" => "fc-chip-warn",
+        "Completed" => "fc-chip-ok", "Cancelled" => "fc-chip-gray", _ => "fc-chip-gray"
+    };
+    private static string StatusAr(string s) => s switch
+    {
+        "Scheduled" => "مجدولة", "InProgress" => "شغالة",
+        "Completed" => "خلصت", "Cancelled" => "ملغاة", _ => s
+    };
+    private static string TypeAr(string t) => t switch
+    {
+        "Oil" => "زيت", "Filter" => "فلاتر", "Brake" => "فرامل", "Tire" => "كاوتش",
+        "Battery" => "بطارية", "Coolant" => "تبريد", "Transmission" => "فتيس",
+        "Electrical" => "كهرباء", "Body" => "سمكرة", "Inspection" => "فحص",
+        "Other" => "أخرى", _ => t
+    };
+
+    private static int? Nul(object? v) => int.TryParse(v?.ToString(), out var n) && n > 0 ? n : null;
+    private static decimal Dec(object? v) => decimal.TryParse(v?.ToString(), out var n) && n >= 0 ? n : 0m;
+    private static decimal? DecN(object? v) => decimal.TryParse(v?.ToString(), out var n) && n > 0 ? n : null;
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "✅ تم" : "حصل خطأ — حاول تاني"; }
+    }
+}

@@ -48,6 +48,10 @@ public partial class Expense
     [StringLength(100)]
     public string? ReferenceNumber { get; set; }
 
+    /* 🔴 طريقة الدفع — بتحدد هل المصروف يدخل الخزينة ولا لأ.
+       NULL = لسه مااتحددش (المصروفات القديمة). */
+    public int? PaymentMethodId { get; set; }
+
     [StringLength(20)]
     public string PaymentStatus { get; set; } = null!;
 
@@ -103,6 +107,9 @@ public partial class Expense
     [ForeignKey("OperationId")]
     [InverseProperty("Expenses")]
     public virtual Operation? Operation { get; set; }
+
+    [ForeignKey("PaymentMethodId")]
+    public virtual PaymentMethod? PaymentMethod { get; set; }
 
     [ForeignKey("SupplierId")]
     [InverseProperty("Expenses")]

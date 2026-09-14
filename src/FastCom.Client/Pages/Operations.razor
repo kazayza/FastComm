@@ -9,6 +9,10 @@
 
 <PageTitle>العمليات — فاست كوم</PageTitle>
 
+
+@* ═══════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════ *@
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
@@ -18,214 +22,1091 @@
                 <p class="fc-hero-sub">كل عملية نقل بإيرادها وتكلفتها وربحها — من الحجز أو مستقلة</p>
             </div>
             <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
+                               OnClick="Reload" Style="color:#9FB4CC" />
                 @if (CanCreate)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="GoNew">عملية جديدة</MudButton>
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="GoNew">عملية جديدة</MudButton>
                 }
             </div>
         </div>
+
         @if (CanView)
         {
             <div class="fc-kpis fc-kpis-glass">
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.LocalShipping" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي العمليات</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.HourglassTop" /></div>
-                    <div><div class="fc-kpi-num">@Open.Count()</div><div class="fc-kpi-lb">لسه شغالة</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(o => o.Status == "Closed")</div><div class="fc-kpi-lb">مقفولة</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
-                    <div><div class="fc-kpi-num">@Money(_items.Sum(o => o.RevenueNet - o.ActualCost))</div><div class="fc-kpi-lb">صافي الربح</div></div></div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.LocalShipping" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي العمليات</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.HourglassTop" /></div>
+                    <div><div class="fc-kpi-num">@Open.Count()</div><div class="fc-kpi-lb">لسه شغالة</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(o => o.Status == "Closed")</div><div class="fc-kpi-lb">مقفولة</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
+                    <div>
+                        <div class="fc-kpi-num @(_items.Sum(o => o.RevenueNet - o.ActualCost) >= 0 ? "" : "kpi-negative")">
+                            @Money(_items.Sum(o => o.RevenueNet - o.ActualCost))
+                        </div>
+                        <div class="fc-kpi-lb">صافي الربح</div>
+                    </div>
+                </div>
             </div>
         }
     </div>
 </div>
 
-<div class="fc-page">
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="op-body">
+
     @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديكصلاحية عرض العمليات.</MudAlert>
+        <div class="op-state-box">
+            <div class="op-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليس لديك صلاحية عرض العمليات — تواصل مع المسؤول</p>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
-            <div class="fc-toolbar">
-                <div class="fc-filters">
-                    @foreach (var t in Tabs)
+        <div class="op-card">
+
+            @* ── Toolbar ── *@
+            <div class="op-toolbar">
+
+                <div class="op-search-wrap">
+                    <svg class="op-search-icon" viewBox="0 0 24 24"
+                         width="16" height="16" fill="none" stroke="currentColor"
+                         stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                    </svg>
+                    <input class="op-search-input"
+                           placeholder="ابحث برقم العملية أو العميل أو الحجز..."
+                           @bind="_search"
+                           @bind:event="oninput"
+                           aria-label="بحث" />
+                    @if (!string.IsNullOrWhiteSpace(_search))
                     {
-                        <button class='fc-filter @(_tab == t.Key ? "on" : "")' @onclick="() => SetTab(t.Key)">@t.Value</button>
+                        <button class="op-search-clear"
+                                @onclick="() => _search = string.Empty"
+                                aria-label="مسح البحث">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
                     }
                 </div>
-                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
-                              Placeholder="ابحث برقم العملية أو العميل أو الحجز..." Variant="Variant.Outlined" Dense="true"
-                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                              Class="fc-search-box" Immediate="true" />
-                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+
+                @* ── Financial Summary ── *@
+                @if (_items.Any() && !_loading)
+                {
+                    <div class="op-fin-summary">
+                        <div class="op-fin-item">
+                            <span class="op-fin-label">الإيرادات</span>
+                            <span class="op-fin-val fin-green">
+                                @Money(Filtered.Sum(o => o.RevenueNet))
+                            </span>
+                        </div>
+                        <div class="op-fin-sep" aria-hidden="true"></div>
+                        <div class="op-fin-item">
+                            <span class="op-fin-label">التكاليف</span>
+                            <span class="op-fin-val fin-red">
+                                @Money(Filtered.Sum(o => o.ActualCost))
+                            </span>
+                        </div>
+                        <div class="op-fin-sep" aria-hidden="true"></div>
+                        <div class="op-fin-item">
+                            <span class="op-fin-label">الربح</span>
+                            @{
+                                var profit = Filtered.Sum(o => o.RevenueNet - o.ActualCost);
+                            }
+                            <span class="op-fin-val @(profit >= 0 ? "fin-green" : "fin-red")">
+                                @Money(profit)
+                            </span>
+                        </div>
+                    </div>
+                }
+
+                <div class="op-results-badge">
+                    عرض <strong>@Filtered.Count()</strong> من <strong>@_items.Count</strong>
+                </div>
+
             </div>
 
+
+            @* ── Status Filter Tabs ── *@
+            <div class="op-status-bar">
+                <div class="op-status-tabs" role="group" aria-label="فلتر الحالة">
+                    @foreach (var t in _statusTabs)
+                    {
+                        var count = t.Key == "all"
+                            ? _items.Count
+                            : _items.Count(o => o.Status == t.Key);
+
+                        <button class="op-status-tab @(_tab == t.Key ? "active" : "")"
+                                @onclick="() => SetTab(t.Key)"
+                                aria-pressed="@(_tab == t.Key)">
+                            <span class="op-tab-dot @StatusDotColor(t.Key)"
+                                  aria-hidden="true"></span>
+                            <span>@t.Value</span>
+                            <span class="op-tab-count">@count</span>
+                        </button>
+                    }
+                </div>
+            </div>
+
+
+            @* ── Content ── *@
             @if (_loading)
             {
-                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+                <div class="op-loading">
+                    <div class="op-spinner" aria-label="جاري التحميل"></div>
+                    <span>جاري تحميل العمليات...</span>
+                </div>
+            }
+            else if (!Filtered.Any())
+            {
+                <div class="op-empty">
+                    <div class="op-empty-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="40" height="40"
+                             fill="none" stroke="currentColor" stroke-width="1.4">
+                            <rect x="1" y="3" width="15" height="13" rx="2"/>
+                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                        </svg>
+                    </div>
+                    <div class="op-empty-title">
+                        @(string.IsNullOrWhiteSpace(_search) ? "لا توجد عمليات في هذا الفلتر" : "لا توجد نتائج")
+                    </div>
+                    <div class="op-empty-sub">
+                        @(string.IsNullOrWhiteSpace(_search)
+                            ? "جرّب فلتر مختلف أو أنشئ عملية جديدة"
+                            : "جرّب كلمة بحث مختلفة")
+                    </div>
+                    @if (CanCreate && string.IsNullOrWhiteSpace(_search))
+                    {
+                        <button class="op-add-btn" @onclick="GoNew">
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2.5"
+                                 aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                            عملية جديدة
+                        </button>
+                    }
+                </div>
             }
             else
             {
-                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
-                    <thead><tr>
-                        <th>رقم العملية</th><th>العميل</th><th>الخط</th><th>التاريخ</th>
-                        <th>الحالة</th><th>الإيراد</th><th>التكلفة</th><th>الربح</th>
-                        <th style="width:170px; text-align:left">إجراءات</th>
-                    </tr></thead>
-                    <tbody>
-                        @foreach (var o in Filtered)
-                        {
+                <div class="op-table-wrap">
+                    <table class="op-table" aria-label="قائمة العمليات">
+                        <thead>
                             <tr>
-                                <td><span class="fc-role-chip">@o.OperationNumber</span>
-                                    @if (o.BookingNumber is not null)
-                                    { <div class="fc-cell-sub">حجز @o.BookingNumber</div> }</td>
-                                <td><div class="fc-cell-main">@o.CustomerName</div>
-                                    <div class="fc-cell-sub">@(o.ServiceName ?? "—")</div></td>
-                                <td class="fc-cell-sub">@(o.PortName ?? "—") ← @(o.DestinationName ?? "—")</td>
-                                <td class="fc-cell-sub">@(o.PlannedDate?.ToString("yyyy-MM-dd") ?? "—")</td>
-                                <td><span class="fc-chip @ChipClass(o.Status)"><i></i>@StatusAr(o.Status)</span></td>
-                                <td><b>@Money(o.RevenueNet)</b>
-                                    @if (o.RevenueTax > 0) { <div class="fc-cell-sub">ضريبة @Money(o.RevenueTax)</div> }</td>
-                                <td class="fc-cell-sub">@Money(o.ActualCost)
-                                    @if (o.EstimatedCost > 0) { <div class="fc-cell-sub">تقدير @Money(o.EstimatedCost)</div> }</td>
-                                <td><span class='fc-chip @(o.RevenueNet - o.ActualCost >= 0 ? "fc-chip-ok" : "fc-chip-bad")'>
-                                    <i></i>@Money(o.RevenueNet - o.ActualCost)</span></td>
-                                <td><div class="fc-row-actions">
-                                    @if (o.Status is not ("Closed" or "Cancelled") && CanEdit)
-                                    {
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
-                                                       Color="Color.Primary" title="تعديل" OnClick="() => GoEdit(o)" />
-                                    }
-                                    @if (o.Status is ("Assigned" or "InTransit" or "DriverReceived") && CanEdit)
-                                    {
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle"
-                                                       Color="Color.Success" title="تم التسليم" OnClick='() => SetStatus(o, "Delivered")' />
-                                    }
-                                    @if (o.Status is ("Delivered" or "ExpensesPending" or "CustodyPending" or "ReadyToClose") && CanClose)
-                                    {
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Lock"
-                                                       Color="Color.Primary" title="إقفال العملية" OnClick="() => Close(o)" />
-                                    }
-                                    @if (o.Status == "Closed" && CanReopen)
-                                    {
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.LockOpen"
-                                                       Color="Color.Warning" title="فتح تاني" OnClick="() => Reopen(o)" />
-                                    }
-                                    @if (o.Status is ("Pending" or "Assigned") && CanCancel)
-                                    {
-                                        @if (_confirmId == o.OperationId)
-                                        {
-                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
-                                                       OnClick='() => SetStatus(o, "Cancelled")'>إلغاء؟</MudButton>
-                                        }
-                                        else
-                                        {
-                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Close"
-                                                           Color="Color.Error" title="إلغاء" OnClick="() => _confirmId = o.OperationId" />
-                                        }
-                                    }
-                                    else if (o.Status is ("Pending" or "Cancelled") && CanDelete)
-                                    {
-                                        @if (_confirmId == o.OperationId)
-                                        {
-                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
-                                                       OnClick="() => Delete(o)">حذف؟</MudButton>
-                                        }
-                                        else
-                                        {
-                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
-                                                           Color="Color.Error" title="حذف" OnClick="() => _confirmId = o.OperationId" />
-                                        }
-                                    }
-                                </div></td>
+                                <th scope="col" class="th-start">العملية</th>
+                                <th scope="col">المسار</th>
+                                <th scope="col">التاريخ</th>
+                                <th scope="col">الحالة</th>
+                                <th scope="col">الإيراد</th>
+                                <th scope="col">التكلفة</th>
+                                <th scope="col">الربح</th>
+                                <th scope="col" style="width:190px">إجراءات</th>
                             </tr>
-                        }
-                        @if (!Filtered.Any())
-                        {
-                            <tr><td colspan="9"><div class="fc-empty"><div>لايوجد عمليات في الفلتر ده</div></div></td></tr>
-                        }
-                    </tbody>
-                </table></div>
+                        </thead>
+                        <tbody>
+                            @foreach (var o in Filtered)
+                            {
+                                var profit = o.RevenueNet - o.ActualCost;
+
+                                <tr class="@(o.Status == "Cancelled" ? "row-cancelled" : "")
+                                           @(o.Status == "Closed" ? "row-closed" : "")">
+
+                                    @* ── العملية: رقم + عميل + حجز ── *@
+                                    <td class="td-start">
+                                        <div class="op-op-cell">
+                                            <div class="op-avatar @AvatarClass(o.Status)"
+                                                 aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="16" height="16"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                                                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                                                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                                                </svg>
+                                            </div>
+                                            <div class="op-op-info">
+                                                <div class="op-op-num">
+                                                    <span class="op-code-chip">@o.OperationNumber</span>
+                                                </div>
+                                                <div class="op-customer-name">@o.CustomerName</div>
+                                                <div class="op-op-meta">
+                                                    @if (!string.IsNullOrWhiteSpace(o.ServiceName))
+                                                    {
+                                                        <span class="op-service-tag">@o.ServiceName</span>
+                                                    }
+                                                    @if (o.BookingNumber is not null)
+                                                    {
+                                                        <span class="op-booking-tag">
+                                                            <svg viewBox="0 0 16 16" width="9" height="9"
+                                                                 fill="none" stroke="currentColor" stroke-width="1.8"
+                                                                 aria-hidden="true">
+                                                                <path d="M2 5h12M5 2v3M11 2v3M3 5v8a1 1 0 001 1h8a1 1 0 001-1V5H3z"/>
+                                                            </svg>
+                                                            @o.BookingNumber
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    @* ── المسار ── *@
+                                    <td>
+                                        @if (o.PortName is not null || o.DestinationName is not null)
+                                        {
+                                            <div class="op-route-cell">
+                                                <span class="op-route-from">@(o.PortName ?? "—")</span>
+                                                <span class="op-route-arrow" aria-hidden="true">
+                                                    <svg viewBox="0 0 24 24" width="11" height="11"
+                                                         fill="none" stroke="currentColor" stroke-width="2.5">
+                                                        <path d="M5 12h14M12 5l7 7-7 7"
+                                                              stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                </span>
+                                                <span class="op-route-to">@(o.DestinationName ?? "—")</span>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="td-muted">—</span>
+                                        }
+                                    </td>
+
+                                    @* ── التاريخ ── *@
+                                    <td class="td-muted">
+                                        @if (o.PlannedDate.HasValue)
+                                        {
+                                            <div class="op-date-cell">
+                                                <svg viewBox="0 0 16 16" width="11" height="11"
+                                                     fill="none" stroke="currentColor" stroke-width="1.7"
+                                                     aria-hidden="true">
+                                                    <rect x="2" y="3" width="12" height="11" rx="2"/>
+                                                    <path d="M5 1v3M11 1v3M2 7h12" stroke-linecap="round"/>
+                                                </svg>
+                                                @o.PlannedDate.Value.ToString("yyyy-MM-dd")
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span>—</span>
+                                        }
+                                    </td>
+
+                                    @* ── الحالة ── *@
+                                    <td>
+                                        <span class="op-chip @ChipClass(o.Status)">
+                                            <span class="op-chip-dot @ChipDotClass(o.Status)"
+                                                  aria-hidden="true"></span>
+                                            @StatusAr(o.Status)
+                                        </span>
+                                    </td>
+
+                                    @* ── الإيراد ── *@
+                                    <td>
+                                        <div class="op-money-cell">
+                                            <span class="op-money-main">@Money(o.RevenueNet)</span>
+                                            @if (o.RevenueTax > 0)
+                                            {
+                                                <span class="op-money-sub">+ ضريبة @Money(o.RevenueTax)</span>
+                                            }
+                                        </div>
+                                    </td>
+
+                                    @* ── التكلفة ── *@
+                                    <td>
+                                        <div class="op-money-cell">
+                                            <span class="op-money-main cost">@Money(o.ActualCost)</span>
+                                            @if (o.EstimatedCost > 0 && o.EstimatedCost != o.ActualCost)
+                                            {
+                                                <span class="op-money-sub">تقدير @Money(o.EstimatedCost)</span>
+                                            }
+                                        </div>
+                                    </td>
+
+                                    @* ── الربح ── *@
+                                    <td>
+                                        <span class="op-profit-badge @(profit >= 0 ? "profit-pos" : "profit-neg")">
+                                            <span aria-hidden="true">@(profit >= 0 ? "↑" : "↓")</span>
+                                            @Money(profit)
+                                        </span>
+                                    </td>
+
+                                    @* ── إجراءات ── *@
+                                    <td>
+                                        <div class="op-actions">
+
+                                            @* تعديل *@
+                                            @if (o.Status is not ("Closed" or "Cancelled") && CanEdit)
+                                            {
+                                                <button class="op-act-btn act-edit"
+                                                        @onclick="() => GoEdit(o)"
+                                                        title="تعديل"
+                                                        aria-label="تعديل @o.OperationNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @* تم التسليم *@
+                                            @if (o.Status is ("Assigned" or "InTransit" or "DriverReceived") && CanEdit)
+                                            {
+                                                <button class="op-act-btn act-deliver"
+                                                        @onclick='() => SetStatus(o, "Delivered")'
+                                                        title="تم التسليم"
+                                                        aria-label="تسليم @o.OperationNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M22 11.08V12a10 10 0 11-5.93-9.14"
+                                                              stroke-linecap="round"/>
+                                                        <path d="M22 4L12 14.01l-3-3"
+                                                              stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @* إقفال *@
+                                            @if (o.Status is ("Delivered" or "ExpensesPending" or "CustodyPending" or "ReadyToClose") && CanClose)
+                                            {
+                                                <button class="op-act-btn act-close"
+                                                        @onclick="() => Close(o)"
+                                                        title="إقفال العملية"
+                                                        aria-label="إقفال @o.OperationNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <rect x="3" y="11" width="18" height="11" rx="2"/>
+                                                        <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @* فتح تاني *@
+                                            @if (o.Status == "Closed" && CanReopen)
+                                            {
+                                                <button class="op-act-btn act-reopen"
+                                                        @onclick="() => Reopen(o)"
+                                                        title="فتح تاني"
+                                                        aria-label="فتح @o.OperationNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <rect x="3" y="11" width="18" height="11" rx="2"/>
+                                                        <path d="M7 11V7a4 4 0 018 0" stroke-linecap="round"/>
+                                                        <path d="M15 7h2" stroke-linecap="round"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @* إلغاء *@
+                                            @if (o.Status is ("Pending" or "Assigned") && CanCancel)
+                                            {
+                                                @if (_confirmId == o.OperationId)
+                                                {
+                                                    <button class="op-confirm-del"
+                                                            @onclick='() => SetStatus(o, "Cancelled")'>
+                                                        إلغاء؟
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button class="op-act-btn act-cancel"
+                                                            @onclick="() => _confirmId = o.OperationId"
+                                                            title="إلغاء"
+                                                            aria-label="إلغاء @o.OperationNumber">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <circle cx="12" cy="12" r="10"/>
+                                                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+                                            }
+
+                                            @* حذف *@
+                                            @if (o.Status is ("Pending" or "Cancelled") && CanDelete)
+                                            {
+                                                @if (_confirmId == o.OperationId)
+                                                {
+                                                    <button class="op-confirm-del"
+                                                            @onclick="() => Delete(o)">
+                                                        حذف؟
+                                                    </button>
+                                                }
+                                                else if (!CanCancel || o.Status == "Cancelled")
+                                                {
+                                                    <button class="op-act-btn act-delete"
+                                                            @onclick="() => _confirmId = o.OperationId"
+                                                            title="حذف"
+                                                            aria-label="حذف @o.OperationNumber">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+                                            }
+
+                                            @if (o.Status == "Closed" && !CanReopen)
+                                            {
+                                                <span class="td-muted" style="font-size:10px">مقفولة</span>
+                                            }
+
+                                        </div>
+                                    </td>
+
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
-        </div></div>
+
+        </div>
     }
 </div>
 
+
+@* ═══════════════════════════════════════════
+   CSS
+═══════════════════════════════════════════ *@
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-orange:    #e06520;
+        --fc-orange-lt: #fff3ec;
+        --fc-teal:      #0d9488;
+        --fc-teal-lt:   #e6faf8;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ================================================================
+       KPI NEGATIVE
+    ================================================================ */
+    .kpi-negative { color: #fca5a5 !important; }
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    .op-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 200px);
+        padding: 16px 20px 32px;
+        max-width: 1400px; width: 100%;
+        margin: 0 auto;
+    }
+
+    /* ================================================================
+       STATES
+    ================================================================ */
+    .op-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .op-state-icon {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .op-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+
+    .op-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .op-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    /* ================================================================
+       CARD
+    ================================================================ */
+    .op-card {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden;
+    }
+
+    /* ================================================================
+       TOOLBAR
+    ================================================================ */
+    .op-toolbar {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+        flex-wrap: wrap;
+    }
+
+    .op-search-wrap {
+        position: relative; display: flex; align-items: center;
+        flex: 1; min-width: 200px; max-width: 380px;
+    }
+
+    .op-search-icon {
+        position: absolute; right: 12px; color: #9aaabb; pointer-events: none;
+    }
+
+    .op-search-input {
+        width: 100%; height: 38px;
+        padding: 0 36px 0 12px;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .op-search-input:focus {
+        border-color: var(--fc-blue);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.10);
+    }
+    .op-search-input::placeholder { color: #b0bcc8; }
+
+    .op-search-clear {
+        position: absolute; left: 10px;
+        display: flex; align-items: center; justify-content: center;
+        width: 22px; height: 22px; border-radius: 50%;
+        border: none; background: #edf1f7; color: #8899ae;
+        cursor: pointer; transition: all .12s ease;
+    }
+    .op-search-clear:hover { background: #dde5f0; color: var(--fc-text); }
+
+    /* Financial Summary in Toolbar */
+    .op-fin-summary {
+        display: flex; align-items: center; gap: 0;
+        padding: 6px 12px;
+        background: #f5f7fa; border: 1px solid #e4eaf3;
+        border-radius: 9px; flex-shrink: 0;
+    }
+
+    .op-fin-item {
+        display: flex; flex-direction: column; align-items: center;
+        gap: 1px; padding: 0 12px;
+    }
+
+    .op-fin-sep { width: 1px; height: 28px; background: #e4eaf3; flex: 0 0 1px; }
+
+    .op-fin-label { font-size: 9px; font-weight: 600; color: #9aaabb; }
+    .op-fin-val {
+        font-family: "Inter", Arial, sans-serif;
+        font-size: 13px; font-weight: 900;
+    }
+    .fin-green { color: var(--fc-green); }
+    .fin-red   { color: var(--fc-red); }
+
+    .op-results-badge {
+        display: flex; align-items: center; gap: 5px;
+        margin-right: auto;
+        font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap;
+    }
+    .op-results-badge strong { color: #5a6e88; }
+
+    /* ================================================================
+       STATUS TABS
+    ================================================================ */
+    .op-status-bar {
+        padding: 10px 18px;
+        background: #f9fafd; border-bottom: 1px solid #edf1f7;
+        overflow-x: auto;
+    }
+
+    .op-status-tabs {
+        display: flex; gap: 4px;
+        padding: 3px; border-radius: 10px; background: #f0f3f8;
+        width: fit-content;
+    }
+
+    .op-status-tab {
+        display: flex; align-items: center; gap: 5px;
+        height: 32px; padding: 0 10px;
+        border: none; border-radius: 7px;
+        background: transparent; color: #6b7d95;
+        font-family: inherit; font-size: 10.5px; font-weight: 700;
+        cursor: pointer; white-space: nowrap;
+        transition: all .15s ease;
+    }
+    .op-status-tab:hover:not(.active) { color: var(--fc-text); background: rgba(255,255,255,.6); }
+
+    .op-status-tab.active {
+        background: var(--fc-card); color: var(--fc-text);
+        box-shadow: 0 1px 4px rgba(15,41,82,.10); font-weight: 800;
+    }
+
+    .op-tab-dot {
+        width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px;
+    }
+
+    .op-tab-count {
+        min-width: 16px; height: 16px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 4px; padding: 0 3px;
+        font-size: 9px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .op-status-tab.active .op-tab-count { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .op-status-tab:not(.active) .op-tab-count { background: #e4eaf3; color: #8899ae; }
+
+    /* Dot Colors */
+    .tdot-all        { background: var(--fc-blue); }
+    .tdot-pending    { background: #9aaabb; }
+    .tdot-assigned   { background: var(--fc-blue); }
+    .tdot-intransit  { background: var(--fc-orange); }
+    .tdot-delivered  { background: var(--fc-teal); }
+    .tdot-closed     { background: var(--fc-amber); }
+    .tdot-cancelled  { background: var(--fc-red); }
+
+    /* ================================================================
+       LOADING / EMPTY
+    ================================================================ */
+    .op-loading {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 200px;
+        color: var(--fc-muted); font-size: 12px; font-weight: 600;
+    }
+
+    .op-spinner {
+        width: 32px; height: 32px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: op-spin .75s linear infinite;
+    }
+    @@keyframes op-spin { to { transform: rotate(360deg); } }
+
+    .op-empty {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 10px; min-height: 240px; padding: 40px 20px;
+        text-align: center;
+    }
+    .op-empty-icon {
+        width: 72px; height: 72px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: #f0f4fa; color: #b0c4d8;
+    }
+    .op-empty-title { font-size: 15px; font-weight: 800; color: var(--fc-text); }
+    .op-empty-sub   { font-size: 12px; color: var(--fc-muted); }
+
+    .op-add-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 16px; margin-top: 6px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; transition: all .15s ease;
+    }
+    .op-add-btn:hover { background: var(--fc-blue); color: #fff; }
+
+    /* ================================================================
+       TABLE
+    ================================================================ */
+    .op-table-wrap { overflow-x: auto; }
+
+    .op-table {
+        width: 100%; border-collapse: collapse; font-size: 12.5px;
+    }
+
+    .op-table thead th {
+        padding: 10px 12px;
+        background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 10.5px; font-weight: 800;
+        text-align: center; border-bottom: 2px solid #e4eaf3;
+        white-space: nowrap; position: sticky; top: 0; z-index: 1;
+    }
+    .op-table .th-start { text-align: right; }
+
+    .op-table tbody tr {
+        border-bottom: 1px solid #f0f3f8; transition: background .12s ease;
+    }
+    .op-table tbody tr:last-child { border-bottom: none; }
+    .op-table tbody tr:hover { background: #fafcff; }
+    .op-table tbody tr.row-cancelled { opacity: .55; }
+    .op-table tbody tr.row-closed    { background: #fafbff; }
+
+    .op-table tbody td {
+        padding: 11px 12px; color: #526070; text-align: center; vertical-align: middle;
+    }
+
+    .td-start { text-align: right !important; }
+    .td-muted { color: #8899ae; font-size: 11px; }
+
+    /* ── Operation Cell ── */
+    .op-op-cell { display: flex; align-items: center; gap: 10px; }
+
+    .op-avatar {
+        width: 36px; height: 36px; flex: 0 0 36px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.10);
+    }
+
+    .av-pending     { background: linear-gradient(135deg, #7a8a9a, #5c6e80); }
+    .av-assigned    { background: linear-gradient(135deg, #1558d6, #1e6ef5); }
+    .av-driverrec   { background: linear-gradient(135deg, #6035a0, #7c4dbd); }
+    .av-intransit   { background: linear-gradient(135deg, #c0501a, #e06520); }
+    .av-delivered   { background: linear-gradient(135deg, #0a7a6e, #0d9488); }
+    .av-expspending { background: linear-gradient(135deg, #9a6507, #e09a10); }
+    .av-custpending { background: linear-gradient(135deg, #9a6507, #e09a10); }
+    .av-readyclose  { background: linear-gradient(135deg, #0d8a48, #16a35b); }
+    .av-closed      { background: linear-gradient(135deg, #b87d08, #e09a10); }
+    .av-cancelled   { background: linear-gradient(135deg, #b02040, #e03048); }
+
+    .op-op-info { min-width: 0; }
+
+    .op-op-num { display: flex; align-items: center; gap: 6px; }
+
+    .op-code-chip {
+        display: inline-flex; align-items: center;
+        padding: 2px 8px; border-radius: 6px;
+        background: #f0f4fa; border: 1px solid #e0e8f4;
+        font-size: 10.5px; font-weight: 800; color: #5a6e88;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .op-customer-name {
+        font-size: 12.5px; font-weight: 800; color: #1c2c44;
+        margin-top: 3px; white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis; max-width: 160px;
+    }
+
+    .op-op-meta {
+        display: flex; align-items: center; gap: 5px; margin-top: 3px; flex-wrap: wrap;
+    }
+
+    .op-service-tag {
+        display: inline-flex; align-items: center;
+        padding: 1px 6px; border-radius: 4px;
+        background: #f0f4fa; font-size: 9px; font-weight: 700; color: #6b7d95;
+    }
+
+    .op-booking-tag {
+        display: inline-flex; align-items: center; gap: 3px;
+        padding: 1px 6px; border-radius: 4px;
+        background: var(--fc-blue-lt); font-size: 9px; font-weight: 700; color: var(--fc-blue);
+        border: 1px solid #d0e4fc;
+    }
+
+    /* ── Route Cell ── */
+    .op-route-cell {
+        display: flex; align-items: center; gap: 4px; justify-content: center;
+    }
+
+    .op-route-from { font-size: 11px; font-weight: 700; color: var(--fc-blue); }
+    .op-route-to   { font-size: 11px; font-weight: 700; color: var(--fc-green); }
+    .op-route-arrow { color: #c0ccd8; display: flex; }
+
+    /* ── Date Cell ── */
+    .op-date-cell {
+        display: flex; align-items: center; gap: 4px;
+        justify-content: center; color: #6b7d95; font-size: 11px;
+    }
+
+    /* ── Status Chips ── */
+    .op-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 3px 9px; border-radius: 7px;
+        font-size: 10px; font-weight: 800; white-space: nowrap;
+    }
+
+    .op-chip-dot {
+        width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px;
+    }
+
+    .chip-pending    { background: #f0f3f8; color: #6b7d95; border: 1px solid #dde5f0; }
+    .chip-assigned   { background: var(--fc-blue-lt); color: var(--fc-blue); border: 1px solid #c0d4fb; }
+    .chip-driverrec  { background: var(--fc-purple-lt); color: var(--fc-purple); border: 1px solid #d0bfef; }
+    .chip-intransit  { background: var(--fc-orange-lt); color: var(--fc-orange); border: 1px solid #f0c8a8; }
+    .chip-delivered  { background: var(--fc-teal-lt); color: var(--fc-teal); border: 1px solid #b0e0dc; }
+    .chip-expspend   { background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898; }
+    .chip-custpend   { background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898; }
+    .chip-readyclose { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .chip-closed     { background: linear-gradient(135deg, #fff8e0, var(--fc-amber-lt)); color: #9a6d08; border: 1px solid #f0d898; }
+    .chip-cancelled  { background: var(--fc-red-lt); color: var(--fc-red); border: 1px solid #ffc8cf; }
+
+    .cdot-pending    { background: #9aaabb; }
+    .cdot-assigned   { background: var(--fc-blue); }
+    .cdot-driverrec  { background: var(--fc-purple); }
+    .cdot-intransit  { background: var(--fc-orange); }
+    .cdot-delivered  { background: var(--fc-teal); }
+    .cdot-expspend   { background: var(--fc-amber); }
+    .cdot-custpend   { background: var(--fc-amber); }
+    .cdot-readyclose { background: var(--fc-green); }
+    .cdot-closed     { background: var(--fc-amber); }
+    .cdot-cancelled  { background: var(--fc-red); }
+
+    /* ── Money ── */
+    .op-money-cell { display: flex; flex-direction: column; gap: 2px; align-items: center; }
+
+    .op-money-main {
+        font-family: "Inter", Arial, sans-serif;
+        font-size: 13px; font-weight: 800; color: var(--fc-text);
+    }
+    .op-money-main.cost { color: #6b7d95; font-weight: 700; }
+
+    .op-money-sub { font-size: 9.5px; color: #9aaabb; font-weight: 500; }
+
+    /* ── Profit Badge ── */
+    .op-profit-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 4px 10px; border-radius: 8px;
+        font-family: "Inter", Arial, sans-serif;
+        font-size: 12px; font-weight: 900;
+    }
+
+    .profit-pos { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .profit-neg { background: var(--fc-red-lt);   color: var(--fc-red);   border: 1px solid #ffc8cf; }
+
+    /* ── Actions ── */
+    .op-actions {
+        display: flex; align-items: center; gap: 3px; justify-content: center; flex-wrap: wrap;
+    }
+
+    .op-act-btn {
+        width: 28px; height: 28px; border-radius: 7px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; cursor: pointer;
+        transition: all .15s ease; background: transparent;
+    }
+
+    .act-edit    { color: var(--fc-blue); }
+    .act-deliver { color: var(--fc-teal); }
+    .act-close   { color: var(--fc-purple); }
+    .act-reopen  { color: var(--fc-amber); }
+    .act-cancel  { color: var(--fc-red); }
+    .act-delete  { color: var(--fc-red); }
+
+    .act-edit:hover    { background: var(--fc-blue-lt);   border-color: #c0d4fb; }
+    .act-deliver:hover { background: var(--fc-teal-lt);   border-color: #b0e0dc; }
+    .act-close:hover   { background: var(--fc-purple-lt); border-color: #d0bfef; }
+    .act-reopen:hover  { background: var(--fc-amber-lt);  border-color: #f0d898; }
+    .act-cancel:hover  { background: var(--fc-red-lt);    border-color: #ffc8cf; }
+    .act-delete:hover  { background: var(--fc-red-lt);    border-color: #ffc8cf; }
+
+    .op-confirm-del {
+        height: 26px; padding: 0 9px;
+        border: none; border-radius: 6px;
+        background: linear-gradient(135deg, #e03048, #c0182e);
+        color: #fff; font-family: inherit;
+        font-size: 9.5px; font-weight: 800; cursor: pointer;
+        animation: op-pulse-del 1s ease infinite;
+        white-space: nowrap;
+    }
+    @@keyframes op-pulse-del {
+        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.35); }
+        50%     { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
+    }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 1200px) {
+        .op-customer-name { max-width: 130px; }
+        .op-fin-summary   { display: none; }
+    }
+
+    @@media (max-width: 900px) {
+        .op-toolbar { flex-direction: column; align-items: stretch; }
+        .op-search-wrap { max-width: 100%; }
+        .op-results-badge { margin-right: 0; }
+        .op-status-tabs { flex-wrap: wrap; }
+    }
+
+    @@media (max-width: 680px) {
+        .op-body { padding: 10px 12px 24px; }
+        .op-toolbar { padding: 10px 12px; }
+        .op-avatar { display: none; }
+        .op-status-bar { padding: 8px 12px; }
+        .op-customer-name { max-width: 100px; }
+    }
+
+    @@media (max-width: 480px) {
+        .op-status-tabs { gap: 2px; }
+        .op-status-tab { padding: 0 7px; font-size: 9.5px; }
+        .op-tab-dot { display: none; }
+        .op-booking-tag { display: none; }
+    }
+
+</style>
+
+
 @code {
     private AuthUser? _user;
-    private bool CanView   => _user?.Can("OPERATION.VIEW") ?? false;
+    private bool CanView   => _user?.Can("OPERATION.VIEW")   ?? false;
     private bool CanCreate => _user?.Can("OPERATION.CREATE") ?? false;
-    private bool CanEdit   => _user?.Can("OPERATION.EDIT") ?? false;
+    private bool CanEdit   => _user?.Can("OPERATION.EDIT")   ?? false;
     private bool CanDelete => _user?.Can("OPERATION.DELETE") ?? false;
     private bool CanCancel => _user?.Can("OPERATION.CANCEL") ?? false;
-    private bool CanClose  => _user?.Can("OPERATION.CLOSE") ?? false;
+    private bool CanClose  => _user?.Can("OPERATION.CLOSE")  ?? false;
     private bool CanReopen => _user?.Can("OPERATION.REOPEN") ?? false;
 
-    private static readonly Dictionary<string, string> Tabs = new()
+    private static readonly (string Key, string Value)[] _statusTabs =
     {
-        ["all"] = "الكل", ["Pending"] = "قيد الانتظار", ["Assigned"] = "متعين",
-        ["InTransit"] = "في الطريق", ["Delivered"] = "اتسلّمت",
-        ["Closed"] = "مقفولة", ["Cancelled"] = "ملغاة"
+        ("all",        "الكل"),
+        ("Pending",    "قيد الانتظار"),
+        ("Assigned",   "متعين"),
+        ("InTransit",  "في الطريق"),
+        ("Delivered",  "اتسلّمت"),
+        ("Closed",     "مقفولة"),
+        ("Cancelled",  "ملغاة")
     };
 
     private static readonly string[] OpenStatuses =
-        { "Pending", "Assigned", "DriverReceived", "InTransit", "Delivered",
-          "ExpensesPending", "CustodyPending", "ReadyToClose" };
+    {
+        "Pending", "Assigned", "DriverReceived", "InTransit",
+        "Delivered", "ExpensesPending", "CustodyPending", "ReadyToClose"
+    };
 
     private List<Item> _items = new();
-    private bool _loading; private string _search = ""; private string _tab = "all";
-    private long? _confirmId;
+    private bool   _loading;
+    private string _search = "";
+    private string _tab    = "all";
+    private long?  _confirmId;
 
     public class Item
     {
-        public long OperationId { get; set; }
-        public string OperationNumber { get; set; } = "";
-        public string? BookingNumber { get; set; }
-        public string CustomerName { get; set; } = "";
-        public string? ServiceName { get; set; }
-        public string? PortName { get; set; }
-        public string? DestinationName { get; set; }
-        public DateTime? PlannedDate { get; set; }
-        public string Status { get; set; } = "";
-        public decimal RevenueNet { get; set; }
-        public decimal RevenueTax { get; set; }
-        public decimal EstimatedCost { get; set; }
-        public decimal ActualCost { get; set; }
-        public DateTime CreatedAt { get; set; }
+        public long      OperationId     { get; set; }
+        public string    OperationNumber { get; set; } = "";
+        public string?   BookingNumber   { get; set; }
+        public string    CustomerName    { get; set; } = "";
+        public string?   ServiceName     { get; set; }
+        public string?   PortName        { get; set; }
+        public string?   DestinationName { get; set; }
+        public DateTime? PlannedDate     { get; set; }
+        public string    Status          { get; set; } = "";
+        public decimal   RevenueNet      { get; set; }
+        public decimal   RevenueTax      { get; set; }
+        public decimal   EstimatedCost   { get; set; }
+        public decimal   ActualCost      { get; set; }
+        public DateTime  CreatedAt       { get; set; }
     }
 
+    /* ── Helpers ── */
     private static string StatusAr(string s) => s switch
     {
-        "Pending" => "قيد الانتظار", "Assigned" => "تم التعيين",
-        "DriverReceived" => "استلم السائق", "InTransit" => "في الطريق",
-        "Delivered" => "تم التسليم", "ExpensesPending" => "بانتظار المصروفات",
-        "CustodyPending" => "بانتظار العهدة", "ReadyToClose" => "جاهزة للإغلاق",
-        "Closed" => "مغلقة", "Cancelled" => "ملغاة", _ => s
+        "Pending"         => "قيد الانتظار",
+        "Assigned"        => "تم التعيين",
+        "DriverReceived"  => "استلم السائق",
+        "InTransit"       => "في الطريق",
+        "Delivered"       => "تم التسليم",
+        "ExpensesPending" => "بانتظار المصروفات",
+        "CustodyPending"  => "بانتظار العهدة",
+        "ReadyToClose"    => "جاهزة للإغلاق",
+        "Closed"          => "مغلقة",
+        "Cancelled"       => "ملغاة",
+        _                 => s
     };
 
     private static string ChipClass(string s) => s switch
     {
-        "Pending" => "fc-chip-gray", "Assigned" => "fc-chip-blue",
-        "DriverReceived" => "fc-chip-purple", "InTransit" => "fc-chip-warn",
-        "Delivered" => "fc-chip-ok", "Closed" => "fc-chip-gold",
-        "Cancelled" => "fc-chip-bad", _ => "fc-chip-gray"
+        "Pending"         => "chip-pending",
+        "Assigned"        => "chip-assigned",
+        "DriverReceived"  => "chip-driverrec",
+        "InTransit"       => "chip-intransit",
+        "Delivered"       => "chip-delivered",
+        "ExpensesPending" => "chip-expspend",
+        "CustodyPending"  => "chip-custpend",
+        "ReadyToClose"    => "chip-readyclose",
+        "Closed"          => "chip-closed",
+        "Cancelled"       => "chip-cancelled",
+        _                 => "chip-pending"
+    };
+
+    private static string ChipDotClass(string s) => s switch
+    {
+        "Pending"         => "cdot-pending",
+        "Assigned"        => "cdot-assigned",
+        "DriverReceived"  => "cdot-driverrec",
+        "InTransit"       => "cdot-intransit",
+        "Delivered"       => "cdot-delivered",
+        "ExpensesPending" => "cdot-expspend",
+        "CustodyPending"  => "cdot-custpend",
+        "ReadyToClose"    => "cdot-readyclose",
+        "Closed"          => "cdot-closed",
+        "Cancelled"       => "cdot-cancelled",
+        _                 => "cdot-pending"
+    };
+
+    private static string AvatarClass(string s) => s switch
+    {
+        "Pending"         => "av-pending",
+        "Assigned"        => "av-assigned",
+        "DriverReceived"  => "av-driverrec",
+        "InTransit"       => "av-intransit",
+        "Delivered"       => "av-delivered",
+        "ExpensesPending" => "av-expspending",
+        "CustodyPending"  => "av-custpending",
+        "ReadyToClose"    => "av-readyclose",
+        "Closed"          => "av-closed",
+        "Cancelled"       => "av-cancelled",
+        _                 => "av-pending"
+    };
+
+    private static string StatusDotColor(string s) => s switch
+    {
+        "all"       => "tdot-all",
+        "Pending"   => "tdot-pending",
+        "Assigned"  => "tdot-assigned",
+        "InTransit" => "tdot-intransit",
+        "Delivered" => "tdot-delivered",
+        "Closed"    => "tdot-closed",
+        "Cancelled" => "tdot-cancelled",
+        _           => "tdot-all"
     };
 
     private static string Money(decimal v) => v.ToString("N0");
 
-    private IEnumerable<Item> Open => _items.Where(o => OpenStatuses.Contains(o.Status));
+    private IEnumerable<Item> Open =>
+        _items.Where(o => OpenStatuses.Contains(o.Status));
 
-    private IEnumerable<Item> Filtered => _items.Where(o =>
-        (_tab == "all" || o.Status == _tab) &&
-        (string.IsNullOrWhiteSpace(_search) ||
-         o.OperationNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-         o.CustomerName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-         (o.BookingNumber ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase)));
+    private IEnumerable<Item> Filtered =>
+        _items.Where(o =>
+            (_tab == "all" || o.Status == _tab) &&
+            (string.IsNullOrWhiteSpace(_search) ||
+             o.OperationNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+             o.CustomerName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+             (o.BookingNumber ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase)));
 
+    /* ── Lifecycle ── */
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
@@ -239,13 +1120,13 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/operations?take=300") ?? new(); }
+        try   { _items = await Http.GetFromJsonAsync<List<Item>>("api/operations?take=300") ?? new(); }
         catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
         finally { _loading = false; }
     }
 
-    private void GoNew() => Nav.NavigateTo("/operations/new");
-    private void GoEdit(Item o) => Nav.NavigateTo($"/operations/new/{o.OperationId}");
+    private void GoNew()         => Nav.NavigateTo("/operations/new");
+    private void GoEdit(Item o)  => Nav.NavigateTo($"/operations/new/{o.OperationId}");
 
     private async Task SetStatus(Item o, string to)
     {
@@ -259,7 +1140,7 @@
         catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
     }
 
-    private async Task Close(Item o) => await Post(o, "close");
+    private async Task Close(Item o)  => await Post(o, "close");
     private async Task Reopen(Item o) => await Post(o, "reopen");
 
     private async Task Post(Item o, string action)

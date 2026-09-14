@@ -1,0 +1,353 @@
+@page "/supplier-invoices"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>فواتير الموردين — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">المالية · الذمم الدائنة</div>
+                <h1 class="fc-hero-title">فواتير الموردين</h1>
+                <p class="fc-hero-sub">اللي علينا للموردين — مسودة، اعتماد، دفع، أعمار ديون</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                @if (CanCreate)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="New">فاتورة مورد جديدة</MudButton>
+                }
+            </div>
+        </div>
+        @if (CanView)
+        {
+            <div class="fc-kpis fc-kpis-glass">
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.ReceiptLong" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">عدد الفواتير</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" /></div>
+                    <div><div class="fc-kpi-num">@Money(OpenTotal)</div><div class="fc-kpi-lb">المتبقي للموردين</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
+                    <div><div class="fc-kpi-num">@OverdueCount</div><div class="fc-kpi-lb">فاتورة متأخرة</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Payments" /></div>
+                    <div><div class="fc-kpi-num">@Money(PaidTotal)</div><div class="fc-kpi-lb">مدفوع</div></div></div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanView)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض فواتير الموردين.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+            <div class="fc-toolbar">
+                <div class="fc-filters">
+                    @foreach (var t in Tabs)
+                    {
+                        <button class='fc-filter @(_tab == t.Key ? "on" : "")' @onclick="() => SetTab(t.Key)">@t.Value</button>
+                    }
+                </div>
+                <select class="fc-sel" style="max-width:220px" @bind="_supFilter">
+                    <option value="">كل الموردين</option>
+                    @foreach (var s in _suppliers)
+                    {
+                        <option value="@s.Id">@s.Label</option>
+                    }
+                </select>
+                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
+                              Placeholder="ابحث بالرقم أو المورد..." Variant="Variant.Outlined" Dense="true"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Class="fc-search-box" Immediate="true" />
+                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+            }
+            else if (_msg is not null)
+            {
+                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
+            }
+
+            @if (!_loading && Filtered.Count() == 0)
+            {
+                <div class="fc-empty">مافيش فواتير مطابقة — اعمل فاتورة مورد جديدة</div>
+            }
+            else if (!_loading)
+            {
+                <div class="fc-table-wrap"><table class="fc-table fc-table-pro2">
+                    <thead><tr>
+                        <th>رقم الفاتورة</th><th>المورد</th><th>التاريخ</th><th>الاستحقاق</th>
+                        <th>الإجمالي</th><th>مدفوع</th><th>المتبقي</th>
+                        <th>الحالة</th><th>الدفع</th><th style="width:120px"></th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach (var i in Filtered)
+                        {
+                            <tr>
+                                <td><span class="fc-chip fc-chip-blue">@i.SupplierInvoiceNumber</span></td>
+                                <td class="fc-cell-main">@i.SupplierName</td>
+                                <td class="fc-cell-sub">@i.InvoiceDate</td>
+                                <td class="@DueCls(i)">@i.DueDate ?? "—"</td>
+                                <td>@Money(i.GrandTotal)</td>
+                                <td>@Money(i.PaidAmount)</td>
+                                <td class="is-neg"><b>@Money(i.Balance)</b></td>
+                                <td><span class="fc-chip @StatusChip(i.Status)">@StatusAr(i.Status)</span></td>
+                                <td><span class="fc-chip @PayChip(i.PaymentStatus)">@PayAr(i.PaymentStatus)</span></td>
+                                <td>
+                                    @if (CanEdit && i.Status == "Draft")
+                                    {
+                                        <MudIconButton Size="Size.Small" title="تعديل"
+                                                       Icon="@Icons.Material.Filled.Edit" Color="Color.Primary"
+                                                       OnClick="() => Edit(i)" />
+                                        <MudIconButton Size="Size.Small" title="اعتماد"
+                                                       Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"
+                                                       OnClick="() => Approve(i)" />
+                                    }
+                                    @if (CanEdit && i.Status != "Cancelled" && i.Status != "Paid" && i.PaidAmount <= 0)
+                                    {
+                                        <MudIconButton Size="Size.Small" title="إلغاء"
+                                                       Icon="@Icons.Material.Filled.Close"
+                                                       OnClick="() => AskCancel(i)" />
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table></div>
+            }
+        </div></div>
+    }
+</div>
+
+@* ══════════ Modal: تأكيد الإلغاء ══════════ *@
+@if (_cancelTarget is not null)
+{
+    <div class="fc-modal-backdrop" @onclick="() => _cancelTarget = null">
+        <div class="fc-modal fc-modal-sm" @onclick:stopPropagation="true">
+            <div class="fc-modal-head">
+                <div>
+                    <div class="fc-modal-title">إلغاء فاتورة مورد</div>
+                    <div class="fc-modal-sub">@_cancelTarget.SupplierInvoiceNumber</div>
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _cancelTarget = null" />
+            </div>
+            <div class="fc-modal-body">
+                <div class="fc-alert fc-alert-warn">
+                    <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
+                    <div class="fc-alert-body">
+                        <div class="fc-alert-title">اتأكد من الإلغاء</div>
+                        <div>الفاتورة هتخرج من حساب المتبقي على المورد. الإجراء مايتراجعش.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="fc-modal-foot">
+                <MudButton Variant="Variant.Outlined" OnClick="() => _cancelTarget = null">رجوع</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="_busy"
+                           OnClick="DoCancel">تأكيد الإلغاء</MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private AuthUser? _user;
+    private bool CanView   => (_user?.Can("SUPPLIER.VIEW") ?? false);
+    private bool CanCreate => (_user?.Can("SUPPLIER.CREATE") ?? false);
+    private bool CanEdit   => (_user?.Can("SUPPLIER.EDIT") ?? false);
+
+    private static readonly Dictionary<string, string> Tabs = new()
+    {
+        ["all"]           = "الكل",
+        ["Draft"]         = "مسودة",
+        ["Approved"]      = "معتمدة",
+        ["PartiallyPaid"] = "مدفوعة جزئيًا",
+        ["Paid"]          = "مدفوعة",
+        ["Cancelled"]     = "ملغاة"
+    };
+
+    private List<Item> _items = new();
+    private List<Opt>  _suppliers = new();
+    private bool _loading, _busy;
+    private string _search = "", _tab = "all", _supFilter = "";
+    private string? _msg; private bool _ok = true;
+    private Item? _cancelTarget;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (!CanView) return;
+        _suppliers = await SafeOpts("api/options/suppliers");
+        await LoadAsync();
+    }
+
+    private async Task Reload() { _msg = null; await LoadAsync(); }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _items = await Http.GetFromJsonAsync<List<Item>>("api/supplier-invoices") ?? new();
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل التحميل: " + ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task<List<Opt>> SafeOpts(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<Opt>>(url) ?? new(); }
+        catch (Exception ex)
+        {
+            _ok = false;
+            _msg = $"تعذّر تحميل قائمة الموردين: {ex.Message}";
+            return new();
+        }
+    }
+
+    private void SetTab(string k) { _tab = k; }
+
+    private IEnumerable<Item> Filtered => _items.Where(i =>
+        (_tab == "all" || i.Status == _tab)
+        && (string.IsNullOrEmpty(_supFilter) || i.SupplierId.ToString() == _supFilter)
+        && (string.IsNullOrWhiteSpace(_search)
+            || i.SupplierInvoiceNumber.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || i.SupplierName.Contains(_search, StringComparison.OrdinalIgnoreCase)));
+
+    /* ── KPIs ── */
+    private decimal OpenTotal => _items
+        .Where(i => i.Status != "Cancelled" && i.Status != "Draft")
+        .Sum(i => i.Balance);
+
+    private decimal PaidTotal => _items.Where(i => i.Status != "Cancelled").Sum(i => i.PaidAmount);
+
+    private int OverdueCount => _items.Count(i =>
+        i.Status != "Cancelled" && i.Status != "Paid" && i.Status != "Draft"
+        && IsOverdue(i.DueDate));
+
+    private static string Today => DateTime.Today.ToString("yyyy-MM-dd");
+
+    /* 🔴 `DueDate` هنا `string?` (ISO yyyy-MM-dd) — الـ `<` على strings = CS0019.
+     *    ترتيب ISO الأبجدي = ترتيبه الزمني بالظبط، فالـ CompareOrdinal صح. */
+    private static bool IsOverdue(string? due) =>
+        !string.IsNullOrEmpty(due) && string.CompareOrdinal(due, Today) < 0;
+
+    /* ── تنسيق ── */
+    private static string Money(decimal v) => v.ToString("N2");
+
+    private static string StatusAr(string s) => s switch
+    {
+        "Draft" => "مسودة", "Approved" => "معتمدة", "PartiallyPaid" => "جزئي",
+        "Paid" => "مدفوعة", "Cancelled" => "ملغاة", _ => s
+    };
+
+    private static string PayAr(string s) => s switch
+    {
+        "Unpaid" => "غير مدفوعة", "PartiallyPaid" => "جزئي", "Paid" => "مدفوعة", _ => s
+    };
+
+    /* 🔴 helpers — أي `"` أو `<` جوه attribute = RZ1010 */
+    private static string StatusChip(string s) => s switch
+    {
+        "Draft" => "fc-chip-gray", "Approved" => "fc-chip-blue",
+        "PartiallyPaid" => "fc-chip-gold", "Paid" => "fc-chip-ok",
+        "Cancelled" => "fc-chip-warn", _ => "fc-chip-gray"
+    };
+
+    private static string PayChip(string s) => s switch
+    {
+        "Unpaid" => "fc-chip-warn", "PartiallyPaid" => "fc-chip-gold",
+        "Paid" => "fc-chip-ok", _ => "fc-chip-gray"
+    };
+
+    private static string DueCls(Item i)
+    {
+        if (i.DueDate is null) return "fc-cell-sub";
+        return i.Balance > 0 && IsOverdue(i.DueDate) ? "is-neg" : "fc-cell-sub";
+    }
+
+    /* ── أفعال ── */
+    private void New()  => Nav.NavigateTo("/supplier-invoices/new");
+    private void Edit(Item i) => Nav.NavigateTo($"/supplier-invoices/new/{i.SupplierInvoiceId}");
+
+    private async Task Approve(Item i)
+    {
+        _busy = true;
+        try
+        {
+            var res = await Http.PostAsync($"api/supplier-invoices/{i.SupplierInvoiceId}/approve", null);
+            _msg = Msg(await res.Content.ReadAsStringAsync(), res.IsSuccessStatusCode ? "✅ اتعتمدت" : "الاعتماد فشل");
+            _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { _ok = false; _msg = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private void AskCancel(Item i) { _cancelTarget = i; }
+
+    private async Task DoCancel()
+    {
+        if (_cancelTarget is null) return;
+        _busy = true;
+        try
+        {
+            var res = await Http.PostAsync($"api/supplier-invoices/{_cancelTarget.SupplierInvoiceId}/cancel", null);
+            _msg = Msg(await res.Content.ReadAsStringAsync(), res.IsSuccessStatusCode ? "✅ اتلغت" : "الإلغاء فشل");
+            _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode) { _cancelTarget = null; await LoadAsync(); }
+        }
+        catch (Exception ex) { _ok = false; _msg = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private static string Msg(string body, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(body) || body.TrimStart().StartsWith("<")) return fallback;
+        try
+        {
+            using var d = System.Text.Json.JsonDocument.Parse(body);
+            if (d.RootElement.TryGetProperty("message", out var m)) return m.GetString() ?? fallback;
+        }
+        catch { }
+        return fallback;
+    }
+
+    /* ── DTOs — مطابقة للكنترولر ── */
+    public class Item
+    {
+        public long    SupplierInvoiceId     { get; set; }
+        public string  SupplierInvoiceNumber { get; set; } = "";
+        public string? SupplierRefNumber     { get; set; }
+        public int     SupplierId            { get; set; }
+        public string  SupplierName          { get; set; } = "";
+        public string  InvoiceDate           { get; set; } = "";
+        public string? DueDate               { get; set; }
+        public decimal SubTotal              { get; set; }
+        public decimal TaxTotal              { get; set; }
+        public decimal GrandTotal            { get; set; }
+        public decimal PaidAmount            { get; set; }
+        public decimal Balance               { get; set; }
+        public string  Status                { get; set; } = "";
+        public string  PaymentStatus         { get; set; } = "";
+        public string? Notes                 { get; set; }
+        public int     LineCount             { get; set; }
+    }
+
+    public class Opt
+    {
+        public int    Id    { get; set; }
+        public string Label { get; set; } = "";
+    }
+}

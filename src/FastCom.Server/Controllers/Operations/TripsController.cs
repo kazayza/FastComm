@@ -19,11 +19,12 @@ namespace FastCom.Server.Controllers.Operations;
 public class TripsController : ControllerBase
 {
     private readonly FastComDbContext _db;
+    private readonly IAuditService _audit;
     private readonly INumberingService _numbers;
     private readonly IPermissionService _perms;
 
-    public TripsController(FastComDbContext db, INumberingService numbers, IPermissionService perms)
-    { _db = db; _numbers = numbers; _perms = perms; }
+    public TripsController(FastComDbContext db, INumberingService numbers, IPermissionService perms, IAuditService audit)
+    { _db = db; _audit = audit; _numbers = numbers; _perms = perms; }
 
     private int CurrentUserId() =>
         int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : -1;
@@ -63,7 +64,11 @@ public class TripsController : ControllerBase
         int VehicleId, string VehiclePlate, int? TrailerId, string? TrailerPlate,
         int? TripTypeId, string? PlannedStartAt, string? ActualStartAt, string? ActualEndAt,
         decimal? StartOdometer, decimal? EndOdometer, decimal? TotalDistanceKm,
-        string? Notes, string Status, decimal DirectCost);
+        string? Notes, string Status, decimal DirectCost,
+        /* 🔴 `DirectCost` = **كل** مصروفات الرحلة. `DistributableCost` = اللي بيتوزّع بس
+           (المصروفات العامة اللي `OperationId` بتاعها فاضي).
+           الاتنين لازم يبانوا — وإلا المستخدم بيشوف 9,500 ويتوزّع 4,500 ويلخبط. */
+        decimal DistributableCost);
 
     public record DetailResponse(Detail Trip, List<OpLine> Operations, List<AllocLine> Allocations);
 
@@ -152,8 +157,19 @@ public class TripsController : ControllerBase
                 a.AllocationBasis, a.AllocationPercent, a.AllocatedAmount, a.Operation.RevenueNet))
             .ToListAsync(ct);
 
+        /* ⚠️ `directCost` هنا = **كل** مصروفات الرحلة (بما فيها المرتبطة بعمليات)،
+           لأن ده عرض تفصيلي للرحلة نفسها.
+           🔴 ماتستخدمش الرقم ده في حساب تكلفة العمليات — التوزيع
+           (`allocate-cost`) بيستثني `OperationId != null` عشان مايتعدّش مرتين. */
         var directCost = await _db.Expenses
             .Where(e => e.TripId == id && e.Status != "Cancelled" && !e.IsDeleted)
+            .SumAsync(e => (decimal?)e.Amount, ct) ?? 0m;
+
+        /* 🔴 اللي بيتوزّع فعلًا = المصروفات العامة بس (OperationId فاضي).
+           لازم يطابق `total` في distribute — وإلا الأرقام مش هتتطابق. */
+        var distributableCost = await _db.Expenses
+            .Where(e => e.TripId == id && e.OperationId == null
+                        && e.Status != "Cancelled" && !e.IsDeleted)
             .SumAsync(e => (decimal?)e.Amount, ct) ?? 0m;
 
         var detail = new Detail(t.TripId, t.TripNumber, t.DriverId, driverName,
@@ -162,7 +178,7 @@ public class TripsController : ControllerBase
             t.ActualStartAt?.ToString("yyyy-MM-ddTHH:mm"),
             t.ActualEndAt?.ToString("yyyy-MM-ddTHH:mm"),
             t.StartOdometer, t.EndOdometer, t.TotalDistanceKm,
-            t.Notes, t.Status, directCost);
+            t.Notes, t.Status, directCost, distributableCost);
 
         return Ok(new DetailResponse(detail, ops, allocs));
     }
@@ -233,6 +249,8 @@ public class TripsController : ControllerBase
 
             await _db.Database.CommitTransactionAsync(ct);
 
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "Trip", null, description: "إنشاء رحلة", ct: ct);
+
             return Ok(new { id = t.TripId, number = t.TripNumber,
                 message = $"✅ اتفتحت الرحلة برقم {t.TripNumber}" });
         }
@@ -256,7 +274,10 @@ public class TripsController : ControllerBase
         if (t is null) return NotFound(new { message = "الرحلة مش موجودة" });
 
         if (t.Status is "Completed" or "Cancelled")
-            return BadRequest(new { message = "الرحلة خلصت — التعديل مقفول" });
+            {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Update, "Trip", null, description: "تعديل رحلة", ct: ct);
+            
+            }
 
         t.DriverId      = req.DriverId;
         t.VehicleId     = req.VehicleId;
@@ -361,7 +382,7 @@ public class TripsController : ControllerBase
         var t = await _db.Trips.FirstOrDefaultAsync(x => x.TripId == id && !x.IsDeleted, ct);
         if (t is null) return NotFound(new { message = "الرحلة مش موجودة" });
         if (t.Status is not ("Planned" or "Assigned"))
-            return BadRequest(new { message = "الرحلة مش في حالة تسمح بالتحرك" });
+            return BadRequest(new { message = "طلب غير صالح" });
 
         if (!await _db.TripOperations.AnyAsync(to => to.TripId == id && to.Status != "Cancelled", ct))
             return BadRequest(new { message = "اربط عملية واحدة على الأقل بالرحلة" });
@@ -403,7 +424,10 @@ public class TripsController : ControllerBase
         var t = await _db.Trips.FirstOrDefaultAsync(x => x.TripId == id && !x.IsDeleted, ct);
         if (t is null) return NotFound(new { message = "الرحلة مش موجودة" });
         if (t.Status is not ("Started" or "Assigned" or "Planned"))
-            return BadRequest(new { message = "الرحلة مش شغالة" });
+            {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Close, "Trip", null, description: "إنهاء رحلة", ct: ct);
+            
+            }
 
         var end = Dt(req?.ActualEndAt) ?? DateTime.UtcNow;
         var odo = Dec(req?.EndOdometer);
@@ -478,6 +502,8 @@ public class TripsController : ControllerBase
             throw;
         }
 
+        await _audit.LogAsync(FastCom.Server.Services.AuditActions.Cancel, "Trip", null, description: "إلغاء رحلة", ct: ct);
+
         return Ok(new { message = "✅ اتلغت الرحلة والعمليات رجعت قيد الانتظار" });
     }
 
@@ -499,11 +525,21 @@ public class TripsController : ControllerBase
         if (opIds.Count == 0)
             return BadRequest(new { message = "لايوجد عمليات مربوطة بالرحلة" });
 
+        /* 🔴 باغ العدّ المزدوج — اتصلح.
+
+           المصروف اللي عليه `TripId` **و** `OperationId` كان بيتعدّ مرتين:
+             1) مرة في `DirectCost`  (trg_Expenses_OpCostSync)
+             2) ومرة تاني جوه `AllocatedAmount` (لأن التوزيع كان بياخده ضمن `total`)
+           → `Operations.ActualCost = DirectCost + AllocCost` كان بيطلع مضخّم.
+
+           القاعدة: المصروف المرتبط بعملية **مباشرةً** مالوش دخل بتوزيع تكلفة الرحلة.
+           اللي بيتوزّع هو مصروفات الرحلة العامة بس (`OperationId IS NULL`). */
         var total = await _db.Expenses
-            .Where(e => e.TripId == id && e.Status != "Cancelled" && !e.IsDeleted)
+            .Where(e => e.TripId == id && e.OperationId == null
+                        && e.Status != "Cancelled" && !e.IsDeleted)
             .SumAsync(e => (decimal?)e.Amount, ct) ?? 0m;
         if (total <= 0)
-            return BadRequest(new { message = "مافيش مصروفات على الرحلة — سجل المصروفات الأول" });
+            return BadRequest(new { message = "مافيش مصروفات عامة على الرحلة — سجل المصروفات الأول (المصروفات المرتبطة بعملية مباشرةً بتتحسب عليها من غير توزيع)" });
 
         var ops = await _db.Operations.AsNoTracking()
             .Where(o => opIds.Contains(o.OperationId))
@@ -604,7 +640,7 @@ public class TripsController : ControllerBase
         var t = await _db.Trips.FirstOrDefaultAsync(x => x.TripId == id && !x.IsDeleted, ct);
         if (t is null) return NotFound(new { message = "الرحلة مش موجودة" });
         if (t.Status is not ("Planned" or "Cancelled"))
-            return BadRequest(new { message = "الرحلة اللي اشتغلت بتتلغى مش بتتحذف" });
+            return BadRequest(new { message = "طلب غير صالح" });
 
         if (await _db.DriverCustodies.AnyAsync(c => c.TripId == id && !c.IsDeleted, ct))
             return BadRequest(new { message = "فيه عهدة على الرحلة" });

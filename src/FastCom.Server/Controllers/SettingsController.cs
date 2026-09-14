@@ -124,7 +124,7 @@ public class SettingsController : ControllerBase
         p.UpdatedBy            = CurrentUserId();
 
         await _db.SaveChangesAsync(ct);
-        return Ok(new { message = "✅ بيانات الشركة اتحدّثت" });
+        return Ok(new { message = "✅تم تحديث بيانات الشركة" });
     }
 
     /// <summary>رفع اللوجو / الختم — بيخزّن تحت <c>wwwroot/App_Data/company</c>.</summary>
@@ -248,7 +248,7 @@ public class SettingsController : ControllerBase
         s.UpdatedBy    = CurrentUserId();
         await _db.SaveChangesAsync(ct);
 
-        return Ok(new { message = $"✅ {key} اتحدّث" });
+        return Ok(new { message = $"✅ {key} تم التحديث" });
     }
 
     /// <summary>حفظ مجموعة مفاتيح مرة واحدة (زر «حفظ» في صفحة الإعدادات).</summary>

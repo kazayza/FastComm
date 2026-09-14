@@ -21,11 +21,15 @@ public interface ISettingsService
     /// <summary>كل الإعدادات كقاموس (كاش 60 ثانية).</summary>
     Task<Dictionary<string, string?>> GetAllAsync(CancellationToken ct = default);
 
-    /// <summary>قيمة نصية. <c>null</c> لو المفتاح مش موجود.</summary>
-    Task<string?> GetStringAsync(string key, CancellationToken ct = default);
-
-    /// <summary>قيمة نصية — بترجع <paramref name="fallback"/> لو فاضية أو مش موجودة.</summary>
-    Task<string> GetStringAsync(string key, string fallback, CancellationToken ct = default);
+    /// <summary>
+    /// قيمة نصية. بترجع <c>null</c> لو المفتاح مش موجود أو فاضي،
+    /// أو <paramref name="fallback"/> لو اتحدد.
+    /// </summary>
+    /// <remarks>
+    /// 🔴 كانت متعرّفة مرتين ( overload بـ <c>Task&lt;string?&gt;</c> وآخر بـ <c>Task&lt;string&gt;</c> )
+    /// وده <b>CS0102</b> — الأوفرلودات مش بتتفرق بنوع الإرجاع بس. اندمجوا في واحدة.
+    /// </remarks>
+    Task<string?> GetStringAsync(string key, string? fallback = null, CancellationToken ct = default);
 
     /// <summary>قيمة رقمية صحيحة.</summary>
     Task<int> GetIntAsync(string key, int fallback = 0, CancellationToken ct = default);
@@ -46,7 +50,7 @@ public interface ISettingsService
 /// <inheritdoc cref="ISettingsService"/>
 public sealed class SettingsService : ISettingsService
 {
-    /// <summary>اسم مفتاح الكاش — عشان أي实例 تانية في نفس الـ Scope تشوف نفس البيانات.</summary>
+    /// <summary>اسم مفتاح الكاش — عشان أي تانية في نفس الـ Scope تشوف نفس البيانات.</summary>
     private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(60);
 
     private readonly FastComDbContext _db;
@@ -100,25 +104,22 @@ public sealed class SettingsService : ISettingsService
         }
     }
 
-    public async Task<string?> GetStringAsync(string key, CancellationToken ct = default)
+    public async Task<string?> GetStringAsync(string key, string? fallback = null, CancellationToken ct = default)
     {
         var all = await GetAllAsync(ct);
-        return all.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v.Trim() : null;
+        return all.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v.Trim() : fallback;
     }
-
-    public async Task<string> GetStringAsync(string key, string fallback, CancellationToken ct = default)
-        => await GetStringAsync(key, ct) ?? fallback;
 
     public async Task<int> GetIntAsync(string key, int fallback = 0, CancellationToken ct = default)
     {
-        var raw = await GetStringAsync(key, ct);
+        var raw = await GetStringAsync(key, null, ct);
         if (raw is null) return fallback;
         return int.TryParse(raw, out var v) ? v : fallback;
     }
 
     public async Task<decimal> GetDecimalAsync(string key, decimal fallback = 0m, CancellationToken ct = default)
     {
-        var raw = await GetStringAsync(key, ct);
+        var raw = await GetStringAsync(key, null, ct);
         if (raw is null) return fallback;
         // 🔴 InvariantCulture: الداتابيز بتخزّن 50000 مش ٥٠٠٠٠
         return decimal.TryParse(raw, System.Globalization.NumberStyles.Any,
@@ -127,7 +128,7 @@ public sealed class SettingsService : ISettingsService
 
     public async Task<bool> GetBoolAsync(string key, bool fallback = false, CancellationToken ct = default)
     {
-        var raw = await GetStringAsync(key, ct);
+        var raw = await GetStringAsync(key, null, ct);
         if (raw is null) return fallback;
         return raw.Trim().ToLowerInvariant() switch
         {
@@ -139,7 +140,7 @@ public sealed class SettingsService : ISettingsService
 
     public async Task<List<string>> GetListAsync(string key, CancellationToken ct = default)
     {
-        var raw = await GetStringAsync(key, ct);
+        var raw = await GetStringAsync(key, null, ct);
         if (raw is null) return new List<string>();
         return raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                   .ToList();
@@ -174,6 +175,9 @@ public static class SettingKeys
 
     public const string ExpenseMaxAmount       = "EXPENSE.MAX_AMOUNT";
     public const string PaymentMaxAmount       = "PAYMENT.MAX_AMOUNT";
+    /* 🔴 كان ناقص — TreasuryController كان فيه سقف hard-coded من غير مفتاح.
+       ⚠️ لسه مش متضاف في الـ seed — هيشتغل بالقيمة الافتراضية لحد ما يتضاف. */
+    public const string TreasuryMaxAmount      = "TREASURY.MAX_AMOUNT";
 
     public const string ShowTaxBreakdown       = "BRANDING.SHOW_TAX_BREAKDOWN";
     public const string EInvoiceEnabled        = "ETA.EINVOICE_ENABLED";
@@ -185,12 +189,19 @@ public static class SettingKeys
 /// </summary>
 public static class SettingDefaults
 {
-    public const decimal CustodyMaxAmount        = 50_000m;
-    public const int     CustodyAlertDays        = 7;
-    public const int     OperationDelayDays      = 0;
-    public const int     FleetInsuranceAlertDays = 30;
-    public const int     FleetLicenseAlertDays   = 30;
-    public const int     PortalTokenDays         = 7;
-    public const int     PortalTokenMaxUses      = 50;
-    public const decimal PaymentMaxAmount        = 100_000_000m;
+    /* 🔴 كانت 50_000m — ولو الجدول فاضي كانت هترفض كل عهدة فوق 50 ألف.
+       اتعدّلت لتطابق `sql/FastCom-settings-seed.sql` (10,000,000)
+       والسقف الـ hard-coded القديم في CustodiesController. */
+    public const decimal CustodyMaxAmount         = 10_000_000m;
+    public const int     CustodyAlertDays         = 7;
+    public const int     OperationDelayDays       = 0;
+    public const int     FleetInsuranceAlertDays  = 30;
+    public const int     FleetLicenseAlertDays    = 30;
+    public const int     PortalTokenDays          = 7;
+    public const int     PortalTokenMaxUses       = 50;
+    /* 🔴 كانوا ناقصين — EXPENSE وTREASURY كان ليهم سقوف hard-coded
+       من غير مفتاح ولا قيمة افتراضية. */
+    public const decimal ExpenseMaxAmount         = 10_000_000m;
+    public const decimal PaymentMaxAmount         = 100_000_000m;
+    public const decimal TreasuryMaxAmount        = 100_000_000m;
 }

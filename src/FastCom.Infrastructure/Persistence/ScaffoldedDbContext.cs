@@ -506,6 +506,7 @@ public partial class FastComDbContext
                 .HasConstraintName("FK_Expenses_Types");
 
             entity.HasOne(d => d.Operation).WithMany(p => p.Expenses).HasConstraintName("FK_Expenses_Operations");
+            entity.HasOne(d => d.PaymentMethod).WithMany(p => p.Expenses).HasConstraintName("FK_Expenses_Methods");
 
             entity.HasOne(d => d.Supplier).WithMany(p => p.Expenses).HasConstraintName("FK_Expenses_Suppliers");
 

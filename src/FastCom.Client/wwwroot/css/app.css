@@ -7,6 +7,10 @@
    ===================================================================================== */
 
 :root {
+    /* 🔴 عرض المحتوى — الهيرو (.fc-hero-inner) والجسم (.fc-page) بيستخدموه.
+          لو عايز تغيّر عرض النظام كله، غيّر القيمة دي بس. */
+    --fc-page-w:      1560px;
+
     --fc-navy:        #0A1B3B;   /* كحلي عميق مشتق من أزرق الهوية — خلفيات غامقة */
     --fc-navy-dark:   #060F24;
     --fc-navy-light:  #16306B;
@@ -80,14 +84,7 @@ code {
 /* ── الـ Sidebar ──────────────────────────────────────────────────────── */
 .fastcom-nav { padding-block: 10px; }
 
-.nav-section-title {
-    font-size: 10.5px !important;
-    font-weight: 700;
-    letter-spacing: .6px;
-    text-transform: uppercase;
-    color: #6C86A3 !important;
-    padding: 16px 20px 6px;
-}
+/* 🔴 `.fc-side-sec` بقى **زرار** (قسم قابل للطي) — التعديل في قسم «الأقسام القابلة للطي» تحت */
 
 /* ── المحتوى ──────────────────────────────────────────────────────────── */
 .fastcom-main {
@@ -171,47 +168,63 @@ code {
    الكلاسات متأكد منها: .mud-nav-link · .mud-nav-link-text · .mud-nav-group  */
 .mud-drawer { background: var(--fc-navy) !important; }
 
+/* 🔴 حواف مدوّرة + مسافة من الجنب — شكل أنضف من الشريط الكامل */
 .mud-drawer .mud-nav-link {
     color: #C7D6E8 !important;
+    margin: 2px 10px !important;
+    border-radius: 10px !important;
+    border-inline-start: 3px solid transparent;
+    min-height: 42px;
+    transition: background .14s ease, color .14s ease;
 }
 .mud-drawer .mud-nav-link-text {
     color: #C7D6E8 !important;
     font-size: 13.5px;
-    font-weight: 500;
+    font-weight: 600;
+    letter-spacing: -.1px;
 }
 .mud-drawer .mud-nav-link .mud-icon-root {
-    color: #8FA9C6 !important;
+    color: #7E9ABB !important;
+    font-size: 19px !important;
+    margin-inline-end: 4px;
 }
 
 /* الرابط النشط — 🟠 برتقالي الهوية (--fc-gold = #FF8015) */
+/* النشط — 🟠 برتقالي الهوية + ظل خفيف */
 .mud-drawer .mud-nav-link.active {
-    background: rgba(255, 128, 21, .18) !important;
+    background: linear-gradient(90deg, rgba(255,128,21,.26), rgba(255,128,21,.07)) !important;
     color: #FFFFFF !important;
     border-inline-start: 3px solid var(--fc-gold);
+    box-shadow: 0 3px 12px rgba(255, 128, 21, .16);
 }
-.mud-drawer .mud-nav-link.active .mud-nav-link-text { color: #FFFFFF !important; }
+.mud-drawer .mud-nav-link.active .mud-nav-link-text { color: #FFFFFF !important; font-weight: 700; }
 .mud-drawer .mud-nav-link.active .mud-icon-root { color: var(--fc-gold) !important; }
 
 /* hover */
 .mud-drawer .mud-nav-link:hover:not(.active) {
-    background: rgba(255, 255, 255, .08) !important;
+    background: rgba(255, 255, 255, .07) !important;
 }
+.mud-drawer .mud-nav-link:hover:not(.active) .mud-icon-root { color: #B9CDE2 !important; }
 
 /* عنوان المجموعة + السهم */
-.mud-drawer .mud-nav-group > .mud-nav-link > .mud-nav-link-text {
-    font-weight: 600;
-}
+.mud-drawer .mud-nav-group > .mud-nav-link > .mud-nav-link-text { font-weight: 700; }
 .mud-drawer .mud-nav-group .mud-collapse-container {
-    background: rgba(0, 0, 0, .16);
+    background: rgba(0, 0, 0, .20);
+    margin: 0 10px;
+    border-radius: 10px;
 }
-.mud-drawer .mud-nav-group .mud-nav-link {
-    font-size: 13px;
+.mud-drawer .mud-nav-group .mud-collapse-container .mud-nav-link {
+    margin: 1px 6px !important;
+    min-height: 38px;
+    font-size: 12.8px;
 }
+/* سهم الفتح */
+.mud-drawer .mud-nav-group .mud-nav-link-expand-icon { color: #7E9ABB !important; }
+.mud-drawer .mud-nav-group .mud-nav-link.active .mud-nav-link-expand-icon,
+.mud-drawer .mud-nav-group .mud-nav-link:hover .mud-nav-link-expand-icon { color: #C7D6E8 !important; }
 
 /* حدود القائمة */
-.mud-drawer .mud-navmenu {
-    padding: 8px 0;
-}
+.mud-drawer .mud-navmenu { padding: 6px 0 22px; }
 
 /* رسالة "سجّل الدخول" الاحتياطية */
 .fc-nav-empty {
@@ -224,6 +237,323 @@ code {
     gap: 12px;
 }
 .fc-nav-empty .mud-icon-root { color: #8FA9C6; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   🎨 القائمة الجانبية — تصميم احترافي (2026-09-13)
+   ══════════════════════════════════════════════════════════════════════
+   البنية:  .fc-side-user  (كارت المستخدم فوق)
+            .fc-side-sec   (عنوان مجموعة + أيقونة)
+            MudNavLink     (الروابط — بتاعة MudBlazor، متفلترة بالصلاحيات)
+            .fc-side-foot  (تذييل)
+
+   🔴 الألوان كلها من متغيّرات الهوية — مافيش لون مكتوب يدوي غير
+      درجات الرمادي المزرق اللي على الكحلي (مالهاش متغيّر).
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* تدرّج خفيف على خلفية الدرج — عمق بدل اللون المصمت */
+.mud-drawer {
+    background:
+        linear-gradient(180deg, #0C2049 0%, var(--fc-navy) 42%, #081631 100%) !important;
+    border-inline-end: 1px solid rgba(255, 255, 255, .07);
+}
+
+/* ── كارت المستخدم فوق القائمة ────────────────────────────────────── */
+.fc-side-user {
+    display: flex; align-items: center; gap: 11px;
+    margin: 12px 12px 6px;
+    padding: 11px 12px;
+    border-radius: 13px;
+    background: rgba(255, 255, 255, .055);
+    border: 1px solid rgba(255, 255, 255, .08);
+}
+.fc-side-av {
+    flex: none;
+    width: 38px; height: 38px;
+    display: grid; place-items: center;
+    border-radius: 11px;
+    background: linear-gradient(135deg, var(--fc-gold), var(--fc-gold-dark));
+    color: #1A1206;
+    font-size: 15px; font-weight: 800;
+    box-shadow: 0 4px 12px rgba(255, 128, 21, .28);
+}
+.fc-side-ui { min-width: 0; flex: 1; }
+.fc-side-un {
+    font-size: 13px; font-weight: 700; color: #fff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fc-side-ur {
+    font-size: 10.5px; color: #8FA9C6; margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* 🔴 كانت مستخدمة في GlobalSearch.razor (`Class="fc-search-input"`)
+      من غير ما تكون معرّفة — فالـ MudTextField كان بيتعرض من غير تنسيق. */
+.fc-search-input .mud-input-control-input-container {
+    background: rgba(255, 255, 255, .10);
+    border: 1px solid rgba(255, 255, 255, .16);
+    border-radius: 10px;
+}
+.fc-search-input .mud-input { color: #fff !important; }
+.fc-search-input .mud-input::placeholder { color: #9FB4CC !important; }
+.fc-search-input .mud-icon-root { color: #9FB4CC !important; }
+
+/* ترقيم الصفحات — مثلثات بالـ border (مافيش أيقونات) */
+.fc-pager {
+    display: flex; gap: 10px; justify-content: center; align-items: center;
+    margin-top: 14px;
+}
+.fc-pager-btn {
+    width: 32px; height: 32px;
+    display: grid; place-items: center;
+    border: 1px solid var(--fc-line);
+    border-radius: 8px;
+    background: #fff; cursor: pointer;
+    transition: background .14s ease, border-color .14s ease;
+}
+.fc-pager-btn:hover:not(:disabled) { background: #F5F7FA; border-color: #C9D6E4; }
+.fc-pager-btn:disabled { opacity: .35; cursor: not-allowed; }
+.fc-tri { width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+.fc-tri-prev { border-right: 7px solid #34506E; }   /* ◀ */
+.fc-tri-next { border-left: 7px solid #34506E; }    /* ▶ */
+
+/* صندوق JSON/نص طويل (سجل المراجعة) */
+.fc-code-box {
+    padding: 10px 12px;
+    background: #0A1B3B; color: #C8D6E8;
+    border-radius: 8px;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px; line-height: 1.7;
+    white-space: pre-wrap; word-break: break-word;
+    max-height: 220px; overflow: auto; direction: ltr; text-align: left;
+}
+
+/* صندوق الرابط — بيتنسخ بالضغط */
+.fc-link-box {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-top: 8px; padding: 10px 12px;
+    background: #0A1B3B; color: #FFD9B8;
+    border-radius: 8px;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12.5px; word-break: break-all;
+    cursor: pointer; direction: ltr;
+    transition: background .14s ease;
+}
+.fc-link-box:hover { background: #123061; }
+.fc-link-box .fc-cell-sub { color: #7E9ABB; font-family: inherit; }
+
+/* نص أحمر/أخضر جوه الخلايا */
+.fc-txt-bad  { color: #C62828; font-weight: 700; }
+.fc-txt-good { color: #2E7D32; font-weight: 700; }
+
+/* شريط الفلاتر */
+.fc-filters {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+.fc-filters .fc-sel { max-width: 200px; }
+
+/* ── صفحة البحث العام ─────────────────────────────────────────────── */
+.fc-search-bar {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+.fc-search-box {
+    flex: 1; min-width: 260px;
+    padding: 12px 16px;
+    border: 1px solid var(--fc-line);
+    border-radius: 12px;
+    background: #fff;
+    font-family: inherit;
+    font-size: 15px;
+    color: var(--fc-navy);
+    transition: border-color .14s ease, box-shadow .14s ease;
+}
+.fc-search-box:focus {
+    outline: none;
+    border-color: var(--fc-gold);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--fc-gold) 18%, transparent);
+}
+.fc-search-box::placeholder { color: #9AA9BC; }
+
+.fc-search-grp { margin-top: 18px; }
+.fc-search-grp:first-child { margin-top: 0; }
+.fc-search-grp-t {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px; font-weight: 800;
+    color: var(--fc-navy);
+}
+.fc-search-grp-t .mud-icon-root {
+    color: var(--fc-gold) !important;
+    font-size: 18px !important; width: 18px !important; height: 18px !important;
+}
+.fc-search-grp-n {
+    min-width: 20px; height: 19px; padding: 0 6px;
+    display: grid; place-items: center;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--fc-gold) 14%, transparent);
+    color: #B45C00;
+    font-size: 11px; font-weight: 800;
+}
+
+/* الصف المختار في الجداول (زي قائمة الأسعار المختارة) */
+.fc-row-sel > td {
+    background: color-mix(in srgb, var(--fc-gold) 9%, transparent) !important;
+    border-top: 1px solid color-mix(in srgb, var(--fc-gold) 34%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--fc-gold) 34%, transparent);
+}
+.fc-row-sel > td:first-child { box-shadow: inset 3px 0 0 var(--fc-gold); }
+
+/* ── شارة العدد (شغل مفتوح) ───────────────────────────────────────── */
+.fc-side-badge {
+    margin-inline-start: auto;
+    min-width: 20px; height: 19px;
+    padding: 0 6px;
+    display: grid; place-items: center;
+    border-radius: 999px;
+    background: var(--fc-gold);
+    color: #1A1206;
+    font-size: 10.5px; font-weight: 800;
+    line-height: 1;
+    box-shadow: 0 2px 7px rgba(255, 128, 21, .35);
+}
+.fc-side-badge.mut {
+    background: rgba(255, 255, 255, .13);
+    color: #A8BED6;
+    box-shadow: none;
+}
+
+/* ── شارة «جديد» للعناصر اللي لسه متضافة ──────────────────────────── */
+.fc-side-new {
+    margin-inline-start: auto;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--fc-gold) 22%, transparent);
+    color: var(--fc-gold);
+    font-size: 9.5px; font-weight: 800;
+    letter-spacing: .3px;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   🎨 القائمة الجانبية — الأقسام القابلة للطي (2026-09-13)
+   ══════════════════════════════════════════════════════════════════════
+   كل قسم = `.fc-side-sec` (زرار) + `.fc-side-sub` (المحتوى).
+   الفتح/القفل بـ `grid-template-rows: 0fr → 1fr` — أنعم طريقة
+   تعمل transition على ارتفاع **مجهول** (max-height محتاج رقم ثابت).
+
+   🔴 `.fc-side-sub` لازم يبقى `overflow:hidden` — وإلا المحتوى
+      هيظهر وهو مقفول.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.fc-side-sec {
+    display: flex; align-items: center; gap: 10px;
+    width: calc(100% - 20px);
+    margin: 3px 10px;
+    padding: 9px 12px;
+    border: 0; border-radius: 10px;
+    background: transparent;
+    color: #B9CDE2;
+    font-family: inherit;
+    font-size: 13px; font-weight: 700;
+    letter-spacing: -.1px;
+    text-align: right;
+    cursor: pointer;
+    transition: background .14s ease, color .14s ease;
+}
+.fc-side-sec:hover { background: rgba(255, 255, 255, .07); color: #fff; }
+.fc-side-sec .mud-icon-root {
+    color: #7E9ABB !important;
+    font-size: 19px !important; width: 19px !important; height: 19px !important;
+    flex: none;
+    transition: color .14s ease;
+}
+.fc-side-sec:hover .mud-icon-root { color: #B9CDE2 !important; }
+
+/* عنوان القسم */
+.fc-side-t { flex: 1; }
+
+
+/* السهم — 🔴 بالـ CSS (border) مش أيقونة، عشان مافيش اعتماد على
+      اسم أيقونة Material ممكن مايكونش موجود في MudBlazor 7.15. */
+.fc-side-chev {
+    flex: none;
+    width: 7px; height: 7px;
+    margin-inline-end: 3px;
+    border-right: 2px solid #7E9ABB;
+    border-bottom: 2px solid #7E9ABB;
+    transform: rotate(45deg);              /* ⌄ */
+    transition: transform .2s ease, border-color .14s ease;
+}
+.fc-side-sec:hover .fc-side-chev { border-color: #B9CDE2; }
+.fc-side-sec[data-open="true" i] .fc-side-chev {
+    transform: rotate(-135deg);            /* ⌃ */
+    border-color: var(--fc-gold);
+}
+
+/* القسم المفتوح — يبان إنه نشط */
+.fc-side-sec[data-open="true" i] {
+    background: rgba(255, 128, 21, .11);
+    color: #fff;
+}
+.fc-side-sec[data-open="true" i] .mud-icon-root { color: var(--fc-gold) !important; }
+
+/* ── المحتوى القابل للطي ──────────────────────────────────────────── */
+.fc-side-sub {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows .22s ease;
+    overflow: hidden;
+}
+.fc-side-sub[data-open="true" i] { grid-template-rows: 1fr; }
+.fc-side-sub-in {
+    min-height: 0;
+    overflow: hidden;
+    padding-inline-start: 14px;
+    margin-inline-start: 10px;
+    border-inline-start: 1px solid rgba(255, 255, 255, .09);
+}
+
+/* الروابط جوه القسم — أصغر شوية */
+.fc-side-sub .mud-nav-link { min-height: 38px; margin: 1px 8px 1px 2px !important; }
+.fc-side-sub .mud-nav-link-text { font-size: 13px; }
+
+/* ── مجموعة فرعية جوه قسم (زي «الأسعار» جوه البيانات الأساسية) ────── */
+.fc-side-grp-t {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 12px 5px;
+    font-size: 10.5px; font-weight: 800;
+    letter-spacing: .8px; text-transform: uppercase;
+    color: #6C86A3;
+}
+.fc-side-grp-t .mud-icon-root {
+    color: #4F6C8C !important;
+    font-size: 14px !important; width: 14px !important; height: 14px !important;
+}
+
+@media (max-width: 600px) {
+    .fc-side-sec { width: calc(100% - 14px); margin: 2px 7px; padding: 8px 10px; }
+    .fc-side-sub-in { margin-inline-start: 7px; }
+}
+
+/* ── تذييل القائمة ────────────────────────────────────────────────── */
+.fc-side-foot {
+    margin: 16px 14px 4px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, .08);
+    font-size: 10px;
+    color: #5F7A99;
+    text-align: center;
+    line-height: 1.7;
+}
+.fc-side-foot b { color: #8FA9C6; font-weight: 700; }
+
+/* ── تجاوب: على الموبايل نصغّر الحشو ──────────────────────────────── */
+@media (max-width: 600px) {
+    .fc-side-user { margin: 10px 8px 4px; padding: 9px 10px; }
+    .fc-side-sec  { padding: 16px 14px 6px; }
+    .mud-drawer .mud-nav-link { margin: 2px 7px !important; }
+}
+
 .fc-nav-empty .mud-typography { color: #C7D6E8 !important; font-size: 13px; }
 
 /* ── Responsive ───────────────────────────────────────────────────────── */
@@ -640,7 +970,10 @@ code {
    تصميم ERP: كروت KPI + جدول Pro + مودالات + Chips
    ===================================================================================== */
 
-.fc-page { padding: 26px 30px 70px; max-width: 1280px; margin-inline: auto; width: 100%; }
+/* 🔴 القاعدة العامة (2026-09-12): الصفحة تبقى أعرض ومتناسبة مع أي شاشة.
+      --fc-page-w هو المتحكم الوحيد في عرض المحتوى — الهيرو والجسم لازم يبقوا
+      نفس القيمة وإلا النص هيبقى مش على خط واحد. */
+.fc-page { padding: 26px clamp(14px, 2.4vw, 34px) 70px; max-width: var(--fc-page-w); margin-inline: auto; width: 100%; }
 
 .fc-crumb { font-size: 12px; font-weight: 700; color: var(--fc-gold); letter-spacing: .3px; margin-bottom: 4px; }
 .fc-page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
@@ -761,7 +1094,15 @@ code {
 }
 
 /* ── الفورم ──────────────────────────────────────────────── */
-.fc-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+/* 🔴 كان عمودين ثابتين — بقى متجاوب: 4 أعمدة على الشاشات الكبيرة،
+      وبينزل 3 → 2 → 1. الحقول اللي عايزة عرض كامل تاخد `.fc-field-full`. */
+.fc-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 235px), 1fr));
+    gap: 16px 18px;
+    align-items: start;
+}
+.fc-field-full { grid-column: 1 / -1; }
 .fc-active-toggle { display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 4px 2px; }
 
 .fc-roles-block { margin-top: 20px; }
@@ -808,7 +1149,7 @@ code {
     background-size: 42px 42px;
     mask-image: linear-gradient(180deg, transparent, #000 30%, transparent 92%);
 }
-.fc-hero-inner { position: relative; z-index: 1; max-width: 1280px; margin-inline: auto; padding: 22px 30px 62px; }
+.fc-hero-inner { position: relative; z-index: 1; max-width: var(--fc-page-w); margin-inline: auto; padding: 22px clamp(14px, 2.4vw, 34px) 62px; }
 .fc-hero .fc-page-head { margin-bottom: 18px; }
 .fc-hero-title { font-size: 26px; font-weight: 800; color: #fff; margin: 0; letter-spacing: -.4px; }
 .fc-hero-sub { color: #9FB4CC; font-size: 14px; margin: 5px 0 0; }
@@ -831,6 +1172,120 @@ code {
 
 /* الكارت بيركب على حافة الهيرو */
 .fc-overlap { margin-top: -52px; position: relative; z-index: 2; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   🔴 الفورمات — تنسيق احترافي (2026-09-12)
+   ══════════════════════════════════════════════════════════════════════
+   النمط: كل قسم في فورم ياخد `.fc-fsec`:
+     • شريط علوي برقم القسم + العنوان + وصف اختياري + أيقونة
+     • خط فاصل
+     • الجسم فيه `.fc-form-grid`
+   ده بيخلي الفورم الطويل **مقسّم ومقروء** بدل ما يكون حقول ورا بعض.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.fc-fsec { margin-bottom: 30px; }
+.fc-fsec:last-child { margin-bottom: 0; }
+
+.fc-fsec-head {
+    display: flex; align-items: center; gap: 11px;
+    padding-bottom: 11px; margin-bottom: 16px;
+    border-bottom: 1.5px solid var(--fc-line);
+}
+
+/* رقم القسم — دايرة كحلية */
+.fc-fsec-n {
+    flex: none;
+    width: 27px; height: 27px;
+    display: grid; place-items: center;
+    border-radius: 9px;
+    background: var(--fc-navy);
+    color: #fff;
+    font-size: 12.5px; font-weight: 800;
+    box-shadow: 0 3px 9px rgba(10, 27, 59, .22);
+}
+
+.fc-fsec-t {
+    font-size: 14.5px; font-weight: 800;
+    color: var(--fc-text); letter-spacing: -.2px;
+}
+
+.fc-fsec-d {
+    font-size: 12px; color: var(--fc-muted);
+    margin-top: 2px; font-weight: 500;
+}
+
+/* أيقونة القسم — على الشمال في RTL */
+.fc-fsec-ic {
+    margin-inline-start: auto;
+    flex: none;
+    width: 32px; height: 32px;
+    display: grid; place-items: center;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--fc-gold) 13%, transparent);
+    color: var(--fc-gold-dark);
+}
+
+/* ── حقل واحد بليبله ────────────────────────────────────────────── */
+.fc-fld { display: flex; flex-direction: column; gap: 6px; }
+.fc-fld-lb {
+    font-size: 12.5px; font-weight: 800;
+    color: var(--fc-text);
+}
+.fc-fld-lb i {
+    font-style: normal; color: var(--fc-error);
+    margin-inline-start: 2px;
+}
+.fc-fld-hint {
+    font-size: 11.5px; color: var(--fc-muted);
+    line-height: 1.55;
+}
+
+/* ── شريط الإجراءات اللاصق أسفل الفورم ────────────────────────────
+   بيخلي زراير الحفظ دايمًا في النظر حتى لو الفورم طويل. */
+.fc-form-actions {
+    display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+    margin-top: 26px; padding-top: 18px;
+    border-top: 1.5px solid var(--fc-line);
+}
+
+/* ── لوحة الشروط (زي «حالة الخزينة») ────────────────────────────── */
+.fc-checks {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 175px), 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+}
+.fc-check {
+    display: flex; align-items: center; gap: 9px;
+    padding: 11px 13px;
+    border: 1.5px solid var(--fc-line);
+    border-radius: 12px;
+    background: var(--fc-card);
+}
+.fc-check-dot {
+    flex: none; width: 9px; height: 9px; border-radius: 50%;
+    background: #C6D0DD;
+}
+.fc-check.on { border-color: color-mix(in srgb, var(--fc-success) 42%, var(--fc-line)); }
+.fc-check.on .fc-check-dot {
+    background: var(--fc-success);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--fc-success) 18%, transparent);
+}
+.fc-check-t { font-size: 12.5px; font-weight: 700; color: var(--fc-text); }
+.fc-check.on .fc-check-t { color: var(--fc-success); }
+
+/* ── تجاوب ──────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+    .fc-fsec { margin-bottom: 22px; }
+    .fc-fsec-ic { display: none; }
+    .fc-form-actions { flex-wrap: wrap; justify-content: stretch; }
+    .fc-form-actions .mud-button-root { flex: 1 1 auto; }
+}
+@media (max-width: 560px) {
+    .fc-fsec-head { gap: 8px; }
+    .fc-fsec-t { font-size: 13.5px; }
+    .fc-fsec-d { display: none; }
+}
 
 /* ── شاشة الأدوار: عمودين ─────────────────────────────────── */
 .fc-roles-wrap { display: grid; grid-template-columns: 320px 1fr; gap: 18px; align-items: start; }
@@ -1004,6 +1459,25 @@ details[open] > summary.fc-matrix-mod-head { border-bottom: 1px solid var(--fc-l
 }
 
 .fc-doc-company { font-size: 1.35rem; font-weight: 800; }
+
+/* ── لوجو الشركة في ترويسة المستند المطبوع ── */
+.fc-doc-brand   { display: flex; align-items: flex-start; gap: 14px; }
+.fc-doc-logo    { flex: 0 0 auto; }
+.fc-doc-logo img {
+    max-height: 62px; max-width: 190px; object-fit: contain; display: block;
+    /* 🔴 -webkit-print-color-adjust عشان اللوجو والألوان تظهر في الطباعة */
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+
+/* ── شارة «ضريبية / غير ضريبية» ── */
+.fc-doc-tax {
+    display: inline-block; margin-top: 6px; padding: 3px 12px;
+    border-radius: 999px; font-size: .78rem; font-weight: 800; letter-spacing: .2px;
+    border: 1.5px solid currentColor;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.fc-doc-tax.is-tax    { color: #14804A; background: rgba(20, 128, 74, .09); }
+.fc-doc-tax.is-nontax { color: #8A6D1F; background: rgba(200, 162, 74, .14); }
 
 .fc-doc-title { font-size: 1.15rem; font-weight: 800; color: var(--fc-gold, #C8A24A); }
 .fc-doc-no    { font-size: 1rem; font-weight: 700; }
@@ -1518,6 +1992,17 @@ details[open] > summary.fc-matrix-mod-head { border-bottom: 1px solid var(--fc-l
 .fc-rep-sec h3 .mud-icon-root { font-size: 19px; color: var(--fc-gold); }
 
 .fc-rep-sec-sub { font-size: .78rem; color: #8896AC; font-weight: 600; margin-top: 2px; }
+
+/* 🆕 2026-09-13 — عمودين جنب بعض في التقارير (التدفق الفعلي: وارد | صادر) */
+.fc-rep-grid2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    align-items: start;
+}
+@media (max-width: 1024px) {
+    .fc-rep-grid2 { grid-template-columns: 1fr; }
+}
 
 /* ── الجدول الاحترافي ── */
 .fc-table-pro2 {

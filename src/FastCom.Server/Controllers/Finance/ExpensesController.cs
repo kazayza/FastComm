@@ -22,9 +22,15 @@ public class ExpensesController : ControllerBase
     private readonly FastComDbContext _db;
     private readonly INumberingService _numbers;
     private readonly IPermissionService _perms;
+    private readonly ISettingsService _settings;
+    private readonly ICashBook _cash;
 
-    public ExpensesController(FastComDbContext db, INumberingService numbers, IPermissionService perms)
-    { _db = db; _numbers = numbers; _perms = perms; }
+    private readonly Services.IAuditService _audit;
+
+    public ExpensesController(FastComDbContext db, INumberingService numbers, IPermissionService perms,
+                              ICashBook cash,
+                               ISettingsService settings, Services.IAuditService audit)
+    { _db = db; _numbers = numbers; _perms = perms; _settings = settings; _cash = cash; _audit = audit; }
 
     private int CurrentUserId() =>
         int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : -1;
@@ -43,7 +49,8 @@ public class ExpensesController : ControllerBase
 
     public record ExpenseUpsert(int ExpenseTypeId, string? ExpenseDate, string? Description,
         decimal Amount, long? OperationId, long? TripId, int? DriverId, int? SupplierId,
-        long? CustodyId, int? TaxRateId, bool? IsTaxDeductible, string? ReferenceNumber, string? Notes, bool AsDraft);
+        long? CustodyId, int? TaxRateId, bool? IsTaxDeductible, string? ReferenceNumber, string? Notes, bool AsDraft,
+        int? PaymentMethodId = null);
 
     public record ListItem(long ExpenseId, string ExpenseNumber, string TypeName,
         string? Description, DateTime ExpenseDate, decimal Amount, decimal TaxRate,
@@ -54,7 +61,7 @@ public class ExpensesController : ControllerBase
         string? ExpenseDate, string? Description, decimal Amount, int? TaxRateId,
         bool IsTaxDeductible, long? OperationId, long? TripId, int? DriverId, int? SupplierId, long? CustodyId,
         string? ReferenceNumber, string? Notes, string PaymentStatus, string Status,
-        bool IsApproved, decimal TaxRate);
+        bool IsApproved, decimal TaxRate, int? PaymentMethodId, string? MethodName);
 
     // ═══════════════ LIST ═══════════════
 
@@ -110,9 +117,15 @@ public class ExpensesController : ControllerBase
             .FirstOrDefaultAsync(x => x.ExpenseId == id && !x.IsDeleted, ct);
         if (e is null) return NotFound(new { message = "المصروف غير موجود" });
 
+        var methodName = e.PaymentMethodId is null ? null
+            : await _db.PaymentMethods.AsNoTracking()
+                .Where(m => m.PaymentMethodId == e.PaymentMethodId)
+                .Select(m => (string?)m.NameAr).FirstOrDefaultAsync(ct);
+
         return Ok(new Detail(e.ExpenseId, e.ExpenseNumber, e.ExpenseTypeId,
             e.ExpenseDate.ToString("yyyy-MM-ddTHH:mm"), e.Description, e.Amount,
-            e.TaxRateId, e.IsTaxDeductible, e.OperationId, e.TripId, e.DriverId, e.SupplierId, e.CustodyId, e.ReferenceNumber, e.Notes, e.PaymentStatus, e.Status, e.IsApproved, e.TaxRate));
+            e.TaxRateId, e.IsTaxDeductible, e.OperationId, e.TripId, e.DriverId, e.SupplierId, e.CustodyId, e.ReferenceNumber, e.Notes, e.PaymentStatus, e.Status, e.IsApproved, e.TaxRate,
+            e.PaymentMethodId, methodName));
     }
 
     // ═══════════════ CREATE ═══════════════
@@ -147,6 +160,7 @@ public class ExpensesController : ControllerBase
             TaxRate         = 0,                       // Snapshot — بتتملأ تحت
             IsTaxDeductible = req.IsTaxDeductible ?? type.IsTaxDeductible,
             ReferenceNumber = B(req.ReferenceNumber),
+            PaymentMethodId = req.PaymentMethodId,
             Notes           = B(req.Notes),
             PaymentStatus   = "Unpaid",
             Status          = req.AsDraft ? "Draft" : "Posted",
@@ -213,8 +227,21 @@ public class ExpensesController : ControllerBase
                 return BadRequest(new { message = "العهدة مقدّمة للتسوية أو معتمدة — فك ربط المصروف أو ألغِه قبل تغيير المبلغ" });
         }
 
+        /* 🔴 امسك القيم **قبل** أي تعديل — عشان القفل والمزامنة */
+        var oldAmount = e.Amount;
+        var oldMethod = e.PaymentMethodId;
+
         var type = await _db.ExpenseTypes.AsNoTracking()
             .FirstAsync(t => t.ExpenseTypeId == req.ExpenseTypeId, ct);
+
+        /* 🔒 لو المصروف دخل الخزينة — المبلغ وطريقة الدفع مقفولين.
+            `oldAmount = 0` إشارة لـ `SyncTreasuryAsync` إن القفل اتكسر. */
+        var wasInTreasury = await _db.CashTransactions.AnyAsync(t =>
+            !t.IsDeleted && t.Status == "Posted" && t.ReferenceNumber == $"EXP:{e.ExpenseNumber}", ct);
+        if (wasInTreasury &&
+            (oldAmount != req.Amount ||
+             (oldMethod ?? 0) != (req.PaymentMethodId ?? 0)))
+            return BadRequest(new { message = "المصروف اتسجل في الخزينة بالفعل — المبلغ وطريقة الدفع ماتتغيرش. ألغِ المصروف وسجّل واحد جديد" });
 
         e.ExpenseTypeId   = req.ExpenseTypeId;
         e.ExpenseDate     = Dt(req.ExpenseDate);
@@ -228,6 +255,7 @@ public class ExpensesController : ControllerBase
         e.TaxRateId       = req.TaxRateId;
         e.IsTaxDeductible = req.IsTaxDeductible ?? type.IsTaxDeductible;
         e.ReferenceNumber = B(req.ReferenceNumber);
+        e.PaymentMethodId = req.PaymentMethodId;
         e.Notes           = B(req.Notes);
         e.UpdatedAt       = DateTime.UtcNow;
         e.UpdatedBy       = CurrentUserId();
@@ -236,6 +264,9 @@ public class ExpensesController : ControllerBase
 
         // 🔴 مزامنة حركة العهدة مع المصروف (إنشاء/تعديل/فك ربط) — مصدر واحد للحقيقة
         await SyncCustodyTransactionAsync(e, ct);
+
+        // 🔴 مزامنة الخزينة — المصروف المدفوع والمعتمد من غير عهدة
+        await SyncTreasuryAsync(e, oldAmount, ct);
         await _db.SaveChangesAsync(ct);
 
         return Ok(new { message = "✅ اتحفظ التعديل" });
@@ -310,6 +341,71 @@ public class ExpensesController : ControllerBase
         tx.Notes           = $"مصروف مرتبط: {e.ExpenseNumber}";
     }
 
+    /* ═══════════════ 🔴 مزامنة الخزينة ═══════════════
+       المصروف يدخل الخزينة **بأربعة شروط** — وأي شرط ناقص يعني مافيش حركة:
+
+         1. `IsApproved`              — معتمد (قرار نهائي)
+         2. `PaymentStatus ≠ Unpaid`  — اتدفع فعلًا (مش مجرد موافقة)
+         3. `CustodyId IS NULL`       — مش من عهدة، وإلا **يتحسب مرتين**
+                                       (صرف العهدة نفسه هو اللي عمل حركة الخزينة)
+         4. طريقة الدفع `IsCashBased` — نقدي. الشيكات والتحويلات مش كاش في الدرج
+
+       ⚠️ `oldAmount` مهم: لو مصروف **داخل الخزينة** مبلغه اتغيّر،
+          بنلغي الحركة القديمة ونعمل واحدة جديدة — عشان الرصيد مايغلطش.      */
+    private async Task<bool> SyncTreasuryAsync(Expense e, decimal? oldAmount, CancellationToken ct)
+    {
+        const string Prefix = "EXP:";
+        var refNo = $"{Prefix}{e.ExpenseNumber}";
+
+        var inTreasury = await _db.CashTransactions.AnyAsync(t =>
+            !t.IsDeleted && t.Status == "Posted" && t.ReferenceNumber == refNo, ct);
+
+        /* 🔒 مصروف فلوسه خرجت من الخزينة فعلًا — المبلغ وطريقة الدفع **ماتتغيرش**.
+            (مصروف معتمد بس لسه مااتدفعش بيتعدّل عادي — مافيش فلوس اتحركت.) */
+        if (inTreasury && oldAmount is not null && oldAmount.Value != e.Amount)
+            throw new InvalidOperationException("TREASURY_LOCKED");
+
+        var method = e.PaymentMethodId is null ? null
+            : await _db.PaymentMethods.AsNoTracking()
+                .FirstOrDefaultAsync(m => m.PaymentMethodId == e.PaymentMethodId, ct);
+
+        var shouldExist = e.IsApproved
+                       && e.PaymentStatus != "Unpaid"
+                       && e.CustodyId is null
+                       && e.Status == "Posted"
+                       && !e.IsDeleted
+                       && method is { IsCashBased: true };
+
+        if (!shouldExist)
+        {
+            var n = await _cash.VoidByReferenceAsync(refNo, ct);
+            if (n > 0) await _db.SaveChangesAsync(ct);
+            return false;
+        }
+
+        /* مافيش تغيير؟ — سيب الحركة زي ما هي (ومنع أي تكرار) */
+        if (inTreasury && oldAmount == e.Amount) return true;
+
+        /* فيه تغيير في المبلغ؟ — العكس الأول، وبعدين الحركة الجديدة */
+        if (inTreasury)
+        {
+            await _cash.VoidByReferenceAsync(refNo, ct);
+            await _db.SaveChangesAsync(ct);
+        }
+
+        var ok = await _cash.PaymentAsync(new CashEntry(
+            ReferenceNumber : refNo,
+            Amount          : e.Amount,
+            PaymentMethodId : e.PaymentMethodId!.Value,
+            SupplierId      : e.SupplierId ?? 0,
+            OperationId     : e.OperationId ?? 0,
+            Description     : $"مصروف {e.ExpenseNumber}",
+            Date            : DateOnly.FromDateTime(e.ExpenseDate)), ct);
+
+        if (ok) await _db.SaveChangesAsync(ct);
+        return ok;
+    }
+
     // ═══════════════ STATUS ═══════════════
 
     public record StatusRequest(string? To);
@@ -345,6 +441,10 @@ public class ExpensesController : ControllerBase
 
         // 🔴 الإلغاء بيشيل حركة الصرف من دفتر العهدة — والرجوع للمؤكد بيعيدها
         await SyncCustodyTransactionAsync(e, ct);
+
+        /* 🔴 والخزينة كمان — إلغاء مصروف مدفوع لازم يشيل حركته من الخزينة */
+        await SyncTreasuryAsync(e, null, ct);
+
         await _db.SaveChangesAsync(ct);
 
         return Ok(new { message = to switch
@@ -373,8 +473,77 @@ public class ExpensesController : ControllerBase
         e.UpdatedBy  = CurrentUserId();
         await _db.SaveChangesAsync(ct);
 
-        return Ok(new { message = "✅ اعتمد المصروف" });
+        /* 🔴 لو المصروف **مدفوع قبل الاعتماد** — الاعتماد هو اللي بيفتح باب الخزينة.
+            (الترتيب العكسي — اعتماد ثم دفع — بيتسجّل في `/pay`.) */
+        var toTreasury = await SyncTreasuryAsync(e, null, ct);
+
+        await _audit.LogAsync(Services.AuditActions.Approve, "Expense", e.ExpenseId.ToString(),
+            newValues: $"IsApproved=true Amount={e.Amount}",
+            description: $"اعتماد المصروف {e.ExpenseNumber}" + (toTreasury ? " — وتسجيله في الخزينة" : ""), ct: ct);
+
+        return Ok(new { message = toTreasury
+            ? "✅ اعتمد المصروف — واتسجل في الخزينة"
+            : "✅ اعتمد المصروف" });
     }
+
+    /* ═══════════════ 🔴 تعليم مصروف «مدفوع» ═══════════════
+       ده الباب اللي كان **ناقص**: `SetStatus` بتتعامل مع Draft/Posted/Cancelled بس،
+       و`Approve` بتغيّر `IsApproved` بس — فمافيش أي طريقة كانت بتوصّل
+       `PaymentStatus = Paid` لغير مصروفات العهدة.
+
+       ⚠️ مصروف العهدة **مرفوض** هنا — فلوسه خرجت وقت صرف العهدة،
+          فلو سجّلناها تاني هنا هتتحسب **مرتين**.                          */
+    [HttpPost("{id:long}/pay")]
+    [Authorize(Policy = "PERM:EXPENSE.EDIT")]
+    public async Task<IActionResult> SetPaid(long id, [FromBody] PayRequest req,
+                                             CancellationToken ct)
+    {
+        var to = req?.To?.Trim();
+        if (to is not ("Unpaid" or "PartiallyPaid" or "Paid"))
+            return BadRequest(new { message = "حالة الدفع غير صالحة" });
+
+        var e = await _db.Expenses.FirstOrDefaultAsync(x => x.ExpenseId == id && !x.IsDeleted, ct);
+        if (e is null) return NotFound(new { message = "المصروف غير موجود" });
+
+        if (to != "Unpaid")
+        {
+            if (e.Status != "Posted")
+                return BadRequest(new { message = "أكّد المصروف الأول" });
+            if (e.CustodyId is not null)
+                return BadRequest(new { message = "المصروف مربوط بعهدة — فلوسه اتصرفت من العهدة، ماتعلّمش مدفوع من هنا" });
+            if (e.PaymentMethodId is null)
+                return BadRequest(new { message = "حدد طريقة الدفع الأول" });
+
+            var m = await _db.PaymentMethods.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.PaymentMethodId == e.PaymentMethodId, ct);
+            if (m is null)
+                return BadRequest(new { message = "طريقة الدفع غير موجودة" });
+
+        }
+
+        var was = e.PaymentStatus;
+        e.PaymentStatus = to;
+        e.UpdatedAt     = DateTime.UtcNow;
+        e.UpdatedBy     = CurrentUserId();
+        await _db.SaveChangesAsync(ct);
+
+        var inTreasury = await SyncTreasuryAsync(e, null, ct);
+
+        var msg = to switch
+        {
+            "Unpaid"        => was != "Unpaid"
+                ? "↩️ رجع المصروف غير مدفوع — واتشالت حركته من الخزينة"
+                : "↩️ رجع المصروف غير مدفوع",
+            "PartiallyPaid" => "🟡 اتعلّم المصروف مدفوع جزئيًا",
+            _               => inTreasury
+                ? "✅ اتعلّم المصروف مدفوع — واتسجل في الخزينة"
+                : "✅ اتعلّم المصروف مدفوع"
+        };
+
+        return Ok(new { message = msg, paymentStatus = to });
+    }
+
+    public record PayRequest(string? To);
 
     // ═══════════════ DELETE (ناعم) ═══════════════
 
@@ -393,6 +562,11 @@ public class ExpensesController : ControllerBase
         e.IsDeleted = true;
         e.DeletedAt = DateTime.UtcNow;
         e.DeletedBy = CurrentUserId();
+
+        /* 🔴 دفاعي — الشرط فوق بيمنع حذف المدفوع، فمفروض مافيش حركة.
+            بس لو حصلت بأي شكل، الرصيد مايفضلش غلط. */
+        await _cash.VoidByReferenceAsync($"EXP:{e.ExpenseNumber}", ct);
+
         await _db.SaveChangesAsync(ct);
 
         return Ok(new { message = "✅ تم حذف المصروف" });
@@ -405,7 +579,11 @@ public class ExpensesController : ControllerBase
     {
         if (r is null) return "البيانات غير كاملة";
         if (r.Amount <= 0) return "المبلغ لازم يكون أكتر من صفر";
-        if (r.Amount > 10_000_000m) return "المبلغ كبير بشكل غير منطقي";
+        /* 🔴 كان hard-coded — بقى من `EXPENSE.MAX_AMOUNT`. 0 = من غير سقف. */
+        var expenseMax = await _settings.GetDecimalAsync(SettingKeys.ExpenseMaxAmount,
+                                                        SettingDefaults.ExpenseMaxAmount, ct);
+        if (expenseMax > 0 && r.Amount > expenseMax)
+            return $"المبلغ أكبر من سقف المصروف المسموح ({expenseMax:N0})";
 
         var type = await _db.ExpenseTypes.AsNoTracking()
             .FirstOrDefaultAsync(t => t.ExpenseTypeId == r.ExpenseTypeId && !t.IsDeleted, ct);
@@ -457,8 +635,17 @@ public class ExpensesController : ControllerBase
                 return "العهدة على رحلة اخرى — اختار رحلة العهدة نفسها";
         }
 
-        if (r.OperationId is null && r.TripId is null && r.SupplierId is null)
-            return "اربط المصروف بعملية أو رحلة أو مورد — عشان يعرف يتحمل على مين";
+        /* 🔴 كان الشرط بيجبر **أي** مصروف يتربط بعملية/رحلة/مورد — وده غلط:
+              المصروفات الإدارية (إيجار · كهرباء · مرتبات · قرطاسية) `IsOperationCost = 0`
+              فمافيهاش حاجة تتربط بيها أصلًا، والقديمة كانت بتخليها مستحيلة التسجيل.
+
+              القاعدة الصح:
+                • مصروف **تشغيلي** (`IsOperationCost = 1`) → لازم يتربط،
+                  عشان يدخل في تكلفة العملية ويظهر في ربحيتها.
+                • مصروف **إداري** (`IsOperationCost = 0`) → الربط اختياري.           */
+        if (type.IsOperationCost &&
+            r.OperationId is null && r.TripId is null && r.SupplierId is null)
+            return $"«{type.NameAr}» مصروف تشغيلي — لازم يتربط بعملية أو رحلة أو مورد عشان يتحمل على مين";
 
         return null;
     }

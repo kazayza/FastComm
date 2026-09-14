@@ -36,7 +36,26 @@ builder.Services.AddDbContext<FastComDbContext>(options =>
         builder.Configuration.GetConnectionString("DefaultConnection"),
         sql =>
         {
-            sql.EnableRetryOnFailure(maxRetryCount: 3);
+            /* 🔴 EnableRetryOnFailure اتشال — كان بيكسر الشغل.
+
+               `EnableRetryOnFailure` بيغلّف الـ DbContext في
+               `SqlServerRetryingExecutionStrategy`، والاستراتيجية دي
+               **بترفض أي transaction بيبدأها المستخدم**:
+
+                   InvalidOperationException: SqlServerRetryingExecutionStrategy
+                   does not support user-initiated transactions.
+
+               وعندنا **21 موضع `BeginTransactionAsync`** في 7 كنترولرز
+               (Trips 7 · Invoices 3 · Operations 3 · Custodies 2 ·
+                Payments 2 · Treasury 2 · Bookings 2).
+
+               البديل (لفّ كل موضع في `CreateExecutionStrategy().ExecuteAsync()`)
+               مرفوض قصدًا: إعادة المحاولة بتعيد تشغيل الـ delegate على
+               **change tracker متّسخ**، وإعادة محاولة كتابة مالية متعددة
+               الخطوات غير آمنة بطبيعتها.
+
+               التكلفة: مافيش إعادة محاولة تلقائية عند أعطال SQL العابرة.
+               لو محتاجها لاحقًا — لفّ الـ 21 موضع الأول، مش هنا. */
             sql.CommandTimeout(60);
         }));
 
@@ -111,8 +130,16 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpContextAccessor();                       // 🔐 لأغراض الـ Audit (IUserContext)
+builder.Services.AddScoped<FastCom.Server.Services.IAuditService, FastCom.Server.Services.AuditService>();  // 📋 سجل المراجعة
 builder.Services.AddScoped<FastCom.Infrastructure.Persistence.IUserContext, FastCom.Server.Auth.HttpUserContext>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
+/* 🔴 ISettingsService — كان مكتوب بس **مش مسجّل**، فالـ 13 مفتاح
+   في SystemSettings ماحدّش كان بيقرأهم والسقوف كانت hard-coded.
+   Scoped (زي PermissionService) لأن الكاش 60 ثانية داخل نفس الـ Scope. */
+builder.Services.AddScoped<FastCom.Server.Services.ISettingsService, FastCom.Server.Services.SettingsService>();
+/* 🔴 ICashBook — دفتر الخزينة. المدفوعات والمصروفات والعهد كلها بتنعكس
+   في الخزينة من مكان واحد (منعًا لتكرار القواعد والعدّ المزدوج). */
+builder.Services.AddScoped<FastCom.Server.Services.ICashBook, FastCom.Server.Services.CashBook>();
 builder.Services.AddScoped<FastCom.Server.Services.INumberingService, FastCom.Server.Services.NumberingService>();
 builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();

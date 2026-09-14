@@ -1,19 +1,25 @@
-﻿@* ============================================================================
-    ✅ Step 3.4: القائمة متفلترة حسب صلاحيات المستخدم (AppUserPermissions).
+﻿@* ════════════════════════════════════════════════════════════════════════════
+    القائمة الجانبية — تصميم 2026-09-13 (v2: أقسام قابلة للطي)
+    ════════════════════════════════════════════════════════════════════════════
+    ── البنية ──
+    كل قسم = `.fc-side-sec` (button) + `.fc-side-sub` (المحتوى).
+    الضغط على القسم يفتحه/يقفله — والحالة في `_open` (HashSet).
+
     ── القواعد ──
     • كل عنصر مرتبط بكود صلاحية من جدول AppPermissions (sql/FastCom-schema.sql).
     • المدير (ADMIN) بيشوف كل حاجة — الـ bypass جاي من AuthUser.IsAdmin.
-    • الـ Section أو الـ Group بيختفي لو كل عناصره مخفيين.
-    • العناصر بتتحدّث فورًا عند تسجيل الدخول/الخروج (OnStateChanged).
-   ============================================================================ *@
+    • القسم بيختفي بالكامل لو كل عناصره مخفية.
+    • بتتحدّث فورًا عند الدخول/الخروج (Auth.OnStateChanged).
+    • 🔴 الشاشات اللي لسه ماتعملتش عليها شارة `.fc-side-new` — شيلها لما تجهز.
+    ── الشكل ──
+    كل الألوان في app.css — مافيش style مكتوب هنا.
+   ════════════════════════════════════════════════════════════════════════════ *@
 @implements IDisposable
 @using FastCom.Client.Auth
 @inject AuthService Auth
 
-<MudNavMenu Class="fastcom-nav">
+<nav class="fastcom-nav mud-navmenu">
 
-    @* ── احتياطي: لو مافيش بيانات مستخدم (مش مسجّل دخول) ──────────────
-       بدل ما القائمة تفضل فاضية من غير أي تفسير *@
     @if (_user is null)
     {
         <div class="fc-nav-empty">
@@ -24,163 +30,387 @@
             </MudButton>
         </div>
     }
-
-    @if (Can("DASHBOARD.VIEW"))
+    else
     {
-        <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
-            الرئيسية
-        </MudNavLink>
-    }
+        @* ── كارت المستخدم ───────────────────────────────────────────── *@
+        <div class="fc-side-user">
+            <span class="fc-side-av">@Initials</span>
+            <span class="fc-side-ui">
+                <span class="fc-side-un">@_user.DisplayName</span>
+                <span class="fc-side-ur">@RoleLabel</span>
+            </span>
+        </div>
 
-    @if (_showOpsSection)
-    {
-        <MudText Class="nav-section-title">التشغيل</MudText>
-
-        @if (_canBookView || _canBookCreate)
+        @* ══════════ الرئيسية ══════════ *@
+        @if (Can("DASHBOARD.VIEW"))
         {
-            <MudNavGroup Title="الحجوزات" Icon="@Icons.Material.Filled.BookOnline" Expanded="false">
-                @if (_canBookView)
-                {
-                    <MudNavLink Href="/bookings" Icon="@Icons.Material.Filled.List">كل الحجوزات</MudNavLink>
-                }
-                @if (_canBookCreate)
-                {
-                    <MudNavLink Href="/bookings/new" Icon="@Icons.Material.Filled.Add">حجز جديد</MudNavLink>
-                }
-            </MudNavGroup>
+            <button type="button" class="fc-side-sec" data-open="@OpMain" @onclick='() => Tgl("main")'>
+                <MudIcon Icon="@Icons.Material.Filled.Home" />
+                <span class="fc-side-t">الرئيسية</span>
+                <span class="fc-side-chev"></span>
+            </button>
+            <div class="fc-side-sub" data-open="@OpMain">
+                <div class="fc-side-sub-in">
+                    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">لوحة المؤشرات</MudNavLink>
+                    <MudNavLink Href="/search" Icon="@Icons.Material.Filled.Search">البحث العام</MudNavLink>
+                </div>
+            </div>
         }
 
-        @if (_canOpsView || _canTripView)
+        @* ══════════ التشغيل ══════════ *@
+        @if (_showOpsSection)
         {
-            <MudNavGroup Title="العمليات" Icon="@Icons.Material.Filled.LocalShipping" Expanded="false">
-                @if (_canOpsView)
-                {
-                    <MudNavLink Href="/operations" Icon="@Icons.Material.Filled.List">كل العمليات</MudNavLink>
-                }
-                @if (_canTripView)
-                {
-                    <MudNavLink Href="/trips" Icon="@Icons.Material.Filled.AirportShuttle">الرحلات</MudNavLink>
-                }
-            </MudNavGroup>
+            <button type="button" class="fc-side-sec" data-open="@OpOps" @onclick='() => Tgl("ops")'>
+                <MudIcon Icon="@Icons.Material.Filled.LocalShipping" />
+                <span class="fc-side-t">التشغيل</span>
+                <span class="fc-side-chev"></span>
+            </button>
+            <div class="fc-side-sub" data-open="@OpOps">
+                <div class="fc-side-sub-in">
+                    @if (_canBookView || _canBookCreate)
+                    {
+                        <div class="fc-side-grp-t">
+                            <MudIcon Icon="@Icons.Material.Filled.BookOnline" /> الحجوزات
+                        </div>
+                        @if (_canBookView)
+                        {
+                            <MudNavLink Href="/bookings" Icon="@Icons.Material.Filled.List">كل الحجوزات</MudNavLink>
+                        }
+                        @if (_canBookCreate)
+                        {
+                            <MudNavLink Href="/bookings/new" Icon="@Icons.Material.Filled.Add">حجز جديد</MudNavLink>
+                        }
+                    }
+                    @if (_canOpsView)
+                    {
+                        <MudNavLink Href="/operations" Icon="@Icons.Material.Filled.LocalShipping">العمليات</MudNavLink>
+                    }
+                    @if (_canTripView)
+                    {
+                        <MudNavLink Href="/trips" Icon="@Icons.Material.Filled.AirportShuttle">الرحلات</MudNavLink>
+                    }
+                    @if (_canContainers)
+                    {
+                        <MudNavLink Href="/containers" Icon="@Icons.Material.Filled.Storage">الحاويات</MudNavLink>
+                    }
+                </div>
+            </div>
         }
-    }
 
-    @if (_showFinanceSection)
-    {
-        <MudText Class="nav-section-title">الماليات</MudText>
-        @if (_canInvoice)
+        @* ══════════ المالية ══════════ *@
+        @if (_showFinanceSection)
         {
-            <MudNavLink Href="/invoices" Icon="@Icons.Material.Filled.ReceiptLong">الفواتير</MudNavLink>
+            <button type="button" class="fc-side-sec" data-open="@OpFin" @onclick='() => Tgl("fin")'>
+                <MudIcon Icon="@Icons.Material.Filled.AccountBalance" />
+                <span class="fc-side-t">المالية</span>
+                <span class="fc-side-chev"></span>
+            </button>
+            <div class="fc-side-sub" data-open="@OpFin">
+                <div class="fc-side-sub-in">
+                    @if (_canInvoice)
+                    {
+                        <MudNavLink Href="/invoices" Icon="@Icons.Material.Filled.ReceiptLong">الفواتير</MudNavLink>
+                    }
+                    @if (_canPayments)
+                    {
+                        <MudNavLink Href="/payments" Icon="@Icons.Material.Filled.Payments">التحصيلات</MudNavLink>
+                    }
+                    @if (_canExpense)
+                    {
+                        <MudNavLink Href="/expenses" Icon="@Icons.Material.Filled.AccountBalanceWallet">المصروفات</MudNavLink>
+                    }
+                    @if (_canCustody)
+                    {
+                        <MudNavLink Href="/custodies" Icon="@Icons.Material.Filled.Savings">عهد السائقين</MudNavLink>
+                    }
+                    @if (_canTreasury)
+                    {
+                        <MudNavLink Href="/treasury" Icon="@Icons.Material.Filled.AccountBalance">الخزينة</MudNavLink>
+                    }
+                    @if (_canSuppliers)
+                    {
+                        <MudNavLink Href="/supplier-invoices" Icon="@Icons.Material.Filled.Receipt">فواتير الموردين</MudNavLink>
+                        <MudNavLink Href="/supplier-payments" Icon="@Icons.Material.Filled.Payments">دفعات الموردين</MudNavLink>
+                    }
+                </div>
+            </div>
         }
-        @if (_canPayments)
-        {
-            <MudNavLink Href="/payments" Icon="@Icons.Material.Filled.Payments">التحصيلات</MudNavLink>
-        }
-        @if (_canExpense)
-        {
-            <MudNavLink Href="/expenses" Icon="@Icons.Material.Filled.AccountBalanceWallet">المصروفات</MudNavLink>
-        }
-        @if (_canTreasury)
-        {
-            <MudNavLink Href="/treasury" Icon="@Icons.Material.Filled.AccountBalance">الخزينة</MudNavLink>
-        }
-    }
 
-    @if (_showFleetSection)
-    {
-        <MudText Class="nav-section-title">الأسطول</MudText>
-        @if (_canDrivers)
+        @* ══════════ الأسطول ══════════ *@
+        @if (_showFleetSection)
         {
-            <MudNavLink Href="/drivers" Icon="@Icons.Material.Filled.Badge">السائقين</MudNavLink>
+            <button type="button" class="fc-side-sec" data-open="@OpFleet" @onclick='() => Tgl("fleet")'>
+                <MudIcon Icon="@Icons.Material.Filled.DirectionsCar" />
+                <span class="fc-side-t">الأسطول</span>
+                <span class="fc-side-chev"></span>
+            </button>
+            <div class="fc-side-sub" data-open="@OpFleet">
+                <div class="fc-side-sub-in">
+                    @if (_canFleet)
+                    {
+                        <MudNavLink Href="/vehicles" Icon="@Icons.Material.Filled.DirectionsCar">العربات</MudNavLink>
+                        <MudNavLink Href="/trailers" Icon="@Icons.Material.Filled.LocalShipping">المقطورات</MudNavLink>
+                    }
+                    @if (_canDrivers)
+                    {
+                        <MudNavLink Href="/drivers" Icon="@Icons.Material.Filled.Badge">السائقين</MudNavLink>
+                    }
+                    @if (_canMaintenance)
+                    {
+                        @* 🚧 /maintenance — شاشة الصيانة (خطة §24 بند 8) *@
+                        <MudNavLink Href="/maintenance" Icon="@Icons.Material.Filled.Build">
+                            الصيانة <span class="fc-side-new">جديد</span>
+                        </MudNavLink>
+                    }
+                </div>
+            </div>
         }
-        @if (_canFleet)
-        {
-            <MudNavLink Href="/vehicles" Icon="@Icons.Material.Filled.DirectionsCar">السيارات</MudNavLink>
-        }
-        @if (_canContainers)
-        {
-            <MudNavLink Href="/containers" Icon="@Icons.Material.Filled.List">الحاويات</MudNavLink>
-        }
-        @if (_canCustody)
-        {
-            <MudNavLink Href="/custodies" Icon="@Icons.Material.Filled.Savings">العهد</MudNavLink>
-        }
-    }
 
-    @if (_showAdminSection)
-    {
-        <MudText Class="nav-section-title">الإدارة</MudText>
-        @if (_canCustomers)
+        @* ══════════ الأطراف ══════════ *@
+        @if (_showPartiesSection)
         {
-            <MudNavLink Href="/customers" Icon="@Icons.Material.Filled.Groups">العملاء</MudNavLink>
+            <button type="button" class="fc-side-sec" data-open="@OpParties" @onclick='() => Tgl("parties")'>
+                <MudIcon Icon="@Icons.Material.Filled.Groups" />
+                <span class="fc-side-t">الأطراف</span>
+                <span class="fc-side-chev"></span>
+            </button>
+            <div class="fc-side-sub" data-open="@OpParties">
+                <div class="fc-side-sub-in">
+                    @if (_canCustomers)
+                    {
+                        <MudNavLink Href="/customers" Icon="@Icons.Material.Filled.Business">العملاء</MudNavLink>
+                    }
+                    @if (_canSuppliers)
+                    {
+                        <MudNavLink Href="/suppliers" Icon="@Icons.Material.Filled.LocalOffer">الموردين</MudNavLink>
+                    }
+                    @if (_canEmployees)
+                    {
+                        <MudNavLink Href="/employees" Icon="@Icons.Material.Filled.PeopleAlt">الموظفين</MudNavLink>
+                    }
+                </div>
+            </div>
         }
-        @if (_canSuppliers)
+
+        @* ══════════ البيانات الأساسية (موديول جديد) ══════════ *@
+        @if (_canMaster)
         {
-            <MudNavLink Href="/suppliers" Icon="@Icons.Material.Filled.LocalOffer">الموردين</MudNavLink>
+            <button type="button" class="fc-side-sec" data-open="@OpMaster" @onclick='() => Tgl("master")'>
+                <MudIcon Icon="@Icons.Material.Filled.Storage" />
+                <span class="fc-side-t">البيانات الأساسية</span>
+                <span class="fc-side-chev"></span>
+            </button>
+            <div class="fc-side-sub" data-open="@OpMaster">
+                <div class="fc-side-sub-in">
+                    @if (_canPricing)
+                    {
+                        <div class="fc-side-grp-t">
+                            <MudIcon Icon="@Icons.Material.Filled.TrendingUp" /> الأسعار
+                        </div>
+                        @* 🚧 /master/services — الخدمات (خطة §24 بند 6) *@
+                        <MudNavLink Href="/master/services" Icon="@Icons.Material.Filled.List">
+                            الخدمات <span class="fc-side-new">جديد</span>
+                        </MudNavLink>
+                        @* 🚧 /master/pricelists — قوائم الأسعار (خطة §24 بند 7) *@
+                        <MudNavLink Href="/master/pricelists" Icon="@Icons.Material.Filled.Assessment">
+                            قوائم الأسعار <span class="fc-side-new">جديد</span>
+                        </MudNavLink>
+                    }
+
+                    <div class="fc-side-grp-t">
+                        <MudIcon Icon="@Icons.Material.Filled.Tune" /> قوائم ورموز
+                    </div>
+                    @* 🚧 /master/numbering — جدول الترقيم (خطة §24 بند 2) *@
+                    <MudNavLink Href="/master/numbering" Icon="@Icons.Material.Filled.Receipt">
+                        الترقيم <span class="fc-side-new">جديد</span>
+                    </MudNavLink>
+                    @* 🚧 /master/triptypes — أنواع الرحلات (خطة §24 بند 4) *@
+                    <MudNavLink Href="/master/triptypes" Icon="@Icons.Material.Filled.Route">
+                        أنواع الرحلات <span class="fc-side-new">جديد</span>
+                    </MudNavLink>
+
+                    <div class="fc-side-grp-t">
+                        <MudIcon Icon="@Icons.Material.Filled.Payments" /> الدفع
+                    </div>
+                    @* 🚧 /master/paymentmethods — طرق الدفع (خطة §24 بند 3) *@
+                    <MudNavLink Href="/master/paymentmethods" Icon="@Icons.Material.Filled.AccountBalanceWallet">
+                        طرق الدفع <span class="fc-side-new">جديد</span>
+                    </MudNavLink>
+                    @* 🚧 /master/paymentterms — شروط الدفع (خطة §24 بند 5) *@
+                    <MudNavLink Href="/master/paymentterms" Icon="@Icons.Material.Filled.Event">
+                        شروط الدفع <span class="fc-side-new">جديد</span>
+                    </MudNavLink>
+                </div>
+            </div>
         }
-        @if (_canEmployees)
+
+        @* ══════════ الإدارة ══════════ *@
+        @if (_showAdminSection)
         {
-            <MudNavLink Href="/employees" Icon="@Icons.Material.Filled.PeopleAlt">الموظفين</MudNavLink>
+            <button type="button" class="fc-side-sec" data-open="@OpAdmin" @onclick='() => Tgl("admin")'>
+                <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" />
+                <span class="fc-side-t">الإدارة</span>
+                <span class="fc-side-chev"></span>
+            </button>
+            <div class="fc-side-sub" data-open="@OpAdmin">
+                <div class="fc-side-sub-in">
+                    @if (_canUsers)
+                    {
+                        <MudNavLink Href="/users" Icon="@Icons.Material.Filled.ManageAccounts">المستخدمين</MudNavLink>
+                    }
+                    @if (_canRoles)
+                    {
+                        <MudNavLink Href="/roles" Icon="@Icons.Material.Filled.VerifiedUser">الأدوار والصلاحيات</MudNavLink>
+                    }
+                    @if (_canAudit)
+                    {
+                        @* 🚧 /audit — سجل المراجعة (خطة §24 بند 10) *@
+                        <MudNavLink Href="/audit" Icon="@Icons.Material.Filled.FactCheck">
+                            سجل المراجعة <span class="fc-side-new">جديد</span>
+                        </MudNavLink>
+                    }
+                    @if (_canPortal)
+                    {
+                        @* 🚧 /portal-admin — إدارة دخول العملاء (خطة §24 بند 9) *@
+                        <MudNavLink Href="/portal-admin" Icon="@Icons.Material.Filled.Key">
+                            بوابة العملاء <span class="fc-side-new">جديد</span>
+                        </MudNavLink>
+                    }
+                    @if (_canDocuments)
+                    {
+                        <MudNavLink Href="/documents" Icon="@Icons.Material.Filled.Description">المستندات</MudNavLink>
+                    }
+                    @if (_canNotify)
+                    {
+                        <MudNavLink Href="/notifications" Icon="@Icons.Material.Filled.Notifications">الإشعارات</MudNavLink>
+                    }
+                    @if (_canSettings)
+                    {
+                        <MudNavLink Href="/settings" Icon="@Icons.Material.Filled.Settings">الإعدادات</MudNavLink>
+                    }
+                </div>
+            </div>
         }
+
+        @* ══════════ التقارير ══════════ *@
         @if (_canReports)
         {
-            <MudNavLink Href="/reports" Icon="@Icons.Material.Filled.Assessment">التقارير</MudNavLink>
+            <button type="button" class="fc-side-sec" data-open="@OpReports" @onclick='() => Tgl("reports")'>
+                <MudIcon Icon="@Icons.Material.Filled.Assessment" />
+                <span class="fc-side-t">التقارير</span>
+                <span class="fc-side-chev"></span>
+            </button>
+            <div class="fc-side-sub" data-open="@OpReports">
+                <div class="fc-side-sub-in">
+                    <MudNavLink Href="/reports" Icon="@Icons.Material.Filled.BarChart">مركز التقارير</MudNavLink>
+                </div>
+            </div>
         }
-        @if (_canUsers)
+
+        @* ══════════ النظام (للمدير فقط) ══════════ *@
+        @if (_isAdmin)
         {
-            <MudNavLink Href="/users" Icon="@Icons.Material.Filled.ManageAccounts">المستخدمين</MudNavLink>
+            <button type="button" class="fc-side-sec" data-open="@OpSystem" @onclick='() => Tgl("system")'>
+                <MudIcon Icon="@Icons.Material.Filled.Info" />
+                <span class="fc-side-t">النظام</span>
+                <span class="fc-side-chev"></span>
+            </button>
+            <div class="fc-side-sub" data-open="@OpSystem">
+                <div class="fc-side-sub-in">
+                    <MudNavLink Href="/health" Icon="@Icons.Material.Filled.CloudDone">حالة النظام</MudNavLink>
+                </div>
+            </div>
         }
-        @if (_canRoles)
-        {
-            <MudNavLink Href="/roles" Icon="@Icons.Material.Filled.Badge">الأدوار والصلاحيات</MudNavLink>
-        }
-        @if (_canSettings)
-        {
-            <MudNavLink Href="/settings" Icon="@Icons.Material.Filled.Settings">الإعدادات</MudNavLink>
-        }
-        @if (_canDocuments)
-        {
-            <MudNavLink Href="/documents" Icon="@Icons.Material.Filled.FactCheck">المستندات</MudNavLink>
-        }
+
+        <div class="fc-side-foot">
+            <b>فاست كوم</b> · نظام إدارة نقل الحاويات<br />
+            الإصدار 1.0
+        </div>
     }
 
-    @if (_isAdmin)
-    {
-        <MudDivider Class="my-3" />
-        <MudNavLink Href="/health" Icon="@Icons.Material.Filled.Info">حالة النظام</MudNavLink>
-    }
-
-</MudNavMenu>
+</nav>
 
 @code {
-    // ═══════════════════════════════════════════════════════════════════
-    //  ✅ Step 3.4 — حالة القائمة
-    //  المستخدم بيتجاب من AuthService (بيانات /api/auth/me المخزّنة)،
-    //  والأعلام بتتحسب مرة واحدة وتتحدّث عند أي تغيير حالة دخول.
-    //  ملاحظة: AuthUser.Can بتعمل bypass تلقائي لدور ADMIN.
-    // ═══════════════════════════════════════════════════════════════════
     private AuthUser? _user;
 
     // ── أعلام الصلاحيات (cache — بتتحدّث في RefreshFlags) ─────────────────
     private bool _isAdmin;
     private bool _canBookView, _canBookCreate;
-    private bool _canOpsView, _canTripView;
-    private bool _canInvoice, _canPayments, _canExpense, _canTreasury;
-    private bool _canDrivers, _canFleet, _canCustody, _canContainers;
-    private bool _canCustomers, _canSuppliers, _canEmployees, _canReports, _canUsers, _canRoles, _canSettings, _canDocuments;
+    private bool _canOpsView, _canTripView, _canContainers;
+    private bool _canInvoice, _canPayments, _canExpense, _canCustody, _canTreasury;
+    private bool _canDrivers, _canFleet, _canMaintenance;
+    private bool _canCustomers, _canSuppliers, _canEmployees;
+    private bool _canMaster, _canPricing;
+    private bool _canUsers, _canRoles, _canAudit, _canPortal, _canDocuments, _canNotify, _canSettings;
+    private bool _canReports;
 
-    // ── ظهور الأقسام (لو كل عناصره مخفيين القسم بيختفي) ───────────────────
-    private bool _showOpsSection     => _canBookView  || _canBookCreate || _canOpsView   || _canTripView;
-    private bool _showFinanceSection => _canInvoice   || _canPayments   || _canExpense   || _canTreasury;
-    private bool _showFleetSection   => _canDrivers   || _canFleet      || _canCustody  || _canContainers;
-    private bool _showAdminSection   => _canCustomers || _canSuppliers  || _canEmployees || _canReports || _canUsers || _canRoles || _canSettings || _canDocuments;
+    // ── ظهور الأقسام (القسم بيختفي لو كل عناصره مخفية) ───────────────────
+    private bool _showOpsSection =>
+        _canBookView || _canBookCreate || _canOpsView || _canTripView || _canContainers;
+    private bool _showFinanceSection =>
+        _canInvoice || _canPayments || _canExpense || _canCustody || _canTreasury || _canSuppliers;
+    private bool _showFleetSection =>
+        _canFleet || _canDrivers || _canMaintenance;
+    private bool _showPartiesSection =>
+        _canCustomers || _canSuppliers || _canEmployees;
+    private bool _showAdminSection =>
+        _canUsers || _canRoles || _canAudit || _canPortal ||
+        _canDocuments || _canNotify || _canSettings;
+
+
+    // ═══════════════ الأقسام القابلة للطي ═══════════════
+
+    /* 🔴 «main» مفتوح افتراضيًا — عشان لوحة المؤشرات تبقى ظاهرة على طول.
+          الباقي مقفول، والمستخدم يفتح اللي عايزه. */
+    private readonly HashSet<string> _open = new() { "main" };
+
+    /* 🔴 property لكل قسم — `data-open="@OpMain"` بدل `@Op("main")`
+          عشان أي `"` جوه attribute = RZ1010 (القاعدة مسجّلة في §Razor attribute rules). */
+    private string OpMain => _open.Contains("main") ? "true" : "false";
+    private string OpOps => _open.Contains("ops") ? "true" : "false";
+    private string OpFin => _open.Contains("fin") ? "true" : "false";
+    private string OpFleet => _open.Contains("fleet") ? "true" : "false";
+    private string OpParties => _open.Contains("parties") ? "true" : "false";
+    private string OpMaster => _open.Contains("master") ? "true" : "false";
+    private string OpAdmin => _open.Contains("admin") ? "true" : "false";
+    private string OpReports => _open.Contains("reports") ? "true" : "false";
+    private string OpSystem => _open.Contains("system") ? "true" : "false";
+
+    private void Tgl(string k)
+    {
+        if (!_open.Remove(k)) _open.Add(k);
+    }
+
+    /// <summary>أول حرفين من اسم المستخدم للأفاتار.</summary>
+    private string Initials
+    {
+        get
+        {
+            var n = (_user?.DisplayName ?? "?").Trim();
+            if (n.Length == 0) return "?";
+            var parts = n.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2) return (parts[0][0].ToString() + parts[1][0]).ToUpperInvariant();
+            return n.Substring(0, Math.Min(2, n.Length)).ToUpperInvariant();
+        }
+    }
+
+    /// <summary>أسماء الأدوار — أو «مدير النظام» لو ADMIN.</summary>
+    private string RoleLabel
+    {
+        get
+        {
+            if (_isAdmin) return "مدير النظام";
+            /* 🔴 `Roles` نوعها `List<string>` مش array — `.Count` مش `.Length` */
+            var r = _user?.Roles;
+            if (r is null || r.Count == 0) return "مستخدم";
+            return r.Count <= 2 ? string.Join(" · ", r) : $"{r[0]} · {r[1]} +{r.Count - 2}";
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
         RefreshFlags();
-
-        // تحديث فوري عند الدخول/الخروج/تحديث بيانات المستخدم
         Auth.OnStateChanged += OnAuthChanged;
     }
 
@@ -194,36 +424,46 @@
     /// <summary>إعادة حساب كل الأعلام من بيانات المستخدم الحالية.</summary>
     private void RefreshFlags()
     {
-        bool Can(string p) => _user?.Can(p) ?? false;
+        bool C(string p) => _user?.Can(p) ?? false;
 
-        _isAdmin       = _user?.IsAdmin ?? false;
+        _isAdmin = _user?.IsAdmin ?? false;
 
-        _canBookView   = Can("BOOKING.VIEW");
-        _canBookCreate = Can("BOOKING.CREATE");
-        _canOpsView    = Can("OPERATION.VIEW");
-        _canTripView   = Can("TRIP.VIEW");
+        _canBookView   = C("BOOKING.VIEW");
+        _canBookCreate = C("BOOKING.CREATE");
+        _canOpsView    = C("OPERATION.VIEW");
+        _canTripView   = C("TRIP.VIEW");
+        _canContainers = C("MASTERDATA.VIEW");
 
-        _canInvoice    = Can("INVOICE.VIEW");
-        _canPayments   = Can("PAYMENT.VIEW");
-        _canExpense    = Can("EXPENSE.VIEW");
-        _canTreasury   = Can("TREASURY.VIEW");
+        _canInvoice    = C("INVOICE.VIEW");
+        _canPayments   = C("PAYMENT.VIEW");
+        _canExpense    = C("EXPENSE.VIEW");
+        _canCustody    = C("CUSTODY.VIEW");
+        _canTreasury   = C("TREASURY.VIEW");
 
-        _canDrivers    = Can("DRIVER.VIEW");
-        _canFleet      = Can("FLEET.VIEW");
-        _canCustody    = Can("CUSTODY.VIEW");
-        _canContainers = Can("MASTERDATA.VIEW");
+        _canFleet       = C("FLEET.VIEW");
+        _canDrivers     = C("DRIVER.VIEW");
+        _canMaintenance = C("MAINTENANCE.VIEW");
 
-        _canCustomers  = Can("CUSTOMER.VIEW");
-        _canSuppliers  = Can("SUPPLIER.VIEW");
-        _canEmployees  = Can("EMPLOYEE.VIEW");
-        _canReports    = Can("REPORT.OPERATIONS") || Can("REPORT.FINANCIAL") || Can("REPORT.FLEET");
-        _canUsers      = Can("USER.VIEW");
-        _canRoles      = Can("ROLE.MANAGE");
-        _canSettings   = Can("SETTINGS.VIEW");
-        _canDocuments  = Can("DOCUMENT.DOWNLOAD");
+        _canCustomers  = C("CUSTOMER.VIEW");
+        _canSuppliers  = C("SUPPLIER.VIEW");
+        _canEmployees  = C("EMPLOYEE.VIEW");
+
+        /* 🔴 البيانات الأساسية موديول جديد — MASTERDATA.VIEW للمجموعة كلها،
+           و PRICING.VIEW للخدمات وقوائم الأسعار بالذات. */
+        _canMaster     = C("MASTERDATA.VIEW");
+        _canPricing    = C("PRICING.VIEW");
+
+        _canUsers      = C("USER.VIEW");
+        _canRoles      = C("ROLE.MANAGE");
+        _canAudit      = C("AUDIT.VIEW");
+        _canPortal     = C("PORTAL.MANAGE");
+        _canDocuments  = C("DOCUMENT.DOWNLOAD");
+        _canNotify     = C("NOTIFICATION.MANAGE");
+        _canSettings   = C("SETTINGS.VIEW");
+
+        _canReports    = C("REPORT.OPERATIONS") || C("REPORT.FINANCIAL") || C("REPORT.FLEET");
     }
 
-    /// <summary>فحص مباشر في الـ markup (لوحة التحكم).</summary>
     private bool Can(string permission) => _user?.Can(permission) ?? false;
 
     public void Dispose() => Auth.OnStateChanged -= OnAuthChanged;

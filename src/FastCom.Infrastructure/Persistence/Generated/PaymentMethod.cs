@@ -33,6 +33,9 @@ public partial class PaymentMethod
     public virtual ICollection<CashTransaction> CashTransactions { get; set; } = new List<CashTransaction>();
 
     [InverseProperty("PaymentMethod")]
+    
+    public virtual ICollection<Expense> Expenses { get; set; } = new List<Expense>();
+
     public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();
 
     [InverseProperty("PaymentMethod")]

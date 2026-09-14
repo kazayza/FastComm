@@ -9,6 +9,10 @@
 
 <PageTitle>الحجوزات — فاست كوم</PageTitle>
 
+
+@* ═══════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════ *@
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
@@ -18,201 +22,986 @@
                 <p class="fc-hero-sub">طلب العميل من أول ما ييجي لحد ما يتأكد ويتحول لعملية نقل</p>
             </div>
             <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
+                               OnClick="Reload" Style="color:#9FB4CC" />
                 @if (CanCreate)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="GoNew">حجز جديد</MudButton>
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="GoNew">حجز جديد</MudButton>
                 }
             </div>
         </div>
+
         @if (CanView)
         {
             <div class="fc-kpis fc-kpis-glass">
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.BookOnline" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي الحجوزات</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.HourglassTop" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(b => b.Status == "Draft")</div><div class="fc-kpi-lb">مسودة</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(b => b.Status == "Confirmed")</div><div class="fc-kpi-lb">مؤكد</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Route" /></div>
-                    <div><div class="fc-kpi-num">@_items.Sum(b => b.ContainersQty)</div><div class="fc-kpi-lb">حاويات مطلوبة</div></div></div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.BookOnline" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي الحجوزات</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.HourglassTop" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(b => b.Status == "Draft")</div><div class="fc-kpi-lb">مسودة</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(b => b.Status == "Confirmed")</div><div class="fc-kpi-lb">مؤكد</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Route" /></div>
+                    <div><div class="fc-kpi-num">@_items.Sum(b => b.ContainersQty)</div><div class="fc-kpi-lb">حاويات مطلوبة</div></div>
+                </div>
             </div>
         }
     </div>
 </div>
 
-<div class="fc-page">
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="bl-body">
+
     @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض الحجوزات.</MudAlert>
+        <div class="bl-state-box">
+            <div class="bl-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليس لديك صلاحية عرض الحجوزات — تواصل مع المسؤول</p>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
-            <div class="fc-toolbar">
-                <div class="fc-filters">
-                    @foreach (var t in Tabs)
+        <div class="bl-card">
+
+            @* ── Toolbar ── *@
+            <div class="bl-toolbar">
+
+                <div class="bl-search-wrap">
+                    <svg class="bl-search-icon" viewBox="0 0 24 24"
+                         width="16" height="16" fill="none" stroke="currentColor"
+                         stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                    </svg>
+                    <input class="bl-search-input"
+                           placeholder="ابحث برقم الحجز أو العميل..."
+                           @bind="_search"
+                           @bind:event="oninput"
+                           aria-label="بحث" />
+                    @if (!string.IsNullOrWhiteSpace(_search))
                     {
-                        <button class='fc-filter @(_tab == t.Key ? "on" : "")' @onclick="() => SetTab(t.Key)">@t.Value</button>
+                        <button class="bl-search-clear"
+                                @onclick="() => _search = string.Empty"
+                                aria-label="مسح البحث">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
                     }
                 </div>
-                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
-                              Placeholder="ابحث برقم الحجز أو العميل..." Variant="Variant.Outlined" Dense="true"
-                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                              Class="fc-search-box" Immediate="true" />
-                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+
+                <div class="bl-results-badge">
+                    عرض <strong>@Filtered.Count()</strong> من <strong>@_items.Count</strong>
+                </div>
+
             </div>
 
+
+            @* ── Status Filter Tabs ── *@
+            <div class="bl-status-bar">
+
+                <div class="bl-status-tabs" role="group" aria-label="فلتر الحالة">
+                    @foreach (var t in _statusTabs)
+                    {
+                        var count = t.Key == "all"
+                            ? _items.Count
+                            : _items.Count(b => b.Status == t.Key);
+
+                        <button class="bl-status-tab @(_tab == t.Key ? "active" : "") @StatusTabColor(t.Key)"
+                                @onclick="() => SetTab(t.Key)"
+                                aria-pressed="@(_tab == t.Key)">
+                            <span class="bl-tab-dot @StatusDotColor(t.Key)"
+                                  aria-hidden="true"></span>
+                            <span>@t.Value</span>
+                            <span class="bl-tab-count">@count</span>
+                        </button>
+                    }
+                </div>
+
+            </div>
+
+
+            @* ── Workflow Hint ── *@
+            <div class="bl-workflow-hint">
+                <svg viewBox="0 0 24 24" width="14" height="14"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                </svg>
+                <div class="bl-workflow-steps">
+                    <span class="bl-wf-step wf-gray">مسودة</span>
+                    <span class="bl-wf-arrow" aria-hidden="true">→</span>
+                    <span class="bl-wf-step wf-blue">مؤكد</span>
+                    <span class="bl-wf-arrow" aria-hidden="true">→</span>
+                    <span class="bl-wf-step wf-purple">متخصص</span>
+                    <span class="bl-wf-arrow" aria-hidden="true">→</span>
+                    <span class="bl-wf-step wf-green">قيد التنفيذ</span>
+                    <span class="bl-wf-arrow" aria-hidden="true">→</span>
+                    <span class="bl-wf-step wf-amber">مكتمل</span>
+                </div>
+                <div class="bl-wf-note">
+                    أنت بتتحكم في أول خطوتين فقط — الباقي بيتحرك تلقائياً حسب العمليات
+                </div>
+            </div>
+
+
+            @* ── Content ── *@
             @if (_loading)
             {
-                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+                <div class="bl-loading">
+                    <div class="bl-spinner" aria-label="جاري التحميل"></div>
+                    <span>جاري تحميل الحجوزات...</span>
+                </div>
+            }
+            else if (!Filtered.Any())
+            {
+                <div class="bl-empty">
+                    <div class="bl-empty-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="40" height="40"
+                             fill="none" stroke="currentColor" stroke-width="1.4">
+                            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                            <path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/>
+                        </svg>
+                    </div>
+                    <div class="bl-empty-title">
+                        @(string.IsNullOrWhiteSpace(_search) ? "لا يوجد حجوزات في هذا الفلتر" : "لا توجد نتائج")
+                    </div>
+                    <div class="bl-empty-sub">
+                        @(string.IsNullOrWhiteSpace(_search)
+                            ? "جرّب فلتر مختلف أو أنشئ حجز جديد"
+                            : "جرّب كلمة بحث مختلفة")
+                    </div>
+                    @if (CanCreate && string.IsNullOrWhiteSpace(_search))
+                    {
+                        <button class="bl-add-btn" @onclick="GoNew">
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2.5"
+                                 aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                            حجز جديد
+                        </button>
+                    }
+                </div>
             }
             else
             {
-                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
-                    <thead><tr>
-                        <th>رقم الحجز</th><th>العميل</th><th>الخدمة</th><th>الخط</th>
-                        <th>المطلوب</th><th>حاويات</th><th>الحالة</th>
-                        <th style="width:150px; text-align:left">إجراءات</th>
-                    </tr></thead>
-                    <tbody>
-                        @foreach (var b in Filtered)
-                        {
+                @* ── الجدول ── *@
+                <div class="bl-table-wrap">
+                    <table class="bl-table" aria-label="قائمة الحجوزات">
+                        <thead>
                             <tr>
-                                <td><span class="fc-role-chip">@b.BookingNumber</span></td>
-                                <td><div class="fc-cell-main">@b.CustomerName</div>
-                                    @if (b.CustomerReference is not null)
-                                    { <div class="fc-cell-sub">مرجع: @b.CustomerReference</div> }</td>
-                                <td class="fc-cell-sub">@(b.ServiceName ?? "—")</td>
-                                <td class="fc-cell-sub">@Route(b)</td>
-                                <td class="fc-cell-sub">@(b.RequestedDate?.ToString("yyyy-MM-dd") ?? "—")</td>
-                                <td><b>@b.ContainersQty</b></td>
-                                <td><span class="fc-chip @ChipClass(b.Status)"><i></i>@StatusAr(b.Status)</span></td>
-                                <td><div class="fc-row-actions">
-                                    @if (b.Status == "Draft")
-                                    {
-                                        @if (CanEdit)
-                                        {
-                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
-                                                           Color="Color.Primary" title="تعديل" OnClick="() => GoEdit(b)" />
-                                        }
-                                        @if (CanConfirm)
-                                        {
-                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle"
-                                                           Color="Color.Success" title="تأكيد" OnClick="() => Confirm(b)" />
-                                        }
-                                        @if (CanDelete)
-                                        {
-                                            @if (_confirmId == b.BookingId)
-                                            {
-                                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
-                                                           OnClick="() => Delete(b)">متأكد؟</MudButton>
-                                            }
-                                            else
-                                            {
-                                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
-                                                               Color="Color.Error" title="حذف" OnClick="() => _confirmId = b.BookingId" />
-                                            }
-                                        }
-                                    }
-                                    else if (b.Status == "Confirmed")
-                                    {
-                                        @if (CanEdit)
-                                        {
-                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
-                                                           Color="Color.Primary" title="رجوع لمسودة" OnClick='() => SetStatus(b, "Draft")' />
-                                        }
-                                        @if (CanCancel)
-                                        {
-                                            @if (_confirmId == b.BookingId)
-                                            {
-                                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
-                                                           OnClick='() => SetStatus(b, "Cancelled")'>إلغاء الحجز؟</MudButton>
-                                            }
-                                            else
-                                            {
-                                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Close"
-                                                               Color="Color.Error" title="إلغاء الحجز" OnClick="() => _confirmId = b.BookingId" />
-                                            }
-                                        }
-                                    }
-                                    else if (b.Status == "Cancelled" && CanEdit)
-                                    {
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Refresh"
-                                                       Color="Color.Primary" title="إرجاع لمسودة" OnClick='() => SetStatus(b, "Draft")' />
-                                    }
-                                    else
-                                    {
-                                        <span class="fc-cell-sub">—</span>
-                                    }
-                                </div></td>
+                                <th scope="col" class="th-start">الحجز</th>
+                                <th scope="col">الخدمة</th>
+                                <th scope="col">المسار</th>
+                                <th scope="col">التاريخ</th>
+                                <th scope="col">حاويات</th>
+                                <th scope="col">الحالة</th>
+                                <th scope="col" style="width:160px">إجراءات</th>
                             </tr>
-                        }
-                        @if (!Filtered.Any())
-                        {
-                            <tr><td colspan="8"><div class="fc-empty"><div>لايوجد اى حجوزاتفي الفلتر ده</div></div></td></tr>
-                        }
-                    </tbody>
-                </table></div>
+                        </thead>
+                        <tbody>
+                            @foreach (var b in Filtered)
+                            {
+                                <tr class="@(b.Status == "Cancelled" ? "row-cancelled" : "")">
+
+                                    @* ── الحجز: رقم + عميل + مرجع ── *@
+                                    <td class="td-start">
+                                        <div class="bl-booking-cell">
+                                            <div class="bl-booking-avatar @AvatarClass(b.Status)">
+                                                <svg viewBox="0 0 24 24" width="16" height="16"
+                                                     fill="none" stroke="currentColor" stroke-width="2"
+                                                     aria-hidden="true">
+                                                    <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                                </svg>
+                                            </div>
+                                            <div class="bl-booking-info">
+                                                <div class="bl-booking-num">
+                                                    <span class="bl-code-chip">@b.BookingNumber</span>
+                                                </div>
+                                                <div class="bl-booking-customer">@b.CustomerName</div>
+                                                @if (!string.IsNullOrWhiteSpace(b.CustomerReference))
+                                                {
+                                                    <div class="bl-booking-ref">
+                                                        <svg viewBox="0 0 16 16" width="10" height="10"
+                                                             fill="none" stroke="currentColor" stroke-width="1.8"
+                                                             aria-hidden="true">
+                                                            <rect x="2" y="2" width="12" height="12" rx="2"/>
+                                                            <path d="M5 8h6M5 5h6M5 11h4" stroke-linecap="round"/>
+                                                        </svg>
+                                                        @b.CustomerReference
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    @* ── الخدمة ── *@
+                                    <td class="td-muted">@(b.ServiceName ?? "—")</td>
+
+                                    @* ── المسار ── *@
+                                    <td>
+                                        @if (b.PortName is not null || b.DestinationName is not null)
+                                        {
+                                            <div class="bl-route-cell">
+                                                <span class="bl-route-from">@(b.PortName ?? "—")</span>
+                                                <span class="bl-route-arrow" aria-hidden="true">
+                                                    <svg viewBox="0 0 24 24" width="12" height="12"
+                                                         fill="none" stroke="currentColor" stroke-width="2.5">
+                                                        <path d="M5 12h14M12 5l7 7-7 7" stroke-linecap="round"
+                                                              stroke-linejoin="round"/>
+                                                    </svg>
+                                                </span>
+                                                <span class="bl-route-to">@(b.DestinationName ?? "—")</span>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="td-muted">—</span>
+                                        }
+                                    </td>
+
+                                    @* ── التاريخ ── *@
+                                    <td class="td-muted">
+                                        @if (b.RequestedDate.HasValue)
+                                        {
+                                            <div class="bl-date-cell">
+                                                <svg viewBox="0 0 16 16" width="11" height="11"
+                                                     fill="none" stroke="currentColor" stroke-width="1.7"
+                                                     aria-hidden="true">
+                                                    <rect x="2" y="3" width="12" height="11" rx="2"/>
+                                                    <path d="M5 1v3M11 1v3M2 7h12" stroke-linecap="round"/>
+                                                </svg>
+                                                @b.RequestedDate.Value.ToString("yyyy-MM-dd")
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span>—</span>
+                                        }
+                                    </td>
+
+                                    @* ── حاويات ── *@
+                                    <td>
+                                        <span class="bl-qty-badge">
+                                            <svg viewBox="0 0 24 24" width="12" height="12"
+                                                 fill="none" stroke="currentColor" stroke-width="2"
+                                                 aria-hidden="true">
+                                                <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                            </svg>
+                                            <strong>@b.ContainersQty</strong>
+                                        </span>
+                                    </td>
+
+                                    @* ── الحالة ── *@
+                                    <td>
+                                        <span class="bl-chip @ChipClass(b.Status)">
+                                            <span class="bl-chip-dot @ChipDotClass(b.Status)"
+                                                  aria-hidden="true"></span>
+                                            @StatusAr(b.Status)
+                                        </span>
+                                    </td>
+
+                                    @* ── إجراءات ── *@
+                                    <td>
+                                        <div class="bl-actions">
+
+                                            @if (b.Status == "Draft")
+                                            {
+                                                @if (CanEdit)
+                                                {
+                                                    <button class="bl-act-btn act-edit"
+                                                            @onclick="() => GoEdit(b)"
+                                                            title="تعديل"
+                                                            aria-label="تعديل @b.BookingNumber">
+                                                        <svg viewBox="0 0 24 24" width="15" height="15"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+
+                                                @if (CanConfirm)
+                                                {
+                                                    <button class="bl-act-btn act-confirm"
+                                                            @onclick="() => Confirm(b)"
+                                                            title="تأكيد الحجز"
+                                                            aria-label="تأكيد @b.BookingNumber">
+                                                        <svg viewBox="0 0 24 24" width="15" height="15"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14"
+                                                                  stroke-linecap="round"/>
+                                                            <path d="M22 4L12 14.01l-3-3"
+                                                                  stroke-linecap="round" stroke-linejoin="round"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+
+                                                @if (CanDelete)
+                                                {
+                                                    @if (_confirmId == b.BookingId)
+                                                    {
+                                                        <button class="bl-confirm-del"
+                                                                @onclick="() => Delete(b)">
+                                                            متأكد؟ حذف
+                                                        </button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button class="bl-act-btn act-delete"
+                                                                @onclick="() => _confirmId = b.BookingId"
+                                                                title="حذف"
+                                                                aria-label="حذف @b.BookingNumber">
+                                                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                            </svg>
+                                                        </button>
+                                                    }
+                                                }
+                                            }
+
+                                            else if (b.Status == "Confirmed")
+                                            {
+                                                @if (CanEdit)
+                                                {
+                                                    <button class="bl-act-btn act-revert"
+                                                            @onclick='() => SetStatus(b, "Draft")'
+                                                            title="إرجاع لمسودة"
+                                                            aria-label="إرجاع @b.BookingNumber لمسودة">
+                                                        <svg viewBox="0 0 24 24" width="15" height="15"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M1 4v6h6" stroke-linecap="round"
+                                                                  stroke-linejoin="round"/>
+                                                            <path d="M3.51 15a9 9 0 102.13-9.36L1 10"
+                                                                  stroke-linecap="round" stroke-linejoin="round"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+
+                                                @if (CanCancel)
+                                                {
+                                                    @if (_confirmId == b.BookingId)
+                                                    {
+                                                        <button class="bl-confirm-del"
+                                                                @onclick='() => SetStatus(b, "Cancelled")'>
+                                                            إلغاء الحجز؟
+                                                        </button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button class="bl-act-btn act-cancel"
+                                                                @onclick="() => _confirmId = b.BookingId"
+                                                                title="إلغاء الحجز"
+                                                                aria-label="إلغاء @b.BookingNumber">
+                                                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                                <circle cx="12" cy="12" r="10"/>
+                                                                <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                                                            </svg>
+                                                        </button>
+                                                    }
+                                                }
+                                            }
+
+                                            else if (b.Status == "Cancelled" && CanEdit)
+                                            {
+                                                <button class="bl-act-btn act-revert"
+                                                        @onclick='() => SetStatus(b, "Draft")'
+                                                        title="إرجاع لمسودة"
+                                                        aria-label="إرجاع @b.BookingNumber لمسودة">
+                                                    <svg viewBox="0 0 24 24" width="15" height="15"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M1 4v6h6" stroke-linecap="round"
+                                                              stroke-linejoin="round"/>
+                                                        <path d="M3.51 15a9 9 0 102.13-9.36L1 10"
+                                                              stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            else
+                                            {
+                                                <span class="td-muted" style="font-size:11px">تلقائي</span>
+                                            }
+
+                                        </div>
+                                    </td>
+
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
-        </div></div>
+
+        </div>
     }
 </div>
 
+
+@* ═══════════════════════════════════════════
+   CSS
+═══════════════════════════════════════════ *@
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    .bl-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 200px);
+        padding: 16px 20px 32px;
+        max-width: 1300px; width: 100%;
+        margin: 0 auto;
+    }
+
+    /* ================================================================
+       STATES
+    ================================================================ */
+    .bl-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .bl-state-icon {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .bl-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+
+    .bl-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .bl-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    /* ================================================================
+       CARD
+    ================================================================ */
+    .bl-card {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden;
+    }
+
+    /* ================================================================
+       TOOLBAR
+    ================================================================ */
+    .bl-toolbar {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+        flex-wrap: wrap;
+    }
+
+    .bl-search-wrap {
+        position: relative; display: flex; align-items: center;
+        flex: 1; min-width: 200px; max-width: 380px;
+    }
+
+    .bl-search-icon {
+        position: absolute; right: 12px; color: #9aaabb; pointer-events: none;
+    }
+
+    .bl-search-input {
+        width: 100%; height: 38px;
+        padding: 0 36px 0 12px;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .bl-search-input:focus {
+        border-color: var(--fc-blue);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.10);
+    }
+    .bl-search-input::placeholder { color: #b0bcc8; }
+
+    .bl-search-clear {
+        position: absolute; left: 10px;
+        display: flex; align-items: center; justify-content: center;
+        width: 22px; height: 22px; border-radius: 50%;
+        border: none; background: #edf1f7; color: #8899ae;
+        cursor: pointer; transition: all .12s ease;
+    }
+    .bl-search-clear:hover { background: #dde5f0; color: var(--fc-text); }
+
+    .bl-results-badge {
+        display: flex; align-items: center; gap: 5px;
+        margin-right: auto;
+        font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap;
+    }
+    .bl-results-badge strong { color: #5a6e88; }
+
+    /* ================================================================
+       STATUS TABS
+    ================================================================ */
+    .bl-status-bar {
+        padding: 10px 18px;
+        background: #f9fafd;
+        border-bottom: 1px solid #edf1f7;
+        overflow-x: auto;
+    }
+
+    .bl-status-tabs {
+        display: flex; gap: 5px;
+        padding: 3px; border-radius: 10px; background: #f0f3f8;
+    }
+
+    .bl-status-tab {
+        display: flex; align-items: center; gap: 5px;
+        height: 34px; padding: 0 12px;
+        border: none; border-radius: 8px;
+        background: transparent; color: #6b7d95;
+        font-family: inherit; font-size: 11px; font-weight: 700;
+        cursor: pointer; white-space: nowrap;
+        transition: all .15s ease;
+    }
+    .bl-status-tab:hover:not(.active) { color: var(--fc-text); background: rgba(255,255,255,.6); }
+
+    .bl-status-tab.active {
+        background: var(--fc-card); color: var(--fc-text);
+        box-shadow: 0 1px 4px rgba(15,41,82,.10);
+        font-weight: 800;
+    }
+
+    .bl-tab-dot {
+        width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px;
+    }
+
+    .bl-tab-count {
+        min-width: 18px; height: 18px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 5px; padding: 0 4px;
+        font-size: 10px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .bl-status-tab.active .bl-tab-count { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .bl-status-tab:not(.active) .bl-tab-count { background: #e4eaf3; color: #8899ae; }
+
+    /* Tab Colors */
+    .dot-all      { background: var(--fc-blue); }
+    .dot-draft    { background: #9aaabb; }
+    .dot-confirmed { background: var(--fc-blue); }
+    .dot-assigned  { background: var(--fc-purple); }
+    .dot-inprogress { background: var(--fc-green); }
+    .dot-completed  { background: var(--fc-amber); }
+    .dot-cancelled  { background: var(--fc-red); }
+
+    /* ================================================================
+       WORKFLOW HINT
+    ================================================================ */
+    .bl-workflow-hint {
+        display: flex; align-items: flex-start; gap: 10px;
+        padding: 12px 18px;
+        background: #fafbfe; border-bottom: 1px solid #edf1f7;
+        color: var(--fc-muted); font-size: 11px;
+    }
+
+    .bl-workflow-steps {
+        display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+    }
+
+    .bl-wf-step {
+        padding: 2px 8px; border-radius: 5px;
+        font-size: 10px; font-weight: 800;
+    }
+
+    .wf-gray   { background: #f0f3f8; color: #8899ae; }
+    .wf-blue   { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .wf-purple { background: var(--fc-purple-lt); color: var(--fc-purple); }
+    .wf-green  { background: var(--fc-green-lt); color: var(--fc-green); }
+    .wf-amber  { background: var(--fc-amber-lt); color: #9a6d08; }
+
+    .bl-wf-arrow { color: #c0ccd8; font-size: 12px; font-weight: 700; }
+
+    .bl-wf-note {
+        font-size: 10px; color: #9aaabb; margin-top: 3px; font-weight: 500;
+    }
+
+    /* ================================================================
+       LOADING / EMPTY
+    ================================================================ */
+    .bl-loading {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 200px;
+        color: var(--fc-muted); font-size: 12px; font-weight: 600;
+    }
+
+    .bl-spinner {
+        width: 32px; height: 32px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: bl-spin .75s linear infinite;
+    }
+    @@keyframes bl-spin { to { transform: rotate(360deg); } }
+
+    .bl-empty {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 10px; min-height: 240px; padding: 40px 20px;
+        text-align: center;
+    }
+    .bl-empty-icon {
+        width: 72px; height: 72px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: #f0f4fa; color: #b0c4d8;
+    }
+    .bl-empty-title { font-size: 15px; font-weight: 800; color: var(--fc-text); }
+    .bl-empty-sub   { font-size: 12px; color: var(--fc-muted); }
+
+    .bl-add-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 16px; margin-top: 6px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; transition: all .15s ease;
+    }
+    .bl-add-btn:hover { background: var(--fc-blue); color: #fff; }
+
+    /* ================================================================
+       TABLE
+    ================================================================ */
+    .bl-table-wrap { overflow-x: auto; }
+
+    .bl-table {
+        width: 100%; border-collapse: collapse; font-size: 13px;
+    }
+
+    .bl-table thead th {
+        padding: 11px 14px;
+        background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 11px; font-weight: 800;
+        text-align: center; border-bottom: 2px solid #e4eaf3;
+        white-space: nowrap; position: sticky; top: 0; z-index: 1;
+    }
+    .bl-table .th-start { text-align: right; }
+
+    .bl-table tbody tr {
+        border-bottom: 1px solid #f0f3f8; transition: background .12s ease;
+    }
+    .bl-table tbody tr:last-child { border-bottom: none; }
+    .bl-table tbody tr:hover { background: #fafcff; }
+    .bl-table tbody tr.row-cancelled { opacity: .55; }
+
+    .bl-table tbody td {
+        padding: 12px 14px; color: #526070; text-align: center; vertical-align: middle;
+    }
+
+    .td-start { text-align: right !important; }
+    .td-muted { color: #8899ae; font-size: 12px; }
+
+    /* ── Booking Cell ── */
+    .bl-booking-cell { display: flex; align-items: center; gap: 11px; }
+
+    .bl-booking-avatar {
+        width: 38px; height: 38px; flex: 0 0 38px; border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.10);
+    }
+
+    .av-draft       { background: linear-gradient(135deg, #8899ae, #6b7d95); }
+    .av-confirmed   { background: linear-gradient(135deg, #1558d6, #1e6ef5); }
+    .av-assigned    { background: linear-gradient(135deg, #6035a0, #7c4dbd); }
+    .av-inprogress  { background: linear-gradient(135deg, #0d8a48, #16a35b); }
+    .av-completed   { background: linear-gradient(135deg, #b87d08, #e09a10); }
+    .av-cancelled   { background: linear-gradient(135deg, #b02040, #e03048); }
+
+    .bl-booking-info { min-width: 0; }
+
+    .bl-booking-num { display: flex; align-items: center; gap: 6px; }
+
+    .bl-code-chip {
+        display: inline-flex; align-items: center;
+        padding: 2px 8px; border-radius: 6px;
+        background: #f0f4fa; border: 1px solid #e0e8f4;
+        font-size: 11px; font-weight: 800; color: #5a6e88;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .bl-booking-customer {
+        font-size: 13px; font-weight: 800; color: #1c2c44;
+        margin-top: 3px; white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis; max-width: 180px;
+    }
+
+    .bl-booking-ref {
+        display: flex; align-items: center; gap: 4px;
+        font-size: 10px; color: #9aaabb; margin-top: 2px;
+    }
+
+    /* ── Route Cell ── */
+    .bl-route-cell {
+        display: flex; align-items: center; gap: 5px;
+        justify-content: center;
+    }
+
+    .bl-route-from { font-size: 11px; font-weight: 700; color: var(--fc-blue); }
+    .bl-route-to   { font-size: 11px; font-weight: 700; color: var(--fc-green); }
+    .bl-route-arrow { color: #c0ccd8; display: flex; }
+
+    /* ── Date Cell ── */
+    .bl-date-cell {
+        display: flex; align-items: center; gap: 4px;
+        justify-content: center; color: #6b7d95; font-size: 12px;
+    }
+
+    /* ── Qty Badge ── */
+    .bl-qty-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 4px 10px; border-radius: 8px;
+        background: var(--fc-amber-lt); border: 1px solid #f0d898;
+        color: #9a6d08; font-size: 12px;
+    }
+    .bl-qty-badge strong {
+        font-size: 14px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    /* ── Chips ── */
+    .bl-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 4px 10px; border-radius: 8px;
+        font-size: 10.5px; font-weight: 800;
+    }
+
+    .bl-chip-dot {
+        width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px;
+    }
+
+    .chip-draft       { background: #f0f3f8;             color: #6b7d95; border: 1px solid #dde5f0; }
+    .chip-confirmed   { background: var(--fc-blue-lt);   color: var(--fc-blue); border: 1px solid #c0d4fb; }
+    .chip-assigned    { background: var(--fc-purple-lt); color: var(--fc-purple); border: 1px solid #d0bfef; }
+    .chip-inprogress  { background: var(--fc-green-lt);  color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .chip-completed   { background: var(--fc-amber-lt);  color: #9a6d08; border: 1px solid #f0d898; }
+    .chip-cancelled   { background: var(--fc-red-lt);    color: var(--fc-red); border: 1px solid #ffc8cf; }
+
+    .cdot-draft       { background: #9aaabb; }
+    .cdot-confirmed   { background: var(--fc-blue); }
+    .cdot-assigned    { background: var(--fc-purple); }
+    .cdot-inprogress  { background: var(--fc-green); }
+    .cdot-completed   { background: var(--fc-amber); }
+    .cdot-cancelled   { background: var(--fc-red); }
+
+    /* ── Actions ── */
+    .bl-actions {
+        display: flex; align-items: center; gap: 4px; justify-content: center;
+    }
+
+    .bl-act-btn {
+        width: 30px; height: 30px; border-radius: 7px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; cursor: pointer;
+        transition: all .15s ease; background: transparent;
+    }
+
+    .act-edit     { color: var(--fc-blue); }
+    .act-confirm  { color: var(--fc-green); }
+    .act-delete   { color: var(--fc-red); }
+    .act-cancel   { color: var(--fc-red); }
+    .act-revert   { color: var(--fc-blue); }
+
+    .act-edit:hover     { background: var(--fc-blue-lt);  border-color: #c0d4fb; }
+    .act-confirm:hover  { background: var(--fc-green-lt); border-color: #b0e0c5; }
+    .act-delete:hover   { background: var(--fc-red-lt);   border-color: #ffc8cf; }
+    .act-cancel:hover   { background: var(--fc-red-lt);   border-color: #ffc8cf; }
+    .act-revert:hover   { background: var(--fc-blue-lt);  border-color: #c0d4fb; }
+
+    .bl-confirm-del {
+        height: 28px; padding: 0 10px;
+        border: none; border-radius: 6px;
+        background: linear-gradient(135deg, #e03048, #c0182e);
+        color: #fff; font-family: inherit;
+        font-size: 10px; font-weight: 800; cursor: pointer;
+        animation: bl-pulse-del 1s ease infinite;
+        white-space: nowrap;
+    }
+    @@keyframes bl-pulse-del {
+        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.35); }
+        50%     { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
+    }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 1100px) {
+        .bl-booking-customer { max-width: 140px; }
+    }
+
+    @@media (max-width: 900px) {
+        .bl-toolbar { flex-direction: column; align-items: stretch; }
+        .bl-search-wrap { max-width: 100%; }
+        .bl-results-badge { margin-right: 0; }
+        .bl-status-tabs { flex-wrap: wrap; }
+        .bl-workflow-hint { flex-direction: column; }
+    }
+
+    @@media (max-width: 680px) {
+        .bl-body { padding: 10px 12px 24px; }
+        .bl-toolbar { padding: 10px 12px; }
+        .bl-booking-avatar { display: none; }
+        .bl-booking-customer { max-width: 120px; }
+        .bl-status-bar { padding: 8px 12px; }
+        .bl-workflow-hint { padding: 8px 12px; display: none; }
+    }
+
+    @@media (max-width: 480px) {
+        .bl-status-tabs { gap: 3px; }
+        .bl-status-tab { padding: 0 8px; font-size: 10px; }
+        .bl-tab-dot { display: none; }
+    }
+
+</style>
+
+
 @code {
     private AuthUser? _user;
-    private bool CanView    => _user?.Can("BOOKING.VIEW") ?? false;
-    private bool CanCreate  => _user?.Can("BOOKING.CREATE") ?? false;
-    private bool CanEdit    => _user?.Can("BOOKING.EDIT") ?? false;
-    private bool CanDelete  => _user?.Can("BOOKING.DELETE") ?? false;
+    private bool CanView    => _user?.Can("BOOKING.VIEW")    ?? false;
+    private bool CanCreate  => _user?.Can("BOOKING.CREATE")  ?? false;
+    private bool CanEdit    => _user?.Can("BOOKING.EDIT")    ?? false;
+    private bool CanDelete  => _user?.Can("BOOKING.DELETE")  ?? false;
     private bool CanConfirm => _user?.Can("BOOKING.CONFIRM") ?? false;
-    private bool CanCancel  => _user?.Can("BOOKING.CANCEL") ?? false;
+    private bool CanCancel  => _user?.Can("BOOKING.CANCEL")  ?? false;
 
-    private static readonly Dictionary<string, string> Tabs = new()
+    private static readonly (string Key, string Value)[] _statusTabs =
     {
-        ["all"] = "الكل", ["Draft"] = "مسودة", ["Confirmed"] = "مؤكد",
-        ["Assigned"] = "متخصص", ["InProgress"] = "قيد التنفيذ",
-        ["Completed"] = "مكتمل", ["Cancelled"] = "ملغي"
+        ("all",        "الكل"),
+        ("Draft",      "مسودة"),
+        ("Confirmed",  "مؤكد"),
+        ("Assigned",   "متخصص"),
+        ("InProgress", "قيد التنفيذ"),
+        ("Completed",  "مكتمل"),
+        ("Cancelled",  "ملغي")
     };
 
     private List<Item> _items = new();
-    private bool _loading; private string _search = ""; private string _tab = "all";
-    private long? _confirmId;
+    private bool   _loading;
+    private string _search = "";
+    private string _tab    = "all";
+    private long?  _confirmId;
 
     public class Item
     {
-        public long BookingId { get; set; }
-        public string BookingNumber { get; set; } = "";
-        public string CustomerName { get; set; } = "";
-        public string? ServiceName { get; set; }
-        public string? PortName { get; set; }
-        public string? DestinationName { get; set; }
-        public string? CustomerReference { get; set; }
-        public DateOnly? RequestedDate { get; set; }
-        public int ContainersQty { get; set; }
-        public string Status { get; set; } = "";
-        public DateTime CreatedAt { get; set; }
+        public long     BookingId         { get; set; }
+        public string   BookingNumber     { get; set; } = "";
+        public string   CustomerName      { get; set; } = "";
+        public string?  ServiceName       { get; set; }
+        public string?  PortName          { get; set; }
+        public string?  DestinationName   { get; set; }
+        public string?  CustomerReference { get; set; }
+        public DateOnly? RequestedDate    { get; set; }
+        public int      ContainersQty     { get; set; }
+        public string   Status            { get; set; } = "";
+        public DateTime CreatedAt         { get; set; }
     }
 
+    /* ── Helpers ── */
     private static string StatusAr(string s) => s switch
     {
-        "Draft" => "مسودة", "Confirmed" => "مؤكد", "Assigned" => "متخصص",
-        "InProgress" => "قيد التنفيذ", "Completed" => "مكتمل", "Cancelled" => "ملغي", _ => s
+        "Draft"      => "مسودة",
+        "Confirmed"  => "مؤكد",
+        "Assigned"   => "متخصص",
+        "InProgress" => "قيد التنفيذ",
+        "Completed"  => "مكتمل",
+        "Cancelled"  => "ملغي",
+        _            => s
     };
 
     private static string ChipClass(string s) => s switch
     {
-        "Draft" => "fc-chip-gray", "Confirmed" => "fc-chip-blue", "Assigned" => "fc-chip-purple",
-        "InProgress" => "fc-chip-ok", "Completed" => "fc-chip-gold", "Cancelled" => "fc-chip-bad", _ => "fc-chip-gray"
+        "Draft"      => "chip-draft",
+        "Confirmed"  => "chip-confirmed",
+        "Assigned"   => "chip-assigned",
+        "InProgress" => "chip-inprogress",
+        "Completed"  => "chip-completed",
+        "Cancelled"  => "chip-cancelled",
+        _            => "chip-draft"
     };
 
-    private static string Route(Item b)
+    private static string ChipDotClass(string s) => s switch
     {
-        var from = b.PortName ?? "—";
-        var to = b.DestinationName ?? "—";
-        return $"{from} ← {to}";
-    }
+        "Draft"      => "cdot-draft",
+        "Confirmed"  => "cdot-confirmed",
+        "Assigned"   => "cdot-assigned",
+        "InProgress" => "cdot-inprogress",
+        "Completed"  => "cdot-completed",
+        "Cancelled"  => "cdot-cancelled",
+        _            => "cdot-draft"
+    };
+
+    private static string AvatarClass(string s) => s switch
+    {
+        "Draft"      => "av-draft",
+        "Confirmed"  => "av-confirmed",
+        "Assigned"   => "av-assigned",
+        "InProgress" => "av-inprogress",
+        "Completed"  => "av-completed",
+        "Cancelled"  => "av-cancelled",
+        _            => "av-draft"
+    };
+
+    private static string StatusTabColor(string s) => s switch
+    {
+        _ => ""
+    };
+
+    private static string StatusDotColor(string s) => s switch
+    {
+        "all"        => "dot-all",
+        "Draft"      => "dot-draft",
+        "Confirmed"  => "dot-confirmed",
+        "Assigned"   => "dot-assigned",
+        "InProgress" => "dot-inprogress",
+        "Completed"  => "dot-completed",
+        "Cancelled"  => "dot-cancelled",
+        _            => "dot-all"
+    };
 
     private IEnumerable<Item> Filtered => _items.Where(b =>
         (_tab == "all" || b.Status == _tab) &&
@@ -233,12 +1022,12 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/bookings?take=300") ?? new(); }
+        try   { _items = await Http.GetFromJsonAsync<List<Item>>("api/bookings?take=300") ?? new(); }
         catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
         finally { _loading = false; }
     }
 
-    private void GoNew() => Nav.NavigateTo("/bookings/new");
+    private void GoNew()        => Nav.NavigateTo("/bookings/new");
     private void GoEdit(Item b) => Nav.NavigateTo($"/bookings/new/{b.BookingId}");
 
     private async Task Confirm(Item b) => await SetStatus(b, "Confirmed");

@@ -1,0 +1,414 @@
+@page "/master/services"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject ISnackbar Snackbar
+
+<PageTitle>الخدمات — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">البيانات الأساسية · الأسعار</div>
+                <h1 class="fc-hero-title">الخدمات</h1>
+                <p class="fc-hero-sub">نقل حاوية · تحميل · انتظار — السعر الافتراضي بيتطبق لو مافيش سعر خاص للعميل</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="LoadAsync" Style="color:#9FB4CC" />
+                @if (CanManage)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="ResetForm">خدمة جديدة</MudButton>
+                }
+            </div>
+        </div>
+
+        <div class="fc-kpis-glass">
+            <div class="fc-kpi"><div class="fc-kpi-lb">الخدمات</div><div class="fc-kpi-num">@_items.Count</div></div>
+            <div class="fc-kpi"><div class="fc-kpi-lb">نشطة</div><div class="fc-kpi-num">@_items.Count(i => i.IsActive)</div></div>
+            <div class="fc-kpi"><div class="fc-kpi-lb">سعرها صفر</div>
+                <div class="fc-kpi-num">@_items.Count(i => i.DefaultSellingPrice == 0)</div></div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanView)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض البيانات الأساسية.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+
+            @if (_items.Any(i => i.DefaultSellingPrice == 0 && i.IsActive))
+            {
+                <div class="fc-alert fc-alert-warn">
+                    <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
+                    <div class="fc-alert-body">
+                        <div class="fc-alert-title">فيه @_items.Count(i => i.DefaultSellingPrice == 0 && i.IsActive) خدمة سعرها صفر</div>
+                        <div>الاقتراح التلقائي في العمليات هيطلع <b>صفر</b> للخدمات دي.
+                            حطّ سعر افتراضي، أو اعمل سعر خاص للعميل من «قوائم الأسعار».</div>
+                    </div>
+                </div>
+            }
+
+            @if (CanManage)
+            {
+                <div class="fc-fsec">
+                    <div class="fc-fsec-head">
+                        <span class="fc-fsec-n">1</span>
+                        <div>
+                            <div class="fc-fsec-t">@(_editId is null ? "خدمة جديدة" : $"تعديل: {_f.NameAr}")</div>
+                            <div class="fc-fsec-d">الكود بالحروف الإنجليزية — زي TRANS40 أو WAIT</div>
+                        </div>
+                        <span class="fc-fsec-ic"><MudIcon Icon="@Icons.Material.Filled.List" Size="Size.Small" /></span>
+                    </div>
+
+                    @if (_msg is not null)
+                    {
+                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                                  Class="mb-4">@_msg</MudAlert>
+                    }
+
+                    <div class="fc-form-grid">
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">الكود<i>*</i></div>
+                            <input class="fc-sel fc-sel-lg" @bind="_f.ServiceCode" maxlength="30" dir="ltr"
+                                   disabled="@(_editId is not null && _f.UsageCount > 0)" />
+                            @if (_editId is not null && _f.UsageCount > 0)
+                            {
+                                <div class="fc-fld-hint">مقفل — مستخدم في @_f.UsageCount بند فاتورة</div>
+                            }
+                        </div>
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">الاسم بالعربي<i>*</i></div>
+                            <input class="fc-sel fc-sel-lg" @bind="_f.NameAr" maxlength="150" />
+                        </div>
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">الاسم بالإنجليزي</div>
+                            <input class="fc-sel fc-sel-lg" @bind="_f.NameEn" maxlength="150" />
+                        </div>
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">الوحدة<i>*</i></div>
+                            <select class="fc-sel fc-sel-lg" @bind="_f.Unit">
+                                @foreach (var u in Units) { <option value="@u">@UnitAr(u)</option> }
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="fc-panel-sub" style="margin:22px 0 12px">التسعير</div>
+                    <div class="fc-form-grid">
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">سعر البيع الافتراضي</div>
+                            <input type="number" min="0" step="0.01" class="fc-sel fc-sel-lg" value="@_f.DefaultSellingPrice"
+                                   @onchange="e => _f.DefaultSellingPrice = ParseDec(e.Value)" />
+                            <div class="fc-fld-hint">بيتطبق لو مافيش سعر خاص للعميل</div>
+                        </div>
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">التكلفة الافتراضية</div>
+                            <input type="number" min="0" step="0.01" class="fc-sel fc-sel-lg" value="@_f.DefaultCost"
+                                   @onchange="e => _f.DefaultCost = ParseDec(e.Value)" />
+                        </div>
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">الضريبة</div>
+                            <select class="fc-sel fc-sel-lg" value="@_f.TaxRateId" @onchange="OnTaxChanged">
+                                <option value="">— بدون —</option>
+                                @foreach (var t in _taxRates) { <option value="@t.Id">@t.Label</option> }
+                            </select>
+                        </div>
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">خاضعة للضريبة؟</div>
+                            <select class="fc-sel fc-sel-lg" @bind="_f.IsTaxable">
+                                <option value="true">أيوه</option>
+                                <option value="false">لأ — معفاة</option>
+                            </select>
+                        </div>
+                        @if (_f.DefaultSellingPrice > 0)
+                        {
+                            <div class="fc-fld">
+                                <div class="fc-fld-lb">الهامش المتوقع</div>
+                                <div class="fc-sel fc-sel-lg" style="display:flex;align-items:center;font-weight:800">
+                                    @Money(_f.DefaultSellingPrice - _f.DefaultCost)
+                                </div>
+                                <div class="fc-fld-hint">سعر البيع − التكلفة</div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="fc-panel-sub" style="margin:22px 0 12px">الفاتورة الإلكترونية (ETA)</div>
+                    <div class="fc-form-grid">
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">كود GS1</div>
+                            <input class="fc-sel fc-sel-lg" @bind="_f.Gs1Code" maxlength="50" dir="ltr" />
+                            <div class="fc-fld-hint">اختياري دلوقتي — مطلوب للتكامل مع منظومة الفاتورة الإلكترونية</div>
+                        </div>
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">كود EGS</div>
+                            <input class="fc-sel fc-sel-lg" @bind="_f.EgsCode" maxlength="50" dir="ltr" />
+                        </div>
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">الحالة</div>
+                            <div class="fc-active-toggle">
+                                <MudCheckBox T="bool" @bind-Value="_f.IsActive" Color="Color.Secondary" Label="نشطة" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+                        @if (_editId is not null)
+                        {
+                            <MudButton Variant="Variant.Text" OnClick="ResetForm">إلغاء التعديل</MudButton>
+                        }
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                                   StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">حفظ</MudButton>
+                    </div>
+                </div>
+            }
+
+            <div class="fc-fsec" style="margin-top:26px">
+                <div class="fc-fsec-head">
+                    <span class="fc-fsec-n">2</span>
+                    <div>
+                        <div class="fc-fsec-t">الخدمات الموجودة</div>
+                        <div class="fc-fsec-d">@_items.Count خدمة · @_items.Count(i => i.IsActive) نشطة</div>
+                    </div>
+                </div>
+
+                <div class="fc-table-wrap"><table class="fc-table">
+                    <thead><tr>
+                        <th>الكود</th><th>الخدمة</th><th>الوحدة</th>
+                        <th>سعر البيع</th><th>التكلفة</th><th>الضريبة</th>
+                        <th>بنود</th><th style="width:110px"></th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach (var s in _items)
+                        {
+                            <tr>
+                                <td><span class="fc-role-chip">@s.ServiceCode</span></td>
+                                <td class="fc-cell-main">
+                                    @s.NameAr
+                                    @if (!s.IsActive)
+                                    {
+                                        <span class="fc-chip fc-chip-gray">معطّلة</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(s.NameEn))
+                                    {
+                                        <div class="fc-cell-sub">@s.NameEn</div>
+                                    }
+                                </td>
+                                <td class="fc-cell-sub">@UnitAr(s.Unit)</td>
+                                <td>
+                                    @if (s.DefaultSellingPrice == 0)
+                                    {
+                                        <span class="fc-chip fc-chip-warn">صفر</span>
+                                    }
+                                    else
+                                    {
+                                        <b>@Money(s.DefaultSellingPrice)</b>
+                                    }
+                                </td>
+                                <td>@Money(s.DefaultCost)</td>
+                                <td class="fc-cell-sub">
+                                    @(string.IsNullOrWhiteSpace(s.TaxRateName) ? (s.IsTaxable ? "—" : "معفاة") : s.TaxRateName)
+                                </td>
+                                <td>@s.UsageCount</td>
+                                <td>
+                                    @if (CanManage)
+                                    {
+                                        <div class="fc-row-actions">
+                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
+                                                           Color="Color.Primary" title="تعديل" OnClick="() => Edit(s)" />
+                                            @if (s.IsActive)
+                                            {
+                                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Close"
+                                                               Color="Color.Error" title="تعطيل" OnClick="() => ToggleAsync(s, false)" />
+                                            }
+                                            else
+                                            {
+                                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle"
+                                                               Color="Color.Success" title="تفعيل" OnClick="() => ToggleAsync(s, true)" />
+                                            }
+                                        </div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (_items.Count == 0)
+                        {
+                            <tr><td colspan="8"><div class="fc-empty">مافيش خدمات — ضيف أول خدمة</div></td></tr>
+                        }
+                    </tbody>
+                </table></div>
+            </div>
+
+        </div></div>
+    }
+</div>
+
+@code {
+    private AuthUser? _user;
+    private bool CanView => _user?.Can("MASTERDATA.VIEW") ?? false;
+    /* 🔴 الخدمات أسعار — فالصلاحية PRICING مش MASTERDATA */
+    private bool CanManage => (_user?.Can("PRICING.CREATE") ?? false) || (_user?.Can("PRICING.EDIT") ?? false);
+
+    private static readonly string[] Units = { "Trip", "Job", "Hour", "Day", "Unit", "Km", "Ton" };
+
+    private List<Item> _items = new();
+    private List<TaxOpt> _taxRates = new();
+    private bool _saving;
+    private string? _msg; private bool _ok = true;
+    private int? _editId;
+    private Form _f = new();
+
+    /// <summary>مطابق لـ <c>MasterDataController.ServiceItem</c> — 14 حقل.</summary>
+    public class Item
+    {
+        public int ServiceId { get; set; }
+        public string ServiceCode { get; set; } = "";
+        public string NameAr { get; set; } = "";
+        public string? NameEn { get; set; }
+        public string Unit { get; set; } = "";
+        public decimal DefaultSellingPrice { get; set; }
+        public decimal DefaultCost { get; set; }
+        public int? TaxRateId { get; set; }
+        public string? TaxRateName { get; set; }
+        public bool IsTaxable { get; set; }
+        public string? Gs1Code { get; set; }
+        public string? EgsCode { get; set; }
+        public bool IsActive { get; set; }
+        public int UsageCount { get; set; }
+    }
+
+    /// <summary>مطابق لـ <c>MasterDataController.ServiceUpsert</c> — 11 حقل.</summary>
+    public class Form
+    {
+        public string ServiceCode { get; set; } = "";
+        public string NameAr { get; set; } = "";
+        public string? NameEn { get; set; }
+        public string Unit { get; set; } = "Trip";
+        public decimal DefaultSellingPrice { get; set; }
+        public decimal DefaultCost { get; set; }
+        public int? TaxRateId { get; set; }
+        public bool IsTaxable { get; set; } = true;
+        public string? Gs1Code { get; set; }
+        public string? EgsCode { get; set; }
+        public bool IsActive { get; set; } = true;
+        public int UsageCount { get; set; }   /* للـ UI بس — قفل الكود */
+    }
+
+    public class TaxOpt { public int Id { get; set; } public string Label { get; set; } = ""; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (!CanView) return;
+        try { _taxRates = await Http.GetFromJsonAsync<List<TaxOpt>>("api/options/tax-rates") ?? new(); }
+        catch { _taxRates = new(); }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/master/services") ?? new(); }
+        catch (Exception ex) { _ok = false; _msg = "فشل التحميل: " + ex.Message; }
+    }
+
+    private void ResetForm() { _editId = null; _f = new Form(); _msg = null; }
+
+    private void Edit(Item s)
+    {
+        _editId = s.ServiceId;
+        _f = new Form
+        {
+            ServiceCode         = s.ServiceCode,
+            NameAr              = s.NameAr,
+            NameEn              = s.NameEn,
+            Unit                = s.Unit,
+            DefaultSellingPrice = s.DefaultSellingPrice,
+            DefaultCost         = s.DefaultCost,
+            TaxRateId           = s.TaxRateId,
+            IsTaxable           = s.IsTaxable,
+            Gs1Code             = s.Gs1Code,
+            EgsCode             = s.EgsCode,
+            IsActive            = s.IsActive,
+            UsageCount          = s.UsageCount
+        };
+        _msg = null;
+    }
+
+    private void OnTaxChanged(ChangeEventArgs e) =>
+        _f.TaxRateId = int.TryParse(e.Value?.ToString(), out var n) && n > 0 ? n : null;
+
+    private async Task SaveAsync()
+    {
+        if (_saving) return;
+        if (string.IsNullOrWhiteSpace(_f.ServiceCode)) { _ok = false; _msg = "كود الخدمة مطلوب"; return; }
+        if (string.IsNullOrWhiteSpace(_f.NameAr))      { _ok = false; _msg = "الاسم بالعربي مطلوب"; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var payload = new
+            {
+                serviceCode         = _f.ServiceCode,
+                nameAr              = _f.NameAr,
+                nameEn              = _f.NameEn,
+                unit                = _f.Unit,
+                defaultSellingPrice = _f.DefaultSellingPrice,
+                defaultCost         = _f.DefaultCost,
+                taxRateId           = _f.TaxRateId,
+                isTaxable           = _f.IsTaxable,
+                gs1Code             = _f.Gs1Code,
+                egsCode             = _f.EgsCode,
+                isActive            = _f.IsActive
+            };
+
+            var res = _editId is null
+                ? await Http.PostAsJsonAsync("api/master/services", payload)
+                : await Http.PutAsJsonAsync($"api/master/services/{_editId}", payload);
+
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) { ResetForm(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task ToggleAsync(Item s, bool activate)
+    {
+        try
+        {
+            var url = $"api/master/services/{s.ServiceId}/" + (activate ? "activate" : "deactivate");
+            var res = await Http.PostAsync(url, null);
+            var msg = await MsgOf(res);
+            _ok = res.IsSuccessStatusCode; _msg = msg;
+            Snackbar.Add(msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+    }
+
+    private static decimal ParseDec(object? v) => decimal.TryParse(v?.ToString(), out var n) && n >= 0 ? n : 0m;
+    private static string Money(decimal v) => v.ToString("N2");
+    private static string UnitAr(string u) => u switch
+    {
+        "Trip" => "رحلة", "Job" => "مهمة", "Hour" => "ساعة", "Day" => "يوم",
+        "Unit" => "وحدة", "Km" => "كيلومتر", "Ton" => "طن", _ => u
+    };
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "✅ تم" : "حصل خطأ — حاول تاني"; }
+    }
+}

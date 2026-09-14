@@ -10,249 +10,1589 @@
 
 <PageTitle>@(_id is null ? "حجز جديد" : "تعديل حجز") — فاست كوم</PageTitle>
 
+
+@* ═══════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════ *@
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
+
             <div>
                 <div class="fc-crumb">التشغيل · الحجوزات</div>
-                <h1 class="fc-hero-title">@(_id is null ? "حجز جديد" : $"تعديل حجز {BookingNumber}")</h1>
-                <p class="fc-hero-sub">سجّل طلب العميل بالحاويات المطلوبة — الرقم بيتولد تلقائيًا (BK-)</p>
+                <h1 class="fc-hero-title">
+                    @if (_id is null)
+                    {
+                        <span>حجز جديد</span>
+                        <span class="bk-hero-badge badge-new">جديد</span>
+                    }
+                    else
+                    {
+                        <span>@BookingNumber</span>
+                        <span class="bk-hero-badge @StatusBadgeClass(_status)">
+                            @StatusAr(_status)
+                        </span>
+                    }
+                </h1>
+                <p class="fc-hero-sub">سجّل طلب العميل بالحاويات المطلوبة</p>
             </div>
+
             <div class="fc-head-actions">
-                <MudButton Variant="Variant.Outlined" OnClick="GoBack" Style="color:#9FB4CC">رجوع</MudButton>
+                <button class="bk-back-btn" @onclick="GoBack">
+                    <svg viewBox="0 0 24 24" width="16" height="16"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         aria-hidden="true">
+                        <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    الحجوزات
+                </button>
                 @if (CanSave && !_locked)
                 {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving"
-                               StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="SaveAsync">حفظ</MudButton>
+                    <button class="bk-save-btn"
+                            @onclick="SaveAsync"
+                            disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="btn-spinner" aria-hidden="true"></span>
+                            <span>جاري الحفظ...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                <path d="M17 21v-8H7v8M7 3v5h8"
+                                      stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>حفظ الحجز</span>
+                        }
+                    </button>
                 }
             </div>
+
         </div>
+
+        @* ── ملخص الحجز (يبان بس في التعديل) ── *@
+        @if (_id is not null && !_loading)
+        {
+            <div class="bk-hero-summary">
+
+                <div class="bk-sum-item">
+                    <div class="bk-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                            <circle cx="12" cy="7" r="4"/>
+                        </svg>
+                    </div>
+                    <div class="bk-sum-text">
+                        <div class="bk-sum-label">العميل</div>
+                        <div class="bk-sum-val">
+                            @(_customers.FirstOrDefault(c => c.Id == _f.CustomerId)?.Label ?? "—")
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bk-sum-div" aria-hidden="true"></div>
+
+                <div class="bk-sum-item">
+                    <div class="bk-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="1" y="3" width="15" height="13" rx="2"/>
+                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                        </svg>
+                    </div>
+                    <div class="bk-sum-text">
+                        <div class="bk-sum-label">الحاويات</div>
+                        <div class="bk-sum-val">@_lines.Sum(l => l.Qty) حاوية</div>
+                    </div>
+                </div>
+
+                <div class="bk-sum-div" aria-hidden="true"></div>
+
+                <div class="bk-sum-item">
+                    <div class="bk-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="5" width="18" height="16" rx="2"/>
+                            <path d="M7 3V7M17 3V7M3 10H21" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="bk-sum-text">
+                        <div class="bk-sum-label">تاريخ التنفيذ</div>
+                        <div class="bk-sum-val">@(_f.RequestedDate ?? "غير محدد")</div>
+                    </div>
+                </div>
+
+                <div class="bk-sum-div" aria-hidden="true"></div>
+
+                <div class="bk-sum-item">
+                    <div class="bk-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 6v6l4 2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="bk-sum-text">
+                        <div class="bk-sum-label">الحالة</div>
+                        <div class="bk-sum-val">@StatusAr(_status)</div>
+                    </div>
+                </div>
+
+            </div>
+        }
+
     </div>
 </div>
 
-<div class="fc-page">
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="bk-body">
+
+    @* No Permission *@
     @if (!CanCreate && _id is null)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية إنشاء حجز.</MudAlert>
+        <div class="bk-state-box">
+            <div class="bk-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليس لديك صلاحية إنشاء حجز جديد</p>
+            <button class="bk-state-back" @onclick="GoBack">العودة للقائمة</button>
+        </div>
     }
+
+    @* Loading *@
     else if (_loading)
     {
-        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+        <div class="bk-loading-wrap">
+            <div class="bk-spinner" aria-label="جاري التحميل"></div>
+            <div class="bk-loading-text">جاري تحميل بيانات الحجز...</div>
+        </div>
     }
+
+    @* MAIN FORM *@
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
-
-            @if (_msg is not null)
-            {
-                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
-                          Class="mb-4">@_msg</MudAlert>
-            }
-            @if (_locked)
-            {
-                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
-                    الحجز حالته «@StatusAr(_status)» — التعديل مقفول. ارجعه لمسودة الأول من صفحة الحجوزات.
-                </MudAlert>
-            }
-
-            <div class="fc-panel-sub" style="margin-bottom:14px">بيانات العميل</div>
-            <div class="fc-form-grid">
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">العميل *</div>
-                    <select class="fc-sel fc-sel-lg" value="@_f.CustomerId" disabled="@_locked"
-                            @onchange="OnCustomerChanged">
-                        <option value="0">— اختار العميل —</option>
-                        @foreach (var c in _customers) { <option value="@c.Id">@c.Label</option> }
-                    </select>
+        @* Locked Banner *@
+        @if (_locked)
+        {
+            <div class="bk-locked-banner" role="alert">
+                <div class="locked-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2"/>
+                        <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                    </svg>
                 </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">جهة الاتصال</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.ContactId" disabled="@_locked">
-                        <option value="">—</option>
-                        @foreach (var c in _contacts) { <option value="@c.Id">@c.Label</option> }
-                    </select>
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">تاريخ التنفيذ المطلوب</div>
-                    <input type="date" class="fc-sel fc-sel-lg" value="@_f.RequestedDate" disabled="@_locked"
-                           @onchange="e => _f.RequestedDate = e.Value?.ToString()" />
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">مرجع العميل (أمر توريد / بيان جمركي)</div>
-                    <input class="fc-sel fc-sel-lg" value="@_f.CustomerReference" disabled="@_locked" maxlength="100"
-                           @onchange="e => _f.CustomerReference = e.Value?.ToString()" />
+                <div class="locked-text">
+                    <strong>الحجز مقفول للتعديل</strong>
+                    <span>
+                        الحالة الحالية «@StatusAr(_status)» — ارجعه لمسودة من صفحة الحجوزات أولاً
+                    </span>
                 </div>
             </div>
+        }
 
-            <div class="fc-panel-sub" style="margin:26px 0 14px">بيانات النقل</div>
-            <div class="fc-form-grid">
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">الخدمة</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.ServiceId" disabled="@_locked">
-                        <option value="">—</option>
-                        @foreach (var s in _services) { <option value="@s.Id">@s.Label</option> }
-                    </select>
+        @* Error/Success Banner *@
+        @if (_msg is not null)
+        {
+            <div class="bk-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                <div aria-hidden="true">
+                    @if (_ok)
+                    {
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                            <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                        </svg>
+                    }
                 </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">نوع الرحلة</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.TripTypeId" disabled="@_locked">
-                        <option value="">—</option>
-                        @foreach (var t in _tripTypes) { <option value="@t.Id">@t.Label</option> }
-                    </select>
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">من (الميناء)</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.PortId" disabled="@_locked">
-                        <option value="">—</option>
-                        @foreach (var p in _ports) { <option value="@p.Id">@p.Label</option> }
-                    </select>
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">إلى (الجهة)</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.DestinationId" disabled="@_locked">
-                        <option value="">—</option>
-                        @foreach (var d in _destinations) { <option value="@d.Id">@d.Label</option> }
-                    </select>
-                </div>
+                <span>@_msg</span>
+                <button class="banner-close" @onclick="() => _msg = null">✕</button>
             </div>
+        }
 
-            <div class="fc-panel-sub" style="margin:26px 0 10px">
-                الحاويات المطلوبة
-                <span class="fc-cell-sub" style="font-weight:600"> — بإجمالي @_lines.Sum(l => l.Qty) حاوية</span>
-            </div>
 
-            <div class="fc-lines">
-                <div class="fc-lines-head">
-                    <div>#</div><div>نوع الحاوية</div><div>العدد</div><div>الوزن (كجم)</div><div>ملاحظات</div><div></div>
-                </div>
-                @if (_lines.Count == 0)
-                {
-                    <div class="fc-lines-empty">مافيش سطور — ضيف حاوية واحدة على الأقل</div>
-                }
-                @foreach (var ln in _lines)
-                {
-                    var i = _lines.IndexOf(ln);
-                    <div class="fc-lines-row">
-                        <div class="fc-cell-sub">@(i + 1)</div>
-                        <div>
-                            <select class="fc-sel" @bind="ln.TypeId" disabled="@_locked">
-                                @foreach (var t in _containerTypes) { <option value="@t.Id">@t.Label</option> }
-                            </select>
-                        </div>
-                        <div>
-                            <input type="number" min="1" max="200" class="fc-sel" value="@ln.Qty" disabled="@_locked"
-                                   @onchange="e => ln.Qty = ParseInt(e.Value, 1)" />
-                        </div>
-                        <div>
-                            <input type="number" min="0" step="1" class="fc-sel" value="@ln.WeightKg" disabled="@_locked"
-                                   @onchange="e => ln.WeightKg = ParseDec(e.Value)" />
-                        </div>
-                        <div>
-                            <input class="fc-sel" value="@ln.Notes" disabled="@_locked" maxlength="500"
-                                   @onchange="e => ln.Notes = e.Value?.ToString()" />
-                        </div>
-                        <div>
-                            @if (!_locked)
+        @* ═══════ TABS ═══════ *@
+        <div class="bk-tabs-wrap">
+
+            <MudTabs Elevation="0"
+                     Rounded="false"
+                     ApplyEffectsToContainer="true"
+                     PanelClass="bk-tab-panel"
+                     @bind-ActivePanelIndex="_activeTab"
+                     Class="bk-mud-tabs">
+
+
+                @* ══════════════════════════════════════
+                   TAB 1 — بيانات العميل
+                ══════════════════════════════════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="btab-label">
+                            <div class="btab-icon btab-blue" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                    <circle cx="12" cy="7" r="4"/>
+                                </svg>
+                            </div>
+                            <span>بيانات العميل</span>
+                            @if (HasTabError(1))
                             {
-                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
-                                               Color="Color.Error" OnClick="() => RemoveLine(i)" />
+                                <span class="btab-err-dot" aria-label="يوجد خطأ"></span>
                             }
                         </div>
-                    </div>
-                }
-            </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="tab-section">
+
+                            <div class="tab-section-head">
+                                <div class="tab-section-icon blue" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18"
+                                         fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                        <circle cx="12" cy="7" r="4"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="tab-section-title">بيانات العميل</div>
+                                    <div class="tab-section-sub">العميل وجهة الاتصال والمرجع وتاريخ التنفيذ</div>
+                                </div>
+                            </div>
+
+                            <div class="bk-form-grid">
+
+                                @* العميل *@
+                                <div class="form-field">
+                                    <label class="field-label" for="cusomer">
+                                        العميل
+                                        <span class="field-required" aria-label="مطلوب">*</span>
+                                    </label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                            <circle cx="12" cy="7" r="4"/>
+                                        </svg>
+                                        <select id="cusomer"
+                                                class="field-input field-select @(_f.CustomerId == 0 && _triedSave ? "field-error" : "")"
+                                                value="@_f.CustomerId"
+                                                disabled="@_locked"
+                                                @onchange="OnCustomerChanged"
+                                                aria-required="true">
+                                            <option value="0">— اختار العميل —</option>
+                                            @foreach (var c in _customers)
+                                            {
+                                                <option value="@c.Id">@c.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    @if (_f.CustomerId == 0 && _triedSave)
+                                    {
+                                        <div class="field-err-msg" role="alert">اختيار العميل مطلوب</div>
+                                    }
+                                </div>
+
+                                @* جهة الاتصال *@
+                                <div class="form-field">
+                                    <label class="field-label" for="contact">جهة الاتصال</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-4.99-5 19.79 19.79 0 01-3.07-8.67A2 2 0 014 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+                                        </svg>
+                                        <select id="contact"
+                                                class="field-input field-select"
+                                                @bind="_f.ContactId"
+                                                disabled="@(_locked || _f.CustomerId == 0)">
+                                            <option value="">—</option>
+                                            @foreach (var c in _contacts)
+                                            {
+                                                <option value="@c.Id">@c.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    @if (_f.CustomerId == 0)
+                                    {
+                                        <div class="field-hint">
+                                            <svg viewBox="0 0 16 16" width="10" height="10"
+                                                 fill="none" stroke="currentColor" stroke-width="1.8"
+                                                 aria-hidden="true">
+                                                <circle cx="8" cy="8" r="6"/>
+                                                <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                            </svg>
+                                            اختار العميل أولاً
+                                        </div>
+                                    }
+                                </div>
+
+                                @* تاريخ التنفيذ *@
+                                <div class="form-field">
+                                    <label class="field-label" for="reqdate">تاريخ التنفيذ المطلوب</label>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="3" y="5" width="18" height="16" rx="2"/>
+                                                <path d="M7 3V7M17 3V7M3 10H21" stroke-linecap="round"/>
+                                            </svg>
+                                        </span>
+                                        <input id="reqdate"
+                                               type="date"
+                                               class="field-input with-prefix"
+                                               value="@_f.RequestedDate"
+                                               disabled="@_locked"
+                                               @onchange="e => _f.RequestedDate = e.Value?.ToString()" />
+                                    </div>
+                                </div>
+
+                                @* مرجع العميل *@
+                                <div class="form-field">
+                                    <label class="field-label" for="custref">مرجع العميل</label>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                                <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                                            </svg>
+                                        </span>
+                                        <input id="custref"
+                                               class="field-input with-prefix"
+                                               value="@_f.CustomerReference"
+                                               disabled="@_locked"
+                                               maxlength="100"
+                                               placeholder="أمر توريد / بيان جمركي"
+                                               @onchange="e => _f.CustomerReference = e.Value?.ToString()" />
+                                    </div>
+                                </div>
+
+                            </div>
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+                @* ══════════════════════════════════════
+                   TAB 2 — بيانات النقل
+                ══════════════════════════════════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="btab-label">
+                            <div class="btab-icon btab-green" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                                </svg>
+                            </div>
+                            <span>بيانات النقل</span>
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="tab-section">
+
+                            <div class="tab-section-head">
+                                <div class="tab-section-icon green" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18"
+                                         fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                        <path d="M16 8h4l3 3v5h-7V8z"/>
+                                        <circle cx="5.5" cy="18.5" r="2.5"/>
+                                        <circle cx="18.5" cy="18.5" r="2.5"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="tab-section-title">بيانات النقل</div>
+                                    <div class="tab-section-sub">الخدمة ونوع الرحلة ومسار الشحن</div>
+                                </div>
+                            </div>
+
+                            <div class="bk-form-grid">
+
+                                @* الخدمة *@
+                                <div class="form-field">
+                                    <label class="field-label" for="service">الخدمة</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                            <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round"/>
+                                        </svg>
+                                        <select id="service"
+                                                class="field-input field-select"
+                                                @bind="_f.ServiceId"
+                                                disabled="@_locked">
+                                            <option value="">— اختار الخدمة —</option>
+                                            @foreach (var s in _services)
+                                            {
+                                                <option value="@s.Id">@s.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
+                                @* نوع الرحلة *@
+                                <div class="form-field">
+                                    <label class="field-label" for="triptype">نوع الرحلة</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <circle cx="12" cy="12" r="10"/>
+                                            <path d="M12 8v4l3 3" stroke-linecap="round"/>
+                                        </svg>
+                                        <select id="triptype"
+                                                class="field-input field-select"
+                                                @bind="_f.TripTypeId"
+                                                disabled="@_locked">
+                                            <option value="">— اختار النوع —</option>
+                                            @foreach (var t in _tripTypes)
+                                            {
+                                                <option value="@t.Id">@t.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
+                                @* من (الميناء) *@
+                                <div class="form-field">
+                                    <label class="field-label" for="port">من (الميناء)</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                            <path d="M9 22V12h6v10"/>
+                                        </svg>
+                                        <select id="port"
+                                                class="field-input field-select"
+                                                @bind="_f.PortId"
+                                                disabled="@_locked">
+                                            <option value="">— اختار الميناء —</option>
+                                            @foreach (var p in _ports)
+                                            {
+                                                <option value="@p.Id">@p.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
+                                @* إلى (الجهة) *@
+                                <div class="form-field">
+                                    <label class="field-label" for="dest">إلى (الجهة)</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                                            <circle cx="12" cy="10" r="3"/>
+                                        </svg>
+                                        <select id="dest"
+                                                class="field-input field-select"
+                                                @bind="_f.DestinationId"
+                                                disabled="@_locked">
+                                            <option value="">— اختار الجهة —</option>
+                                            @foreach (var d in _destinations)
+                                            {
+                                                <option value="@d.Id">@d.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            @* Route Visual *@
+                            @if (_f.PortId.HasValue && _f.DestinationId.HasValue)
+                            {
+                                <div class="bk-route-visual">
+                                    <div class="route-point">
+                                        <div class="route-dot dot-from" aria-hidden="true"></div>
+                                        <div class="route-label">
+                                            <span class="route-caption">ميناء الإقلاع</span>
+                                            <strong>@(_ports.FirstOrDefault(p => p.Id == _f.PortId)?.Label ?? "—")</strong>
+                                        </div>
+                                    </div>
+                                    <div class="route-line" aria-hidden="true">
+                                        <svg viewBox="0 0 100 20" width="100" height="20"
+                                             preserveAspectRatio="none">
+                                            <path d="M0 10 Q50 2 100 10" fill="none"
+                                                  stroke="#1e6ef5" stroke-width="1.5"
+                                                  stroke-dasharray="4 3"/>
+                                        </svg>
+                                        <div class="route-truck" aria-hidden="true">🚛</div>
+                                    </div>
+                                    <div class="route-point">
+                                        <div class="route-dot dot-to" aria-hidden="true"></div>
+                                        <div class="route-label">
+                                            <span class="route-caption">جهة الوصول</span>
+                                            <strong>@(_destinations.FirstOrDefault(d => d.Id == _f.DestinationId)?.Label ?? "—")</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+                @* ══════════════════════════════════════
+                   TAB 3 — الحاويات والملاحظات
+                ══════════════════════════════════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="btab-label">
+                            <div class="btab-icon btab-amber" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                </svg>
+                            </div>
+                            <span>الحاويات</span>
+                            @if (_lines.Count > 0)
+                            {
+                                <span class="btab-count">@_lines.Sum(l => l.Qty)</span>
+                            }
+                            @if (HasTabError(3))
+                            {
+                                <span class="btab-err-dot" aria-label="يوجد خطأ"></span>
+                            }
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="tab-section">
+
+                            <div class="tab-section-head">
+                                <div class="tab-section-icon amber" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18"
+                                         fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                    </svg>
+                                </div>
+                                <div style="flex:1">
+                                    <div class="tab-section-title">الحاويات المطلوبة</div>
+                                    <div class="tab-section-sub">
+                                        إجمالي
+                                        <strong>@_lines.Sum(l => l.Qty)</strong>
+                                        حاوية في
+                                        <strong>@_lines.Count</strong>
+                                        سطر
+                                    </div>
+                                </div>
+                                @if (!_locked)
+                                {
+                                    <button class="bk-add-line-btn" @onclick="AddLine">
+                                        <svg viewBox="0 0 24 24" width="15" height="15"
+                                             fill="none" stroke="currentColor" stroke-width="2.5"
+                                             aria-hidden="true">
+                                            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                        </svg>
+                                        أضف حاوية
+                                    </button>
+                                }
+                            </div>
+
+                            @* ── Container Cards ── *@
+                            @if (_lines.Count == 0)
+                            {
+                                <div class="bk-containers-empty">
+                                    <div class="containers-empty-icon" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="40" height="40"
+                                             fill="none" stroke="currentColor" stroke-width="1.4">
+                                            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                        </svg>
+                                    </div>
+                                    <div class="containers-empty-title">لا توجد حاويات</div>
+                                    <div class="containers-empty-sub">أضف حاوية واحدة على الأقل</div>
+                                    @if (!_locked)
+                                    {
+                                        <button class="bk-add-line-btn mt-10" @onclick="AddLine">
+                                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                                 fill="none" stroke="currentColor" stroke-width="2.5"
+                                                 aria-hidden="true">
+                                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                            </svg>
+                                            أضف حاوية
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="bk-container-cards">
+
+                                    @foreach (var ln in _lines)
+                                    {
+                                        var idx = _lines.IndexOf(ln);
+
+                                        <div class="bk-container-card">
+
+                                            @* Card Header *@
+                                            <div class="bk-cc-head">
+                                                <div class="bk-cc-num" aria-label="رقم السطر">
+                                                    @(idx + 1)
+                                                </div>
+                                                <div class="bk-cc-type-badge">
+                                                    <svg viewBox="0 0 24 24" width="13" height="13"
+                                                         fill="none" stroke="currentColor" stroke-width="2"
+                                                         aria-hidden="true">
+                                                        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                                    </svg>
+                                                    @(_containerTypes.FirstOrDefault(t => t.Id == ln.TypeId)?.Label ?? "نوع الحاوية")
+                                                </div>
+                                                <div class="bk-cc-total">
+                                                    إجمالي: <strong>@ln.Qty</strong> حاوية
+                                                    @if (ln.WeightKg.HasValue)
+                                                    {
+                                                        <span>· @ln.WeightKg كجم</span>
+                                                    }
+                                                </div>
+                                                @if (!_locked)
+                                                {
+                                                    <button class="bk-cc-del"
+                                                            @onclick="() => RemoveLine(idx)"
+                                                            title="حذف السطر"
+                                                            aria-label="حذف السطر @(idx + 1)">
+                                                        <svg viewBox="0 0 24 24" width="15" height="15"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+                                            </div>
+
+                                            @* Card Body *@
+                                            <div class="bk-cc-body">
+
+                                                <div class="form-field">
+                                                    <label class="field-label">نوع الحاوية</label>
+                                                    <div class="field-select-wrap">
+                                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                                             width="13" height="13" fill="none"
+                                                             stroke="currentColor" stroke-width="2"
+                                                             aria-hidden="true">
+                                                            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                                        </svg>
+                                                        <select class="field-input field-select"
+                                                                @bind="ln.TypeId"
+                                                                disabled="@_locked">
+                                                            @foreach (var t in _containerTypes)
+                                                            {
+                                                                <option value="@t.Id">@t.Label</option>
+                                                            }
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                <div class="form-field">
+                                                    <label class="field-label">العدد</label>
+                                                    <div class="bk-qty-control">
+                                                        @if (!_locked)
+                                                        {
+                                                            <button class="qty-btn qty-minus"
+                                                                    @onclick="() => { if (ln.Qty > 1) ln.Qty--; }"
+                                                                    aria-label="تقليل العدد">
+                                                                −
+                                                            </button>
+                                                        }
+                                                        <input type="number" min="1" max="200"
+                                                               class="field-input qty-input"
+                                                               value="@ln.Qty"
+                                                               disabled="@_locked"
+                                                               @onchange="e => ln.Qty = ParseInt(e.Value, 1)" />
+                                                        @if (!_locked)
+                                                        {
+                                                            <button class="qty-btn qty-plus"
+                                                                    @onclick="() => ln.Qty++"
+                                                                    aria-label="زيادة العدد">
+                                                                +
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                </div>
+
+                                                <div class="form-field">
+                                                    <label class="field-label">الوزن (كجم)</label>
+                                                    <div class="field-input-group">
+                                                        <span class="field-prefix" aria-hidden="true">
+                                                            <svg viewBox="0 0 24 24" width="13" height="13"
+                                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                                <path d="M12 2a3 3 0 00-3 3v1H5a1 1 0 00-1 1v14a1 1 0 001 1h14a1 1 0 001-1V7a1 1 0 00-1-1h-4V5a3 3 0 00-3-3z"/>
+                                                            </svg>
+                                                        </span>
+                                                        <input type="number" min="0" step="1"
+                                                               class="field-input with-prefix"
+                                                               value="@ln.WeightKg"
+                                                               disabled="@_locked"
+                                                               placeholder="اختياري"
+                                                               @onchange="e => ln.WeightKg = ParseDec(e.Value)" />
+                                                    </div>
+                                                </div>
+
+                                                <div class="form-field bk-cc-notes">
+                                                    <label class="field-label">ملاحظات الحاوية</label>
+                                                    <input class="field-input"
+                                                           value="@ln.Notes"
+                                                           disabled="@_locked"
+                                                           maxlength="500"
+                                                           placeholder="أي تفاصيل إضافية..."
+                                                           @onchange="e => ln.Notes = e.Value?.ToString()" />
+                                                </div>
+
+                                            </div>
+
+                                        </div>
+                                    }
+
+                                </div>
+                            }
+
+                            @* ── ملاحظات الحجز ── *@
+                            <div class="tab-section-sub-head">
+                                <svg viewBox="0 0 24 24" width="16" height="16"
+                                     fill="none" stroke="currentColor" stroke-width="2"
+                                     aria-hidden="true">
+                                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                                </svg>
+                                ملاحظات الحجز
+                            </div>
+
+                            <div class="form-field">
+                                <textarea class="field-input field-textarea"
+                                          rows="3"
+                                          maxlength="1000"
+                                          disabled="@_locked"
+                                          placeholder="أي ملاحظات خاصة بهذا الحجز..."
+                                          @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
+                            </div>
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+            </MudTabs>
+        </div>
+
+
+        @* ── Bottom Actions ── *@
+        <div class="bk-bottom-actions">
+
+            <button class="bk-bottom-back" @onclick="GoBack">
+                <svg viewBox="0 0 24 24" width="15" height="15"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     aria-hidden="true">
+                    <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                رجوع للقائمة
+            </button>
 
             @if (CanSave && !_locked)
             {
-                <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-3"
-                           StartIcon="@Icons.Material.Filled.Add" OnClick="AddLine">ضيف سطر</MudButton>
+                <div class="bk-bottom-right">
+
+                    @if (_activeTab < 2)
+                    {
+                        <button class="bk-next-btn"
+                                @onclick="() => _activeTab++">
+                            التالي
+                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    }
+
+                    <button class="bk-bottom-save"
+                            @onclick="SaveAsync"
+                            disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="btn-spinner sm" aria-hidden="true"></span>
+                            <span>جاري الحفظ...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>حفظ الحجز</span>
+                        }
+                    </button>
+
+                </div>
             }
 
-            <div class="fc-panel-sub" style="margin:26px 0 8px">ملاحظات</div>
-            <textarea class="fc-sel" rows="3" maxlength="1000" disabled="@_locked"
-                      @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
+        </div>
 
-            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:26px">
-                <MudButton Variant="Variant.Outlined" OnClick="GoBack">رجوع</MudButton>
-                @if (CanSave && !_locked)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveAsync">حفظ</MudButton>
-                }
-            </div>
-
-        </div></div>
     }
 </div>
 
+
+@* ═══════════════════════════════════════════
+   CSS
+═══════════════════════════════════════════ *@
+<style>
+
+    /* ================================================================
+       VARIABLES
+    ================================================================ */
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ================================================================
+       HERO ADDITIONS
+    ================================================================ */
+    .bk-hero-badge {
+        display: inline-flex; align-items: center;
+        padding: 3px 10px; border-radius: 20px;
+        font-size: 11px; font-weight: 800;
+    }
+
+    .badge-new      { background: rgba(34,197,94,.2);  color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+    .badge-draft    { background: rgba(255,255,255,.12); color: rgba(255,255,255,.75); border: 1px solid rgba(255,255,255,.2); }
+    .badge-confirmed { background: rgba(59,130,246,.25); color: #93c5fd; border: 1px solid rgba(59,130,246,.3); }
+    .badge-assigned  { background: rgba(168,85,247,.25); color: #d8b4fe; border: 1px solid rgba(168,85,247,.3); }
+    .badge-inprogress { background: rgba(234,179,8,.25); color: #fde68a; border: 1px solid rgba(234,179,8,.3); }
+    .badge-completed  { background: rgba(34,197,94,.25); color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+    .badge-cancelled  { background: rgba(239,68,68,.25); color: #fca5a5; border: 1px solid rgba(239,68,68,.3); }
+
+    /* Hero Buttons */
+    .bk-back-btn {
+        display: inline-flex; align-items: center; gap: 5px;
+        height: 36px; padding: 0 13px;
+        border: 1px solid rgba(255,255,255,.2); border-radius: 9px;
+        background: rgba(255,255,255,.08); color: rgba(255,255,255,.75);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: background .15s ease;
+    }
+    .bk-back-btn:hover { background: rgba(255,255,255,.14); }
+    .bk-back-btn svg { transform: rotate(180deg); }
+
+    .bk-save-btn {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 38px; padding: 0 18px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: #fff; font-family: inherit;
+        font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(22,163,74,.35);
+        transition: all .15s ease;
+    }
+    .bk-save-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(22,163,74,.4); }
+    .bk-save-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* Hero Summary Strip */
+    .bk-hero-summary {
+        display: flex; align-items: stretch;
+        background: rgba(0,0,0,.15); border: 1px solid rgba(255,255,255,.10);
+        border-radius: 12px; overflow: hidden; backdrop-filter: blur(8px);
+        margin-top: 4px;
+    }
+
+    .bk-sum-item {
+        flex: 1; display: flex; align-items: center; gap: 10px;
+        padding: 12px 16px;
+    }
+
+    .bk-sum-div { width: 1px; background: rgba(255,255,255,.10); align-self: stretch; }
+
+    .bk-sum-icon {
+        width: 32px; height: 32px; flex: 0 0 32px; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(255,255,255,.10); color: rgba(255,255,255,.7);
+    }
+
+    .bk-sum-label { font-size: 9.5px; color: rgba(255,255,255,.5); font-weight: 600; }
+    .bk-sum-val   { font-size: 13px; font-weight: 800; color: #fff; margin-top: 2px; }
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    .bk-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 180px);
+        padding: 16px 20px 32px;
+        max-width: 1050px; width: 100%;
+        margin: 0 auto;
+        display: flex; flex-direction: column; gap: 14px;
+    }
+
+    /* ================================================================
+       STATES
+    ================================================================ */
+    .bk-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 280px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .bk-state-icon {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .bk-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+
+    .bk-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .bk-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    .bk-state-back {
+        margin-top: 8px; padding: 9px 20px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-text);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: background .15s ease;
+    }
+    .bk-state-back:hover { background: #f0f4fa; }
+
+    /* ================================================================
+       LOADING
+    ================================================================ */
+    .bk-loading-wrap {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 14px; min-height: 260px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .bk-spinner {
+        width: 36px; height: 36px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: bk-spin .75s linear infinite;
+    }
+    @@keyframes bk-spin { to { transform: rotate(360deg); } }
+
+    .bk-loading-text { font-size: 13px; font-weight: 600; color: var(--fc-muted); }
+
+    /* ================================================================
+       BANNERS
+    ================================================================ */
+    .bk-locked-banner {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px; border-radius: 12px;
+        background: linear-gradient(135deg, #fffbeb, #fff8e0);
+        border: 1px solid #fde68a;
+        box-shadow: 0 2px 10px rgba(234,179,8,.10);
+    }
+
+    .locked-icon { flex: 0 0 auto; color: #d97706; }
+
+    .locked-text { display: flex; flex-direction: column; gap: 2px; }
+    .locked-text strong { font-size: 13px; font-weight: 800; color: #92400e; }
+    .locked-text span   { font-size: 11.5px; color: #b45309; }
+
+    .bk-banner {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 16px; border-radius: 10px;
+        font-size: 13px; font-weight: 600;
+        animation: bk-banner-in .25s ease;
+    }
+    @@keyframes bk-banner-in {
+        from { opacity: 0; transform: translateY(-6px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .banner-success { background: #e9f8f0; color: #0e7a43; border: 1px solid #b5e8d0; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8d0; }
+
+    .banner-close {
+        margin-right: auto; background: none; border: none;
+        color: inherit; opacity: .6; cursor: pointer; font-size: 13px;
+        padding: 2px 6px; border-radius: 5px;
+    }
+    .banner-close:hover { opacity: 1; }
+
+    /* ================================================================
+       TABS
+    ================================================================ */
+    .bk-tabs-wrap {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden; flex: 1;
+    }
+
+    .bk-mud-tabs .mud-tabs-toolbar {
+        background: linear-gradient(180deg, #f9fafd 0%, #f3f6fb 100%);
+        border-bottom: 2px solid #e8edf5;
+        padding: 0 16px; min-height: 54px;
+    }
+
+    .bk-mud-tabs .mud-tab {
+        font-family: "Cairo","Tajawal","Inter",Arial,sans-serif;
+        font-size: 12px; font-weight: 700; color: var(--fc-muted);
+        padding: 0 6px; min-width: unset; transition: color .15s ease;
+    }
+
+    .bk-mud-tabs .mud-tab.mud-tab-active { color: var(--fc-blue) !important; font-weight: 800; }
+
+    .bk-mud-tabs .mud-tab-slider {
+        background: var(--fc-blue) !important;
+        height: 3px; border-radius: 3px 3px 0 0;
+    }
+
+    .bk-mud-tabs .mud-tab:hover:not(.mud-tab-active) {
+        color: var(--fc-text); background: rgba(0,0,0,.03); border-radius: 8px;
+    }
+
+    .bk-tab-panel { padding: 0; }
+
+    /* Tab Labels */
+    .btab-label {
+        display: flex; align-items: center; gap: 7px;
+        padding: 0 4px; white-space: nowrap;
+    }
+
+    .btab-icon {
+        width: 26px; height: 26px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 7px;
+    }
+
+    .btab-blue  { background: var(--fc-blue-lt);  color: var(--fc-blue); }
+    .btab-green { background: var(--fc-green-lt); color: var(--fc-green); }
+    .btab-amber { background: var(--fc-amber-lt); color: var(--fc-amber); }
+
+    .btab-err-dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--fc-red); flex: 0 0 7px;
+        animation: bk-pulse 1.5s ease infinite;
+    }
+    @@keyframes bk-pulse {
+        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.4); }
+        50%      { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
+    }
+
+    .btab-count {
+        min-width: 18px; height: 18px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 5px; padding: 0 4px;
+        background: var(--fc-amber-lt); color: #9a6d08;
+        font-size: 10px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    /* ================================================================
+       TAB SECTION
+    ================================================================ */
+    .tab-section { padding: 24px 28px 28px; }
+
+    .tab-section-head {
+        display: flex; align-items: flex-start; gap: 12px;
+        margin-bottom: 22px; padding-bottom: 18px;
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .tab-section-icon {
+        width: 42px; height: 42px; flex: 0 0 42px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 12px;
+    }
+    .tab-section-icon.blue  { background: var(--fc-blue-lt);  color: var(--fc-blue);  border: 1px solid #bdd4fc; }
+    .tab-section-icon.green { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .tab-section-icon.amber { background: var(--fc-amber-lt); color: var(--fc-amber); border: 1px solid #f0d070; }
+
+    .tab-section-title { font-size: 15px; font-weight: 800; color: #1c2b43; line-height: 1.2; }
+    .tab-section-sub   { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
+
+    .tab-section-sub-head {
+        display: flex; align-items: center; gap: 7px;
+        font-size: 12px; font-weight: 800; color: #344258;
+        margin: 22px 0 10px;
+        padding-top: 18px; border-top: 1px solid #edf1f7;
+    }
+
+    /* ================================================================
+       FORM
+    ================================================================ */
+    .bk-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 18px;
+    }
+
+    .form-field { display: flex; flex-direction: column; gap: 6px; }
+
+    .field-label {
+        font-size: 12px; font-weight: 800; color: #344258;
+        display: flex; align-items: center; gap: 4px;
+    }
+
+    .field-required { color: var(--fc-red); font-size: 14px; line-height: 1; }
+
+    .field-input {
+        height: 42px; width: 100%;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 13px; padding: 0 12px;
+        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+        outline: none;
+    }
+    .field-input:focus {
+        border-color: var(--fc-blue);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.10);
+        background: #fff;
+    }
+    .field-input:disabled { opacity: .7; background: #f3f5f8; cursor: not-allowed; }
+    .field-input.field-error {
+        border-color: var(--fc-red);
+        box-shadow: 0 0 0 3px rgba(224,48,72,.08);
+    }
+    .field-input::placeholder { color: #b0bcc8; }
+
+    .field-textarea {
+        height: auto; padding: 10px 12px;
+        resize: vertical; min-height: 80px;
+    }
+
+    /* Select with icon */
+    .field-select-wrap {
+        position: relative; display: flex; align-items: center;
+    }
+
+    .field-select-icon {
+        position: absolute; right: 12px; color: #9aaabb;
+        pointer-events: none; z-index: 1;
+    }
+
+    .field-select {
+        padding-right: 36px; cursor: pointer;
+        -webkit-appearance: none; appearance: none;
+    }
+    .field-select:disabled { cursor: not-allowed; }
+
+    /* Input with prefix */
+    .field-input-group { position: relative; display: flex; align-items: center; }
+
+    .field-prefix {
+        position: absolute; right: 12px;
+        display: flex; align-items: center;
+        color: #9aaabb; pointer-events: none; z-index: 1;
+    }
+
+    .field-input.with-prefix { padding-right: 36px; }
+
+    .field-hint {
+        display: flex; align-items: center; gap: 5px;
+        font-size: 10.5px; color: var(--fc-muted); font-weight: 500;
+    }
+
+    .field-err-msg { font-size: 10.5px; color: var(--fc-red); font-weight: 700; }
+
+    /* ================================================================
+       ROUTE VISUAL
+    ================================================================ */
+    .bk-route-visual {
+        display: flex; align-items: center; gap: 0;
+        margin-top: 22px; padding: 14px 20px;
+        background: linear-gradient(135deg, #f5f8ff, #eef4ff);
+        border: 1px solid #c8d8fb; border-radius: 12px;
+        animation: bk-banner-in .25s ease;
+    }
+
+    .route-point { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+
+    .route-dot {
+        width: 14px; height: 14px; border-radius: 50%;
+        border: 3px solid;
+    }
+    .dot-from { background: var(--fc-blue-lt);  border-color: var(--fc-blue); }
+    .dot-to   { background: var(--fc-green-lt); border-color: var(--fc-green); }
+
+    .route-label { display: flex; flex-direction: column; gap: 2px; }
+    .route-caption { font-size: 9px; font-weight: 600; color: #8899ae; }
+    .route-label strong { font-size: 13px; font-weight: 800; color: var(--fc-text); }
+
+    .route-line {
+        flex: 1; display: flex; flex-direction: column;
+        align-items: center; gap: 0; position: relative; margin: 0 10px;
+    }
+    .route-truck { font-size: 20px; margin-top: -4px; }
+
+    /* ================================================================
+       CONTAINER CARDS
+    ================================================================ */
+    .bk-containers-empty {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 10px; min-height: 180px;
+        border: 2px dashed #d8e8f8; border-radius: 12px;
+        background: #f8fbff; text-align: center; padding: 30px;
+    }
+
+    .containers-empty-icon {
+        width: 70px; height: 70px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: #edf3fb; color: #b0c4d8;
+    }
+    .containers-empty-title { font-size: 14px; font-weight: 800; color: var(--fc-text); }
+    .containers-empty-sub   { font-size: 12px; color: var(--fc-muted); }
+
+    .bk-add-line-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 14px;
+        border: 1.5px solid var(--fc-amber);
+        border-radius: 9px;
+        background: var(--fc-amber-lt); color: #9a6d08;
+        font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; white-space: nowrap; flex-shrink: 0;
+        transition: all .15s ease;
+    }
+    .bk-add-line-btn:hover { background: var(--fc-amber); color: #fff; }
+    .bk-add-line-btn.mt-10 { margin-top: 10px; }
+
+    .bk-container-cards { display: flex; flex-direction: column; gap: 12px; }
+
+    .bk-container-card {
+        border: 1px solid #e4edf8; border-radius: 12px;
+        background: linear-gradient(180deg, #fafcff, #f5f8fb);
+        overflow: hidden;
+        transition: border-color .18s ease, box-shadow .18s ease;
+    }
+    .bk-container-card:hover {
+        border-color: #c8d8f0;
+        box-shadow: 0 4px 14px rgba(15,41,82,.06);
+    }
+
+    .bk-cc-head {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px;
+        background: linear-gradient(180deg, #f0f5fc, #eaf1f9);
+        border-bottom: 1px solid #dce8f5;
+    }
+
+    .bk-cc-num {
+        width: 26px; height: 26px; border-radius: 8px; flex: 0 0 26px;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--fc-blue); color: #fff;
+        font-size: 11px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .bk-cc-type-badge {
+        display: flex; align-items: center; gap: 5px;
+        padding: 3px 10px; border-radius: 7px;
+        background: rgba(30,110,245,.08); border: 1px solid rgba(30,110,245,.15);
+        color: var(--fc-blue); font-size: 11px; font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .bk-cc-total {
+        flex: 1; font-size: 11px; color: #6b7d95; font-weight: 600;
+    }
+    .bk-cc-total strong { color: var(--fc-text); font-weight: 900; }
+    .bk-cc-total span   { color: #9aaabb; }
+
+    .bk-cc-del {
+        width: 30px; height: 30px; border-radius: 7px; flex: 0 0 30px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; background: transparent;
+        color: var(--fc-red); cursor: pointer;
+        transition: all .15s ease;
+    }
+    .bk-cc-del:hover { background: var(--fc-red-lt); border-color: #ffc8cf; }
+
+    .bk-cc-body {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr 1fr 2fr;
+        gap: 14px; padding: 14px 16px;
+        align-items: start;
+    }
+
+    .bk-cc-notes { grid-column: 4; }
+
+    /* Qty Control */
+    .bk-qty-control {
+        display: flex; align-items: center; gap: 0;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        overflow: hidden; background: #fafcff;
+    }
+
+    .qty-btn {
+        width: 36px; height: 42px; flex: 0 0 36px;
+        display: flex; align-items: center; justify-content: center;
+        border: none; background: transparent;
+        cursor: pointer; font-size: 18px; font-weight: 900;
+        transition: background .12s ease;
+    }
+
+    .qty-minus { color: var(--fc-red); border-left: 1px solid #d8e2f0; }
+    .qty-plus  { color: var(--fc-green); border-right: 1px solid #d8e2f0; }
+
+    .qty-minus:hover { background: var(--fc-red-lt); }
+    .qty-plus:hover  { background: var(--fc-green-lt); }
+
+    .qty-input {
+        flex: 1; text-align: center; border: none !important;
+        border-radius: 0 !important; background: transparent !important;
+        box-shadow: none !important;
+        font-weight: 800; font-size: 14px;
+    }
+
+    /* ================================================================
+       BOTTOM ACTIONS
+    ================================================================ */
+    .bk-bottom-actions {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; padding: 14px 20px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 8px rgba(15,41,82,.04);
+    }
+
+    .bk-bottom-back {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 16px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .bk-bottom-back:hover { background: #f0f4fa; color: var(--fc-text); }
+    .bk-bottom-back svg { transform: rotate(180deg); }
+
+    .bk-bottom-right { display: flex; align-items: center; gap: 10px; }
+
+    .bk-next-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 16px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .bk-next-btn:hover { background: var(--fc-blue); color: #fff; }
+    .bk-next-btn svg { transform: rotate(180deg); }
+
+    .bk-bottom-save {
+        display: inline-flex; align-items: center; gap: 8px;
+        height: 40px; padding: 0 22px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #1e6ef5, #1558d6);
+        color: #fff; font-family: inherit;
+        font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(30,110,245,.30);
+        transition: all .15s ease;
+    }
+    .bk-bottom-save:hover:not(:disabled) {
+        transform: translateY(-1px); box-shadow: 0 6px 18px rgba(30,110,245,.38);
+    }
+    .bk-bottom-save:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* ================================================================
+       SPINNER
+    ================================================================ */
+    .btn-spinner {
+        width: 15px; height: 15px;
+        border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+        border-radius: 50%; animation: bk-spin .7s linear infinite;
+    }
+    .btn-spinner.sm { width: 13px; height: 13px; }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 900px) {
+        .bk-form-grid { grid-template-columns: 1fr; }
+        .bk-cc-body   { grid-template-columns: 1fr 1fr; }
+        .bk-cc-notes  { grid-column: 1 / -1; }
+        .bk-hero-summary { flex-wrap: wrap; }
+        .bk-sum-item { flex: 0 0 50%; }
+        .bk-sum-div:nth-child(4) { display: none; }
+        .tab-section { padding: 18px 16px 22px; }
+    }
+
+    @@media (max-width: 680px) {
+        .bk-body { padding: 10px 12px 24px; }
+        .bk-cc-body { grid-template-columns: 1fr; }
+        .bk-cc-notes { grid-column: 1; }
+        .bk-bottom-actions { flex-direction: column; }
+        .bk-bottom-back, .bk-bottom-save { width: 100%; justify-content: center; }
+        .bk-bottom-right { width: 100%; flex-direction: column; }
+        .bk-next-btn { width: 100%; justify-content: center; }
+        .bk-sum-item { flex: 0 0 100%; }
+        .bk-sum-div { display: none; }
+        .route-label strong { font-size: 11px; }
+    }
+
+    @@media (max-width: 480px) {
+        .bk-hero-summary { display: none; }
+    }
+
+</style>
+
+
 @code {
     [Parameter] public long? Id { get; set; }
-    private long? _id;
+    private long?  _id;
     private string BookingNumber = "";
-    private string _status = "Draft";
-    private bool _locked;
+    private string _status       = "Draft";
+    private bool   _locked;
+    private int    _activeTab;
+    private bool   _triedSave;
 
     private AuthUser? _user;
     private bool CanCreate => _user?.Can("BOOKING.CREATE") ?? false;
-    private bool CanEdit   => _user?.Can("BOOKING.EDIT") ?? false;
+    private bool CanEdit   => _user?.Can("BOOKING.EDIT")   ?? false;
     private bool CanSave   => _id is null ? CanCreate : CanEdit;
 
-    private bool _loading; private bool _saving; private string? _msg; private bool _ok;
+    private bool    _loading; private bool _saving;
+    private string? _msg;     private bool _ok;
 
-    private List<Opt> _customers = new();
-    private List<Opt> _contacts = new();
-    private List<Opt> _services = new();
-    private List<Opt> _ports = new();
-    private List<Opt> _destinations = new();
-    private List<Opt> _tripTypes = new();
+    private List<Opt> _customers      = new();
+    private List<Opt> _contacts       = new();
+    private List<Opt> _services       = new();
+    private List<Opt> _ports          = new();
+    private List<Opt> _destinations   = new();
+    private List<Opt> _tripTypes      = new();
     private List<Opt> _containerTypes = new();
 
     private List<LineRow> _lines = new();
-    private Form _f = new();
+    private Form          _f     = new();
 
-    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+    /* ── Validation ── */
+    private bool HasTabError(int tab) => _triedSave && tab switch
+    {
+        1 => _f.CustomerId == 0,
+        3 => _lines.Count == 0 || _lines.All(l => l.TypeId == 0 || l.Qty <= 0),
+        _ => false
+    };
+
+    /* ── Status ── */
+    private static string StatusAr(string s) => s switch
+    {
+        "Draft"      => "مسودة",
+        "Confirmed"  => "مؤكد",
+        "Assigned"   => "متخصص",
+        "InProgress" => "قيد التنفيذ",
+        "Completed"  => "مكتمل",
+        "Cancelled"  => "ملغي",
+        _            => s
+    };
+
+    private static string StatusBadgeClass(string s) => s switch
+    {
+        "Draft"      => "badge-draft",
+        "Confirmed"  => "badge-confirmed",
+        "Assigned"   => "badge-assigned",
+        "InProgress" => "badge-inprogress",
+        "Completed"  => "badge-completed",
+        "Cancelled"  => "badge-cancelled",
+        _            => "badge-draft"
+    };
+
+    /* ── DTOs ── */
+    public class Opt
+    {
+        public int    Id    { get; set; }
+        public string Label { get; set; } = "";
+    }
 
     public class LineRow
     {
-        public int TypeId { get; set; }
-        public int Qty { get; set; } = 1;
+        public int      TypeId   { get; set; }
+        public int      Qty      { get; set; } = 1;
         public decimal? WeightKg { get; set; }
-        public string? Notes { get; set; }
+        public string?  Notes    { get; set; }
     }
 
     public class Form
     {
-        public int CustomerId { get; set; }
-        public int? ContactId { get; set; }
-        public string? RequestedDate { get; set; }
-        public int? ServiceId { get; set; }
-        public int? PortId { get; set; }
-        public int? DestinationId { get; set; }
-        public int? TripTypeId { get; set; }
+        public int     CustomerId        { get; set; }
+        public int?    ContactId         { get; set; }
+        public string? RequestedDate     { get; set; }
+        public int?    ServiceId         { get; set; }
+        public int?    PortId            { get; set; }
+        public int?    DestinationId     { get; set; }
+        public int?    TripTypeId        { get; set; }
         public string? CustomerReference { get; set; }
-        public string? Notes { get; set; }
+        public string? Notes             { get; set; }
     }
 
     public class DetailRow
     {
-        public int ContainerTypeId { get; set; }
-        public int RequestedQty { get; set; }
-        public decimal? WeightKg { get; set; }
-        public string? Notes { get; set; }
+        public int      ContainerTypeId { get; set; }
+        public int      RequestedQty    { get; set; }
+        public decimal? WeightKg        { get; set; }
+        public string?  Notes           { get; set; }
     }
 
     public class DetailBooking
     {
-        public string BookingNumber { get; set; } = "";
-        public int CustomerId { get; set; }
-        public string? RequestedDate { get; set; }
-        public int? ServiceId { get; set; }
-        public int? PortId { get; set; }
-        public int? DestinationId { get; set; }
-        public int? TripTypeId { get; set; }
-        public string? CustomerReference { get; set; }
-        public int? ContactId { get; set; }
-        public string? Notes { get; set; }
-        public string Status { get; set; } = "Draft";
+        public string  BookingNumber      { get; set; } = "";
+        public int     CustomerId         { get; set; }
+        public string? RequestedDate      { get; set; }
+        public int?    ServiceId          { get; set; }
+        public int?    PortId             { get; set; }
+        public int?    DestinationId      { get; set; }
+        public int?    TripTypeId         { get; set; }
+        public string? CustomerReference  { get; set; }
+        public int?    ContactId          { get; set; }
+        public string? Notes              { get; set; }
+        public string  Status             { get; set; } = "Draft";
     }
 
     public class DetailResponse
@@ -261,22 +1601,18 @@
         public List<DetailRow> Lines { get; set; } = new();
     }
 
-    private static string StatusAr(string s) => s switch
-    {
-        "Draft" => "مسودة", "Confirmed" => "مؤكد", "Assigned" => "متخصص",
-        "InProgress" => "قيد التنفيذ", "Completed" => "مكتمل", "Cancelled" => "ملغي", _ => s
-    };
-
-    private static int ParseInt(object? v, int fallback) =>
+    /* ── Helpers ── */
+    private static int      ParseInt(object? v, int fallback) =>
         int.TryParse(v?.ToString(), out var n) && n > 0 ? n : fallback;
 
     private static decimal? ParseDec(object? v) =>
         decimal.TryParse(v?.ToString(), out var n) && n > 0 ? n : null;
 
+    /* ── Init ── */
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
-        _id = Id;
+        _id   = Id;
 
         if (!CanSave) return;
 
@@ -309,8 +1645,8 @@
         if (d is null) { _msg = "الحجز مش موجود"; _ok = false; return; }
 
         BookingNumber = d.Booking.BookingNumber;
-        _status = d.Booking.Status;
-        _locked = _status is not ("Draft" or "Confirmed");
+        _status       = d.Booking.Status;
+        _locked       = _status is not ("Draft" or "Confirmed");
 
         _f = new Form
         {
@@ -327,8 +1663,10 @@
 
         _lines = d.Lines.Select(l => new LineRow
         {
-            TypeId = l.ContainerTypeId, Qty = l.RequestedQty,
-            WeightKg = l.WeightKg, Notes = l.Notes
+            TypeId   = l.ContainerTypeId,
+            Qty      = l.RequestedQty,
+            WeightKg = l.WeightKg,
+            Notes    = l.Notes
         }).ToList();
 
         if (_lines.Count == 0) AddLine();
@@ -337,7 +1675,11 @@
 
     private void AddLine()
     {
-        _lines.Add(new LineRow { TypeId = _containerTypes.FirstOrDefault()?.Id ?? 0, Qty = 1 });
+        _lines.Add(new LineRow
+        {
+            TypeId = _containerTypes.FirstOrDefault()?.Id ?? 0,
+            Qty    = 1
+        });
     }
 
     private void RemoveLine(int idx)
@@ -348,25 +1690,45 @@
     private async Task OnCustomerChanged(ChangeEventArgs e)
     {
         _f.CustomerId = int.TryParse(e.Value?.ToString(), out var n) ? n : 0;
-        _f.ContactId = null;
-        _contacts = new();
+        _f.ContactId  = null;
+        _contacts     = new();
         if (_f.CustomerId > 0) await LoadContactsAsync(_f.CustomerId);
     }
 
     private async Task LoadContactsAsync(int customerId)
     {
-        try { _contacts = await Http.GetFromJsonAsync<List<Opt>>($"api/options/contacts?customerId={customerId}") ?? new(); }
+        try
+        {
+            _contacts = await Http.GetFromJsonAsync<List<Opt>>(
+                $"api/options/contacts?customerId={customerId}") ?? new();
+        }
         catch { _contacts = new(); }
     }
 
     private void GoBack() => Nav.NavigateTo("/bookings");
 
+    /* ── Save ── */
     private async Task SaveAsync()
     {
-        _msg = null;
-        if (_f.CustomerId <= 0) { _ok = false; _msg = "لازم تختار العميل"; return; }
+        _triedSave = true;
+        _msg       = null;
+
+        if (_f.CustomerId <= 0)
+        {
+            _ok  = false;
+            _msg = "لازم تختار العميل";
+            _activeTab = 0;
+            return;
+        }
+
         var lines = _lines.Where(l => l.TypeId > 0 && l.Qty > 0).ToList();
-        if (lines.Count == 0) { _ok = false; _msg = "ضيف حاوية واحدة على الأقل"; return; }
+        if (lines.Count == 0)
+        {
+            _ok  = false;
+            _msg = "ضيف حاوية واحدة على الأقل";
+            _activeTab = 2;
+            return;
+        }
 
         var payload = new
         {
@@ -381,8 +1743,10 @@
             notes             = _f.Notes,
             lines             = lines.Select(l => new
             {
-                containerTypeId = l.TypeId, requestedQty = l.Qty,
-                weightKg = l.WeightKg, notes = l.Notes
+                containerTypeId = l.TypeId,
+                requestedQty    = l.Qty,
+                weightKg        = l.WeightKg,
+                notes           = l.Notes
             })
         };
 

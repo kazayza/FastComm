@@ -1,0 +1,331 @@
+@page "/employees/new"
+@page "/employees/new/{Id:int}"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_id is null ? "موظف جديد" : "تعديل موظف") — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">البيانات الأساسية · الموظفون</div>
+                <h1 class="fc-hero-title">@(_id is null ? "موظف جديد" : $"تعديل {EmployeeCode}")</h1>
+                <p class="fc-hero-sub">سجّل بيانات الموظف — والكود بيتولد تلقائيًا (EMP-)</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudButton Variant="Variant.Outlined" OnClick="GoBack" Style="color:#9FB4CC">رجوع</MudButton>
+                @if (CanSave)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving"
+                               StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="SaveAsync">حفظ</MudButton>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanSave)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">
+            @(_id is null ? "ليس لديك صلاحية إضافة موظف." : "ليس لديك صلاحية تعديل موظف.")
+        </MudAlert>
+    }
+    else if (_loading)
+    {
+        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+
+            @if (_msg is not null)
+            {
+                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
+            }
+
+            @* ══════════ 1. الهوية ══════════ *@
+            <div class="fc-panel-sub" style="margin-bottom:14px">الهوية</div>
+            <div class="fc-form-grid">
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">الاسم بالعربي *</div>
+                    <input class="fc-sel fc-sel-lg" @bind="_f.FullNameAr" maxlength="150" />
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">الاسم بالإنجليزي</div>
+                    <input class="fc-sel fc-sel-lg" @bind="_f.FullNameEn" maxlength="150" />
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">الرقم القومي</div>
+                    <input class="fc-sel fc-sel-lg" @bind="_f.NationalId" maxlength="14" dir="ltr"
+                           style="text-align:right" />
+                    <div class="fc-field-hint">14 رقم — مطلوب للتأمينات</div>
+                </div>
+            </div>
+
+            @* ══════════ 2. التواصل ══════════ *@
+            <div class="fc-panel-sub" style="margin:26px 0 14px">التواصل</div>
+            <div class="fc-form-grid">
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">الموبايل</div>
+                    <input class="fc-sel fc-sel-lg" @bind="_f.Mobile" maxlength="20" dir="ltr"
+                           style="text-align:right" />
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">البريد الإلكتروني</div>
+                    <input type="email" class="fc-sel fc-sel-lg" @bind="_f.Email" maxlength="150" dir="ltr"
+                           style="text-align:right" />
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">العنوان</div>
+                    <input class="fc-sel fc-sel-lg" @bind="_f.Address" maxlength="300" />
+                </div>
+            </div>
+
+            @* ══════════ 3. الوظيفة ══════════ *@
+            <div class="fc-panel-sub" style="margin:26px 0 14px">الوظيفة</div>
+            <div class="fc-form-grid">
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">تاريخ التعيين</div>
+                    @* 🔴 `@bind` على `type="date"` محتاج `DateOnly?`/`DateTime?` —
+                       و`_f.HireDate` هنا `string` (عشان السيرفر بياخد ISO نص).
+                       فبنستخدم `@onchange` + helper من غير أي `"` جوه الـ attribute. *@
+                    <input type="date" class="fc-sel fc-sel-lg" value="@_f.HireDate"
+                           @onchange="OnHireDateChanged" />
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">القسم</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.DepartmentId">
+                        <option value="">— بدون —</option>
+                        @foreach (var d in _depts) { <option value="@d.Id">@d.Label</option> }
+                    </select>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">المسمى الوظيفي</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.JobTitleId">
+                        <option value="">— بدون —</option>
+                        @foreach (var j in _titles) { <option value="@j.Id">@j.Label</option> }
+                    </select>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">المدير المباشر</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.ManagerEmployeeId">
+                        <option value="">— بدون —</option>
+                        @foreach (var m in Managers)
+                        {
+                            <option value="@m.EmployeeId">@m.FullNameAr (@m.EmployeeCode)</option>
+                        }
+                    </select>
+                    <div class="fc-field-hint">مافيش أقسام ومسّميات؟ تتضاف من قاعدة البيانات — النظام لسه مافيه شاشة ليها</div>
+                </div>
+            </div>
+
+            @* ══════════ 4. الحالة ══════════ *@
+            <div class="fc-panel-sub" style="margin:26px 0 14px">حالة الخدمة</div>
+            <div class="fc-form-grid">
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">الحالة</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.EmploymentStatus">
+                        <option value="Active">نشط</option>
+                        <option value="OnLeave">في إجازة</option>
+                        <option value="Suspended">موقوف</option>
+                        <option value="Terminated">منتهي الخدمة</option>
+                    </select>
+                </div>
+            </div>
+
+            @if (_id is not null && _f.EmploymentStatus == "Terminated")
+            {
+                <div class="fc-alert fc-alert-warn" style="margin-top:18px">
+                    <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
+                    <div class="fc-alert-body">
+                        <div class="fc-alert-title">الموظف منتهي الخدمة</div>
+                        <div>مش هيظهر في قوائم الاختيار (سائقين / مديرين) — بس سجله وبياناته محفوظين.</div>
+                    </div>
+                </div>
+            }
+
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:26px">
+                <MudButton Variant="Variant.Outlined" OnClick="GoBack">رجوع</MudButton>
+                @if (CanSave)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                               OnClick="SaveAsync">حفظ</MudButton>
+                }
+            </div>
+
+        </div></div>
+    }
+</div>
+
+@code {
+    [Parameter] public int? Id { get; set; }
+    private int? _id;
+    private string EmployeeCode = "";
+
+    private AuthUser? _user;
+    private bool CanCreate => _user?.Can("EMPLOYEE.CREATE") ?? false;
+    private bool CanEdit   => _user?.Can("EMPLOYEE.EDIT") ?? false;
+    private bool CanSave   => _id is null ? CanCreate : CanEdit;
+
+    private bool _loading; private bool _saving;
+    private string? _msg; private bool _ok = true;
+
+    private List<Opt> _depts  = new();
+    private List<Opt> _titles = new();
+    private List<Mgr> _all    = new();
+
+    private Form _f = new();
+
+    /* 🔴 الموظف مايكونش مدير نفسه — بنستثني نفسه في التعديل. */
+    private IEnumerable<Mgr> Managers =>
+        _id is null ? _all : _all.Where(m => m.EmployeeId != _id.Value);
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+
+    public class Mgr
+    {
+        public int EmployeeId { get; set; }
+        public string EmployeeCode { get; set; } = "";
+        public string FullNameAr { get; set; } = "";
+        public string EmploymentStatus { get; set; } = "";
+    }
+
+    /// <summary>مطابق لـ <c>EmployeesController.Upsert</c> (12 — HireDate نص ISO).</summary>
+    public class Form
+    {
+        public string FullNameAr { get; set; } = "";
+        public string? FullNameEn { get; set; }
+        public string? NationalId { get; set; }
+        public string? Mobile { get; set; }
+        public string? Email { get; set; }
+        public string? Address { get; set; }
+        public string? HireDate { get; set; }
+        public int? DepartmentId { get; set; }
+        public int? JobTitleId { get; set; }
+        public int? BranchId { get; set; }
+        public int? ManagerEmployeeId { get; set; }
+        public string EmploymentStatus { get; set; } = "Active";
+    }
+
+    /// <summary>مطابق لـ <c>EmployeesController.Detail</c> (14 — HireDate DateOnly?).</summary>
+    public class Detail
+    {
+        public int EmployeeId { get; set; }
+        public string EmployeeCode { get; set; } = "";
+        public string FullNameAr { get; set; } = "";
+        public string? FullNameEn { get; set; }
+        public string? NationalId { get; set; }
+        public string? Mobile { get; set; }
+        public string? Email { get; set; }
+        public string? Address { get; set; }
+        public DateOnly? HireDate { get; set; }
+        public int? DepartmentId { get; set; }
+        public int? JobTitleId { get; set; }
+        public int? BranchId { get; set; }
+        public int? ManagerEmployeeId { get; set; }
+        public string EmploymentStatus { get; set; } = "";
+    }
+
+    // ═══════════════ Init ═══════════════
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        _id = Id;
+        if (!CanSave) return;
+
+        _loading = true;
+        try
+        {
+            _depts  = await SafeGetT<Opt>("api/options/departments");
+            _titles = await SafeGetT<Opt>("api/options/job-titles");
+            _all    = await SafeGetT<Mgr>("api/employees?take=300");
+
+            if (_id is not null) await LoadAsync(_id.Value);
+            else _f = new Form
+            {
+                EmploymentStatus = "Active",
+                HireDate         = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd")
+            };
+        }
+        catch (Exception ex) { _msg = "فشل التحميل: " + ex.Message; _ok = false; }
+        finally { _loading = false; }
+    }
+
+    private async Task LoadAsync(int id)
+    {
+        var d = await Http.GetFromJsonAsync<Detail>($"api/employees/{id}");
+        if (d is null) { _msg = "الموظف غير موجود"; _ok = false; return; }
+
+        EmployeeCode = d.EmployeeCode;
+        _f = new Form
+        {
+            FullNameAr        = d.FullNameAr,
+            FullNameEn        = d.FullNameEn,
+            NationalId        = d.NationalId,
+            Mobile            = d.Mobile,
+            Email             = d.Email,
+            Address           = d.Address,
+            HireDate          = d.HireDate?.ToString("yyyy-MM-dd"),
+            DepartmentId      = d.DepartmentId,
+            JobTitleId        = d.JobTitleId,
+            BranchId          = d.BranchId,
+            ManagerEmployeeId = d.ManagerEmployeeId,
+            EmploymentStatus  = d.EmploymentStatus
+        };
+    }
+
+    // ═══════════════ Save ═══════════════
+
+    private async Task SaveAsync()
+    {
+        if (_saving) return;
+        _saving = true; _msg = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_f.FullNameAr))
+            { _msg = "الاسم بالعربي مطلوب"; _ok = false; return; }
+
+            var res = _id is null
+                ? await Http.PostAsJsonAsync("api/employees", _f)
+                : await Http.PutAsJsonAsync($"api/employees/{_id}", _f);
+
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) GoBack();
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    // ═══════════════ Helpers ═══════════════
+
+    private void OnHireDateChanged(ChangeEventArgs e) =>
+        _f.HireDate = e.Value?.ToString();
+
+    private void GoBack() => Nav.NavigateTo("/employees");
+
+    private async Task<List<T>> SafeGetT<T>(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<T>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "✅ تم الحفظ" : "حصل خطأ — حاول تاني"; }
+    }
+}

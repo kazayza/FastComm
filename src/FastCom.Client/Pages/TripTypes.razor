@@ -1,0 +1,260 @@
+@page "/master/triptypes"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject ISnackbar Snackbar
+
+<PageTitle>أنواع الرحلات — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">البيانات الأساسية</div>
+                <h1 class="fc-hero-title">أنواع الرحلات</h1>
+                <p class="fc-hero-sub">وارد · صادر · ترانزيت — النوع بيحدد الضريبة الافتراضية</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="LoadAsync" Style="color:#9FB4CC" />
+                @if (CanManage)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="ResetForm">نوع جديد</MudButton>
+                }
+            </div>
+        </div>
+
+        <div class="fc-kpis-glass">
+            <div class="fc-kpi"><div class="fc-kpi-lb">الأنواع</div><div class="fc-kpi-num">@_items.Count</div></div>
+            <div class="fc-kpi"><div class="fc-kpi-lb">مستخدمة في رحلات</div>
+                <div class="fc-kpi-num">@_items.Count(i => i.UsageCount > 0)</div></div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanView)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض البيانات الأساسية.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+
+            <div class="fc-alert fc-alert-info">
+                <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Info" /></div>
+                <div class="fc-alert-body">
+                    <div class="fc-alert-title">الضريبة الافتراضية مهمة</div>
+                    <div>خدمات <b>الترانزيت</b> عبر المواني معفاة من الضريبة —
+                        فاختار <b>EXEMPT</b> لنوع الترانزيت. الباقي عادةً ضريبة جدول 5%.</div>
+                </div>
+            </div>
+
+            @if (CanManage)
+            {
+                <div class="fc-fsec">
+                    <div class="fc-fsec-head">
+                        <span class="fc-fsec-n">1</span>
+                        <div>
+                            <div class="fc-fsec-t">@(_editId is null ? "نوع رحلة جديد" : $"تعديل: {_f.NameAr}")</div>
+                            <div class="fc-fsec-d">الكود بالحروف الإنجليزية — زي IMPORT أو TRANSIT</div>
+                        </div>
+                        <span class="fc-fsec-ic"><MudIcon Icon="@Icons.Material.Filled.Route" Size="Size.Small" /></span>
+                    </div>
+
+                    @if (_msg is not null)
+                    {
+                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                                  Class="mb-4">@_msg</MudAlert>
+                    }
+
+                    <div class="fc-form-grid">
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">الكود<i>*</i></div>
+                            <input class="fc-sel fc-sel-lg" @bind="_f.Code" maxlength="30" dir="ltr"
+                                   disabled="@(_editId is not null && _f.UsageCount > 0)" />
+                            @if (_editId is not null && _f.UsageCount > 0)
+                            {
+                                <div class="fc-fld-hint">مقفل — مستخدم في @_f.UsageCount رحلة</div>
+                            }
+                        </div>
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">الاسم بالعربي<i>*</i></div>
+                            <input class="fc-sel fc-sel-lg" @bind="_f.NameAr" maxlength="100" />
+                        </div>
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">الاسم بالإنجليزي</div>
+                            <input class="fc-sel fc-sel-lg" @bind="_f.NameEn" maxlength="100" />
+                        </div>
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">الضريبة الافتراضية</div>
+                            <select class="fc-sel fc-sel-lg" value="@_f.DefaultTaxRateId" @onchange="OnTaxChanged">
+                                <option value="">— بدون —</option>
+                                @foreach (var t in _taxRates) { <option value="@t.Id">@t.Label</option> }
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+                        @if (_editId is not null)
+                        {
+                            <MudButton Variant="Variant.Text" OnClick="ResetForm">إلغاء التعديل</MudButton>
+                        }
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                                   StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">حفظ</MudButton>
+                    </div>
+                </div>
+            }
+
+            <div class="fc-fsec" style="margin-top:26px">
+                <div class="fc-fsec-head">
+                    <span class="fc-fsec-n">2</span>
+                    <div><div class="fc-fsec-t">الأنواع الموجودة</div></div>
+                </div>
+
+                <div class="fc-table-wrap"><table class="fc-table">
+                    <thead><tr>
+                        <th>الكود</th><th>الاسم</th><th>الضريبة الافتراضية</th>
+                        <th>رحلات</th><th style="width:70px"></th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach (var t in _items)
+                        {
+                            <tr>
+                                <td><span class="fc-role-chip">@t.Code</span></td>
+                                <td class="fc-cell-main">
+                                    @t.NameAr
+                                    @if (!string.IsNullOrWhiteSpace(t.NameEn))
+                                    {
+                                        <div class="fc-cell-sub">@t.NameEn</div>
+                                    }
+                                </td>
+                                <td>@(string.IsNullOrWhiteSpace(t.TaxRateName) ? "—" : t.TaxRateName)</td>
+                                <td>@t.UsageCount</td>
+                                <td>
+                                    @if (CanManage)
+                                    {
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
+                                                       Color="Color.Primary" title="تعديل" OnClick="() => Edit(t)" />
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (_items.Count == 0)
+                        {
+                            <tr><td colspan="5"><div class="fc-empty">مافيش أنواع — ضيف أول نوع</div></td></tr>
+                        }
+                    </tbody>
+                </table></div>
+            </div>
+
+        </div></div>
+    }
+</div>
+
+@code {
+    private AuthUser? _user;
+    private bool CanView   => _user?.Can("MASTERDATA.VIEW") ?? false;
+    private bool CanManage => _user?.Can("MASTERDATA.MANAGE") ?? false;
+
+    private List<Item> _items = new();
+    private List<TaxOpt> _taxRates = new();
+    private bool _saving;
+    private string? _msg; private bool _ok = true;
+    private int? _editId;
+    private Form _f = new();
+
+    /// <summary>مطابق لـ <c>MasterDataController.TripTypeItem</c> — 7 حقول.</summary>
+    public class Item
+    {
+        public int TripTypeId { get; set; }
+        public string Code { get; set; } = "";
+        public string NameAr { get; set; } = "";
+        public string? NameEn { get; set; }
+        public int? DefaultTaxRateId { get; set; }
+        public string? TaxRateName { get; set; }
+        public int UsageCount { get; set; }
+    }
+
+    /// <summary>مطابق لـ <c>MasterDataController.TripTypeUpsert</c> — 4 حقول.</summary>
+    public class Form
+    {
+        public string Code { get; set; } = "";
+        public string NameAr { get; set; } = "";
+        public string? NameEn { get; set; }
+        public int? DefaultTaxRateId { get; set; }
+        public int UsageCount { get; set; }   /* للـ UI بس — قفل الكود */
+    }
+
+    public class TaxOpt { public int Id { get; set; } public string Label { get; set; } = ""; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (!CanView) return;
+        try { _taxRates = await Http.GetFromJsonAsync<List<TaxOpt>>("api/options/tax-rates") ?? new(); }
+        catch { _taxRates = new(); }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/master/trip-types") ?? new(); }
+        catch (Exception ex) { _ok = false; _msg = "فشل التحميل: " + ex.Message; }
+    }
+
+    private void ResetForm() { _editId = null; _f = new Form(); _msg = null; }
+
+    private void Edit(Item t)
+    {
+        _editId = t.TripTypeId;
+        _f = new Form
+        {
+            Code = t.Code, NameAr = t.NameAr, NameEn = t.NameEn,
+            DefaultTaxRateId = t.DefaultTaxRateId, UsageCount = t.UsageCount
+        };
+        _msg = null;
+    }
+
+    private void OnTaxChanged(ChangeEventArgs e) =>
+        _f.DefaultTaxRateId = int.TryParse(e.Value?.ToString(), out var n) && n > 0 ? n : null;
+
+    private async Task SaveAsync()
+    {
+        if (_saving) return;
+        if (string.IsNullOrWhiteSpace(_f.Code))   { _ok = false; _msg = "الكود مطلوب"; return; }
+        if (string.IsNullOrWhiteSpace(_f.NameAr)) { _ok = false; _msg = "الاسم بالعربي مطلوب"; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var payload = new
+            {
+                code = _f.Code, nameAr = _f.NameAr, nameEn = _f.NameEn,
+                defaultTaxRateId = _f.DefaultTaxRateId
+            };
+            var res = _editId is null
+                ? await Http.PostAsJsonAsync("api/master/trip-types", payload)
+                : await Http.PutAsJsonAsync($"api/master/trip-types/{_editId}", payload);
+
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) { ResetForm(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "✅ تم" : "حصل خطأ — حاول تاني"; }
+    }
+}

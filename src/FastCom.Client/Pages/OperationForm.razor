@@ -10,322 +10,1827 @@
 
 <PageTitle>@(_id is null ? "عملية جديدة" : "تعديل عملية") — فاست كوم</PageTitle>
 
+
+@* ═══════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════ *@
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
+
             <div>
                 <div class="fc-crumb">التشغيل · العمليات</div>
-                <h1 class="fc-hero-title">@(_id is null ? "عملية جديدة" : $"تعديل {OpNumber}")</h1>
+                <h1 class="fc-hero-title">
+                    @if (_id is null)
+                    {
+                        <span>عملية جديدة</span>
+                        <span class="op-hero-badge badge-new">جديدة</span>
+                    }
+                    else
+                    {
+                        <span>@OpNumber</span>
+                        <span class="op-hero-badge @StatusBadgeClass(_status)">@StatusAr(_status)</span>
+                    }
+                </h1>
                 <p class="fc-hero-sub">الإيراد والتكلفة بيتحسبوا تلقائي — الرقم بيتولد (OP-)</p>
             </div>
+
             <div class="fc-head-actions">
-                <MudButton Variant="Variant.Outlined" OnClick="GoBack" Style="color:#9FB4CC">رجوع</MudButton>
+                <button class="op-back-btn" @onclick="GoBack">
+                    <svg viewBox="0 0 24 24" width="16" height="16"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         aria-hidden="true">
+                        <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    العمليات
+                </button>
                 @if (CanSave && !_locked)
                 {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving"
-                               StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="SaveAsync">حفظ</MudButton>
+                    <button class="op-save-btn"
+                            @onclick="SaveAsync"
+                            disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="btn-spinner" aria-hidden="true"></span>
+                            <span>جاري الحفظ...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                <path d="M17 21v-8H7v8M7 3v5h8"
+                                      stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>حفظ العملية</span>
+                        }
+                    </button>
                 }
             </div>
+
         </div>
+
+        @* ── ملخص العملية في التعديل ── *@
+        @if (_id is not null && !_loading)
+        {
+            <div class="op-hero-summary">
+
+                <div class="op-sum-item">
+                    <div class="op-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                            <circle cx="12" cy="7" r="4"/>
+                        </svg>
+                    </div>
+                    <div class="op-sum-text">
+                        <div class="op-sum-label">العميل</div>
+                        <div class="op-sum-val">
+                            @(_customers.FirstOrDefault(c => c.Id == _f.CustomerId)?.Label ?? "—")
+                        </div>
+                    </div>
+                </div>
+
+                <div class="op-sum-div" aria-hidden="true"></div>
+
+                <div class="op-sum-item">
+                    <div class="op-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="1" x2="12" y2="23"/>
+                            <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                        </svg>
+                    </div>
+                    <div class="op-sum-text">
+                        <div class="op-sum-label">الإيراد الصافي</div>
+                        <div class="op-sum-val sum-green">@TotalNet.ToString("N2")</div>
+                    </div>
+                </div>
+
+                <div class="op-sum-div" aria-hidden="true"></div>
+
+                <div class="op-sum-item">
+                    <div class="op-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2a10 10 0 100 20A10 10 0 0012 2z"/>
+                            <path d="M12 8v4l3 3" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="op-sum-text">
+                        <div class="op-sum-label">التاريخ المخطط</div>
+                        <div class="op-sum-val">@(_f.PlannedDate?.Substring(0, 10) ?? "غير محدد")</div>
+                    </div>
+                </div>
+
+                <div class="op-sum-div" aria-hidden="true"></div>
+
+                <div class="op-sum-item">
+                    <div class="op-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                            <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div class="op-sum-text">
+                        <div class="op-sum-label">الحالة</div>
+                        <div class="op-sum-val">@StatusAr(_status)</div>
+                    </div>
+                </div>
+
+            </div>
+        }
+
     </div>
 </div>
 
-<div class="fc-page">
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="opf-body">
+
+    @* No Permission *@
     @if (!CanCreate && _id is null)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديكصلاحية إنشاء عملية.</MudAlert>
+        <div class="opf-state-box">
+            <div class="opf-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليس لديك صلاحية إنشاء عملية جديدة</p>
+            <button class="opf-state-back" @onclick="GoBack">العودة للقائمة</button>
+        </div>
     }
+
+    @* Loading *@
     else if (_loading)
     {
-        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+        <div class="opf-loading-wrap">
+            <div class="opf-spinner" aria-label="جاري التحميل"></div>
+            <div class="opf-loading-text">جاري تحميل بيانات العملية...</div>
+        </div>
     }
+
+    @* MAIN FORM *@
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
+        @* Locked Banner *@
+        @if (_locked)
+        {
+            <div class="opf-locked-banner" role="alert">
+                <div class="locked-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2"/>
+                        <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="locked-text">
+                    <strong>العملية مقفولة للتعديل</strong>
+                    <span>الحالة «@StatusAr(_status)» — العملية في هذه الحالة لا تقبل التعديل</span>
+                </div>
+            </div>
+        }
 
-            @if (_msg is not null)
-            {
-                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
-            }
-            @if (_locked)
-            {
-                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
-                    العملية حالتها «@StatusAr(_status)» — التعديل مقفول.
-                </MudAlert>
-            }
-
-            @if (_id is null && _bookings.Count > 0)
-            {
-                <div class="fc-panel-sub" style="margin-bottom:6px">من حجز مؤكد (اختياري)</div>
-                <select class="fc-sel fc-sel-lg" style="max-width:520px" value="@_selectedBooking"
-                        @onchange="OnBookingPicked">
-                    <option value="">— عملية مستقلة من غير حجز —</option>
-                    @foreach (var b in _bookings)
+        @* Error/Success Banner *@
+        @if (_msg is not null)
+        {
+            <div class="opf-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                <div aria-hidden="true">
+                    @if (_ok)
                     {
-                        <option value="@b.BookingId">@b.BookingNumber — @b.CustomerName</option>
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                            <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
                     }
-                </select>
-            }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                        </svg>
+                    }
+                </div>
+                <span>@_msg</span>
+                <button class="banner-close" @onclick="() => _msg = null">✕</button>
+            </div>
+        }
 
-            <div class="fc-panel-sub" style="margin:26px 0 14px">بيانات العملية</div>
-            <div class="fc-form-grid">
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">العميل *</div>
-                    <select class="fc-sel fc-sel-lg" value="@_f.CustomerId" disabled="@_locked"
-                            @onchange="OnCustomerChanged">
-                        <option value="0">— اختار العميل —</option>
-                        @foreach (var c in _customers) { <option value="@c.Id">@c.Label</option> }
-                    </select>
+
+        @* ── Booking Picker (إضافة فقط) ── *@
+        @if (_id is null && _bookings.Count > 0)
+        {
+            <div class="opf-booking-picker">
+                <div class="booking-picker-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                    </svg>
                 </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">التاريخ المخطط</div>
-                    <input type="datetime-local" class="fc-sel fc-sel-lg" value="@_f.PlannedDate" disabled="@_locked"
-                           @onchange="e => _f.PlannedDate = e.Value?.ToString()" />
+                <div class="booking-picker-text">
+                    <div class="booking-picker-title">من حجز مؤكد</div>
+                    <div class="booking-picker-sub">اختار حجز وسيتم ملء البيانات تلقائياً</div>
                 </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">نوع الرحلة</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.TripTypeId" disabled="@_locked">
-                        <option value="">—</option>
-                        @foreach (var t in _tripTypes) { <option value="@t.Id">@t.Label</option> }
-                    </select>
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">التكلفة التقديرية</div>
-                    <input type="number" min="0" step="0.01" class="fc-sel fc-sel-lg" value="@_f.EstimatedCost" disabled="@_locked"
-                           @onchange="e => _f.EstimatedCost = ParseDec(e.Value) ?? 0m" />
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">من (الميناء)</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.PortId" disabled="@_locked">
-                        <option value="">—</option>
-                        @foreach (var p in _ports) { <option value="@p.Id">@p.Label</option> }
-                    </select>
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">إلى (الجهة)</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.DestinationId" disabled="@_locked">
-                        <option value="">—</option>
-                        @foreach (var d in _destinations) { <option value="@d.Id">@d.Label</option> }
+                <div class="booking-picker-select-wrap">
+                    <svg class="bp-select-icon" viewBox="0 0 24 24" width="14" height="14"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         aria-hidden="true">
+                        <rect x="3" y="5" width="18" height="16" rx="2"/>
+                        <path d="M7 3V7M17 3V7M3 10H21" stroke-linecap="round"/>
+                    </svg>
+                    <select class="booking-picker-select"
+                            value="@_selectedBooking"
+                            @onchange="OnBookingPicked">
+                        <option value="">— عملية مستقلة من غير حجز —</option>
+                        @foreach (var b in _bookings)
+                        {
+                            <option value="@b.BookingId">
+                                @b.BookingNumber — @b.CustomerName
+                            </option>
+                        }
                     </select>
                 </div>
             </div>
+        }
 
-            <div class="fc-panel-sub" style="margin:26px 0 6px">
-                سطور الإيراد
-                <span class="fc-cell-sub" style="font-weight:600"> — السعر بييجي من قواعد تسعير العميل، وتقدر تعدّله</span>
-            </div>
-            @if (_priceSource is not null)
-            {
-                <div class="fc-cell-sub" style="margin-bottom:10px">مصدر آخر سعر مقترح: @_priceSource</div>
-            }
 
-            <div class="fc-lines">
-                <div class="fc-rev-head">
-                    <div>الخدمة</div><div>البيان</div><div>الكمية</div><div>سعر الوحدة</div>
-                    <div>الخصم</div><div>الضريبة %</div><div>الإجمالي</div><div></div>
-                </div>
-                @if (_lines.Count == 0)
-                {
-                    <div class="fc-lines-empty">مافيش سطور — ضيف سطر إيراد واحد على الأقل</div>
-                }
-                @foreach (var ln in _lines)
-                {
-                    <div class="fc-rev-row">
-                        <div>
-                            <select class="fc-sel" @bind="ln.ServiceId" disabled="@_locked">
-                                <option value="0">—</option>
-                                @foreach (var s in _services) { <option value="@s.Id">@s.Label</option> }
-                            </select>
-                        </div>
-                        <div>
-                            <input class="fc-sel" value="@ln.Description" disabled="@_locked" maxlength="300"
-                                   @onchange="e => ln.Description = e.Value?.ToString()" />
-                        </div>
-                        <div>
-                            <input type="number" min="0.001" step="0.001" class="fc-sel" value="@ln.Qty" disabled="@_locked"
-                                   @onchange="e => ln.Qty = ParseDec(e.Value) ?? 1m" />
-                        </div>
-                        <div>
-                            <input type="number" min="0" step="0.01" class="fc-sel" value="@ln.UnitPrice" disabled="@_locked"
-                                   @onchange="e => ln.UnitPrice = ParseDec(e.Value) ?? 0m" />
-                        </div>
-                        <div>
-                            <input type="number" min="0" step="0.01" class="fc-sel" value="@ln.Discount" disabled="@_locked"
-                                   @onchange="e => ln.Discount = ParseDec(e.Value) ?? 0m" />
-                        </div>
-                        <div>
-                            <select class="fc-sel" @bind="ln.TaxRateId" disabled="@_locked">
-                                <option value="">0%</option>
-                                @foreach (var t in _taxRates) { <option value="@t.Id">@t.Label</option> }
-                            </select>
-                        </div>
-                        <div class="fc-rev-total">@LineGross(ln).ToString("N2")</div>
-                        <div>
-                            @if (!_locked)
+        @* ═══════ TABS ═══════ *@
+        <div class="opf-tabs-wrap">
+
+            <MudTabs Elevation="0"
+                     Rounded="false"
+                     ApplyEffectsToContainer="true"
+                     PanelClass="opf-tab-panel"
+                     @bind-ActivePanelIndex="_activeTab"
+                     Class="opf-mud-tabs">
+
+
+                @* ══════════════════════════════════════
+                   TAB 1 — بيانات العملية
+                ══════════════════════════════════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="otab-label">
+                            <div class="otab-icon otab-blue" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                                </svg>
+                            </div>
+                            <span>بيانات العملية</span>
+                            @if (HasTabError(1))
                             {
-                                <div style="display:flex; gap:2px">
-                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Search"
-                                                   Color="Color.Primary" title="اقترح السعر" OnClick="() => SuggestAsync(ln)" />
-                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
-                                                   Color="Color.Error" title="احذف السطر" OnClick="() => RemoveLine(ln)" />
-                                </div>
+                                <span class="otab-err-dot" aria-label="يوجد خطأ"></span>
                             }
                         </div>
-                    </div>
-                }
-            </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="tab-section">
+
+                            <div class="tab-section-head">
+                                <div class="tab-section-icon blue" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18"
+                                         fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                        <path d="M16 8h4l3 3v5h-7V8z"/>
+                                        <circle cx="5.5" cy="18.5" r="2.5"/>
+                                        <circle cx="18.5" cy="18.5" r="2.5"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="tab-section-title">بيانات العملية الأساسية</div>
+                                    <div class="tab-section-sub">العميل والتاريخ والمسار والتكلفة التقديرية</div>
+                                </div>
+                            </div>
+
+                            <div class="opf-form-grid">
+
+                                @* العميل *@
+                                <div class="form-field">
+                                    <label class="field-label" for="customer">
+                                        العميل
+                                        <span class="field-required" aria-label="مطلوب">*</span>
+                                    </label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                            <circle cx="12" cy="7" r="4"/>
+                                        </svg>
+                                        <select id="customer"
+                                                class="field-input field-select @(_f.CustomerId == 0 && _triedSave ? "field-error" : "")"
+                                                value="@_f.CustomerId"
+                                                disabled="@_locked"
+                                                @onchange="OnCustomerChanged"
+                                                aria-required="true">
+                                            <option value="0">— اختار العميل —</option>
+                                            @foreach (var c in _customers)
+                                            {
+                                                <option value="@c.Id">@c.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    @if (_f.CustomerId == 0 && _triedSave)
+                                    {
+                                        <div class="field-err-msg" role="alert">اختيار العميل مطلوب</div>
+                                    }
+                                </div>
+
+                                @* التاريخ المخطط *@
+                                <div class="form-field">
+                                    <label class="field-label" for="plandate">التاريخ المخطط</label>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="3" y="5" width="18" height="16" rx="2"/>
+                                                <path d="M7 3V7M17 3V7M3 10H21" stroke-linecap="round"/>
+                                            </svg>
+                                        </span>
+                                        <input id="plandate"
+                                               type="datetime-local"
+                                               class="field-input with-prefix"
+                                               value="@_f.PlannedDate"
+                                               disabled="@_locked"
+                                               @onchange="e => _f.PlannedDate = e.Value?.ToString()" />
+                                    </div>
+                                </div>
+
+                                @* نوع الرحلة *@
+                                <div class="form-field">
+                                    <label class="field-label" for="triptype">نوع الرحلة</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <circle cx="12" cy="12" r="10"/>
+                                            <path d="M12 8v4l3 3" stroke-linecap="round"/>
+                                        </svg>
+                                        <select id="triptype"
+                                                class="field-input field-select"
+                                                @bind="_f.TripTypeId"
+                                                disabled="@_locked">
+                                            <option value="">— اختار النوع —</option>
+                                            @foreach (var t in _tripTypes)
+                                            {
+                                                <option value="@t.Id">@t.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
+                                @* التكلفة التقديرية *@
+                                <div class="form-field">
+                                    <label class="field-label" for="estcost">التكلفة التقديرية</label>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix" aria-hidden="true">ج.م</span>
+                                        <input id="estcost"
+                                               type="number" min="0" step="0.01"
+                                               class="field-input with-prefix"
+                                               value="@_f.EstimatedCost"
+                                               disabled="@_locked"
+                                               placeholder="0.00"
+                                               @onchange="e => _f.EstimatedCost = ParseDec(e.Value) ?? 0m" />
+                                    </div>
+                                    <div class="field-hint">
+                                        <svg viewBox="0 0 16 16" width="10" height="10"
+                                             fill="none" stroke="currentColor" stroke-width="1.8"
+                                             aria-hidden="true">
+                                            <circle cx="8" cy="8" r="6"/>
+                                            <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                        </svg>
+                                        بيتملى تلقائياً من اقتراح السعر
+                                    </div>
+                                </div>
+
+                                @* من (الميناء) *@
+                                <div class="form-field">
+                                    <label class="field-label" for="port">من (الميناء)</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                            <path d="M9 22V12h6v10"/>
+                                        </svg>
+                                        <select id="port"
+                                                class="field-input field-select"
+                                                @bind="_f.PortId"
+                                                disabled="@_locked">
+                                            <option value="">— اختار الميناء —</option>
+                                            @foreach (var p in _ports)
+                                            {
+                                                <option value="@p.Id">@p.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
+                                @* إلى (الجهة) *@
+                                <div class="form-field">
+                                    <label class="field-label" for="dest">إلى (الجهة)</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                                            <circle cx="12" cy="10" r="3"/>
+                                        </svg>
+                                        <select id="dest"
+                                                class="field-input field-select"
+                                                @bind="_f.DestinationId"
+                                                disabled="@_locked">
+                                            <option value="">— اختار الجهة —</option>
+                                            @foreach (var d in _destinations)
+                                            {
+                                                <option value="@d.Id">@d.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            @* Route Visual *@
+                            @if (_f.PortId.HasValue && _f.DestinationId.HasValue)
+                            {
+                                <div class="opf-route-visual">
+                                    <div class="route-point">
+                                        <div class="route-dot dot-from" aria-hidden="true"></div>
+                                        <div class="route-label">
+                                            <span class="route-caption">ميناء الإقلاع</span>
+                                            <strong>@(_ports.FirstOrDefault(p => p.Id == _f.PortId)?.Label ?? "—")</strong>
+                                        </div>
+                                    </div>
+                                    <div class="route-line" aria-hidden="true">
+                                        <svg viewBox="0 0 100 20" width="100" height="20"
+                                             preserveAspectRatio="none">
+                                            <path d="M0 10 Q50 2 100 10" fill="none"
+                                                  stroke="#1e6ef5" stroke-width="1.5"
+                                                  stroke-dasharray="4 3"/>
+                                        </svg>
+                                        <div class="route-truck" aria-hidden="true">🚛</div>
+                                    </div>
+                                    <div class="route-point">
+                                        <div class="route-dot dot-to" aria-hidden="true"></div>
+                                        <div class="route-label">
+                                            <span class="route-caption">جهة الوصول</span>
+                                            <strong>@(_destinations.FirstOrDefault(d => d.Id == _f.DestinationId)?.Label ?? "—")</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+                @* ══════════════════════════════════════
+                   TAB 2 — سطور الإيراد
+                ══════════════════════════════════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="otab-label">
+                            <div class="otab-icon otab-green" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="12" y1="1" x2="12" y2="23"/>
+                                    <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                                </svg>
+                            </div>
+                            <span>سطور الإيراد</span>
+                            @if (_lines.Count > 0)
+                            {
+                                <span class="otab-count">@_lines.Count</span>
+                            }
+                            @if (HasTabError(2))
+                            {
+                                <span class="otab-err-dot" aria-label="يوجد خطأ"></span>
+                            }
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="tab-section">
+
+                            <div class="tab-section-head">
+                                <div class="tab-section-icon green" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18"
+                                         fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="12" y1="1" x2="12" y2="23"/>
+                                        <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                                    </svg>
+                                </div>
+                                <div style="flex:1">
+                                    <div class="tab-section-title">سطور الإيراد</div>
+                                    <div class="tab-section-sub">
+                                        @if (_priceSource is not null)
+                                        {
+                                            <span>مصدر السعر المقترح: <strong>@_priceSource</strong></span>
+                                        }
+                                        else
+                                        {
+                                            <span>السعر بييجي من قواعد تسعير العميل — تقدر تعدّله</span>
+                                        }
+                                    </div>
+                                </div>
+                                @if (!_locked)
+                                {
+                                    <button class="opf-add-line-btn" @onclick="AddLine">
+                                        <svg viewBox="0 0 24 24" width="15" height="15"
+                                             fill="none" stroke="currentColor" stroke-width="2.5"
+                                             aria-hidden="true">
+                                            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                        </svg>
+                                        أضف سطر
+                                    </button>
+                                }
+                            </div>
+
+                            @* ── Revenue Line Cards ── *@
+                            @if (_lines.Count == 0)
+                            {
+                                <div class="opf-lines-empty">
+                                    <div class="lines-empty-icon" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="40" height="40"
+                                             fill="none" stroke="currentColor" stroke-width="1.4">
+                                            <line x1="12" y1="1" x2="12" y2="23"/>
+                                            <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                                        </svg>
+                                    </div>
+                                    <div class="lines-empty-title">لا توجد سطور إيراد</div>
+                                    <div class="lines-empty-sub">أضف سطر إيراد واحد على الأقل</div>
+                                    @if (!_locked)
+                                    {
+                                        <button class="opf-add-line-btn mt-10" @onclick="AddLine">
+                                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                                 fill="none" stroke="currentColor" stroke-width="2.5"
+                                                 aria-hidden="true">
+                                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                            </svg>
+                                            أضف سطر
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="opf-rev-cards">
+
+                                    @foreach (var ln in _lines)
+                                    {
+                                        var idx      = _lines.IndexOf(ln);
+                                        var lineNet   = LineNet(ln);
+                                        var lineGross = LineGross(ln);
+
+                                        <div class="opf-rev-card">
+
+                                            @* Card Header *@
+                                            <div class="opf-rc-head">
+                                                <div class="opf-rc-num">@(idx + 1)</div>
+                                                <div class="opf-rc-service-badge">
+                                                    <svg viewBox="0 0 24 24" width="12" height="12"
+                                                         fill="none" stroke="currentColor" stroke-width="2"
+                                                         aria-hidden="true">
+                                                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                                        <path d="M2 17l10 5 10-5M2 12l10 5 10-5"
+                                                              stroke-linecap="round"/>
+                                                    </svg>
+                                                    @(_services.FirstOrDefault(s => s.Id == ln.ServiceId)?.Label ?? "اختار الخدمة")
+                                                </div>
+                                                <div class="opf-rc-total">
+                                                    إجمالي السطر:
+                                                    <strong>@lineGross.ToString("N2")</strong>
+                                                    <span>(صافي @lineNet.ToString("N2"))</span>
+                                                </div>
+                                                @if (!_locked)
+                                                {
+                                                    <button class="opf-rc-suggest"
+                                                            @onclick="() => SuggestAsync(ln)"
+                                                            title="اقتراح السعر"
+                                                            aria-label="اقتراح السعر للسطر @(idx + 1)">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <circle cx="11" cy="11" r="8"/>
+                                                            <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                                                        </svg>
+                                                        اقتراح
+                                                    </button>
+                                                    <button class="opf-rc-del"
+                                                            @onclick="() => RemoveLine(ln)"
+                                                            title="حذف السطر"
+                                                            aria-label="حذف السطر @(idx + 1)">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+                                            </div>
+
+                                            @* Card Body *@
+                                            <div class="opf-rc-body">
+
+                                                <div class="form-field">
+                                                    <label class="field-label">الخدمة</label>
+                                                    <div class="field-select-wrap">
+                                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                                             width="13" height="13" fill="none"
+                                                             stroke="currentColor" stroke-width="2"
+                                                             aria-hidden="true">
+                                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                                            <path d="M2 17l10 5 10-5M2 12l10 5 10-5"
+                                                                  stroke-linecap="round"/>
+                                                        </svg>
+                                                        <select class="field-input field-select"
+                                                                @bind="ln.ServiceId"
+                                                                disabled="@_locked">
+                                                            <option value="0">— اختار —</option>
+                                                            @foreach (var s in _services)
+                                                            {
+                                                                <option value="@s.Id">@s.Label</option>
+                                                            }
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                <div class="form-field opf-desc-field">
+                                                    <label class="field-label">البيان</label>
+                                                    <input class="field-input"
+                                                           value="@ln.Description"
+                                                           disabled="@_locked"
+                                                           maxlength="300"
+                                                           placeholder="وصف الخدمة..."
+                                                           @onchange="e => ln.Description = e.Value?.ToString()" />
+                                                </div>
+
+                                                <div class="form-field">
+                                                    <label class="field-label">الكمية</label>
+                                                    <div class="opf-qty-control">
+                                                        @if (!_locked)
+                                                        {
+                                                            <button class="qty-btn qty-minus"
+                                                                    @onclick="() => { if (ln.Qty > 1) ln.Qty -= 1; }"
+                                                                    aria-label="تقليل">−</button>
+                                                        }
+                                                        <input type="number" min="0.001" step="0.001"
+                                                               class="field-input qty-input"
+                                                               value="@ln.Qty"
+                                                               disabled="@_locked"
+                                                               @onchange="e => ln.Qty = ParseDec(e.Value) ?? 1m" />
+                                                        @if (!_locked)
+                                                        {
+                                                            <button class="qty-btn qty-plus"
+                                                                    @onclick="() => ln.Qty += 1"
+                                                                    aria-label="زيادة">+</button>
+                                                        }
+                                                    </div>
+                                                </div>
+
+                                                <div class="form-field">
+                                                    <label class="field-label">سعر الوحدة</label>
+                                                    <div class="field-input-group">
+                                                        <span class="field-prefix" aria-hidden="true">ج.م</span>
+                                                        <input type="number" min="0" step="0.01"
+                                                               class="field-input with-prefix"
+                                                               value="@ln.UnitPrice"
+                                                               disabled="@_locked"
+                                                               placeholder="0.00"
+                                                               @onchange="e => ln.UnitPrice = ParseDec(e.Value) ?? 0m" />
+                                                    </div>
+                                                </div>
+
+                                                <div class="form-field">
+                                                    <label class="field-label">الخصم</label>
+                                                    <div class="field-input-group">
+                                                        <span class="field-prefix" aria-hidden="true">ج.م</span>
+                                                        <input type="number" min="0" step="0.01"
+                                                               class="field-input with-prefix"
+                                                               value="@ln.Discount"
+                                                               disabled="@_locked"
+                                                               placeholder="0.00"
+                                                               @onchange="e => ln.Discount = ParseDec(e.Value) ?? 0m" />
+                                                    </div>
+                                                </div>
+
+                                                <div class="form-field">
+                                                    <label class="field-label">الضريبة</label>
+                                                    <div class="field-select-wrap">
+                                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                                             width="13" height="13" fill="none"
+                                                             stroke="currentColor" stroke-width="2"
+                                                             aria-hidden="true">
+                                                            <path d="M20 12V22H4V12M22 7H2v5h20V7zM12 22V7M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/>
+                                                        </svg>
+                                                        <select class="field-input field-select"
+                                                                @bind="ln.TaxRateId"
+                                                                disabled="@_locked">
+                                                            <option value="">0%</option>
+                                                            @foreach (var t in _taxRates)
+                                                            {
+                                                                <option value="@t.Id">@t.Label</option>
+                                                            }
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                            </div>
+
+                                            @* Line Summary *@
+                                            <div class="opf-rc-summary">
+                                                <div class="rc-sum-item">
+                                                    <span>صافي</span>
+                                                    <strong>@lineNet.ToString("N2")</strong>
+                                                </div>
+                                                <div class="rc-sum-sep" aria-hidden="true"></div>
+                                                <div class="rc-sum-item">
+                                                    <span>ضريبة</span>
+                                                    <strong>@((lineGross - lineNet).ToString("N2"))</strong>
+                                                </div>
+                                                <div class="rc-sum-sep" aria-hidden="true"></div>
+                                                <div class="rc-sum-item rc-sum-total">
+                                                    <span>الإجمالي</span>
+                                                    <strong>@lineGross.ToString("N2")</strong>
+                                                </div>
+                                            </div>
+
+                                        </div>
+                                    }
+
+                                </div>
+
+                                @* ── Total Bar ── *@
+                                <div class="opf-total-bar">
+                                    <div class="total-bar-label">
+                                        <svg viewBox="0 0 24 24" width="16" height="16"
+                                             fill="none" stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <line x1="12" y1="1" x2="12" y2="23"/>
+                                            <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                                        </svg>
+                                        الإجمالي الكلي
+                                    </div>
+                                    <div class="total-bar-nums">
+                                        <div class="total-item">
+                                            <span>صافي الإيراد</span>
+                                            <strong class="total-green">@TotalNet.ToString("N2")</strong>
+                                        </div>
+                                        <div class="total-sep" aria-hidden="true"></div>
+                                        <div class="total-item">
+                                            <span>الضريبة</span>
+                                            <strong>@TotalTax.ToString("N2")</strong>
+                                        </div>
+                                        <div class="total-sep" aria-hidden="true"></div>
+                                        <div class="total-item total-grand">
+                                            <span>الإجمالي مع الضريبة</span>
+                                            <strong>@((TotalNet + TotalTax).ToString("N2"))</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+                @* ══════════════════════════════════════
+                   TAB 3 — الملاحظات والملخص
+                ══════════════════════════════════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="otab-label">
+                            <div class="otab-icon otab-purple" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                                </svg>
+                            </div>
+                            <span>الملاحظات</span>
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="tab-section">
+
+                            <div class="tab-section-head">
+                                <div class="tab-section-icon purple" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18"
+                                         fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="tab-section-title">الملاحظات والملخص المالي</div>
+                                    <div class="tab-section-sub">ملاحظات العملية ومراجعة الأرقام قبل الحفظ</div>
+                                </div>
+                            </div>
+
+                            @* ملاحظات *@
+                            <div class="form-field">
+                                <label class="field-label">ملاحظات العملية</label>
+                                <textarea class="field-input field-textarea"
+                                          rows="4"
+                                          maxlength="1000"
+                                          disabled="@_locked"
+                                          placeholder="أي ملاحظات أو تفاصيل إضافية..."
+                                          @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
+                            </div>
+
+                            @* ملخص مالي *@
+                            <div class="opf-fin-summary">
+                                <div class="fin-summary-title">
+                                    <svg viewBox="0 0 24 24" width="16" height="16"
+                                         fill="none" stroke="currentColor" stroke-width="2"
+                                         aria-hidden="true">
+                                        <line x1="12" y1="1" x2="12" y2="23"/>
+                                        <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                                    </svg>
+                                    الملخص المالي
+                                </div>
+                                <div class="fin-summary-grid">
+                                    <div class="fin-sum-row">
+                                        <span>صافي الإيراد</span>
+                                        <strong class="fin-green">@TotalNet.ToString("N2") ج.م</strong>
+                                    </div>
+                                    <div class="fin-sum-row">
+                                        <span>ضريبة الإيراد</span>
+                                        <strong>@TotalTax.ToString("N2") ج.م</strong>
+                                    </div>
+                                    <div class="fin-sum-row">
+                                        <span>إجمالي الإيراد</span>
+                                        <strong>@((TotalNet + TotalTax).ToString("N2")) ج.م</strong>
+                                    </div>
+                                    <div class="fin-sum-div"></div>
+                                    <div class="fin-sum-row">
+                                        <span>التكلفة التقديرية</span>
+                                        <strong class="fin-red">@_f.EstimatedCost.ToString("N2") ج.م</strong>
+                                    </div>
+                                    <div class="fin-sum-row fin-sum-profit @(TotalNet - _f.EstimatedCost >= 0 ? "profit-pos" : "profit-neg")">
+                                        <span>الربح التقديري</span>
+                                        <strong>@((TotalNet - _f.EstimatedCost).ToString("N2")) ج.م</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+            </MudTabs>
+        </div>
+
+
+        @* ── Bottom Actions ── *@
+        <div class="opf-bottom-actions">
+
+            <button class="opf-bottom-back" @onclick="GoBack">
+                <svg viewBox="0 0 24 24" width="15" height="15"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     aria-hidden="true">
+                    <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                رجوع للقائمة
+            </button>
 
             @if (CanSave && !_locked)
             {
-                <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-3"
-                           StartIcon="@Icons.Material.Filled.Add" OnClick="AddLine">ضيف سطر</MudButton>
+                <div class="opf-bottom-right">
+
+                    @if (_activeTab < 2)
+                    {
+                        <button class="opf-next-btn" @onclick="() => _activeTab++">
+                            التالي
+                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    }
+
+                    <button class="opf-bottom-save"
+                            @onclick="SaveAsync"
+                            disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="btn-spinner sm" aria-hidden="true"></span>
+                            <span>جاري الحفظ...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                <path d="M17 21v-8H7v8M7 3v5h8"
+                                      stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>حفظ العملية</span>
+                        }
+                    </button>
+
+                </div>
             }
 
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:18px;
-                        padding:14px 16px; background:#F6F8FB; border-radius:12px">
-                <span class="fc-panel-sub" style="margin:0">الإجمالي</span>
-                <span style="font-size:15px; font-weight:800">
-                    صافي @TotalNet.ToString("N2") &nbsp;·&nbsp; ضريبة @TotalTax.ToString("N2") &nbsp;·&nbsp;
-                    إجمالي @((TotalNet + TotalTax)).ToString("N2")
-                </span>
-            </div>
+        </div>
 
-            <div class="fc-panel-sub" style="margin:26px 0 8px">ملاحظات</div>
-            <textarea class="fc-sel" rows="3" maxlength="1000" disabled="@_locked"
-                      @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
-
-            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:26px">
-                <MudButton Variant="Variant.Outlined" OnClick="GoBack">رجوع</MudButton>
-                @if (CanSave && !_locked)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveAsync">حفظ</MudButton>
-                }
-            </div>
-
-        </div></div>
     }
 </div>
 
+
+@* ═══════════════════════════════════════════
+   CSS
+═══════════════════════════════════════════ *@
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ================================================================
+       HERO ADDITIONS
+    ================================================================ */
+    .op-hero-badge {
+        display: inline-flex; align-items: center;
+        padding: 3px 10px; border-radius: 20px;
+        font-size: 11px; font-weight: 800;
+    }
+
+    .badge-new       { background: rgba(34,197,94,.2);  color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+    .badge-pending   { background: rgba(255,255,255,.12); color: rgba(255,255,255,.75); border: 1px solid rgba(255,255,255,.2); }
+    .badge-assigned  { background: rgba(59,130,246,.25); color: #93c5fd; border: 1px solid rgba(59,130,246,.3); }
+    .badge-intransit { background: rgba(234,88,12,.25);  color: #fdba74; border: 1px solid rgba(234,88,12,.3); }
+    .badge-delivered { background: rgba(20,184,166,.25); color: #99f6e4; border: 1px solid rgba(20,184,166,.3); }
+    .badge-closed    { background: rgba(234,179,8,.25);  color: #fde68a; border: 1px solid rgba(234,179,8,.3); }
+    .badge-cancelled { background: rgba(239,68,68,.25);  color: #fca5a5; border: 1px solid rgba(239,68,68,.3); }
+
+    .op-back-btn {
+        display: inline-flex; align-items: center; gap: 5px;
+        height: 36px; padding: 0 13px;
+        border: 1px solid rgba(255,255,255,.2); border-radius: 9px;
+        background: rgba(255,255,255,.08); color: rgba(255,255,255,.75);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: background .15s ease;
+    }
+    .op-back-btn:hover { background: rgba(255,255,255,.14); }
+    .op-back-btn svg  { transform: rotate(180deg); }
+
+    .op-save-btn {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 38px; padding: 0 18px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: #fff; font-family: inherit;
+        font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(22,163,74,.35);
+        transition: all .15s ease;
+    }
+    .op-save-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(22,163,74,.4); }
+    .op-save-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* Hero Summary */
+    .op-hero-summary {
+        display: flex; align-items: stretch;
+        background: rgba(0,0,0,.15); border: 1px solid rgba(255,255,255,.10);
+        border-radius: 12px; overflow: hidden; backdrop-filter: blur(8px);
+        margin-top: 4px;
+    }
+
+    .op-sum-item {
+        flex: 1; display: flex; align-items: center; gap: 10px;
+        padding: 12px 16px;
+    }
+
+    .op-sum-div { width: 1px; background: rgba(255,255,255,.10); align-self: stretch; }
+
+    .op-sum-icon {
+        width: 32px; height: 32px; flex: 0 0 32px; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(255,255,255,.10); color: rgba(255,255,255,.7);
+    }
+
+    .op-sum-label { font-size: 9.5px; color: rgba(255,255,255,.5); font-weight: 600; }
+    .op-sum-val   { font-size: 13px; font-weight: 800; color: #fff; margin-top: 2px; }
+    .sum-green    { color: #6ee7b7; }
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    .opf-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 180px);
+        padding: 16px 20px 32px;
+        max-width: 1050px; width: 100%;
+        margin: 0 auto;
+        display: flex; flex-direction: column; gap: 14px;
+    }
+
+    /* ================================================================
+       STATES
+    ================================================================ */
+    .opf-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 280px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .opf-state-icon {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .opf-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+
+    .opf-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .opf-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    .opf-state-back {
+        margin-top: 8px; padding: 9px 20px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-text);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: background .15s ease;
+    }
+    .opf-state-back:hover { background: #f0f4fa; }
+
+    /* ================================================================
+       LOADING
+    ================================================================ */
+    .opf-loading-wrap {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 14px; min-height: 260px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .opf-spinner {
+        width: 36px; height: 36px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: opf-spin .75s linear infinite;
+    }
+    @@keyframes opf-spin { to { transform: rotate(360deg); } }
+
+    .opf-loading-text { font-size: 13px; font-weight: 600; color: var(--fc-muted); }
+
+    /* ================================================================
+       BANNERS
+    ================================================================ */
+    .opf-locked-banner {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px; border-radius: 12px;
+        background: linear-gradient(135deg, #fffbeb, #fff8e0);
+        border: 1px solid #fde68a;
+        box-shadow: 0 2px 10px rgba(234,179,8,.10);
+    }
+
+    .locked-icon  { flex: 0 0 auto; color: #d97706; }
+    .locked-text  { display: flex; flex-direction: column; gap: 2px; }
+    .locked-text strong { font-size: 13px; font-weight: 800; color: #92400e; }
+    .locked-text span   { font-size: 11.5px; color: #b45309; }
+
+    .opf-banner {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 16px; border-radius: 10px;
+        font-size: 13px; font-weight: 600;
+        animation: opf-banner-in .25s ease;
+    }
+    @@keyframes opf-banner-in {
+        from { opacity: 0; transform: translateY(-6px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .banner-success { background: #e9f8f0; color: #0e7a43; border: 1px solid #b5e8d0; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8d0; }
+
+    .banner-close {
+        margin-right: auto; background: none; border: none;
+        color: inherit; opacity: .6; cursor: pointer; font-size: 13px;
+    }
+    .banner-close:hover { opacity: 1; }
+
+    /* ================================================================
+       BOOKING PICKER
+    ================================================================ */
+    .opf-booking-picker {
+        display: flex; align-items: center; gap: 14px;
+        padding: 14px 18px; border-radius: 12px;
+        background: linear-gradient(135deg, #f5f8ff, #eef4ff);
+        border: 1px solid #c8d8fb;
+        flex-wrap: wrap;
+    }
+
+    .booking-picker-icon {
+        width: 40px; height: 40px; flex: 0 0 40px; border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        border: 1px solid #bdd4fc;
+    }
+
+    .booking-picker-title { font-size: 13px; font-weight: 800; color: #1c2b43; }
+    .booking-picker-sub   { font-size: 11px; color: var(--fc-muted); margin-top: 2px; }
+
+    .booking-picker-select-wrap {
+        position: relative; display: flex; align-items: center;
+        flex: 1; min-width: 200px;
+    }
+
+    .bp-select-icon {
+        position: absolute; right: 12px; color: #9aaabb;
+        pointer-events: none; z-index: 1;
+    }
+
+    .booking-picker-select {
+        width: 100%; height: 40px;
+        padding: 0 36px 0 12px;
+        border: 1px solid #c8d8fb; border-radius: 9px;
+        background: #fff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; font-weight: 700;
+        cursor: pointer; outline: none;
+        -webkit-appearance: none; appearance: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .booking-picker-select:focus {
+        border-color: var(--fc-blue);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.10);
+    }
+
+    /* ================================================================
+       TABS
+    ================================================================ */
+    .opf-tabs-wrap {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden; flex: 1;
+    }
+
+    .opf-mud-tabs .mud-tabs-toolbar {
+        background: linear-gradient(180deg, #f9fafd 0%, #f3f6fb 100%);
+        border-bottom: 2px solid #e8edf5;
+        padding: 0 16px; min-height: 54px;
+    }
+
+    .opf-mud-tabs .mud-tab {
+        font-family: "Cairo","Tajawal","Inter",Arial,sans-serif;
+        font-size: 12px; font-weight: 700; color: var(--fc-muted);
+        padding: 0 6px; min-width: unset; transition: color .15s ease;
+    }
+
+    .opf-mud-tabs .mud-tab.mud-tab-active { color: var(--fc-blue) !important; font-weight: 800; }
+
+    .opf-mud-tabs .mud-tab-slider {
+        background: var(--fc-blue) !important;
+        height: 3px; border-radius: 3px 3px 0 0;
+    }
+
+    .opf-mud-tabs .mud-tab:hover:not(.mud-tab-active) {
+        color: var(--fc-text); background: rgba(0,0,0,.03); border-radius: 8px;
+    }
+
+    .opf-tab-panel { padding: 0; }
+
+    /* Tab Labels */
+    .otab-label {
+        display: flex; align-items: center; gap: 7px;
+        padding: 0 4px; white-space: nowrap;
+    }
+
+    .otab-icon {
+        width: 26px; height: 26px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 7px;
+    }
+
+    .otab-blue   { background: var(--fc-blue-lt);  color: var(--fc-blue); }
+    .otab-green  { background: var(--fc-green-lt); color: var(--fc-green); }
+    .otab-purple { background: var(--fc-purple-lt); color: var(--fc-purple); }
+
+    .otab-err-dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--fc-red); flex: 0 0 7px;
+        animation: opf-pulse 1.5s ease infinite;
+    }
+    @@keyframes opf-pulse {
+        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.4); }
+        50%      { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
+    }
+
+    .otab-count {
+        min-width: 18px; height: 18px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 5px; padding: 0 4px;
+        background: var(--fc-green-lt); color: var(--fc-green);
+        font-size: 10px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    /* ================================================================
+       TAB SECTION
+    ================================================================ */
+    .tab-section { padding: 24px 28px 28px; }
+
+    .tab-section-head {
+        display: flex; align-items: flex-start; gap: 12px;
+        margin-bottom: 22px; padding-bottom: 18px;
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .tab-section-icon {
+        width: 42px; height: 42px; flex: 0 0 42px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 12px;
+    }
+    .tab-section-icon.blue   { background: var(--fc-blue-lt);  color: var(--fc-blue);   border: 1px solid #bdd4fc; }
+    .tab-section-icon.green  { background: var(--fc-green-lt); color: var(--fc-green);  border: 1px solid #b0e0c5; }
+    .tab-section-icon.purple { background: var(--fc-purple-lt); color: var(--fc-purple); border: 1px solid #d0bfef; }
+
+    .tab-section-title { font-size: 15px; font-weight: 800; color: #1c2b43; line-height: 1.2; }
+    .tab-section-sub   { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
+
+    /* ================================================================
+       FORM
+    ================================================================ */
+    .opf-form-grid {
+        display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px;
+    }
+
+    .form-field { display: flex; flex-direction: column; gap: 6px; }
+
+    .field-label {
+        font-size: 12px; font-weight: 800; color: #344258;
+        display: flex; align-items: center; gap: 4px;
+    }
+
+    .field-required { color: var(--fc-red); font-size: 14px; line-height: 1; }
+
+    .field-input {
+        height: 42px; width: 100%;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 13px; padding: 0 12px;
+        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+        outline: none;
+    }
+    .field-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); background: #fff; }
+    .field-input:disabled { opacity: .7; background: #f3f5f8; cursor: not-allowed; }
+    .field-input.field-error { border-color: var(--fc-red); box-shadow: 0 0 0 3px rgba(224,48,72,.08); }
+    .field-input::placeholder { color: #b0bcc8; }
+
+    .field-textarea { height: auto; padding: 10px 12px; resize: vertical; min-height: 100px; }
+
+    .field-select-wrap { position: relative; display: flex; align-items: center; }
+    .field-select-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; z-index: 1; }
+    .field-select { padding-right: 36px; cursor: pointer; -webkit-appearance: none; appearance: none; }
+    .field-select:disabled { cursor: not-allowed; }
+
+    .field-input-group { position: relative; display: flex; align-items: center; }
+    .field-prefix {
+        position: absolute; right: 12px;
+        display: flex; align-items: center;
+        color: #9aaabb; pointer-events: none; z-index: 1;
+        font-size: 11px; font-weight: 700;
+    }
+    .field-input.with-prefix { padding-right: 36px; }
+
+    .field-hint {
+        display: flex; align-items: center; gap: 5px;
+        font-size: 10.5px; color: var(--fc-muted); font-weight: 500;
+    }
+
+    .field-err-msg { font-size: 10.5px; color: var(--fc-red); font-weight: 700; }
+
+    /* ================================================================
+       ROUTE VISUAL
+    ================================================================ */
+    .opf-route-visual {
+        display: flex; align-items: center;
+        margin-top: 22px; padding: 14px 20px;
+        background: linear-gradient(135deg, #f5f8ff, #eef4ff);
+        border: 1px solid #c8d8fb; border-radius: 12px;
+        animation: opf-banner-in .25s ease;
+    }
+
+    .route-point  { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+    .route-dot    { width: 14px; height: 14px; border-radius: 50%; border: 3px solid; }
+    .dot-from     { background: var(--fc-blue-lt);  border-color: var(--fc-blue); }
+    .dot-to       { background: var(--fc-green-lt); border-color: var(--fc-green); }
+
+    .route-label    { display: flex; flex-direction: column; gap: 2px; }
+    .route-caption  { font-size: 9px; font-weight: 600; color: #8899ae; }
+    .route-label strong { font-size: 13px; font-weight: 800; color: var(--fc-text); }
+
+    .route-line  {
+        flex: 1; display: flex; flex-direction: column;
+        align-items: center; gap: 0; margin: 0 10px; position: relative;
+    }
+    .route-truck { font-size: 20px; margin-top: -4px; }
+
+    /* ================================================================
+       REVENUE LINES
+    ================================================================ */
+    .opf-lines-empty {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 10px; min-height: 180px;
+        border: 2px dashed #d8e8f8; border-radius: 12px;
+        background: #f8fbff; text-align: center; padding: 30px;
+    }
+
+    .lines-empty-icon {
+        width: 70px; height: 70px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: #edf3fb; color: #b0c4d8;
+    }
+    .lines-empty-title { font-size: 14px; font-weight: 800; color: var(--fc-text); }
+    .lines-empty-sub   { font-size: 12px; color: var(--fc-muted); }
+
+    .opf-add-line-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 14px;
+        border: 1.5px solid var(--fc-green); border-radius: 9px;
+        background: var(--fc-green-lt); color: var(--fc-green);
+        font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; white-space: nowrap; flex-shrink: 0;
+        transition: all .15s ease;
+    }
+    .opf-add-line-btn:hover { background: var(--fc-green); color: #fff; }
+    .opf-add-line-btn.mt-10 { margin-top: 10px; }
+
+    .opf-rev-cards { display: flex; flex-direction: column; gap: 14px; }
+
+    .opf-rev-card {
+        border: 1px solid #e4edf8; border-radius: 12px;
+        background: linear-gradient(180deg, #fafcff, #f5f8fb);
+        overflow: hidden;
+        transition: border-color .18s ease, box-shadow .18s ease;
+    }
+    .opf-rev-card:hover {
+        border-color: #c8d8f0; box-shadow: 0 4px 14px rgba(15,41,82,.06);
+    }
+
+    /* Card Header */
+    .opf-rc-head {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px;
+        background: linear-gradient(180deg, #f0f5fc, #eaf1f9);
+        border-bottom: 1px solid #dce8f5;
+        flex-wrap: wrap;
+    }
+
+    .opf-rc-num {
+        width: 26px; height: 26px; border-radius: 8px; flex: 0 0 26px;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--fc-green); color: #fff;
+        font-size: 11px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .opf-rc-service-badge {
+        display: flex; align-items: center; gap: 5px;
+        padding: 3px 10px; border-radius: 7px;
+        background: rgba(22,163,91,.08); border: 1px solid rgba(22,163,91,.15);
+        color: var(--fc-green); font-size: 11px; font-weight: 800; white-space: nowrap;
+    }
+
+    .opf-rc-total {
+        flex: 1; font-size: 11px; color: #6b7d95; font-weight: 600;
+    }
+    .opf-rc-total strong { color: var(--fc-text); font-weight: 900; font-size: 13px; }
+    .opf-rc-total span   { color: #9aaabb; font-size: 10px; }
+
+    .opf-rc-suggest {
+        display: inline-flex; align-items: center; gap: 5px;
+        height: 28px; padding: 0 10px;
+        border: 1px solid #bdd4fc; border-radius: 7px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 10px; font-weight: 800;
+        cursor: pointer; white-space: nowrap;
+        transition: all .12s ease;
+    }
+    .opf-rc-suggest:hover { background: var(--fc-blue); color: #fff; }
+
+    .opf-rc-del {
+        width: 28px; height: 28px; border-radius: 7px; flex: 0 0 28px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; background: transparent;
+        color: var(--fc-red); cursor: pointer; transition: all .15s ease;
+    }
+    .opf-rc-del:hover { background: var(--fc-red-lt); border-color: #ffc8cf; }
+
+    /* Card Body */
+    .opf-rc-body {
+        display: grid;
+        grid-template-columns: 1.4fr 2fr 1fr 1fr 1fr 1fr;
+        gap: 12px; padding: 14px 16px;
+        align-items: start;
+    }
+
+    .opf-desc-field { grid-column: 2; }
+
+    /* Qty Control */
+    .opf-qty-control {
+        display: flex; align-items: center;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        overflow: hidden; background: #fafcff;
+    }
+
+    .qty-btn {
+        width: 34px; height: 42px; flex: 0 0 34px;
+        display: flex; align-items: center; justify-content: center;
+        border: none; background: transparent;
+        cursor: pointer; font-size: 18px; font-weight: 900;
+        transition: background .12s ease;
+    }
+    .qty-minus { color: var(--fc-red);  border-left: 1px solid #d8e2f0; }
+    .qty-plus  { color: var(--fc-green); border-right: 1px solid #d8e2f0; }
+    .qty-minus:hover { background: var(--fc-red-lt); }
+    .qty-plus:hover  { background: var(--fc-green-lt); }
+
+    .qty-input {
+        flex: 1; text-align: center; border: none !important;
+        border-radius: 0 !important; background: transparent !important;
+        box-shadow: none !important; font-weight: 800; font-size: 13px;
+    }
+
+    /* Line Summary */
+    .opf-rc-summary {
+        display: flex; align-items: center;
+        padding: 8px 16px;
+        background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        border-top: 1px solid #dce8f5;
+        gap: 0;
+    }
+
+    .rc-sum-item {
+        flex: 1; display: flex; flex-direction: column;
+        align-items: center; gap: 2px; padding: 0 10px;
+    }
+    .rc-sum-item span   { font-size: 9px; color: #9aaabb; font-weight: 600; }
+    .rc-sum-item strong { font-size: 13px; font-weight: 800; color: var(--fc-text); font-family: "Inter", Arial, sans-serif; }
+    .rc-sum-total strong { color: var(--fc-blue); font-size: 14px; }
+
+    .rc-sum-sep { width: 1px; height: 30px; background: #dde5f0; flex: 0 0 1px; }
+
+    /* Total Bar */
+    .opf-total-bar {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 20px; margin-top: 14px; padding: 16px 20px;
+        background: linear-gradient(135deg, #f3f8ff, #eaf3ff);
+        border: 1px solid #bdd4fc; border-radius: 12px;
+        flex-wrap: wrap;
+    }
+
+    .total-bar-label {
+        display: flex; align-items: center; gap: 7px;
+        font-size: 13px; font-weight: 800; color: var(--fc-blue);
+    }
+
+    .total-bar-nums {
+        display: flex; align-items: center; gap: 0;
+    }
+
+    .total-item {
+        display: flex; flex-direction: column; align-items: center; gap: 2px;
+        padding: 0 16px;
+    }
+    .total-item span   { font-size: 9.5px; color: #8899ae; font-weight: 600; }
+    .total-item strong {
+        font-size: 15px; font-weight: 900; color: var(--fc-text);
+        font-family: "Inter", Arial, sans-serif;
+    }
+    .total-green  { color: var(--fc-green) !important; }
+    .total-grand strong { color: var(--fc-blue); font-size: 17px; }
+
+    .total-sep { width: 1px; height: 35px; background: #c8d8f0; flex: 0 0 1px; }
+
+    /* ================================================================
+       FINANCIAL SUMMARY (Tab 3)
+    ================================================================ */
+    .opf-fin-summary {
+        margin-top: 22px; padding: 18px 20px;
+        background: linear-gradient(135deg, #f5f8ff, #eef4ff);
+        border: 1px solid #c8d8fb; border-radius: 12px;
+    }
+
+    .fin-summary-title {
+        display: flex; align-items: center; gap: 7px;
+        font-size: 13px; font-weight: 800; color: var(--fc-blue);
+        margin-bottom: 14px; padding-bottom: 10px;
+        border-bottom: 1px solid #c8d8fb;
+    }
+
+    .fin-summary-grid { display: flex; flex-direction: column; gap: 8px; }
+
+    .fin-sum-row {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 8px 12px; border-radius: 8px;
+        background: rgba(255,255,255,.7);
+        font-size: 12.5px; font-weight: 600; color: var(--fc-text);
+    }
+    .fin-sum-row strong {
+        font-family: "Inter", Arial, sans-serif;
+        font-size: 14px; font-weight: 900;
+    }
+
+    .fin-green { color: var(--fc-green); }
+    .fin-red   { color: var(--fc-red); }
+
+    .fin-sum-div {
+        height: 1px; background: #c8d8fb; margin: 4px 0;
+    }
+
+    .fin-sum-profit {
+        border: 2px solid; border-radius: 9px; padding: 10px 12px;
+    }
+    .profit-pos { border-color: #b0e0c5; background: var(--fc-green-lt); color: var(--fc-green); }
+    .profit-neg { border-color: #ffc8cf; background: var(--fc-red-lt);   color: var(--fc-red); }
+    .profit-pos strong, .profit-neg strong { font-size: 16px !important; }
+
+    /* ================================================================
+       BOTTOM ACTIONS
+    ================================================================ */
+    .opf-bottom-actions {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; padding: 14px 20px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); box-shadow: 0 2px 8px rgba(15,41,82,.04);
+    }
+
+    .opf-bottom-back {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 16px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .opf-bottom-back:hover { background: #f0f4fa; color: var(--fc-text); }
+    .opf-bottom-back svg { transform: rotate(180deg); }
+
+    .opf-bottom-right { display: flex; align-items: center; gap: 10px; }
+
+    .opf-next-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 16px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .opf-next-btn:hover { background: var(--fc-blue); color: #fff; }
+    .opf-next-btn svg { transform: rotate(180deg); }
+
+    .opf-bottom-save {
+        display: inline-flex; align-items: center; gap: 8px;
+        height: 40px; padding: 0 22px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #1e6ef5, #1558d6);
+        color: #fff; font-family: inherit;
+        font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(30,110,245,.30);
+        transition: all .15s ease;
+    }
+    .opf-bottom-save:hover:not(:disabled) {
+        transform: translateY(-1px); box-shadow: 0 6px 18px rgba(30,110,245,.38);
+    }
+    .opf-bottom-save:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* ================================================================
+       SPINNER
+    ================================================================ */
+    .btn-spinner {
+        width: 15px; height: 15px;
+        border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+        border-radius: 50%; animation: opf-spin .7s linear infinite;
+    }
+    .btn-spinner.sm { width: 13px; height: 13px; }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 1000px) {
+        .opf-rc-body { grid-template-columns: 1fr 1fr 1fr; }
+        .opf-desc-field { grid-column: 1 / -1; }
+    }
+
+    @@media (max-width: 900px) {
+        .opf-form-grid { grid-template-columns: 1fr; }
+        .tab-section { padding: 18px 16px 22px; }
+        .op-hero-summary { flex-wrap: wrap; }
+        .op-sum-item { flex: 0 0 50%; }
+        .op-sum-div:nth-child(4) { display: none; }
+        .total-bar-nums { flex-wrap: wrap; gap: 8px; }
+        .total-item { flex: 0 0 45%; }
+        .total-sep { display: none; }
+    }
+
+    @@media (max-width: 680px) {
+        .opf-body { padding: 10px 12px 24px; }
+        .opf-rc-body { grid-template-columns: 1fr 1fr; }
+        .opf-desc-field { grid-column: 1 / -1; }
+        .opf-bottom-actions { flex-direction: column; }
+        .opf-bottom-back, .opf-bottom-save { width: 100%; justify-content: center; }
+        .opf-bottom-right { width: 100%; flex-direction: column; }
+        .opf-next-btn { width: 100%; justify-content: center; }
+        .op-sum-item { flex: 0 0 100%; }
+        .op-sum-div { display: none; }
+        .opf-booking-picker { flex-direction: column; align-items: flex-start; }
+        .booking-picker-select-wrap { width: 100%; }
+    }
+
+    @@media (max-width: 480px) {
+        .opf-rc-body { grid-template-columns: 1fr; }
+        .op-hero-summary { display: none; }
+        .opf-rc-head { flex-wrap: wrap; }
+    }
+
+</style>
+
+
 @code {
     [Parameter] public long? Id { get; set; }
-    private long? _id;
+    private long?  _id;
     private string OpNumber = "";
-    private string _status = "Pending";
-    private bool _locked;
+    private string _status  = "Pending";
+    private bool   _locked;
+    private int    _activeTab;
+    private bool   _triedSave;
 
     private AuthUser? _user;
     private bool CanCreate => _user?.Can("OPERATION.CREATE") ?? false;
-    private bool CanEdit   => _user?.Can("OPERATION.EDIT") ?? false;
+    private bool CanEdit   => _user?.Can("OPERATION.EDIT")   ?? false;
     private bool CanSave   => _id is null ? CanCreate : CanEdit;
 
-    private bool _loading; private bool _saving; private string? _msg; private bool _ok;
+    private bool    _loading; private bool _saving;
+    private string? _msg;     private bool _ok;
     private string? _priceSource;
-    private string _selectedBooking = "";
+    private string  _selectedBooking = "";
 
-    private List<Opt> _customers = new();
-    private List<Opt> _services = new();
-    private List<Opt> _ports = new();
-    private List<Opt> _destinations = new();
-    private List<Opt> _tripTypes = new();
-    private List<TaxOpt> _taxRates = new();
-    private List<Bk> _bookings = new();
+    private List<Opt>    _customers    = new();
+    private List<Opt>    _services     = new();
+    private List<Opt>    _ports        = new();
+    private List<Opt>    _destinations = new();
+    private List<Opt>    _tripTypes    = new();
+    private List<TaxOpt> _taxRates     = new();
+    private List<Bk>     _bookings     = new();
 
     private List<RevRow> _lines = new();
-    private Form _f = new();
+    private Form         _f     = new();
 
-    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
-    public class TaxOpt { public int Id { get; set; } public string Label { get; set; } = "";
-        public decimal Value { get; set; } }
-    public class Bk { public long BookingId { get; set; } public string BookingNumber { get; set; } = "";
-        public string CustomerName { get; set; } = ""; }
+    /* ── Validation ── */
+    private bool HasTabError(int tab) => _triedSave && tab switch
+    {
+        1 => _f.CustomerId == 0,
+        2 => _lines.Count == 0 || _lines.All(l => l.ServiceId == 0 || l.Qty <= 0),
+        _ => false
+    };
+
+    /* ── DTOs ── */
+    public class Opt    { public int Id { get; set; } public string Label { get; set; } = ""; }
+    public class TaxOpt { public int Id { get; set; } public string Label { get; set; } = ""; public decimal Value { get; set; } }
+    public class Bk     { public long BookingId { get; set; } public string BookingNumber { get; set; } = ""; public string CustomerName { get; set; } = ""; }
 
     public class RevRow
     {
-        public int ServiceId { get; set; }
-        public string? Description { get; set; }
-        public decimal Qty { get; set; } = 1;
-        public decimal UnitPrice { get; set; }
-        public decimal Discount { get; set; }
-        public int? TaxRateId { get; set; }
-        public long? PriceRuleId { get; set; }
+        public int      ServiceId   { get; set; }
+        public string?  Description { get; set; }
+        public decimal  Qty         { get; set; } = 1;
+        public decimal  UnitPrice   { get; set; }
+        public decimal  Discount    { get; set; }
+        public int?     TaxRateId   { get; set; }
+        public long?    PriceRuleId { get; set; }
     }
 
     public class Form
     {
-        public long? BookingId { get; set; }
-        public int CustomerId { get; set; }
-        public int? ServiceId { get; set; }
-        public int? PortId { get; set; }
-        public int? DestinationId { get; set; }
-        public int? TripTypeId { get; set; }
-        public string? PlannedDate { get; set; }
+        public long?   BookingId     { get; set; }
+        public int     CustomerId    { get; set; }
+        public int?    ServiceId     { get; set; }
+        public int?    PortId        { get; set; }
+        public int?    DestinationId { get; set; }
+        public int?    TripTypeId    { get; set; }
+        public string? PlannedDate   { get; set; }
         public decimal EstimatedCost { get; set; }
-        public string? Notes { get; set; }
+        public string? Notes         { get; set; }
     }
 
     public class Suggestion
     {
-        public decimal UnitPrice { get; set; }
-        public decimal? CostPrice { get; set; }
-        public int? TaxRateId { get; set; }
-        public decimal TaxRate { get; set; }
-        public long? PriceRuleId { get; set; }
-        public string Source { get; set; } = "";
+        public decimal  UnitPrice   { get; set; }
+        public decimal? CostPrice   { get; set; }
+        public int?     TaxRateId   { get; set; }
+        public decimal  TaxRate     { get; set; }
+        public long?    PriceRuleId { get; set; }
+        public string   Source      { get; set; } = "";
     }
 
     public class RevDto
     {
-        public int ServiceId { get; set; }
-        public string? Description { get; set; }
-        public decimal Quantity { get; set; }
-        public decimal UnitPrice { get; set; }
-        public decimal Discount { get; set; }
-        public int? TaxRateId { get; set; }
-        public long? PriceRuleId { get; set; }
+        public int      ServiceId   { get; set; }
+        public string?  Description { get; set; }
+        public decimal  Quantity    { get; set; }
+        public decimal  UnitPrice   { get; set; }
+        public decimal  Discount    { get; set; }
+        public int?     TaxRateId   { get; set; }
+        public long?    PriceRuleId { get; set; }
     }
 
     public class DetailOp
     {
-        public string OperationNumber { get; set; } = "";
-        public long? BookingId { get; set; }
-        public int CustomerId { get; set; }
-        public int? ServiceId { get; set; }
-        public int? PortId { get; set; }
-        public int? DestinationId { get; set; }
-        public int? TripTypeId { get; set; }
-        public string? PlannedDate { get; set; }
-        public decimal EstimatedCost { get; set; }
-        public string? Notes { get; set; }
-        public string Status { get; set; } = "Pending";
+        public string  OperationNumber { get; set; } = "";
+        public long?   BookingId       { get; set; }
+        public int     CustomerId      { get; set; }
+        public int?    ServiceId       { get; set; }
+        public int?    PortId          { get; set; }
+        public int?    DestinationId   { get; set; }
+        public int?    TripTypeId      { get; set; }
+        public string? PlannedDate     { get; set; }
+        public decimal EstimatedCost   { get; set; }
+        public string? Notes           { get; set; }
+        public string  Status          { get; set; } = "Pending";
     }
 
     public class DetailResponse
     {
-        public DetailOp Operation { get; set; } = new();
-        public List<RevDto> RevenueLines { get; set; } = new();
+        public DetailOp       Operation    { get; set; } = new();
+        public List<RevDto>   RevenueLines { get; set; } = new();
     }
 
-    public class BookingDetail
-    {
-        public BookingInfo Booking { get; set; } = new();
-    }
+    public class BookingDetail { public BookingInfo Booking { get; set; } = new(); }
 
     public class BookingInfo
     {
-        public int CustomerId { get; set; }
-        public string? RequestedDate { get; set; }
-        public int? ServiceId { get; set; }
-        public int? PortId { get; set; }
-        public int? DestinationId { get; set; }
-        public int? TripTypeId { get; set; }
-        public string? CustomerReference { get; set; }
+        public int     CustomerId         { get; set; }
+        public string? RequestedDate      { get; set; }
+        public int?    ServiceId          { get; set; }
+        public int?    PortId             { get; set; }
+        public int?    DestinationId      { get; set; }
+        public int?    TripTypeId         { get; set; }
+        public string? CustomerReference  { get; set; }
     }
 
+    /* ── Helpers ── */
     private static string StatusAr(string s) => s switch
     {
-        "Pending" => "قيد الانتظار", "Assigned" => "تم التعيين",
-        "DriverReceived" => "استلم السائق", "InTransit" => "في الطريق",
-        "Delivered" => "تم التسليم", "Closed" => "مغلقة", "Cancelled" => "ملغاة", _ => s
+        "Pending"        => "قيد الانتظار",
+        "Assigned"       => "تم التعيين",
+        "DriverReceived" => "استلم السائق",
+        "InTransit"      => "في الطريق",
+        "Delivered"      => "تم التسليم",
+        "Closed"         => "مغلقة",
+        "Cancelled"      => "ملغاة",
+        _                => s
+    };
+
+    private static string StatusBadgeClass(string s) => s switch
+    {
+        "Pending"        => "badge-pending",
+        "Assigned"       => "badge-assigned",
+        "InTransit"      => "badge-intransit",
+        "Delivered"      => "badge-delivered",
+        "Closed"         => "badge-closed",
+        "Cancelled"      => "badge-cancelled",
+        _                => "badge-pending"
     };
 
     private static decimal? ParseDec(object? v) =>
@@ -334,16 +1839,17 @@
     private decimal RateOf(RevRow ln) =>
         ln.TaxRateId is null ? 0m : _taxRates.FirstOrDefault(x => x.Id == ln.TaxRateId.Value)?.Value ?? 0m;
 
-    private decimal LineNet(RevRow ln) => ln.Qty * ln.UnitPrice - ln.Discount;
+    private decimal LineNet(RevRow ln)   => ln.Qty * ln.UnitPrice - ln.Discount;
     private decimal LineGross(RevRow ln) => LineNet(ln) + LineNet(ln) * RateOf(ln) / 100m;
 
     private decimal TotalNet => _lines.Sum(LineNet);
     private decimal TotalTax => _lines.Sum(ln => LineNet(ln) * RateOf(ln) / 100m);
 
+    /* ── Init ── */
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
-        _id = Id;
+        _id   = Id;
         if (!CanSave) return;
 
         _loading = true;
@@ -386,8 +1892,8 @@
         if (d is null) { _msg = "العملية مش موجودة"; _ok = false; return; }
 
         OpNumber = d.Operation.OperationNumber;
-        _status = d.Operation.Status;
-        _locked = _status is "Closed" or "Cancelled";
+        _status  = d.Operation.Status;
+        _locked  = _status is "Closed" or "Cancelled";
 
         _f = new Form
         {
@@ -404,9 +1910,13 @@
 
         _lines = d.RevenueLines.Select(r => new RevRow
         {
-            ServiceId = r.ServiceId, Description = r.Description, Qty = r.Quantity,
-            UnitPrice = r.UnitPrice, Discount = r.Discount,
-            TaxRateId = r.TaxRateId, PriceRuleId = r.PriceRuleId
+            ServiceId   = r.ServiceId,
+            Description = r.Description,
+            Qty         = r.Quantity,
+            UnitPrice   = r.UnitPrice,
+            Discount    = r.Discount,
+            TaxRateId   = r.TaxRateId,
+            PriceRuleId = r.PriceRuleId
         }).ToList();
 
         if (_lines.Count == 0) AddLine();
@@ -419,17 +1929,14 @@
     private void OnCustomerChanged(ChangeEventArgs e)
     {
         _f.CustomerId = int.TryParse(e.Value?.ToString(), out var n) ? n : 0;
-        _priceSource = null;
+        _priceSource  = null;
     }
 
     private async Task OnBookingPicked(ChangeEventArgs e)
     {
         _selectedBooking = e.Value?.ToString() ?? "";
         if (!long.TryParse(_selectedBooking, out var bkId) || bkId <= 0)
-        {
-            _f.BookingId = null;
-            return;
-        }
+        { _f.BookingId = null; return; }
 
         try
         {
@@ -456,24 +1963,25 @@
     private async Task SuggestAsync(RevRow ln)
     {
         if (_f.CustomerId <= 0) { _msg = "اختار العميل الأول"; _ok = false; return; }
-        if (ln.ServiceId <= 0)  { _msg = "اختار الخدمة في السطر الأول"; _ok = false; return; }
+        if (ln.ServiceId <= 0)  { _msg = "اختار الخدمة في السطر"; _ok = false; return; }
 
         var url = $"api/operations/price-suggest?customerId={_f.CustomerId}&serviceId={ln.ServiceId}" +
-                  (_f.PortId is not null ? $"&portId={_f.PortId}" : "") +
+                  (_f.PortId        is not null ? $"&portId={_f.PortId}" : "") +
                   (_f.DestinationId is not null ? $"&destinationId={_f.DestinationId}" : "") +
-                  (_f.TripTypeId is not null ? $"&tripTypeId={_f.TripTypeId}" : "");
+                  (_f.TripTypeId    is not null ? $"&tripTypeId={_f.TripTypeId}" : "");
 
         try
         {
             var s = await Http.GetFromJsonAsync<Suggestion>(url);
             if (s is null) return;
 
-            ln.UnitPrice  = s.UnitPrice;
-            ln.TaxRateId  = s.TaxRateId;
+            ln.UnitPrice   = s.UnitPrice;
+            ln.TaxRateId   = s.TaxRateId;
             ln.PriceRuleId = s.PriceRuleId;
             if (string.IsNullOrWhiteSpace(ln.Description))
                 ln.Description = _services.FirstOrDefault(x => x.Id == ln.ServiceId)?.Label;
-            if (s.CostPrice is not null && s.CostPrice > 0) _f.EstimatedCost = s.CostPrice.Value;
+            if (s.CostPrice is not null && s.CostPrice > 0)
+                _f.EstimatedCost = s.CostPrice.Value;
 
             _priceSource = s.Source;
             _msg = null;
@@ -485,10 +1993,19 @@
 
     private async Task SaveAsync()
     {
-        _msg = null;
-        if (_f.CustomerId <= 0) { _ok = false; _msg = "لازم تختار العميل"; return; }
+        _triedSave = true;
+        _msg       = null;
+
+        if (_f.CustomerId <= 0)
+        {
+            _ok = false; _msg = "لازم تختار العميل"; _activeTab = 0; return;
+        }
+
         var lines = _lines.Where(l => l.ServiceId > 0 && l.Qty > 0).ToList();
-        if (lines.Count == 0) { _ok = false; _msg = "ضيف سطر إيراد واحد على الأقل"; return; }
+        if (lines.Count == 0)
+        {
+            _ok = false; _msg = "ضيف سطر إيراد واحد على الأقل"; _activeTab = 1; return;
+        }
 
         var payload = new
         {
@@ -503,9 +2020,13 @@
             notes         = _f.Notes,
             revenueLines  = lines.Select(l => new
             {
-                serviceId = l.ServiceId, description = l.Description, quantity = l.Qty,
-                unitPrice = l.UnitPrice, discount = l.Discount,
-                taxRateId = l.TaxRateId, priceRuleId = l.PriceRuleId
+                serviceId   = l.ServiceId,
+                description = l.Description,
+                quantity    = l.Qty,
+                unitPrice   = l.UnitPrice,
+                discount    = l.Discount,
+                taxRateId   = l.TaxRateId,
+                priceRuleId = l.PriceRuleId
             })
         };
 
@@ -517,7 +2038,11 @@
                 : await Http.PutAsJsonAsync($"api/operations/{_id}", payload);
 
             var msg = await MsgOf(res);
-            if (res.IsSuccessStatusCode) { Snackbar.Add(msg, Severity.Success); Nav.NavigateTo("/operations"); }
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(msg, Severity.Success);
+                Nav.NavigateTo("/operations");
+            }
             else { _ok = false; _msg = msg; }
         }
         catch (Exception ex) { _ok = false; _msg = "مش قادر أوصل للسيرفر: " + ex.Message; }

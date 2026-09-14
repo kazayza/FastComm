@@ -24,8 +24,11 @@ public class InvoicesController : ControllerBase
     private readonly INumberingService _numbers;
     private readonly IPermissionService _perms;
 
-    public InvoicesController(FastComDbContext db, INumberingService numbers, IPermissionService perms)
-    { _db = db; _numbers = numbers; _perms = perms; }
+    private readonly Services.IAuditService _audit;
+
+    public InvoicesController(FastComDbContext db, INumberingService numbers, IPermissionService perms,
+                              Services.IAuditService audit)
+    { _db = db; _numbers = numbers; _perms = perms; _audit = audit; }
 
     private int CurrentUserId() =>
         int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : -1;
@@ -493,6 +496,9 @@ public class InvoicesController : ControllerBase
         var inv = await _db.Invoices.FirstOrDefaultAsync(x => x.InvoiceId == id && !x.IsDeleted, ct);
         if (inv is null) return NotFound(new { message = "الفاتورة مش موجودة" });
 
+        /* 🔴 الحالة القديمة — لازم تتقرا **قبل** التعديل عشان سجل المراجعة */
+        var prevStatus = inv.Status;
+
         switch (to)
         {
             case "Cancelled":
@@ -519,6 +525,14 @@ public class InvoicesController : ControllerBase
         inv.UpdatedAt = DateTime.UtcNow;
         inv.UpdatedBy = CurrentUserId();
         await _db.SaveChangesAsync(ct);
+
+        /* 🔴 سجل المراجعة — تغيير حالة فاتورة.
+         *    ⚠️ `global::` لازم: الكلاس فيه action اسمه Services(ct) فبيخفي
+         *    الـ namespace `FastCom.Server.Services` → CS0119 من غيره. */
+        await _audit.LogAsync(global::FastCom.Server.Services.AuditActions.Update,
+            "Invoice", inv.InvoiceId.ToString(),
+            oldValues: $"Status={prevStatus}", newValues: $"Status={to}",
+            description: $"تغيير حالة الفاتورة {inv.InvoiceNumber} إلى {Ar(to)}", ct: ct);
 
         return Ok(new { message = $"✅ بقت {Ar(to)}" });
     }
@@ -566,6 +580,12 @@ public class InvoicesController : ControllerBase
         }
         await _db.SaveChangesAsync(ct);
 
+        /* 🔴 سجل المراجعة — تسليم الفاتورة */
+        await _audit.LogAsync(global::FastCom.Server.Services.AuditActions.Send,
+            "Invoice", inv.InvoiceId.ToString(),
+            newValues: $"Channel={channel}",
+            description: $"تسليم الفاتورة {inv.InvoiceNumber} ({ChannelAr(channel)})", ct: ct);
+
         return Ok(new { message = $"✅ اتسلّمت الفاتورة {inv.InvoiceNumber} ({ChannelAr(channel)})" });
     }
 
@@ -611,6 +631,12 @@ public class InvoicesController : ControllerBase
         inv.DeletedAt = DateTime.UtcNow;
         inv.DeletedBy = CurrentUserId();
         await _db.SaveChangesAsync(ct);
+
+        /* 🔴 سجل المراجعة — حذف الفاتورة (Invoice مافيهاش TotalWithTax — الاسم GrandTotal) */
+        await _audit.LogAsync(global::FastCom.Server.Services.AuditActions.Delete,
+            "Invoice", inv.InvoiceId.ToString(),
+            oldValues: $"Number={inv.InvoiceNumber} Total={inv.GrandTotal}",
+            description: $"حذف الفاتورة {inv.InvoiceNumber}", ct: ct);
 
         return Ok(new { message = "🗑️ اتحذفت الفاتورة" });
     }

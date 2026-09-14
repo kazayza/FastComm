@@ -4,6 +4,7 @@
 @using FastCom.Client.Auth
 @inject HttpClient Http
 @inject AuthService Auth
+@inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
 <PageTitle>السائقين — فاست كوم</PageTitle>
@@ -21,7 +22,7 @@
                 @if (CanCreate)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="New">سائق جديد</MudButton>
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="GoNew">سائق جديد</MudButton>
                 }
             </div>
         </div>
@@ -84,7 +85,7 @@
                                 @if (CanEdit)
                                 {
                                     <td><div class="fc-row-actions">
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="() => Edit(d)" />
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="() => GoEdit(d)" />
                                         @if (_confirmId == d.DriverId)
                                         {
                                             <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" OnClick="() => Delete(d)">متأكد؟</MudButton>
@@ -107,65 +108,6 @@
         </div></div>
     }
 
-    @if (_modalOpen && CanCreate)
-    {
-        <div class="fc-modal-backdrop" @onclick="Close">
-            <div class="fc-modal" @onclick:stopPropagation>
-                <div class="fc-modal-head">
-                    <div><div class="fc-modal-title">@(_editId is null ? "سائق جديد" : "تعديل سائق")</div>
-                        <div class="fc-modal-sub">الكود بيتولد تلقائيًا (DRV-)</div></div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="Close" />
-                </div>
-                <div class="fc-modal-body">
-                    @if (_msg is not null)
-                    {
-                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
-                    }
-                    <div class="fc-form-grid">
-                        <div><div class="fc-panel-sub" style="margin-bottom:6px">نوع السائق</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_f.DriverType">
-                                <option value="Internal">داخلي (موظف)</option>
-                                <option value="External">خارجي (مورد)</option>
-                            </select></div>
-                        @if (_f.DriverType == "Internal")
-                        {
-                            <div><div class="fc-panel-sub" style="margin-bottom:6px">الموظف *</div>
-                                <select class="fc-sel fc-sel-lg" @bind="_f.EmployeeId">
-                                    <option value="">— اختار —</option>
-                                    @foreach (var e in _employees) { <option value="@e.Id">@e.Label</option> }
-                                </select></div>
-                        }
-                        else
-                        {
-                            <div><div class="fc-panel-sub" style="margin-bottom:6px">المورد *</div>
-                                <select class="fc-sel fc-sel-lg" @bind="_f.SupplierId">
-                                    <option value="">— اختار —</option>
-                                    @foreach (var s in _suppliers) { <option value="@s.Id">@s.Label</option> }
-                                </select></div>
-                        }
-                        <MudTextField T="string" @bind-Value="_f.FullName" Label="الاسم الكامل *" Variant="Variant.Outlined" />
-                        <MudTextField T="string" @bind-Value="_f.NationalId" Label="الرقم القومي" Variant="Variant.Outlined" />
-                        <MudTextField T="string" @bind-Value="_f.Mobile" Label="الموبايل" Variant="Variant.Outlined" />
-                        <MudTextField T="string" @bind-Value="_f.LicenseNumber" Label="رقم الرخصة" Variant="Variant.Outlined" />
-                        <MudTextField T="string" @bind-Value="_f.LicenseType" Label="درجة الرخصة" Variant="Variant.Outlined" />
-                        <div><div class="fc-panel-sub" style="margin-bottom:6px">انتهاء الرخصة</div>
-                            <input type="date" class="fc-sel fc-sel-lg" value="@_f.LicenseExpiryDate"
-                                   @onchange="e => _f.LicenseExpiryDate = e.Value?.ToString()" /></div>
-                        <div><div class="fc-panel-sub" style="margin-bottom:6px">الحالة</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_f.Status">
-                                <option value="Active">نشط</option>
-                                <option value="Inactive">غير نشط</option>
-                                <option value="Suspended">موقوف</option>
-                            </select></div>
-                    </div>
-                </div>
-                <div class="fc-modal-foot">
-                    <MudButton Variant="Variant.Outlined" OnClick="Close">إلغاء</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveAsync">حفظ</MudButton>
-                </div>
-            </div>
-        </div>
-    }
 </div>
 
 @code {
@@ -176,27 +118,13 @@
     private bool CanDelete => _user?.Can("DRIVER.DELETE") ?? false;
 
     private List<Item> _items = new();
-    private List<Opt> _employees = new();
-    private List<Opt> _suppliers = new();
     private bool _loading; private string _search = ""; private int? _confirmId;
-    private bool _modalOpen; private int? _editId; private bool _saving; private string? _msg; private bool _ok;
-    private Form _f = new();
 
-    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
 
     public class Item { public int DriverId { get; set; } public string DriverCode { get; set; } = "";
         public string DriverType { get; set; } = ""; public string FullName { get; set; } = "";
         public string? Mobile { get; set; } public DateOnly? LicenseExpiryDate { get; set; } public string Status { get; set; } = ""; }
 
-    public class Detail { public string DriverType { get; set; } = ""; public int? EmployeeId { get; set; }
-        public int? SupplierId { get; set; } public string FullName { get; set; } = ""; public string? NationalId { get; set; }
-        public string? Mobile { get; set; } public string? LicenseNumber { get; set; } public string? LicenseType { get; set; }
-        public DateOnly? LicenseExpiryDate { get; set; } public string Status { get; set; } = ""; public string? Notes { get; set; } }
-
-    public class Form { public string DriverType { get; set; } = "Internal"; public int? EmployeeId { get; set; }
-        public int? SupplierId { get; set; } public string FullName { get; set; } = ""; public string? NationalId { get; set; }
-        public string? Mobile { get; set; } public string? LicenseNumber { get; set; } public string? LicenseType { get; set; }
-        public string? LicenseExpiryDate { get; set; } public string Status { get; set; } = "Active"; }
 
     private int ExpiringSoon => _items.Count(d =>
         d.LicenseExpiryDate is not null && d.LicenseExpiryDate.Value > DateOnly.FromDateTime(DateTime.Today) &&
@@ -209,22 +137,12 @@
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
-        if (CanView)
-        {
-            await LoadAsync();
-            if (CanCreate)
-            {
-                _employees = await SafeGet("api/options/employees");
-                _suppliers = await SafeGet("api/options/suppliers");
-            }
-        }
+        if (CanView) await LoadAsync();
     }
 
-    private async Task<List<Opt>> SafeGet(string url)
-    {
-        try { return await Http.GetFromJsonAsync<List<Opt>>(url) ?? new(); }
-        catch { return new(); }
-    }
+    /* 🔴 الفورم بقى شاشة مستقلة — `/drivers/new` */
+    private void GoNew() => Nav.NavigateTo("/drivers/new");
+    private void GoEdit(Item d) => Nav.NavigateTo($"/drivers/new/{d.DriverId}");
 
     private async Task Reload() { await LoadAsync(); }
 
@@ -236,47 +154,7 @@
         finally { _loading = false; }
     }
 
-    private void New() { _editId = null; _f = new Form(); _msg = null; _modalOpen = true; }
 
-    private async Task Edit(Item d)
-    {
-        try
-        {
-            var x = await Http.GetFromJsonAsync<Detail>($"api/drivers/{d.DriverId}");
-            if (x is null) return;
-            _editId = d.DriverId;
-            _f = new Form { DriverType = x.DriverType, EmployeeId = x.EmployeeId, SupplierId = x.SupplierId,
-                FullName = x.FullName, NationalId = x.NationalId, Mobile = x.Mobile,
-                LicenseNumber = x.LicenseNumber, LicenseType = x.LicenseType,
-                LicenseExpiryDate = x.LicenseExpiryDate?.ToString("yyyy-MM-dd"), Status = x.Status };
-            _msg = null; _modalOpen = true;
-        }
-        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
-    }
-
-    private void Close() { _modalOpen = false; }
-
-    private async Task SaveAsync()
-    {
-        _saving = true; _msg = null;
-        try
-        {
-            var payload = new
-            {
-                driverType = _f.DriverType, employeeId = _f.EmployeeId, supplierId = _f.SupplierId,
-                fullName = _f.FullName, nationalId = _f.NationalId, mobile = _f.Mobile,
-                licenseNumber = _f.LicenseNumber, licenseType = _f.LicenseType,
-                licenseExpiryDate = _f.LicenseExpiryDate, status = _f.Status, notes = (string?)null
-            };
-            var res = _editId is null
-                ? await Http.PostAsJsonAsync("api/drivers", payload)
-                : await Http.PutAsJsonAsync($"api/drivers/{_editId}", payload);
-            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
-            if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); Close(); await LoadAsync(); }
-        }
-        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
-        finally { _saving = false; }
-    }
 
     private async Task Delete(Item d)
     {

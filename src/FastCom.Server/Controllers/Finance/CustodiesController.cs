@@ -22,11 +22,23 @@ namespace FastCom.Server.Controllers.Finance;
 public class CustodiesController : ControllerBase
 {
     private readonly FastComDbContext _db;
+    private readonly IAuditService _audit;
     private readonly INumberingService _numbers;
     private readonly IPermissionService _perms;
+    private readonly ISettingsService _settings;
+    private readonly ICashBook _cash;
 
-    public CustodiesController(FastComDbContext db, INumberingService numbers, IPermissionService perms)
-    { _db = db; _numbers = numbers; _perms = perms; }
+    public CustodiesController(FastComDbContext db, INumberingService numbers, IPermissionService perms,
+                               ISettingsService settings, ICashBook cash, IAuditService audit)
+    { _db = db; _audit = audit; _numbers = numbers; _perms = perms; _settings = settings; _cash = cash; }
+
+    /* 🔴 كود طريقة الدفع «نقدي» — لصرف العهدة ورد الباقي.
+       العهدة **كاش** بطبيعتها (فلوس بتتسلّم بالإيد)، فمش محتاجين طريقة دفع من المستخدم. */
+    private async Task<int?> CashMethodIdAsync(CancellationToken ct) =>
+        await _db.PaymentMethods.AsNoTracking()
+            .Where(m => m.Code == "CASH" && m.IsActive)
+            .Select(m => (int?)m.PaymentMethodId)
+            .FirstOrDefaultAsync(ct);
 
     private int CurrentUserId() =>
         int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : -1;
@@ -192,7 +204,15 @@ public class CustodiesController : ControllerBase
     {
         if (req is null) return BadRequest(new { message = "البيانات مش كاملة" });
         if (req.AmountIssued < 0) return BadRequest(new { message = "مبلغ العهدة مينفعش يكون سالب" });
-        if (req.AmountIssued > 10_000_000m) return BadRequest(new { message = "المبلغ كبير بشكل غير منطقي" });
+        /* 🔴 كان hard-coded 10,000,000 — بقى من `CUSTODY.MAX_AMOUNT`.
+           0 = من غير سقف. */
+        var custodyMax = await _settings.GetDecimalAsync(SettingKeys.CustodyMaxAmount,
+                                                       SettingDefaults.CustodyMaxAmount, ct);
+        if (custodyMax > 0 && req.AmountIssued > custodyMax)
+            {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "Custody", null, description: "إنشاء عهدة", ct: ct);
+            
+            }
         if (req.OwnerId <= 0) return BadRequest(new { message = "اختار صاحب العهدة" });
 
         if (req.OwnerType is not ("Driver" or "Employee"))
@@ -256,6 +276,18 @@ public class CustodiesController : ControllerBase
                     CreatedBy       = CurrentUserId()
                 });
                 await _db.SaveChangesAsync(ct);
+
+                /* 🔴 الخزينة — صرف العهدة = فلوس **خرجت** من الخزينة للسائق.
+                   ده بيحصل مرة واحدة بس (وقت الصرف)، والمصروفات المربوطة بالعهدة
+                   **مابتعملش** حركة خزينة تانية — وإلا هتتحسب مرتين. */
+                var paid = await _cash.PaymentAsync(new CashEntry(
+                    ReferenceNumber : $"CUST-ISSUE:{c.CustodyNumber}",
+                    Amount          : c.AmountIssued,
+                    PaymentMethodId : await CashMethodIdAsync(ct) ?? 0,
+                    CustodyId       : c.CustodyId,
+                    Description     : $"صرف عهدة {c.CustodyNumber}",
+                    Date            : DateOnly.FromDateTime(c.CustodyDate)), ct);
+                if (paid) await _db.SaveChangesAsync(ct);
             }
 
             await _db.Database.CommitTransactionAsync(ct);
@@ -278,7 +310,13 @@ public class CustodiesController : ControllerBase
     {
         if (req is null) return BadRequest(new { message = "البيانات مش كاملة" });
         if (req.Amount <= 0) return BadRequest(new { message = "المبلغ لازم يكون أكتر من صفر" });
-        if (req.Amount > 10_000_000m) return BadRequest(new { message = "المبلغ كبير بشكل غير منطقي" });
+        var txMax = await _settings.GetDecimalAsync(SettingKeys.CustodyMaxAmount,
+                                                    SettingDefaults.CustodyMaxAmount, ct);
+        if (txMax > 0 && req.Amount > txMax)
+            {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "Custody", null, description: "حركة عهدة", ct: ct);
+            
+            }
         if (req.Type is not ("Additional" or "Refund"))
             return BadRequest(new { message = "نوع الحركة لازم يكون «رد باقي» أو «إضافة مبلغ»" });
 
@@ -299,7 +337,7 @@ public class CustodiesController : ControllerBase
             return BadRequest(new { message =
                 "ربط المصروفات بالعهدة بيتعمل تلقائيًا من شاشة المصروفات — حركة «رد باقي» مالهاش مصروف" });
 
-        _db.CustodyTransactions.Add(new CustodyTransaction
+        var tx = new CustodyTransaction
         {
             CustodyId       = c.CustodyId,
             TransactionType = req.Type,
@@ -308,15 +346,34 @@ public class CustodiesController : ControllerBase
             ExpenseId       = req.ExpenseId,
             Notes           = B(req.Notes),
             CreatedBy       = CurrentUserId()
-        });
-        await _db.SaveChangesAsync(ct);
+        };
+        _db.CustodyTransactions.Add(tx);
+        await _db.SaveChangesAsync(ct);          // ← عشان ناخد `tx.CustodyTransactionId`
+
+        /* 🔴 الخزينة — **رد الباقي** = فلوس رجعت من السائق للخزينة → إيض.
+           المرجع فيه رقم الحركة عشان يبقى فريد (عهدة واحدة ممكن ترد أكتر من مرة).
+           ⚠️ «إضافة مبلغ» **مابتعملش** حركة خزينة — لأنها بتزود `AdditionalDue`
+           (مستحق على الشركة) بس، والفلوس لسه مااتدفعتش. */
+        var toTreasury = false;
+        if (req.Type == "Refund")
+        {
+            toTreasury = await _cash.ReceiptAsync(new CashEntry(
+                ReferenceNumber : $"CUST-REFUND:{c.CustodyNumber}:{tx.CustodyTransactionId}",
+                Amount          : tx.Amount,
+                PaymentMethodId : await CashMethodIdAsync(ct) ?? 0,
+                CustodyId       : c.CustodyId,
+                Description     : $"رد باقي عهدة {c.CustodyNumber}",
+                Date            : DateOnly.FromDateTime(tx.TransactionDate)), ct);
+            if (toTreasury) await _db.SaveChangesAsync(ct);
+        }
 
         var now = await _db.DriverCustodies.AsNoTracking()
             .FirstAsync(x => x.CustodyId == id, ct);
 
         return Ok(new
         {
-            message = req.Type == "Refund" ? "✅ اتسجل رد الباقي" : "✅ اتسجلت الإضافة",
+            message = (req.Type == "Refund" ? "✅ اتسجل رد الباقي" : "✅ اتسجلت الإضافة")
+                      + (toTreasury ? " — واتسجل إيض في الخزينة" : ""),
             spent    = now.AmountSpent,
             returned = now.AmountReturned,
             due      = now.AdditionalDue,
@@ -373,7 +430,10 @@ public class CustodiesController : ControllerBase
         var c = await _db.DriverCustodies.FirstOrDefaultAsync(x => x.CustodyId == id && !x.IsDeleted, ct);
         if (c is null) return NotFound(new { message = "العهدة مش موجودة" });
         if (c.Status is not ("Open" or "PartiallySettled"))
-            return BadRequest(new { message = "العهدة مش في حالة تسمح بتقديم التسوية" });
+            {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Settle, "Custody", null, description: "تسوية عهدة", ct: ct);
+            
+            }
 
         var moved = await _db.CustodyTransactions.AnyAsync(
             t => t.CustodyId == id && t.TransactionType != "Issue", ct);
@@ -397,7 +457,10 @@ public class CustodiesController : ControllerBase
         var c = await _db.DriverCustodies.FirstOrDefaultAsync(x => x.CustodyId == id && !x.IsDeleted, ct);
         if (c is null) return NotFound(new { message = "العهدة مش موجودة" });
         if (c.Status != "Submitted")
-            return BadRequest(new { message = "العهدة مش مقدّمة للتسوية" });
+            {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Approve, "Custody", null, description: "اعتماد عهدة", ct: ct);
+            
+            }
 
         var extra = c.AmountSpent + c.AmountReturned - (c.AmountIssued + c.AdditionalDue);
         if (extra > 0 && req?.AddAdditional != true)
@@ -426,7 +489,10 @@ public class CustodiesController : ControllerBase
         var c = await _db.DriverCustodies.FirstOrDefaultAsync(x => x.CustodyId == id && !x.IsDeleted, ct);
         if (c is null) return NotFound(new { message = "العهدة مش موجودة" });
         if (c.Status != "Approved")
-            return BadRequest(new { message = "العهدة لازم تكون معتمدة قبل الإغلاق" });
+            {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Close, "Custody", null, description: "إقفال عهدة", ct: ct);
+            
+            }
 
         c.Status    = "Closed";
         c.ClosedAt  = DateTime.UtcNow;
@@ -447,7 +513,7 @@ public class CustodiesController : ControllerBase
         var c = await _db.DriverCustodies.FirstOrDefaultAsync(x => x.CustodyId == id && !x.IsDeleted, ct);
         if (c is null) return NotFound(new { message = "العهدة مش موجودة" });
         if (c.Status != "Open")
-            return BadRequest(new { message = "العهدة اتحرّكت — ماتتحذفش" });
+            return BadRequest(new { message = "طلب غير صالح" });
 
         if (await _db.Expenses.AnyAsync(e => e.CustodyId == id && !e.IsDeleted, ct))
             return BadRequest(new { message = "في مصروفات مربوطة بالعهدة دي — الغِها الأول" });
@@ -464,6 +530,10 @@ public class CustodiesController : ControllerBase
         var issues = await _db.CustodyTransactions
             .Where(t => t.CustodyId == id).ToListAsync(ct);
         _db.CustodyTransactions.RemoveRange(issues);
+
+        /* 🔴 لازم حركة الخزينة بتاعة الصرف تتلغى — وإلا الرصيد يفضل ناقص
+           على عهدة اتمسحت. (العهدة هنا `Open` بس، فمافيش رد باقي حصل.) */
+        await _cash.VoidByReferenceAsync($"CUST-ISSUE:{c.CustodyNumber}", ct);
 
         c.IsDeleted = true;
         c.DeletedAt = DateTime.UtcNow;

@@ -4,6 +4,7 @@
 @using FastCom.Client.Auth
 @inject HttpClient Http
 @inject AuthService Auth
+@inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
 <PageTitle>الحاويات — فاست كوم</PageTitle>
@@ -21,7 +22,7 @@
                 @if (CanManage)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="New">حاوية جديدة</MudButton>
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="GoNew">حاوية جديدة</MudButton>
                 }
             </div>
         </div>
@@ -91,7 +92,7 @@
                                 {
                                     <td><div class="fc-row-actions">
                                         <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
-                                                       Color="Color.Primary" OnClick="() => Edit(c)" />
+                                                       Color="Color.Primary" OnClick="() => GoEdit(c)" />
                                         @if (_confirmId == c.ContainerId)
                                         {
                                             <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
@@ -116,69 +117,6 @@
         </div></div>
     }
 
-    @if (_modalOpen && CanManage)
-    {
-        <div class="fc-modal-backdrop" @onclick="Close">
-            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation>
-                <div class="fc-modal-head">
-                    <div><div class="fc-modal-title">@(_editId is null ? "حاوية جديدة" : "تعديل حاوية")</div>
-                        <div class="fc-modal-sub">الرقم بالشكل الدولي: 4 حروف + 7 أرقام</div></div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="Close" />
-                </div>
-                <div class="fc-modal-body">
-                    @if (_msg is not null)
-                    {
-                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
-                                  Class="mb-4">@_msg</MudAlert>
-                    }
-                    <MudTextField T="string" @bind-Value="_f.ContainerNumber" Label="رقم الحاوية *"
-                                  Variant="Variant.Outlined" Class="mb-3" Placeholder="MSCU1234567" />
-                    <div class="fc-form-grid">
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">نوع الحاوية *</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_f.ContainerTypeId">
-                                @foreach (var t in _types) { <option value="@t.Id">@t.Label</option> }
-                            </select>
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">الملكية</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_f.OwnerType">
-                                <option value="ShippingLine">خط ملاحي</option>
-                                <option value="Customer">العميل</option>
-                                <option value="Leased">مستأجرة</option>
-                                <option value="Company">الشركة</option>
-                            </select>
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">اسم المالك</div>
-                            <input class="fc-sel fc-sel-lg" value="@_f.OwnerName" maxlength="150"
-                                   @onchange="e => _f.OwnerName = e.Value?.ToString()" />
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">الوزن (كجم)</div>
-                            <input type="number" min="0" step="1" class="fc-sel fc-sel-lg" value="@_f.WeightKg"
-                                   @onchange="e => _f.WeightKg = ParseDec(e.Value)" />
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">الحالة</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_f.CurrentStatus">
-                                <option value="Available">متاحة</option>
-                                <option value="InTransit">في الطريق</option>
-                                <option value="AtPort">في الميناء</option>
-                                <option value="AtDepot">في المخزن</option>
-                                <option value="Delivered">تم التسليم</option>
-                                <option value="Returned">مرتجعة</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                <div class="fc-modal-foot">
-                    <MudButton Variant="Variant.Outlined" OnClick="Close">إلغاء</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveAsync">حفظ</MudButton>
-                </div>
-            </div>
-        </div>
-    }
 </div>
 
 @code {
@@ -194,13 +132,8 @@
     };
 
     private List<Item> _items = new();
-    private List<Opt> _types = new();
     private bool _loading; private string _search = ""; private string _tab = "all";
     private long? _confirmId;
-    private bool _modalOpen; private long? _editId; private bool _saving; private string? _msg; private bool _ok;
-    private Form _f = new();
-
-    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
 
     public class Item
     {
@@ -215,26 +148,6 @@
         public string CurrentStatus { get; set; } = "";
     }
 
-    public class Detail
-    {
-        public int ContainerTypeId { get; set; }
-        public string OwnerType { get; set; } = "";
-        public string? OwnerName { get; set; }
-        public decimal? WeightKg { get; set; }
-        public string CurrentStatus { get; set; } = "";
-        public string? Notes { get; set; }
-    }
-
-    public class Form
-    {
-        public string ContainerNumber { get; set; } = "";
-        public int ContainerTypeId { get; set; }
-        public string OwnerType { get; set; } = "ShippingLine";
-        public string? OwnerName { get; set; }
-        public decimal? WeightKg { get; set; }
-        public string CurrentStatus { get; set; } = "Available";
-        public string? Notes { get; set; }
-    }
 
     private static string StatusAr(string s) => s switch
     {
@@ -267,16 +180,12 @@
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
-        if (CanView)
-        {
-            await LoadAsync();
-            if (CanManage)
-            {
-                try { _types = await Http.GetFromJsonAsync<List<Opt>>("api/options/container-types") ?? new(); }
-                catch { _types = new(); }
-            }
-        }
+        if (CanView) await LoadAsync();
     }
+
+    /* 🔴 الفورم بقى شاشة مستقلة — `/containers/new` */
+    private void GoNew() => Nav.NavigateTo("/containers/new");
+    private void GoEdit(Item c) => Nav.NavigateTo($"/containers/new/{c.ContainerId}");
 
     private async Task Reload() { await LoadAsync(); }
 
@@ -288,55 +197,6 @@
         try { _items = await Http.GetFromJsonAsync<List<Item>>("api/containers") ?? new(); }
         catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
         finally { _loading = false; }
-    }
-
-    private void New()
-    {
-        _editId = null;
-        _f = new Form { ContainerTypeId = _types.FirstOrDefault()?.Id ?? 0 };
-        _msg = null; _modalOpen = true;
-    }
-
-    private async Task Edit(Item c)
-    {
-        try
-        {
-            var d = await Http.GetFromJsonAsync<Detail>($"api/containers/{c.ContainerId}");
-            if (d is null) return;
-            _editId = c.ContainerId;
-            _f = new Form
-            {
-                ContainerNumber = c.ContainerNumber, ContainerTypeId = d.ContainerTypeId,
-                OwnerType = d.OwnerType, OwnerName = d.OwnerName,
-                WeightKg = d.WeightKg, CurrentStatus = d.CurrentStatus, Notes = d.Notes
-            };
-            _msg = null; _modalOpen = true;
-        }
-        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
-    }
-
-    private void Close() { _modalOpen = false; }
-
-    private async Task SaveAsync()
-    {
-        _saving = true; _msg = null;
-        try
-        {
-            var payload = new
-            {
-                containerNumber = _f.ContainerNumber, containerTypeId = _f.ContainerTypeId,
-                ownerType = _f.OwnerType, ownerName = _f.OwnerName,
-                weightKg = _f.WeightKg, currentStatus = _f.CurrentStatus, notes = _f.Notes
-            };
-            var res = _editId is null
-                ? await Http.PostAsJsonAsync("api/containers", payload)
-                : await Http.PutAsJsonAsync($"api/containers/{_editId}", payload);
-
-            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
-            if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); Close(); await LoadAsync(); }
-        }
-        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
-        finally { _saving = false; }
     }
 
     private async Task Delete(Item c)

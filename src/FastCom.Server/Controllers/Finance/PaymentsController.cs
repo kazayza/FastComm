@@ -22,9 +22,14 @@ public class PaymentsController : ControllerBase
 {
     private readonly FastComDbContext _db;
     private readonly INumberingService _numbers;
+    private readonly ISettingsService _settings;
+    private readonly ICashBook _cash;
 
-    public PaymentsController(FastComDbContext db, INumberingService numbers)
-    { _db = db; _numbers = numbers; }
+    private readonly Services.IAuditService _audit;
+
+    public PaymentsController(FastComDbContext db, INumberingService numbers, ISettingsService settings,
+                              ICashBook cash, Services.IAuditService audit)
+    { _db = db; _numbers = numbers; _settings = settings; _cash = cash; _audit = audit; }
 
     private int CurrentUserId() =>
         int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : -1;
@@ -227,16 +232,39 @@ public class PaymentsController : ControllerBase
             }
             await _db.SaveChangesAsync(ct);
 
+            /* 🔴 الخزينة — الدفعة **النقدية** بتعمل إيض تلقائي.
+               الشيكات والتحويلات والبطاقات `IsCashBased = 0` فمابتدخلش الخزينة
+               (دي بتتحول كاش لاحقًا بحركة مستقلة).
+               ⚠️ الحركة جوه **نفس المعاملة** — فلو فشل أي جزء الكل بيرجع. */
+            var toTreasury = false;
+            var method = await _db.PaymentMethods.AsNoTracking()
+                .FirstOrDefaultAsync(m => m.PaymentMethodId == req.PaymentMethodId, ct);
+            if (method is { IsCashBased: true })
+            {
+                toTreasury = await _cash.ReceiptAsync(new CashEntry(
+                    ReferenceNumber : $"PAY:{p.PaymentNumber}",
+                    Amount          : p.Amount,
+                    PaymentMethodId : p.PaymentMethodId,
+                    CustomerId      : p.CustomerId,
+                    InvoiceId       : req.Allocations!.Count == 1 ? req.Allocations[0].InvoiceId : 0,
+                    Description     : req.Allocations!.Count == 1
+                        ? $"تحصيل {p.PaymentNumber} على فاتورة"
+                        : $"تحصيل {p.PaymentNumber} على {req.Allocations.Count} فواتير",
+                    Date            : p.PaymentDate), ct);
+                if (toTreasury) await _db.SaveChangesAsync(ct);
+            }
+
             await _db.Database.CommitTransactionAsync(ct);
 
             var left = req.Amount - allocated;
+            var baseMsg = left > 0
+                ? $"✅ اتسجّلت الدفعة {p.PaymentNumber} — فاضل {left:N2} مش متوزّع على فواتير"
+                : $"✅ اتسجّلت الدفعة {p.PaymentNumber}";
             return Ok(new
             {
                 id = p.PaymentId,
                 number = p.PaymentNumber,
-                message = left > 0
-                    ? $"✅ اتسجّلت الدفعة {p.PaymentNumber} — فاضل {left:N2} مش متوزّع على فواتير"
-                    : $"✅ اتسجّلت الدفعة {p.PaymentNumber}"
+                message = toTreasury ? baseMsg + " — واتسجل إيض في الخزينة" : baseMsg
             });
         }
         catch (Exception)
@@ -297,6 +325,10 @@ public class PaymentsController : ControllerBase
         {
             _db.PaymentAllocations.RemoveRange(allocs);
 
+            /* 🔴 لو الدفعة كانت عملت إيض في الخزينة — يتلغى معاه.
+               `VoidByReferenceAsync` بيخلي `Status = "Void"` والـ trigger بيظبط الرصيد. */
+            await _cash.VoidByReferenceAsync($"PAY:{p.PaymentNumber}", ct);
+
             p.Status    = "Cancelled";
             p.UpdatedAt = DateTime.UtcNow;
             p.UpdatedBy = CurrentUserId();
@@ -310,6 +342,12 @@ public class PaymentsController : ControllerBase
             throw;
         }
 
+        /* 🔴 سجل المراجعة — **بعد الـ Commit** عشان لو حصل rollback
+              الـ audit مايتسجلش لحاجة محصلتش. */
+        await _audit.LogAsync(Services.AuditActions.Cancel, "Payment", p.PaymentId.ToString(),
+            oldValues: $"Number={p.PaymentNumber} Amount={p.Amount}",
+            description: $"إلغاء الدفعة {p.PaymentNumber} ورجوع المديونية على الفواتير", ct: ct);
+
         return Ok(new { message = $"❌ اتلغت الدفعة {p.PaymentNumber} ورجعت المديونية على الفواتير" });
     }
 
@@ -320,7 +358,11 @@ public class PaymentsController : ControllerBase
         if (r is null) return "البيانات مش كاملة";
         if (r.CustomerId <= 0) return "اختار العميل";
         if (r.Amount <= 0) return "المبلغ لازم يكون أكتر من صفر";
-        if (r.Amount > 100_000_000m) return "المبلغ كبير بشكل غير منطقي";
+        /* 🔴 كان hard-coded — بقى من `PAYMENT.MAX_AMOUNT`. 0 = من غير سقف. */
+        var payMax = await _settings.GetDecimalAsync(SettingKeys.PaymentMaxAmount,
+                                                    SettingDefaults.PaymentMaxAmount, ct);
+        if (payMax > 0 && r.Amount > payMax)
+            return $"المبلغ أكبر من سقف التحصيل المسموح ({payMax:N0})";
 
         var cust = await _db.Customers.AsNoTracking()
             .FirstOrDefaultAsync(c => c.CustomerId == r.CustomerId && !c.IsDeleted, ct);

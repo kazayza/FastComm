@@ -1,0 +1,300 @@
+@page "/supplier-payments/new"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>دفعة مورد جديدة — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">المالية · الذمم الدائنة</div>
+                <h1 class="fc-hero-title">دفعة مورد جديدة</h1>
+                <p class="fc-hero-sub">الرقم بيتولّد تلقائيًا (SPAY-) · الدفعة بتتوزّع على فواتير المورد المفتوحة الأقدم أولًا</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudButton Variant="Variant.Outlined" OnClick="GoBack" Style="color:#9FB4CC">رجوع</MudButton>
+                @if (CanSave)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving"
+                               StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">تسجيل الدفعة</MudButton>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanSave)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية تسجيل دفعات الموردين.</MudAlert>
+    }
+    else if (_loading)
+    {
+        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+            @if (_msg is not null)
+            {
+                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                          Class="mb-4">@_msg</MudAlert>
+            }
+
+            <div class="fc-panel-sub">بيانات الدفعة</div>
+            <div class="fc-form-grid">
+                <div><div class="fc-panel-sub" style="margin-bottom:6px">المورد *</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.SupplierId" @bind:after="SupplierChanged">
+                        <option value="0">— اختر —</option>
+                        @foreach (var s in _suppliers) { <option value="@s.Id">@s.Label</option> }
+                    </select></div>
+                <div><div class="fc-panel-sub" style="margin-bottom:6px">الفرع *</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.BranchId">
+                        <option value="0">— اختر —</option>
+                        @foreach (var b in _branches) { <option value="@b.Id">@b.Label</option> }
+                    </select></div>
+                <div><div class="fc-panel-sub" style="margin-bottom:6px">تاريخ الدفع *</div>
+                    <input type="date" class="fc-sel fc-sel-lg" value="@_f.PaymentDate"
+                           @onchange="e => _f.PaymentDate = OptStr(e.Value)" /></div>
+                <div><div class="fc-panel-sub" style="margin-bottom:6px">المبلغ *</div>
+                    <input type="number" step="0.01" min="0" class="fc-sel fc-sel-lg"
+                           value="@_f.Amount" @onchange="e => _f.Amount = ParseDec(e.Value)" /></div>
+            </div>
+
+            <div class="fc-panel-sub" style="margin:26px 0 14px">طريقة الدفع</div>
+            <div class="fc-form-grid">
+                <div><div class="fc-panel-sub" style="margin-bottom:6px">الطريقة *</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.PaymentMethodId">
+                        <option value="0">— اختر —</option>
+                        @foreach (var m in _methods) { <option value="@m.Id">@m.Label</option> }
+                    </select>
+                    @if (SelectedMethod is not null && !SelectedMethod.IsCashBased)
+                    {
+                        <div class="fc-field-hint">طريقة غير نقدية — مش هتعمل حركة في الخزينة</div>
+                    }
+                </div>
+                @if (SelectedMethod is null || SelectedMethod.RequiresChequeNo)
+                {
+                    <div><div class="fc-panel-sub" style="margin-bottom:6px">رقم الشيك</div>
+                        <input class="fc-sel fc-sel-lg" maxlength="50" value="@_f.ChequeNumber"
+                               @onchange="e => _f.ChequeNumber = OptStr(e.Value)" /></div>
+                    <div><div class="fc-panel-sub" style="margin-bottom:6px">تاريخ استحقاق الشيك</div>
+                        <input type="date" class="fc-sel fc-sel-lg" value="@_f.ChequeDate"
+                               @onchange="e => _f.ChequeDate = OptStr(e.Value)" /></div>
+                }
+                <div><div class="fc-panel-sub" style="margin-bottom:6px">الحساب البنكي</div>
+                    <input class="fc-sel fc-sel-lg" maxlength="100" value="@_f.BankAccount"
+                           @onchange="e => _f.BankAccount = OptStr(e.Value)" /></div>
+            </div>
+            @if (!_methods.Any())
+            {
+                <div class="fc-alert fc-alert-warn" style="margin-top:12px">
+                    <div class="fc-alert-body">مافيش طرق دفع متاحة — لازم تكون عندك صلاحية عرض الفواتير، أو ضيف طريقة دفع من «البيانات الأساسية».</div>
+                </div>
+            }
+
+            <div class="fc-panel-sub" style="margin:26px 0 14px">ملاحظات</div>
+            <textarea class="fc-sel fc-sel-lg" rows="2" @bind="_f.Notes"
+                      placeholder="أي تفاصيل إضافية عن الدفعة..."></textarea>
+        </div></div>
+
+        @* ── الفواتير المفتوحة على المورد ── *@
+        @if (_f.SupplierId > 0)
+        {
+            <div class="fc-card" style="margin-top:18px">
+                <div class="fc-panel-sub">الفواتير المفتوحة على المورد ده</div>
+                @if (_openLoading)
+                {
+                    <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Small" /></div>
+                }
+                else if (!_open.Any())
+                {
+                    <div class="fc-empty"><div>مافيش فواتير مفتوحة — اعتمد فاتورة الأول قبل ما تسجّل دفعة</div></div>
+                }
+                else
+                {
+                    <div class="fc-alert" style="margin-bottom:12px">
+                        <div class="fc-alert-body">
+                            المتاح للسداد: <b>@Money(_open.Sum(i => i.GrandTotal - i.PaidAmount))</b>
+                            — الدفعة هتتوزّع على الفواتير دي بالترتيب (الأقدم أولًا).
+                        </div>
+                    </div>
+                    <div class="fc-table-wrap"><table class="fc-table">
+                        <thead><tr><th>الفاتورة</th><th>التاريخ</th><th style="text-align:left">الإجمالي</th>
+                            <th style="text-align:left">المدفوع</th><th style="text-align:left">المتبقي</th></tr></thead>
+                        <tbody>
+                            @foreach (var i in _open)
+                            {
+                                <tr>
+                                    <td><span class="fc-role-chip">@i.SupplierInvoiceNumber</span></td>
+                                    <td class="fc-cell-sub">@i.InvoiceDate</td>
+                                    <td style="text-align:left">@Money(i.GrandTotal)</td>
+                                    <td style="text-align:left">@Money(i.PaidAmount)</td>
+                                    <td style="text-align:left; font-weight:700">@Money(i.GrandTotal - i.PaidAmount)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table></div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private AuthUser? _user;
+    private bool CanSave => _user?.Can("SUPPLIER.CREATE") ?? false;
+
+    private bool _loading = true, _saving, _openLoading, _ok = true;
+    private string? _msg;
+    private Form _f = new();
+    private List<Opt> _suppliers = new();
+    private List<Opt> _branches = new();
+    private List<Method> _methods = new();
+    private List<OpenInv> _open = new();
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+
+    public class Method
+    {
+        public int Id { get; set; }
+        public string Label { get; set; } = "";
+        public string Code { get; set; } = "";
+        public bool RequiresChequeNo { get; set; }
+        public bool IsCashBased { get; set; }
+    }
+
+    public class OpenInv
+    {
+        public long SupplierInvoiceId { get; set; }
+        public string SupplierInvoiceNumber { get; set; } = "";
+        public string InvoiceDate { get; set; } = "";
+        public string Status { get; set; } = "";
+        public string PaymentStatus { get; set; } = "";
+        public decimal GrandTotal { get; set; }
+        public decimal PaidAmount { get; set; }
+    }
+
+    public class Form
+    {
+        public int SupplierId { get; set; }
+        public int BranchId { get; set; }
+        public string? PaymentDate { get; set; }
+        public int PaymentMethodId { get; set; }
+        public decimal Amount { get; set; }
+        public string? ChequeNumber { get; set; }
+        public string? ChequeDate { get; set; }
+        public string? BankAccount { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    private Method? SelectedMethod =>
+        _methods.FirstOrDefault(m => m.Id == _f.PaymentMethodId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (!CanSave) { _loading = false; return; }
+
+        _f.PaymentDate = DateTime.Today.ToString("yyyy-MM-dd");
+
+        _suppliers = await SafeOpts("api/options/suppliers");
+        _branches  = await SafeOpts("api/options/branches");
+        /* ⚠️ `api/options/payment-methods` محتاج `INVOICE.VIEW` —
+         *    مستخدم الموردين ممكن ما يكونش عنده، فبنحمّله بصمت ونعرض تحذير. */
+        try { _methods = await Http.GetFromJsonAsync<List<Method>>("api/options/payment-methods") ?? new(); }
+        catch { _methods = new(); }
+
+        if (_branches.Count == 1) _f.BranchId = _branches[0].Id;
+        _loading = false;
+    }
+
+    private async Task<List<Opt>> SafeOpts(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<Opt>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    private async Task SupplierChanged()
+    {
+        _open.Clear();
+        if (_f.SupplierId <= 0) return;
+        _openLoading = true;
+        try
+        {
+            var all = await Http.GetFromJsonAsync<List<OpenInv>>(
+                $"api/supplier-invoices?supplierId={_f.SupplierId}") ?? new();
+            /* نفس شرط السيرفر بالظبط: مش مسوّدة ولا ملغاة، ولسه ما اتسدّدتش كامل */
+            _open = all.Where(i => i.Status != "Draft" && i.Status != "Cancelled"
+                                && i.PaymentStatus != "Paid")
+                       .OrderBy(i => i.InvoiceDate).ThenBy(i => i.SupplierInvoiceId)
+                       .ToList();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل تحميل الفواتير: " + ex.Message, Severity.Error); }
+        finally { _openLoading = false; }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_saving) return;
+        if (_f.SupplierId <= 0)      { _ok = false; _msg = "اختار المورد"; return; }
+        if (_f.BranchId <= 0)        { _ok = false; _msg = "اختار الفرع"; return; }
+        if (_f.PaymentMethodId <= 0) { _ok = false; _msg = "اختار طريقة الدفع"; return; }
+        if (_f.Amount <= 0)          { _ok = false; _msg = "المبلغ لازم يكون أكبر من صفر"; return; }
+        if (string.IsNullOrWhiteSpace(_f.PaymentDate)) { _ok = false; _msg = "التاريخ مطلوب"; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var payload = new
+            {
+                supplierId      = _f.SupplierId,
+                branchId        = _f.BranchId,
+                paymentDate     = _f.PaymentDate,
+                paymentMethodId = _f.PaymentMethodId,
+                amount          = _f.Amount,
+                chequeNumber    = _f.ChequeNumber,
+                chequeDate      = _f.ChequeDate,
+                bankAccount     = _f.BankAccount,
+                notes           = _f.Notes
+            };
+            var res = await Http.PostAsJsonAsync("api/supplier-payments", payload);
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) GoBack();
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private void GoBack() => Nav.NavigateTo("/supplier-payments");
+
+    /* ── helpers ── */
+    private static string? OptStr(object? v)
+    {
+        var s = v?.ToString();
+        return string.IsNullOrWhiteSpace(s) ? null : s;
+    }
+
+    private static decimal ParseDec(object? v) =>
+        decimal.TryParse(v?.ToString(), out var d) ? d : 0m;
+
+    private static string Money(decimal v) => v.ToString("N2");
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+    }
+}

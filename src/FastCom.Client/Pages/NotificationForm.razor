@@ -1,0 +1,226 @@
+@page "/notifications/new"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>إشعار جديد — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">الإدارة · الإشعارات</div>
+                <h1 class="fc-hero-title">إشعار جديد</h1>
+                <p class="fc-hero-sub">الإشعار العام بيوصل لكل المستخدمين · أو تربطه بكيان معين</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudButton Variant="Variant.Outlined" OnClick="GoBack" Style="color:#9FB4CC">رجوع</MudButton>
+                @if (CanManage)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving"
+                               StartIcon="@Icons.Material.Filled.Notifications" OnClick="SaveAsync">إرسال</MudButton>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanManage)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية إرسال إشعارات.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+
+            @if (_msg is not null)
+            {
+                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
+            }
+
+            @* ══════════ 1. المحتوى ══════════ *@
+            <div class="fc-panel-sub" style="margin-bottom:14px">المحتوى</div>
+            <div class="fc-form-grid">
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">العنوان *</div>
+                    <input class="fc-sel fc-sel-lg" @bind="_f.Title" maxlength="200" />
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">الأولوية</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.Priority">
+                        <option value="Low">منخفضة</option>
+                        <option value="Normal">عادية</option>
+                        <option value="High">عالية</option>
+                        <option value="Critical">حرجة</option>
+                    </select>
+                    @if (_f.Priority is "High" or "Critical")
+                    {
+                        <div class="fc-field-hint">الأولوية دي بتظهر بتنبيه مميز عند المستخدم</div>
+                    }
+                </div>
+                <div style="grid-column:1/-1">
+                    <div class="fc-panel-sub" style="margin-bottom:6px">النص *</div>
+                    <textarea class="fc-sel" rows="4" maxlength="1000"
+                              @onchange="e => _f.Message = e.Value?.ToString()">@_f.Message</textarea>
+                </div>
+            </div>
+
+            @* ══════════ 2. لمين ══════════ *@
+            <div class="fc-panel-sub" style="margin:26px 0 14px">لمين</div>
+            <div class="fc-form-grid">
+                <div style="grid-column:1/-1">
+                    <div class="fc-active-toggle" style="padding:6px 0 12px">
+                        <MudCheckBox T="bool" @bind-Value="_f.IsGlobal" Color="Color.Primary"
+                                     Label="إشعار عام — يوصل لكل المستخدمين" />
+                    </div>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">نوع الإشعار</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.NotificationType">
+                        @foreach (var t in Types) { <option value="@t.Key">@t.Value</option> }
+                    </select>
+                </div>
+            </div>
+
+            @* ══════════ 3. الربط بكيان (اختياري) ══════════ *@
+            <div class="fc-panel-sub" style="margin:26px 0 14px">الربط بكيان (اختياري)</div>
+            <div class="fc-form-grid">
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">الكيان</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.EntityType">
+                        <option value="">— من غير ربط —</option>
+                        @foreach (var e in Entities) { <option value="@e.Key">@e.Value</option> }
+                    </select>
+                    <div class="fc-field-hint">بيخلي الإشعار يفتح على الحاجة نفسها</div>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">رقم الكيان</div>
+                    <input type="number" min="1" class="fc-sel fc-sel-lg" value="@_f.EntityId"
+                           @onchange="e => _f.EntityId = ParseLong(e.Value)" />
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_f.EntityType) && _f.EntityId is null)
+            {
+                <div class="fc-alert fc-alert-warn" style="margin-top:18px">
+                    <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
+                    <div class="fc-alert-body">
+                        <div class="fc-alert-title">ناقص رقم الكيان</div>
+                        <div>اخترت «@EntityAr(_f.EntityType)» — اكتب رقمه، أو شيل الربط خالص.</div>
+                    </div>
+                </div>
+            }
+
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:26px">
+                <MudButton Variant="Variant.Outlined" OnClick="GoBack">رجوع</MudButton>
+                @if (CanManage)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                               OnClick="SaveAsync">إرسال</MudButton>
+                }
+            </div>
+
+        </div></div>
+    }
+</div>
+
+@code {
+    private AuthUser? _user;
+    private bool CanManage => _user?.Can("NOTIFICATION.MANAGE") ?? false;
+
+    private bool _saving;
+    private string? _msg; private bool _ok = true;
+
+    private Form _f = new();
+
+    private static readonly Dictionary<string, string> Types = new()
+    {
+        ["General"] = "عام", ["Alert"] = "تنبيه", ["Reminder"] = "تذكير",
+        ["Finance"] = "مالي", ["Operations"] = "تشغيل", ["System"] = "النظام"
+    };
+
+    private static readonly Dictionary<string, string> Entities = new()
+    {
+        ["Operation"] = "عملية", ["Trip"] = "رحلة", ["Invoice"] = "فاتورة",
+        ["Booking"] = "حجز", ["Custody"] = "عهدة", ["Driver"] = "سائق", ["Vehicle"] = "سيارة"
+    };
+
+    /// <summary>مطابق لـ <c>NotificationsController.CreateRequest</c> — 7 حقول.</summary>
+    public class Form
+    {
+        public string? NotificationType { get; set; } = "General";
+        public string? Title { get; set; }
+        public string? Message { get; set; }
+        public string? Priority { get; set; } = "Normal";
+        public bool IsGlobal { get; set; } = true;
+        public string? EntityType { get; set; }
+        public long? EntityId { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+    }
+
+    // ═══════════════ Save ═══════════════
+
+    private async Task SaveAsync()
+    {
+        if (_saving) return;
+
+        if (string.IsNullOrWhiteSpace(_f.Title))
+        { _ok = false; _msg = "اكتب عنوان"; return; }
+        if (string.IsNullOrWhiteSpace(_f.Message))
+        { _ok = false; _msg = "اكتب نص الإشعار"; return; }
+        if (!string.IsNullOrEmpty(_f.EntityType) && _f.EntityId is null)
+        { _ok = false; _msg = "اكتب رقم الكيان أو شيل الربط"; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var payload = new
+            {
+                notificationType = _f.NotificationType,
+                title            = _f.Title,
+                message          = _f.Message,
+                priority         = _f.Priority,
+                /* 🔴 عام = `userId` فاضي. مش عام = لمستخدم محدّد (حاليًا: أنت). */
+                userId           = _f.IsGlobal ? (int?)null : _user?.UserId,
+                entityType       = string.IsNullOrEmpty(_f.EntityType) ? null : _f.EntityType,
+                entityId         = _f.EntityId
+            };
+
+            var res = await Http.PostAsJsonAsync("api/notifications", payload);
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) GoBack();
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    // ═══════════════ Helpers ═══════════════
+
+    private void GoBack() => Nav.NavigateTo("/notifications");
+
+    private static long? ParseLong(object? v) =>
+        long.TryParse(v?.ToString(), out var n) && n > 0 ? n : null;
+
+    private static string EntityAr(string t) => Entities.TryGetValue(t, out var v) ? v : t;
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "✅ اتبعت الإشعار" : "حصل خطأ — حاول تاني"; }
+    }
+}

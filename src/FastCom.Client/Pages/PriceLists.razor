@@ -1,0 +1,675 @@
+@page "/master/pricelists"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject ISnackbar Snackbar
+
+<PageTitle>قوائم الأسعار — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">البيانات الأساسية · الأسعار</div>
+                <h1 class="fc-hero-title">قوائم الأسعار</h1>
+                <p class="fc-hero-sub">أسعار خاصة بالعميل — القاعدة الأخص هي اللي بتتطبق تلقائيًا</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="LoadListsAsync" Style="color:#9FB4CC" />
+                @if (CanCreate)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="NewList">قائمة جديدة</MudButton>
+                }
+            </div>
+        </div>
+
+        <div class="fc-kpis-glass">
+            <div class="fc-kpi"><div class="fc-kpi-lb">القوائم</div><div class="fc-kpi-num">@_lists.Count</div></div>
+            <div class="fc-kpi"><div class="fc-kpi-lb">القواعد</div><div class="fc-kpi-num">@_lists.Sum(l => l.RuleCount)</div></div>
+            <div class="fc-kpi"><div class="fc-kpi-lb">سارية دلوقتي</div>
+                <div class="fc-kpi-num">@_lists.Count(IsLive)</div></div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanView)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض الأسعار.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+
+            <div class="fc-alert fc-alert-info">
+                <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Info" /></div>
+                <div class="fc-alert-body">
+                    <div class="fc-alert-title">القاعدة الأخص هي اللي تكسب</div>
+                    <div>لو فيه أكتر من قاعدة منطبقة، النظام بيختار <b>اللي فيها أبعاد أكتر</b>
+                        (ميناء + وجهة + نوع حاوية + نوع رحلة). البعد الفاضي معناه «أي قيمة».
+                        وبعدين الأولوية (الرقم الأصغر أعلى).</div>
+                </div>
+            </div>
+
+            @if (_msg is not null)
+            {
+                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                          Class="mb-4">@_msg</MudAlert>
+            }
+
+            @* ══════════ 1. القوائم ══════════ *@
+            <div class="fc-fsec">
+                <div class="fc-fsec-head">
+                    <span class="fc-fsec-n">1</span>
+                    <div>
+                        <div class="fc-fsec-t">قوائم الأسعار</div>
+                        <div class="fc-fsec-d">اختار قائمة عشان تشوف قواعدها وتضيف فيها</div>
+                    </div>
+                    <span class="fc-fsec-ic"><MudIcon Icon="@Icons.Material.Filled.Assessment" Size="Size.Small" /></span>
+                </div>
+
+                <div class="fc-table-wrap"><table class="fc-table">
+                    <thead><tr>
+                        <th>الكود</th><th>الاسم</th><th>سارية من</th><th>لغاية</th>
+                        <th>قواعد</th><th style="width:170px"></th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach (var l in _lists)
+                        {
+                            <tr class="@RowCls(l)">
+                                <td><span class="fc-role-chip">@l.PriceListCode</span></td>
+                                <td class="fc-cell-main">
+                                    @l.NameAr
+                                    @if (!string.IsNullOrWhiteSpace(l.NameEn))
+                                    {
+                                        <div class="fc-cell-sub">@l.NameEn</div>
+                                    }
+                                </td>
+                                <td>@l.ValidFrom.ToString("yyyy-MM-dd")</td>
+                                <td>
+                                    @if (l.ValidTo is null)
+                                    {
+                                        <span class="fc-chip fc-chip-ok">مفتوحة</span>
+                                    }
+                                    else
+                                    {
+                                        @l.ValidTo.Value.ToString("yyyy-MM-dd")
+                                    }
+                                </td>
+                                <td>@l.RuleCount</td>
+                                <td>
+                                    <div class="fc-row-actions">
+                                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                                   OnClick="() => SelectList(l)">القواعد</MudButton>
+                                        @if (CanEdit)
+                                        {
+                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
+                                                           Color="Color.Primary" title="تعديل" OnClick="() => EditList(l)" />
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        @if (_lists.Count == 0)
+                        {
+                            <tr><td colspan="6"><div class="fc-empty">مافيش قوائم — اعمل أول قائمة</div></td></tr>
+                        }
+                    </tbody>
+                </table></div>
+            </div>
+
+            @* ══════════ 2. قواعد القائمة المختارة ══════════ *@
+            @if (_sel is not null)
+            {
+                <div class="fc-fsec" style="margin-top:26px">
+                    <div class="fc-fsec-head">
+                        <span class="fc-fsec-n">2</span>
+                        <div>
+                            <div class="fc-fsec-t">قواعد: @_selName</div>
+                            <div class="fc-fsec-d">مرتبة من الأخص للأعم — الأولى هي اللي بتتطبق</div>
+                        </div>
+                        @if (CanCreate)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Secondary"
+                                       StartIcon="@Icons.Material.Filled.Add" OnClick="NewRule">قاعدة جديدة</MudButton>
+                        }
+                    </div>
+
+                    <div class="fc-table-wrap"><table class="fc-table">
+                        <thead><tr>
+                            <th>العميل</th><th>الخدمة</th><th>الأبعاد</th>
+                            <th>السعر</th><th>التكلفة</th><th>الصلاحية</th>
+                            <th>أولوية</th><th style="width:90px"></th>
+                        </tr></thead>
+                        <tbody>
+                            @foreach (var r in _rules)
+                            {
+                                <tr>
+                                    <td class="fc-cell-main">@r.CustomerName</td>
+                                    <td>@r.ServiceName</td>
+                                    <td class="fc-cell-sub">@Dims(r)</td>
+                                    <td><b>@Money(r.UnitPrice)</b></td>
+                                    <td>@(r.CostPrice is null ? "—" : Money(r.CostPrice.Value))</td>
+                                    <td class="fc-cell-sub">
+                                        @r.ValidFrom.ToString("yyyy-MM-dd")
+                                        @if (r.ValidTo is not null)
+                                        {
+                                            <text> → @r.ValidTo.Value.ToString("yyyy-MM-dd")</text>
+                                        }
+                                    </td>
+                                    <td>
+                                        @r.Priority
+                                        @if (!r.IsActive)
+                                        {
+                                            <span class="fc-chip fc-chip-gray">موقوفة</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (CanEdit)
+                                        {
+                                            <div class="fc-row-actions">
+                                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
+                                                               Color="Color.Primary" title="تعديل" OnClick="() => EditRule(r)" />
+                                                @if (CanDelete)
+                                                {
+                                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
+                                                                   Color="Color.Error" title="حذف" OnClick="() => DeleteRuleAsync(r)" />
+                                                }
+                                            </div>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                            @if (_rules.Count == 0)
+                            {
+                                <tr><td colspan="8"><div class="fc-empty">مافيش قواعد في القائمة دي</div></td></tr>
+                            }
+                        </tbody>
+                    </table></div>
+                </div>
+            }
+
+        </div></div>
+    }
+</div>
+
+@* ═══════════ مودال: قائمة أسعار ═══════════ *@
+@if (_listOpen && CanCreate)
+{
+    <div class="fc-modal-backdrop" @onclick="() => _listOpen = false">
+        <div class="fc-modal fc-modal-sm" @onclick:stopPropagation="true">
+            <div class="fc-modal-head">
+                <div>
+                    <div class="fc-modal-title">@(_listEditId is null ? "قائمة أسعار جديدة" : "تعديل قائمة")</div>
+                    <div class="fc-modal-sub">القائمة نفسها مجرد وعاء — الأسعار في القواعد</div>
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _listOpen = false" />
+            </div>
+            <div class="fc-modal-body">
+                <div class="fc-form-grid">
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">الكود<i>*</i></div>
+                        <input class="fc-sel fc-sel-lg" @bind="_lf.PriceListCode" maxlength="30" dir="ltr" />
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">الاسم بالعربي<i>*</i></div>
+                        <input class="fc-sel fc-sel-lg" @bind="_lf.NameAr" maxlength="150" />
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">الاسم بالإنجليزي</div>
+                        <input class="fc-sel fc-sel-lg" @bind="_lf.NameEn" maxlength="150" />
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">سارية من<i>*</i></div>
+                        <input type="date" class="fc-sel fc-sel-lg" value="@_lf.ValidFrom"
+                               @onchange="e => _lf.ValidFrom = e.Value?.ToString()" />
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">سارية لغاية</div>
+                        <input type="date" class="fc-sel fc-sel-lg" value="@_lf.ValidTo"
+                               @onchange="e => _lf.ValidTo = e.Value?.ToString()" />
+                        <div class="fc-fld-hint">فاضي = مفتوحة</div>
+                    </div>
+                </div>
+            </div>
+            <div class="fc-modal-foot">
+                <MudButton Variant="Variant.Text" OnClick="() => _listOpen = false">إلغاء</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                           StartIcon="@Icons.Material.Filled.Save" OnClick="SaveListAsync">حفظ</MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@* ═══════════ مودال: قاعدة سعر ═══════════ *@
+@if (_ruleOpen && CanCreate && _sel is not null)
+{
+    <div class="fc-modal-backdrop" @onclick="() => _ruleOpen = false">
+        <div class="fc-modal" @onclick:stopPropagation="true">
+            <div class="fc-modal-head">
+                <div>
+                    <div class="fc-modal-title">@(_ruleEditId is null ? "قاعدة سعر جديدة" : "تعديل قاعدة")</div>
+                    <div class="fc-modal-sub">في قائمة: @_selName</div>
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _ruleOpen = false" />
+            </div>
+            <div class="fc-modal-body">
+
+                @if (_msg is not null)
+                {
+                    <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                              Class="mb-4">@_msg</MudAlert>
+                }
+
+                <div class="fc-panel-sub">لمين وعلى إيه</div>
+                <div class="fc-form-grid">
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">العميل<i>*</i></div>
+                        <select class="fc-sel fc-sel-lg" @bind="_rf.CustomerId">
+                            <option value="0">— اختار —</option>
+                            @foreach (var c in _customers) { <option value="@c.Id">@c.Label</option> }
+                        </select>
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">الخدمة<i>*</i></div>
+                        <select class="fc-sel fc-sel-lg" @bind="_rf.ServiceId">
+                            <option value="0">— اختار —</option>
+                            @foreach (var s in _services) { <option value="@s.Id">@s.Label</option> }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="fc-panel-sub" style="margin:18px 0 10px">الأبعاد (فاضي = أي قيمة)</div>
+                <div class="fc-form-grid">
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">الميناء</div>
+                        <select class="fc-sel fc-sel-lg" value="@_rf.PortId" @onchange="e => _rf.PortId = Nul(e.Value)">
+                            <option value="">أي ميناء</option>
+                            @foreach (var p in _ports) { <option value="@p.Id">@p.Label</option> }
+                        </select>
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">الوجهة</div>
+                        <select class="fc-sel fc-sel-lg" value="@_rf.DestinationId" @onchange="e => _rf.DestinationId = Nul(e.Value)">
+                            <option value="">أي وجهة</option>
+                            @foreach (var d in _dests) { <option value="@d.Id">@d.Label</option> }
+                        </select>
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">نوع الحاوية</div>
+                        <select class="fc-sel fc-sel-lg" value="@_rf.ContainerTypeId" @onchange="e => _rf.ContainerTypeId = Nul(e.Value)">
+                            <option value="">أي نوع</option>
+                            @foreach (var c in _ctypes) { <option value="@c.Id">@c.Label</option> }
+                        </select>
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">نوع الرحلة</div>
+                        <select class="fc-sel fc-sel-lg" value="@_rf.TripTypeId" @onchange="e => _rf.TripTypeId = Nul(e.Value)">
+                            <option value="">أي نوع</option>
+                            @foreach (var t in _ttypes) { <option value="@t.Id">@t.Label</option> }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="fc-panel-sub" style="margin:18px 0 10px">السعر والصلاحية</div>
+                <div class="fc-form-grid">
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">سعر البيع<i>*</i></div>
+                        <input type="number" min="0" step="0.01" class="fc-sel fc-sel-lg" value="@_rf.UnitPrice"
+                               @onchange="e => _rf.UnitPrice = Dec(e.Value)" />
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">التكلفة</div>
+                        <input type="number" min="0" step="0.01" class="fc-sel fc-sel-lg" value="@_rf.CostPrice"
+                               @onchange="e => _rf.CostPrice = Dec(e.Value)" />
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">الضريبة</div>
+                        <select class="fc-sel fc-sel-lg" value="@_rf.TaxRateId" @onchange="e => _rf.TaxRateId = Nul(e.Value)">
+                            <option value="">— بدون —</option>
+                            @foreach (var t in _taxRates) { <option value="@t.Id">@t.Label</option> }
+                        </select>
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">الأولوية</div>
+                        <input type="number" min="1" max="9999" class="fc-sel fc-sel-lg" value="@_rf.Priority"
+                               @onchange="e => _rf.Priority = (int)Lng(e.Value)" />
+                        <div class="fc-fld-hint">الرقم الأصغر أعلى</div>
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">ساري من<i>*</i></div>
+                        <input type="date" class="fc-sel fc-sel-lg" value="@_rf.ValidFrom"
+                               @onchange="e => _rf.ValidFrom = e.Value?.ToString()" />
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">ساري لغاية</div>
+                        <input type="date" class="fc-sel fc-sel-lg" value="@_rf.ValidTo"
+                               @onchange="e => _rf.ValidTo = e.Value?.ToString()" />
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">الحالة</div>
+                        <div class="fc-active-toggle">
+                            <MudCheckBox T="bool" @bind-Value="_rf.IsActive" Color="Color.Secondary" Label="نشطة" />
+                        </div>
+                    </div>
+                    <div class="fc-fld fc-field-full">
+                        <div class="fc-fld-lb">ملاحظات</div>
+                        <input class="fc-sel fc-sel-lg" @bind="_rf.Notes" maxlength="500" />
+                    </div>
+                </div>
+            </div>
+            <div class="fc-modal-foot">
+                <MudButton Variant="Variant.Text" OnClick="() => _ruleOpen = false">إلغاء</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                           StartIcon="@Icons.Material.Filled.Save" OnClick="SaveRuleAsync">حفظ</MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private AuthUser? _user;
+    private bool CanView   => (_user?.Can("PRICING.VIEW") ?? false) || (_user?.Can("PRICING.CREATE") ?? false);
+    private bool CanCreate => (_user?.Can("PRICING.CREATE") ?? false);
+    private bool CanEdit   => (_user?.Can("PRICING.EDIT") ?? false);
+    private bool CanDelete => (_user?.Can("PRICING.DELETE") ?? false);
+
+    private List<Lst> _lists = new();
+    private List<Rule> _rules = new();
+    private int? _sel; private string _selName = "";
+
+    private List<Opt> _customers = new(), _services = new(), _ports = new(),
+                      _dests = new(), _ctypes = new(), _ttypes = new();
+    private List<TaxOpt> _taxRates = new();
+
+    private bool _listOpen, _ruleOpen, _saving;
+    private string? _msg; private bool _ok = true;
+    private int? _listEditId;
+    private long? _ruleEditId;
+    private ListForm _lf = new();
+    private RuleForm _rf = new();
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+    public class TaxOpt { public int Id { get; set; } public string Label { get; set; } = ""; }
+
+    /// <summary>مطابق لـ <c>PriceListsController.ListItem</c> — 7 حقول.</summary>
+    public class Lst
+    {
+        public int PriceListId { get; set; }
+        public string PriceListCode { get; set; } = "";
+        public string NameAr { get; set; } = "";
+        public string? NameEn { get; set; }
+        public DateOnly ValidFrom { get; set; }
+        public DateOnly? ValidTo { get; set; }
+        public int RuleCount { get; set; }
+    }
+
+    /// <summary>مطابق لـ <c>PriceListsController.RuleItem</c> — 24 حقل.</summary>
+    public class Rule
+    {
+        public long CustomerPriceRuleId { get; set; }
+        public int CustomerId { get; set; }
+        public string CustomerName { get; set; } = "";
+        public int? PriceListId { get; set; }
+        public string? PriceListName { get; set; }
+        public int ServiceId { get; set; }
+        public string ServiceName { get; set; } = "";
+        public int? PortId { get; set; }
+        public string? PortName { get; set; }
+        public int? DestinationId { get; set; }
+        public string? DestinationName { get; set; }
+        public int? ContainerTypeId { get; set; }
+        public string? ContainerTypeName { get; set; }
+        public int? TripTypeId { get; set; }
+        public string? TripTypeName { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal? CostPrice { get; set; }
+        public int? TaxRateId { get; set; }
+        public string? TaxRateName { get; set; }
+        public DateOnly ValidFrom { get; set; }
+        public DateOnly? ValidTo { get; set; }
+        public int Priority { get; set; }
+        public bool IsActive { get; set; }
+        public string? Notes { get; set; }
+        public int Specificity { get; set; }
+    }
+
+    public class ListForm
+    {
+        public string PriceListCode { get; set; } = "";
+        public string NameAr { get; set; } = "";
+        public string? NameEn { get; set; }
+        public string? ValidFrom { get; set; }
+        public string? ValidTo { get; set; }
+    }
+
+    /// <summary>مطابق لـ <c>PriceListsController.RuleUpsert</c> — 14 حقل.</summary>
+    public class RuleForm
+    {
+        public int CustomerId { get; set; }
+        public int ServiceId { get; set; }
+        public int? PortId { get; set; }
+        public int? DestinationId { get; set; }
+        public int? ContainerTypeId { get; set; }
+        public int? TripTypeId { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal? CostPrice { get; set; }
+        public int? TaxRateId { get; set; }
+        public string? ValidFrom { get; set; }
+        public string? ValidTo { get; set; }
+        public int Priority { get; set; } = 100;
+        public bool IsActive { get; set; } = true;
+        public string? Notes { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (!CanView) return;
+
+        _customers = await SafeOpts("api/options/customers");
+        _services  = await SafeOpts("api/options/services");
+        _ports     = await SafeOpts("api/options/ports");
+        _dests     = await SafeOpts("api/options/destinations");
+        _ctypes    = await SafeOpts("api/options/container-types");
+        _ttypes    = await SafeOpts("api/options/trip-types");
+        try { _taxRates = await Http.GetFromJsonAsync<List<TaxOpt>>("api/options/tax-rates") ?? new(); }
+        catch { _taxRates = new(); }
+
+        await LoadListsAsync();
+    }
+
+    private async Task LoadListsAsync()
+    {
+        try { _lists = await Http.GetFromJsonAsync<List<Lst>>("api/master/pricelists") ?? new(); }
+        catch (Exception ex) { _ok = false; _msg = "فشل التحميل: " + ex.Message; }
+        if (_sel is not null) await LoadRulesAsync(_sel.Value);
+    }
+
+    private async Task SelectList(Lst l)
+    {
+        _sel = l.PriceListId; _selName = l.NameAr; _msg = null;
+        await LoadRulesAsync(l.PriceListId);
+    }
+
+    private async Task LoadRulesAsync(int id)
+    {
+        try { _rules = await Http.GetFromJsonAsync<List<Rule>>($"api/master/pricelists/{id}/rules") ?? new(); }
+        catch { _rules = new(); }
+    }
+
+    private async Task<List<Opt>> SafeOpts(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<Opt>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    // ═══════════ القوائم ═══════════
+
+    private void NewList()
+    {
+        _listEditId = null;
+        _lf = new ListForm { ValidFrom = DateTime.Now.ToString("yyyy-MM-dd") };
+        _msg = null; _listOpen = true;
+    }
+
+    private void EditList(Lst l)
+    {
+        _listEditId = l.PriceListId;
+        _lf = new ListForm
+        {
+            PriceListCode = l.PriceListCode, NameAr = l.NameAr, NameEn = l.NameEn,
+            ValidFrom = l.ValidFrom.ToString("yyyy-MM-dd"),
+            ValidTo   = l.ValidTo?.ToString("yyyy-MM-dd")
+        };
+        _msg = null; _listOpen = true;
+    }
+
+    private async Task SaveListAsync()
+    {
+        if (_saving) return;
+        if (string.IsNullOrWhiteSpace(_lf.PriceListCode)) { _ok = false; _msg = "الكود مطلوب"; return; }
+        if (string.IsNullOrWhiteSpace(_lf.NameAr))        { _ok = false; _msg = "الاسم مطلوب"; return; }
+        if (string.IsNullOrWhiteSpace(_lf.ValidFrom))     { _ok = false; _msg = "تاريخ «ساري من» مطلوب"; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var payload = new
+            {
+                priceListCode = _lf.PriceListCode, nameAr = _lf.NameAr, nameEn = _lf.NameEn,
+                validFrom = _lf.ValidFrom, validTo = _lf.ValidTo
+            };
+            var res = _listEditId is null
+                ? await Http.PostAsJsonAsync("api/master/pricelists", payload)
+                : await Http.PutAsJsonAsync($"api/master/pricelists/{_listEditId}", payload);
+
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) { _listOpen = false; await LoadListsAsync(); }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    // ═══════════ القواعد ═══════════
+
+    private void NewRule()
+    {
+        _ruleEditId = null;
+        _rf = new RuleForm { ValidFrom = DateTime.Now.ToString("yyyy-MM-dd") };
+        _msg = null; _ruleOpen = true;
+    }
+
+    private void EditRule(Rule r)
+    {
+        _ruleEditId = r.CustomerPriceRuleId;
+        _rf = new RuleForm
+        {
+            CustomerId      = r.CustomerId,
+            ServiceId       = r.ServiceId,
+            PortId          = r.PortId,
+            DestinationId   = r.DestinationId,
+            ContainerTypeId = r.ContainerTypeId,
+            TripTypeId      = r.TripTypeId,
+            UnitPrice       = r.UnitPrice,
+            CostPrice       = r.CostPrice,
+            TaxRateId       = r.TaxRateId,
+            ValidFrom       = r.ValidFrom.ToString("yyyy-MM-dd"),
+            ValidTo         = r.ValidTo?.ToString("yyyy-MM-dd"),
+            Priority        = r.Priority,
+            IsActive        = r.IsActive,
+            Notes           = r.Notes
+        };
+        _msg = null; _ruleOpen = true;
+    }
+
+    private async Task SaveRuleAsync()
+    {
+        if (_saving || _sel is null) return;
+        if (_rf.CustomerId <= 0) { _ok = false; _msg = "اختار العميل"; return; }
+        if (_rf.ServiceId <= 0)  { _ok = false; _msg = "اختار الخدمة"; return; }
+        if (string.IsNullOrWhiteSpace(_rf.ValidFrom)) { _ok = false; _msg = "تاريخ «ساري من» مطلوب"; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var payload = new
+            {
+                customerId = _rf.CustomerId, priceListId = _sel, serviceId = _rf.ServiceId,
+                portId = _rf.PortId, destinationId = _rf.DestinationId,
+                containerTypeId = _rf.ContainerTypeId, tripTypeId = _rf.TripTypeId,
+                unitPrice = _rf.UnitPrice, costPrice = _rf.CostPrice, taxRateId = _rf.TaxRateId,
+                validFrom = _rf.ValidFrom, validTo = _rf.ValidTo,
+                priority = _rf.Priority, isActive = _rf.IsActive, notes = _rf.Notes
+            };
+            var res = _ruleEditId is null
+                ? await Http.PostAsJsonAsync($"api/master/pricelists/{_sel}/rules", payload)
+                : await Http.PutAsJsonAsync($"api/master/pricelists/rules/{_ruleEditId}", payload);
+
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode)
+            {
+                _ruleOpen = false;
+                await LoadRulesAsync(_sel.Value);
+                await LoadListsAsync();
+            }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task DeleteRuleAsync(Rule r)
+    {
+        try
+        {
+            var res = await Http.DeleteAsync($"api/master/pricelists/rules/{r.CustomerPriceRuleId}");
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) { await LoadRulesAsync(_sel ?? 0); await LoadListsAsync(); }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+    }
+
+    // ═══════════ helpers ═══════════
+
+    /* 🔴 أي `"` جوه attribute = RZ1010 (حتى مع الأقواس السكانر بيحذّر)
+          — فالـ class من helper. */
+    private string RowCls(Lst l) => _sel == l.PriceListId ? "fc-row-sel" : "";
+
+    private static bool IsLive(Lst l)
+    {
+        var t = DateOnly.FromDateTime(DateTime.Now);
+        return l.ValidFrom <= t && (l.ValidTo is null || l.ValidTo >= t);
+    }
+
+    private static string Dims(Rule r)
+    {
+        var d = new List<string>();
+        if (!string.IsNullOrWhiteSpace(r.PortName))          d.Add(r.PortName!);
+        if (!string.IsNullOrWhiteSpace(r.DestinationName))   d.Add(r.DestinationName!);
+        if (!string.IsNullOrWhiteSpace(r.ContainerTypeName)) d.Add(r.ContainerTypeName!);
+        if (!string.IsNullOrWhiteSpace(r.TripTypeName))      d.Add(r.TripTypeName!);
+        return d.Count == 0 ? "عام (أي حالة)" : string.Join(" · ", d);
+    }
+
+    private static int? Nul(object? v) => int.TryParse(v?.ToString(), out var n) && n > 0 ? n : null;
+    private static long Lng(object? v) => long.TryParse(v?.ToString(), out var n) && n > 0 ? n : 0;
+    private static decimal Dec(object? v) => decimal.TryParse(v?.ToString(), out var n) && n >= 0 ? n : 0m;
+    private static string Money(decimal v) => v.ToString("N2");
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "✅ تم" : "حصل خطأ — حاول تاني"; }
+    }
+}

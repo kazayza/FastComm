@@ -1,0 +1,258 @@
+@page "/containers/new"
+@page "/containers/new/{Id:long}"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_id is null ? "حاوية جديدة" : "تعديل حاوية") — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">البيانات الأساسية · الحاويات</div>
+                <h1 class="fc-hero-title">@(_id is null ? "حاوية جديدة" : $"تعديل {ContainerNumber}")</h1>
+                <p class="fc-hero-sub">الرقم بالشكل الدولي: 4 حروف + 7 أرقام — زي <b>MSCU1234567</b></p>
+            </div>
+            <div class="fc-head-actions">
+                <MudButton Variant="Variant.Outlined" OnClick="GoBack" Style="color:#9FB4CC">رجوع</MudButton>
+                @if (CanSave)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving"
+                               StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="SaveAsync">حفظ</MudButton>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanSave)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية إدارة الحاويات.</MudAlert>
+    }
+    else if (_loading)
+    {
+        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+
+            @if (_msg is not null)
+            {
+                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
+            }
+
+            @* ══════════ 1. التعريف ══════════ *@
+            <div class="fc-panel-sub" style="margin-bottom:14px">التعريف</div>
+            <div class="fc-form-grid">
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">رقم الحاوية *</div>
+                    <input class="fc-sel fc-sel-lg" @bind="_f.ContainerNumber" maxlength="11" dir="ltr"
+                           placeholder="MSCU1234567" style="text-align:right" />
+                    <div class="fc-field-hint">4 حروف + 7 أرقام · @(NumberOk ? "الشكل صح ✓" : "لسه ناقص أو غلط")</div>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">نوع الحاوية *</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.ContainerTypeId">
+                        @foreach (var t in _types) { <option value="@t.Id">@t.Label</option> }
+                    </select>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">الوزن (كجم)</div>
+                    <input type="number" min="0" step="1" class="fc-sel fc-sel-lg" value="@_f.WeightKg"
+                           @onchange="e => _f.WeightKg = ParseDec(e.Value)" />
+                </div>
+            </div>
+
+            @* ══════════ 2. الملكية ══════════ *@
+            <div class="fc-panel-sub" style="margin:26px 0 14px">الملكية</div>
+            <div class="fc-form-grid">
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">جهة الملكية</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.OwnerType">
+                        <option value="ShippingLine">خط ملاحي</option>
+                        <option value="Customer">العميل</option>
+                        <option value="Leased">مستأجرة</option>
+                        <option value="Company">الشركة</option>
+                    </select>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">اسم المالك</div>
+                    <input class="fc-sel fc-sel-lg" @bind="_f.OwnerName" maxlength="150" />
+                    <div class="fc-field-hint">اسم الخط الملاحي أو العميل</div>
+                </div>
+            </div>
+
+            @* ══════════ 3. الحالة ══════════ *@
+            <div class="fc-panel-sub" style="margin:26px 0 14px">الحالة</div>
+            <div class="fc-form-grid">
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">الحالة الحالية</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.CurrentStatus">
+                        <option value="Available">متاحة</option>
+                        <option value="InTransit">في الطريق</option>
+                        <option value="AtPort">في الميناء</option>
+                        <option value="AtDepot">في المخزن</option>
+                        <option value="Delivered">تم التسليم</option>
+                        <option value="Returned">مرتجعة</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="fc-panel-sub" style="margin:26px 0 8px">ملاحظات</div>
+            <textarea class="fc-sel" rows="3" maxlength="500"
+                      @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
+
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:26px">
+                <MudButton Variant="Variant.Outlined" OnClick="GoBack">رجوع</MudButton>
+                @if (CanSave)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                               OnClick="SaveAsync">حفظ</MudButton>
+                }
+            </div>
+
+        </div></div>
+    }
+</div>
+
+@code {
+    [Parameter] public long? Id { get; set; }
+    private long? _id;
+    private string ContainerNumber = "";
+
+    private AuthUser? _user;
+    private bool CanSave => _user?.Can("MASTERDATA.MANAGE") ?? false;
+
+    private bool _loading; private bool _saving;
+    private string? _msg; private bool _ok = true;
+
+    private List<Opt> _types = new();
+    private Form _f = new();
+
+    /* ISO 6346 — 4 حروف كبيرة + 7 أرقام. بننبّه بس، مانمنعش
+       (السيرفر هو اللي بيقرر). */
+    private bool NumberOk =>
+        !string.IsNullOrWhiteSpace(_f.ContainerNumber) &&
+        System.Text.RegularExpressions.Regex.IsMatch(
+            _f.ContainerNumber.Trim(), "^[A-Z]{4}[0-9]{7}$");
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+
+    /// <summary>مطابق لـ <c>ContainersController.Upsert</c> — 7 حقول.</summary>
+    public class Form
+    {
+        public string ContainerNumber { get; set; } = "";
+        public int ContainerTypeId { get; set; }
+        public string OwnerType { get; set; } = "ShippingLine";
+        public string? OwnerName { get; set; }
+        public decimal? WeightKg { get; set; }
+        public string CurrentStatus { get; set; } = "Available";
+        public string? Notes { get; set; }
+    }
+
+    /// <summary>مطابق لـ <c>ContainersController.Detail</c> — 8 حقول.</summary>
+    public class Detail
+    {
+        public long ContainerId { get; set; }
+        public string ContainerNumber { get; set; } = "";
+        public int ContainerTypeId { get; set; }
+        public string OwnerType { get; set; } = "";
+        public string? OwnerName { get; set; }
+        public decimal? WeightKg { get; set; }
+        public string CurrentStatus { get; set; } = "";
+        public string? Notes { get; set; }
+    }
+
+    // ═══════════════ Init ═══════════════
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        _id = Id;
+        if (!CanSave) return;
+
+        _loading = true;
+        try
+        {
+            _types = await SafeGetT<Opt>("api/options/container-types");
+            if (_types.Count > 0) _f.ContainerTypeId = _types[0].Id;
+            if (_id is not null) await LoadAsync(_id.Value);
+        }
+        catch (Exception ex) { _msg = "فشل التحميل: " + ex.Message; _ok = false; }
+        finally { _loading = false; }
+    }
+
+    private async Task LoadAsync(long id)
+    {
+        var d = await Http.GetFromJsonAsync<Detail>($"api/containers/{id}");
+        if (d is null) { _msg = "الحاوية غير موجودة"; _ok = false; return; }
+
+        ContainerNumber = d.ContainerNumber;
+        _f = new Form
+        {
+            ContainerNumber = d.ContainerNumber,
+            ContainerTypeId = d.ContainerTypeId,
+            OwnerType       = d.OwnerType,
+            OwnerName       = d.OwnerName,
+            WeightKg        = d.WeightKg,
+            CurrentStatus   = d.CurrentStatus,
+            Notes           = d.Notes
+        };
+    }
+
+    // ═══════════════ Save ═══════════════
+
+    private async Task SaveAsync()
+    {
+        if (_saving) return;
+        _saving = true; _msg = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_f.ContainerNumber))
+            { _msg = "رقم الحاوية مطلوب"; _ok = false; return; }
+            if (_f.ContainerTypeId <= 0)
+            { _msg = "اختار نوع الحاوية"; _ok = false; return; }
+
+            var res = _id is null
+                ? await Http.PostAsJsonAsync("api/containers", _f)
+                : await Http.PutAsJsonAsync($"api/containers/{_id}", _f);
+
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) GoBack();
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    // ═══════════════ Helpers ═══════════════
+
+    private void GoBack() => Nav.NavigateTo("/containers");
+
+    private static decimal? ParseDec(object? v) =>
+        decimal.TryParse(v?.ToString(), out var n) && n > 0 ? n : null;
+
+    private async Task<List<T>> SafeGetT<T>(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<T>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "✅ تم الحفظ" : "حصل خطأ — حاول تاني"; }
+    }
+}

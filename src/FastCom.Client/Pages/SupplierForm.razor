@@ -1,0 +1,261 @@
+@page "/suppliers/new"
+@page "/suppliers/new/{Id:int}"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_id is null ? "مورد جديد" : "تعديل مورد") — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">البيانات الأساسية · الموردون</div>
+                <h1 class="fc-hero-title">@(_id is null ? "مورد جديد" : $"تعديل {SupplierCode}")</h1>
+                <p class="fc-hero-sub">سجّل بيانات المورد — والكود بيتولد تلقائيًا (SUP-)</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudButton Variant="Variant.Outlined" OnClick="GoBack" Style="color:#9FB4CC">رجوع</MudButton>
+                @if (CanSave)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving"
+                               StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="SaveAsync">حفظ</MudButton>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanSave)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">
+            @(_id is null ? "ليس لديك صلاحية إضافة مورد." : "ليس لديك صلاحية تعديل مورد.")
+        </MudAlert>
+    }
+    else if (_loading)
+    {
+        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+
+            @if (_msg is not null)
+            {
+                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
+            }
+
+            @* ══════════ 1. التعريف ══════════ *@
+            <div class="fc-panel-sub" style="margin-bottom:14px">التعريف</div>
+            <div class="fc-form-grid">
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">نوع المورد *</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.SupplierType">
+                        @foreach (var t in Types) { <option value="@t.Key">@t.Value</option> }
+                    </select>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">الاسم بالعربي *</div>
+                    @* 🔴 `@bind` بدل `@onchange` — أي `"` جوه attribute = RZ1010 *@
+                    <input class="fc-sel fc-sel-lg" @bind="_f.NameAr" maxlength="150" />
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">الاسم بالإنجليزي</div>
+                    <input class="fc-sel fc-sel-lg" value="@_f.NameEn" maxlength="150"
+                           @onchange="e => _f.NameEn = e.Value?.ToString()" />
+                </div>
+            </div>
+
+            @* ══════════ 2. بيانات ضريبية وقانونية ══════════ *@
+            <div class="fc-panel-sub" style="margin:26px 0 14px">بيانات ضريبية</div>
+            <div class="fc-form-grid">
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">الرقم الضريبي</div>
+                    <input class="fc-sel fc-sel-lg" value="@_f.TaxNumber" maxlength="50"
+                           @onchange="e => _f.TaxNumber = e.Value?.ToString()" />
+                    <div class="fc-field-hint">مطلوب للفواتير الضريبية وإقرارات الخصم</div>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">شرط السداد</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.PaymentTermId">
+                        <option value="">— كاش / حسب الاتفاق —</option>
+                        @foreach (var p in _terms) { <option value="@p.Id">@p.Label</option> }
+                    </select>
+                    <div class="fc-field-hint">بيحدد ميعاد استحقاق فاتورة المورد</div>
+                </div>
+            </div>
+
+            @* ══════════ 3. التواصل ══════════ *@
+            <div class="fc-panel-sub" style="margin:26px 0 14px">التواصل</div>
+            <div class="fc-form-grid">
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">التليفون</div>
+                    <input class="fc-sel fc-sel-lg" value="@_f.Phone" maxlength="30" dir="ltr"
+                           style="text-align:right" @onchange="e => _f.Phone = e.Value?.ToString()" />
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">البريد الإلكتروني</div>
+                    <input type="email" class="fc-sel fc-sel-lg" value="@_f.Email" maxlength="150" dir="ltr"
+                           style="text-align:right" @onchange="e => _f.Email = e.Value?.ToString()" />
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">العنوان</div>
+                    <input class="fc-sel fc-sel-lg" value="@_f.Address" maxlength="300"
+                           @onchange="e => _f.Address = e.Value?.ToString()" />
+                </div>
+            </div>
+
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:26px">
+                <MudButton Variant="Variant.Outlined" OnClick="GoBack">رجوع</MudButton>
+                @if (CanSave)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                               OnClick="SaveAsync">حفظ</MudButton>
+                }
+            </div>
+
+        </div></div>
+    }
+</div>
+
+@code {
+    [Parameter] public int? Id { get; set; }
+    private int? _id;
+    private string SupplierCode = "";
+
+    private AuthUser? _user;
+    private bool CanCreate => _user?.Can("SUPPLIER.CREATE") ?? false;
+    private bool CanEdit   => _user?.Can("SUPPLIER.EDIT") ?? false;
+    private bool CanSave   => _id is null ? CanCreate : CanEdit;
+
+    private bool _loading; private bool _saving;
+    private string? _msg; private bool _ok = true;
+
+    private List<Opt> _terms = new();
+    private Form _f = new();
+
+    /* 🔴 نفس القاموس الموجود في `Suppliers.razor` — لازم يفضل متطابق
+       وإلا القائمة هتعرض نوع والمورد محفوظ بنوع تاني. */
+    private static readonly Dictionary<string, string> Types = new()
+    {
+        ["TransportCompany"] = "شركة نقل", ["FuelStation"] = "محطة وقود", ["Workshop"] = "ورشة",
+        ["PortServices"] = "خدمات ميناء", ["PartsSupplier"] = "مورد قطع غيار", ["Other"] = "أخرى"
+    };
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+
+    /// <summary>مطابق لـ <c>SuppliersController.Upsert</c> — 8 حقول.</summary>
+    public class Form
+    {
+        public string SupplierType { get; set; } = "TransportCompany";
+        public string NameAr { get; set; } = "";
+        public string? NameEn { get; set; }
+        public string? TaxNumber { get; set; }
+        public string? Phone { get; set; }
+        public string? Email { get; set; }
+        public string? Address { get; set; }
+        public int? PaymentTermId { get; set; }
+    }
+
+    /// <summary>مطابق لـ <c>SuppliersController.Detail</c> — 11 حقل.</summary>
+    public class Detail
+    {
+        public int SupplierId { get; set; }
+        public string SupplierCode { get; set; } = "";
+        public string SupplierType { get; set; } = "";
+        public string NameAr { get; set; } = "";
+        public string? NameEn { get; set; }
+        public string? TaxNumber { get; set; }
+        public string? Phone { get; set; }
+        public string? Email { get; set; }
+        public string? Address { get; set; }
+        public int? PaymentTermId { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    // ═══════════════ Init ═══════════════
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        _id = Id;
+        if (!CanSave) return;
+
+        _loading = true;
+        try
+        {
+            _terms = await SafeGetT<Opt>("api/options/payment-terms");
+            if (_id is not null) await LoadAsync(_id.Value);
+        }
+        catch (Exception ex) { _msg = "فشل التحميل: " + ex.Message; _ok = false; }
+        finally { _loading = false; }
+    }
+
+    private async Task LoadAsync(int id)
+    {
+        var d = await Http.GetFromJsonAsync<Detail>($"api/suppliers/{id}");
+        if (d is null) { _msg = "المورد غير موجود"; _ok = false; return; }
+
+        SupplierCode = d.SupplierCode;
+        _f = new Form
+        {
+            SupplierType  = d.SupplierType,
+            NameAr        = d.NameAr,
+            NameEn        = d.NameEn,
+            TaxNumber     = d.TaxNumber,
+            Phone         = d.Phone,
+            Email         = d.Email,
+            Address       = d.Address,
+            PaymentTermId = d.PaymentTermId
+        };
+    }
+
+    // ═══════════════ Save ═══════════════
+
+    private async Task SaveAsync()
+    {
+        if (_saving) return;
+        _saving = true; _msg = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_f.NameAr))
+            { _msg = "الاسم بالعربي مطلوب"; _ok = false; return; }
+
+            var res = _id is null
+                ? await Http.PostAsJsonAsync("api/suppliers", _f)
+                : await Http.PutAsJsonAsync($"api/suppliers/{_id}", _f);
+
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) GoBack();
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    // ═══════════════ Helpers ═══════════════
+
+    private void GoBack() => Nav.NavigateTo("/suppliers");
+
+    private async Task<List<T>> SafeGetT<T>(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<T>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "✅ تم الحفظ" : "حصل خطأ — حاول تاني"; }
+    }
+}

@@ -46,6 +46,31 @@ public class AuthMessageHandler : DelegatingHandler
             await _store.ClearAsync();
         }
 
+        /* ─────────────────────────────────────────────────────────────────
+           🔴 تشخيص: لو طلب على /api/... رجّع HTML
+
+           `Program.cs` فيه `app.MapFallbackToFile("index.html")` — فأي route
+           مش موجود على السيرفر بيرجع **index.html** بدل 404 JSON.
+           والنتيجة رسالة مالهاش معنى:
+               «'<' is an invalid start of a value. Path: $ | LineNumber: 0»
+
+           بنحوّلها لرسالة تقول السبب على طول — **لكل الصفحات مرة واحدة**.
+           ───────────────────────────────────────────────────────────────── */
+        var path = request.RequestUri?.AbsolutePath ?? "";
+        if (path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase)
+            && !path.StartsWith("/api/health", StringComparison.OrdinalIgnoreCase))
+        {
+            var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!string.IsNullOrWhiteSpace(raw) && raw.TrimStart().StartsWith("<"))
+            {
+                throw new HttpRequestException(
+                    $"الإندبوينت `{path}` مش موجود على السيرفر — " +
+                    "السيرفر رجّع صفحة HTML مش بيانات. " +
+                    "اتأكد إن ملف الكنترولر متنسوخ في `FastCom.Server` " +
+                    "وإنك عملت **rebuild للسيرفر** (مش Client بس).");
+            }
+        }
+
         return response;
     }
 }

@@ -10,6 +10,10 @@
 
 <PageTitle>الإعدادات — فاست كوم</PageTitle>
 
+
+@* ═══════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════ *@
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
@@ -27,428 +31,1647 @@
         <div class="fc-kpis fc-kpis-glass">
             <div class="fc-kpi">
                 <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.Business" /></div>
-                <div><div class="fc-kpi-num" style="font-size:1rem">@CompanyName</div>
-                    <div class="fc-kpi-lb">الشركة</div></div>
+                <div>
+                    <div class="fc-kpi-num" style="font-size:.95rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px">
+                        @CompanyName
+                    </div>
+                    <div class="fc-kpi-lb">الشركة</div>
+                </div>
             </div>
             <div class="fc-kpi">
                 <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.Tune" /></div>
-                <div><div class="fc-kpi-num">@(_settings?.Count ?? 0)</div>
-                    <div class="fc-kpi-lb">مفتاح في النظام</div></div>
+                <div><div class="fc-kpi-num">@(_settings?.Count ?? 0)</div><div class="fc-kpi-lb">مفتاح النظام</div></div>
             </div>
             <div class="fc-kpi">
                 <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.VerifiedUser" /></div>
-                <div><div class="fc-kpi-num">@SystemKeys</div>
-                    <div class="fc-kpi-lb">من أساسيات النظام</div></div>
+                <div><div class="fc-kpi-num">@SystemKeys</div><div class="fc-kpi-lb">مفاتيح أساسية</div></div>
+            </div>
+            <div class="fc-kpi">
+                <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Image" /></div>
+                <div>
+                    <div class="fc-kpi-num">@LogoCount</div>
+                    <div class="fc-kpi-lb">شعار / ختم</div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<div class="fc-overlap">
-    <div class="fc-card">
 
-        @if (_err is not null)
-        {
-            <div class="fc-alert fc-alert-bad">
-                <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.ErrorOutline" /></div>
-                <div class="fc-alert-body">
-                    <div class="fc-alert-title">تعذّر تحميل الإعدادات</div>
-                    <div>@_err</div>
-                </div>
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="st-body">
+
+    @if (_err is not null)
+    {
+        <div class="st-error-box" role="alert">
+            <div class="st-err-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 8v4M12 16h.01" stroke-linecap="round"/>
+                </svg>
             </div>
-        }
-
-        <div class="fc-rtabs">
-            <button type="button" class="@TabClass(0)" @onclick="@(() => _tab = 0)">
-                <MudIcon Icon="@Icons.Material.Filled.Business" Size="Size.Small" />
-                بيانات الشركة
-            </button>
-            <button type="button" class="@TabClass(1)" @onclick="@(() => _tab = 1)">
-                <MudIcon Icon="@Icons.Material.Filled.Tune" Size="Size.Small" />
-                مفاتيح النظام
-                <span class="fc-rtab-n">@(_settings?.Count ?? 0)</span>
-            </button>
+            <div>
+                <strong>تعذّر تحميل الإعدادات</strong>
+                <p>@_err</p>
+            </div>
         </div>
+    }
 
-        @if (_loading)
-        {
-            <div class="fc-loading"><MudProgressCircular Indeterminate="true" Size="Size.Small" /> جارٍ التحميل…</div>
-        }
+    @if (_loading)
+    {
+        <div class="st-loading-wrap">
+            <div class="st-spinner" aria-label="جاري التحميل"></div>
+            <span>جاري تحميل الإعدادات...</span>
+        </div>
+    }
+    else if (_pf is not null || _settings is not null)
+    {
+        <div class="st-tabs-wrap">
 
-        @* ══════════════════ بيانات الشركة ══════════════════ *@
-        @if (_tab == 0 && _pf is not null)
-        {
-            <div class="fc-rep-sec" style="margin-top:6px">
-                <div>
-                    <h3><MudIcon Icon="@Icons.Material.Filled.AccountBalance" /> البيانات القانونية</h3>
-                    <div class="fc-rep-sec-sub">دي اللي بتتطبع في الفواتير والمستندات الرسمية</div>
-                </div>
-                @if (!string.IsNullOrEmpty(_p?.UpdatedAt))
-                {
-                    <div class="fc-cell-sub">آخر تحديث @_p!.UpdatedAt</div>
-                }
-            </div>
+            <MudTabs Elevation="0"
+                     Rounded="false"
+                     ApplyEffectsToContainer="true"
+                     PanelClass="st-tab-panel"
+                     @bind-ActivePanelIndex="_tab"
+                     Class="st-mud-tabs">
 
-            <div class="fc-set-grid">
-                <div class="fc-field">
-                    <div class="fc-field-lb">الاسم القانوني (عربي) <b>*</b></div>
-                    <input class="fc-field-in" @bind="_pf.LegalNameAr" />
-                </div>
-                <div class="fc-field">
-                    <div class="fc-field-lb">الاسم القانوني (إنجليزي)</div>
-                    <input class="fc-field-in" @bind="_pf.LegalNameEn" />
-                </div>
-                <div class="fc-field">
-                    <div class="fc-field-lb">الاسم التجاري (عربي)</div>
-                    <input class="fc-field-in" @bind="_pf.TradeNameAr" />
-                </div>
-                <div class="fc-field">
-                    <div class="fc-field-lb">الاسم التجاري (إنجليزي)</div>
-                    <input class="fc-field-in" @bind="_pf.TradeNameEn" />
-                </div>
-                <div class="fc-field">
-                    <div class="fc-field-lb">الرقم الضريبي <b>*</b></div>
-                    <input class="fc-field-in" @bind="_pf.TaxNumber" placeholder="15 رقم" />
-                </div>
-                <div class="fc-field">
-                    <div class="fc-field-lb">رقم التسجيل في القيمة المضافة</div>
-                    <input class="fc-field-in" @bind="_pf.VatRegistrationNumber" />
-                </div>
-                <div class="fc-field">
-                    <div class="fc-field-lb">السجل التجاري</div>
-                    <input class="fc-field-in" @bind="_pf.CommercialRegister" />
-                </div>
-                <div class="fc-field">
-                    <div class="fc-field-lb">كود العملة</div>
-                    <input class="fc-field-in" maxlength="3" @bind="_pf.CurrencyCode" />
-                    <div class="fc-field-hint">3 حروف — زي EGP</div>
-                </div>
-            </div>
 
-            <div class="fc-rep-sec">
-                <div>
-                    <h3><MudIcon Icon="@Icons.Material.Filled.Place" /> العنوان والتواصل</h3>
-                </div>
-            </div>
+                @* ══════════════════════════════════════
+                   TAB 1 — بيانات الشركة
+                ══════════════════════════════════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="stab-label">
+                            <div class="stab-icon stab-gold" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                    <path d="M9 22V12h6v10"/>
+                                </svg>
+                            </div>
+                            <span>بيانات الشركة</span>
+                        </div>
+                    </TabContent>
 
-            <div class="fc-set-grid">
-                <div class="fc-field">
-                    <div class="fc-field-lb">العنوان (عربي) <b>*</b></div>
-                    <input class="fc-field-in" @bind="_pf.AddressAr" />
-                </div>
-                <div class="fc-field">
-                    <div class="fc-field-lb">العنوان (إنجليزي)</div>
-                    <input class="fc-field-in" @bind="_pf.AddressEn" />
-                </div>
-                <div class="fc-field">
-                    <div class="fc-field-lb">المدينة (عربي)</div>
-                    <input class="fc-field-in" @bind="_pf.CityAr" />
-                </div>
-                <div class="fc-field">
-                    <div class="fc-field-lb">المدينة (إنجليزي)</div>
-                    <input class="fc-field-in" @bind="_pf.CityEn" />
-                </div>
-                <div class="fc-field">
-                    <div class="fc-field-lb">التليفون</div>
-                    <input class="fc-field-in" @bind="_pf.Phone" />
-                </div>
-                <div class="fc-field">
-                    <div class="fc-field-lb">الموبايل</div>
-                    <input class="fc-field-in" @bind="_pf.Mobile" />
-                </div>
-                <div class="fc-field">
-                    <div class="fc-field-lb">البريد الإلكتروني</div>
-                    <input class="fc-field-in" type="email" @bind="_pf.Email" />
-                </div>
-                <div class="fc-field">
-                    <div class="fc-field-lb">الموقع</div>
-                    <input class="fc-field-in" @bind="_pf.Website" placeholder="https://" />
-                </div>
-            </div>
+                    <ChildContent>
+                        <div class="st-tab-section">
 
-            <div class="fc-rep-sec">
-                <div>
-                    <h3><MudIcon Icon="@Icons.Material.Filled.Description" /> إعدادات الفوترة</h3>
-                </div>
-            </div>
+                            @* ── البيانات القانونية ── *@
+                            <div class="st-section-card">
+                                <div class="st-section-head">
+                                    <div class="st-section-icon icon-blue" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="st-section-title">البيانات القانونية</div>
+                                        <div class="st-section-sub">بتتطبع في الفواتير والمستندات الرسمية</div>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(_p?.UpdatedAt))
+                                    {
+                                        <span class="st-updated-badge">
+                                            <svg viewBox="0 0 16 16" width="10" height="10"
+                                                 fill="none" stroke="currentColor" stroke-width="1.8"
+                                                 aria-hidden="true">
+                                                <circle cx="8" cy="8" r="6"/>
+                                                <path d="M8 5v3l2 2" stroke-linecap="round"/>
+                                            </svg>
+                                            آخر حفظ @_p!.UpdatedAt
+                                        </span>
+                                    }
+                                </div>
 
-            <div class="fc-set-grid">
-                <div class="fc-field">
-                    <div class="fc-field-lb">نسبة الضريبة الافتراضية</div>
-                    <select class="fc-field-in" @bind="_pf.DefaultTaxRateId">
-                        <option value="">— بدون —</option>
-                        @foreach (var t in _taxRates)
-                        {
-                            <option value="@t.TaxRateId">@t.NameAr (@t.Rate%)</option>
-                        }
-                    </select>
-                    <div class="fc-field-hint">بتتطبق على العميل اللي ملهوش نسبة معرّفة</div>
-                </div>
-                <div class="fc-field">
-                    <div class="fc-field-lb">شهر بداية السنة المالية</div>
-                    <select class="fc-field-in" @bind="_pf.FiscalYearStartMonth">
-                        @for (var m = 1; m <= 12; m++)
-                        {
-                            var mm = m;
-                            <option value="@mm">@MonthName(mm)</option>
-                        }
-                    </select>
-                </div>
-                <div class="fc-field span2">
-                    <div class="fc-field-lb">حاشية الفاتورة (عربي)</div>
-                    <input class="fc-field-in" @bind="_pf.InvoiceFooterNoteAr"
-                           placeholder="مثال: شكراً لتعاملكم معنا" />
-                </div>
-                <div class="fc-field span2">
-                    <div class="fc-field-lb">حاشية الفاتورة (إنجليزي)</div>
-                    <input class="fc-field-in" @bind="_pf.InvoiceFooterNoteEn" />
-                </div>
-            </div>
+                                <div class="st-form-grid">
 
-            <div class="fc-rep-sec">
-                <div>
-                    <h3><MudIcon Icon="@Icons.Material.Filled.Image" /> الشعار والختم</h3>
-                    <div class="fc-rep-sec-sub">png · jpg · webp — 5 ميجا كحد أقصى</div>
-                </div>
-            </div>
+                                    <div class="st-field">
+                                        <label class="st-label">
+                                            الاسم القانوني (عربي)
+                                            <span class="st-required">*</span>
+                                        </label>
+                                        <input class="st-input" @bind="_pf!.LegalNameAr" placeholder="الاسم القانوني الكامل" />
+                                    </div>
 
-            <div class="fc-set-grid">
-                @foreach (var slot in Slots)
-                {
-                    <div class="fc-logo-slot">
-                        <div class="fc-logo-box">
-                            @if (!string.IsNullOrEmpty(slot.Path))
+                                    <div class="st-field">
+                                        <label class="st-label">الاسم القانوني (إنجليزي)</label>
+                                        <input class="st-input" @bind="_pf!.LegalNameEn" placeholder="Legal Name in English" dir="ltr" />
+                                    </div>
+
+                                    <div class="st-field">
+                                        <label class="st-label">الاسم التجاري (عربي)</label>
+                                        <input class="st-input" @bind="_pf!.TradeNameAr" placeholder="الاسم المعروف به" />
+                                    </div>
+
+                                    <div class="st-field">
+                                        <label class="st-label">الاسم التجاري (إنجليزي)</label>
+                                        <input class="st-input" @bind="_pf!.TradeNameEn" placeholder="Trade Name" dir="ltr" />
+                                    </div>
+
+                                    <div class="st-field">
+                                        <label class="st-label">
+                                            الرقم الضريبي
+                                            <span class="st-required">*</span>
+                                        </label>
+                                        <div class="st-input-group">
+                                            <span class="st-prefix" aria-hidden="true">
+                                                <svg viewBox="0 0 16 16" width="13" height="13"
+                                                     fill="none" stroke="currentColor" stroke-width="1.7">
+                                                    <rect x="2" y="2" width="12" height="12" rx="2"/>
+                                                    <path d="M5 8h6M5 5h6M5 11h4" stroke-linecap="round"/>
+                                                </svg>
+                                            </span>
+                                            <input class="st-input with-prefix" @bind="_pf!.TaxNumber"
+                                                   placeholder="15 رقم" dir="ltr" />
+                                        </div>
+                                    </div>
+
+                                    <div class="st-field">
+                                        <label class="st-label">رقم التسجيل (القيمة المضافة)</label>
+                                        <input class="st-input" @bind="_pf!.VatRegistrationNumber"
+                                               placeholder="اختياري" dir="ltr" />
+                                    </div>
+
+                                    <div class="st-field">
+                                        <label class="st-label">السجل التجاري</label>
+                                        <input class="st-input" @bind="_pf!.CommercialRegister"
+                                               placeholder="رقم السجل التجاري" dir="ltr" />
+                                    </div>
+
+                                    <div class="st-field">
+                                        <label class="st-label">كود العملة</label>
+                                        <input class="st-input" maxlength="3" @bind="_pf!.CurrencyCode"
+                                               placeholder="EGP" dir="ltr" style="text-transform:uppercase" />
+                                        <div class="st-hint">3 حروف — مثال: EGP أو USD</div>
+                                    </div>
+
+                                </div>
+                            </div>
+
+
+                            @* ── العنوان والتواصل ── *@
+                            <div class="st-section-card">
+                                <div class="st-section-head">
+                                    <div class="st-section-icon icon-green" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                                            <circle cx="12" cy="10" r="3"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="st-section-title">العنوان والتواصل</div>
+                                        <div class="st-section-sub">بيانات الاتصال بالشركة</div>
+                                    </div>
+                                </div>
+
+                                <div class="st-form-grid">
+
+                                    <div class="st-field">
+                                        <label class="st-label">
+                                            العنوان (عربي)
+                                            <span class="st-required">*</span>
+                                        </label>
+                                        <input class="st-input" @bind="_pf!.AddressAr" placeholder="العنوان الكامل" />
+                                    </div>
+
+                                    <div class="st-field">
+                                        <label class="st-label">العنوان (إنجليزي)</label>
+                                        <input class="st-input" @bind="_pf!.AddressEn" placeholder="Full Address" dir="ltr" />
+                                    </div>
+
+                                    <div class="st-field">
+                                        <label class="st-label">المدينة (عربي)</label>
+                                        <div class="st-input-group">
+                                            <span class="st-prefix" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="13" height="13"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                                                    <circle cx="12" cy="10" r="3"/>
+                                                </svg>
+                                            </span>
+                                            <input class="st-input with-prefix" @bind="_pf!.CityAr" placeholder="القاهرة" />
+                                        </div>
+                                    </div>
+
+                                    <div class="st-field">
+                                        <label class="st-label">المدينة (إنجليزي)</label>
+                                        <input class="st-input" @bind="_pf!.CityEn" placeholder="Cairo" dir="ltr" />
+                                    </div>
+
+                                    <div class="st-field">
+                                        <label class="st-label">التليفون</label>
+                                        <div class="st-input-group">
+                                            <span class="st-prefix" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="13" height="13"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-4.99-5 19.79 19.79 0 01-3.07-8.67A2 2 0 014 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+                                                </svg>
+                                            </span>
+                                            <input class="st-input with-prefix" @bind="_pf!.Phone"
+                                                   type="tel" placeholder="02-XXXXXXXX" dir="ltr" />
+                                        </div>
+                                    </div>
+
+                                    <div class="st-field">
+                                        <label class="st-label">الموبايل</label>
+                                        <div class="st-input-group">
+                                            <span class="st-prefix" aria-hidden="true">📱</span>
+                                            <input class="st-input with-prefix" @bind="_pf!.Mobile"
+                                                   type="tel" placeholder="01X-XXXXXXXX" dir="ltr" />
+                                        </div>
+                                    </div>
+
+                                    <div class="st-field">
+                                        <label class="st-label">البريد الإلكتروني</label>
+                                        <div class="st-input-group">
+                                            <span class="st-prefix" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="13" height="13"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                                                    <path d="M22 6l-10 7L2 6"/>
+                                                </svg>
+                                            </span>
+                                            <input class="st-input with-prefix" @bind="_pf!.Email"
+                                                   type="email" placeholder="info@company.com" dir="ltr" />
+                                        </div>
+                                    </div>
+
+                                    <div class="st-field">
+                                        <label class="st-label">الموقع الإلكتروني</label>
+                                        <div class="st-input-group">
+                                            <span class="st-prefix" aria-hidden="true">🌐</span>
+                                            <input class="st-input with-prefix" @bind="_pf!.Website"
+                                                   placeholder="https://company.com" dir="ltr" />
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+
+
+                            @* ── أزرار الحفظ ── *@
+                            <div class="st-actions-bar">
+                                @if (CanManage)
+                                {
+                                    <button class="st-save-btn" @onclick="SaveProfile" disabled="@_saving">
+                                        @if (_saving)
+                                        {
+                                            <span class="btn-spinner sm" aria-hidden="true"></span>
+                                            <span>جاري الحفظ...</span>
+                                        }
+                                        else
+                                        {
+                                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                                 fill="none" stroke="currentColor" stroke-width="2"
+                                                 aria-hidden="true">
+                                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                                <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                            <span>حفظ بيانات الشركة</span>
+                                        }
+                                    </button>
+                                    <span class="st-required-note">
+                                        الحقول بالنجمة <span class="st-required">*</span> مطلوبة
+                                    </span>
+                                }
+                                else
+                                {
+                                    <div class="st-no-perm">
+                                        <svg viewBox="0 0 24 24" width="16" height="16"
+                                             fill="none" stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <rect x="3" y="11" width="18" height="11" rx="2"/>
+                                            <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                                        </svg>
+                                        عرض فقط — التعديل يحتاج صلاحية
+                                        <code>SETTINGS.MANAGE</code>
+                                    </div>
+                                }
+                            </div>
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+                @* ══════════════════════════════════════
+                   TAB 2 — الشعار والختم
+                ══════════════════════════════════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="stab-label">
+                            <div class="stab-icon stab-purple" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                                    <path d="M21 15l-5-5L5 21"/>
+                                </svg>
+                            </div>
+                            <span>الشعار والختم</span>
+                            @if (LogoCount > 0)
                             {
-                                <img src="@slot.Path" alt="@slot.Label" />
+                                <span class="stab-count">@LogoCount</span>
+                            }
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="st-tab-section">
+
+                            <div class="st-section-card">
+                                <div class="st-section-head">
+                                    <div class="st-section-icon icon-purple" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                                            <path d="M21 15l-5-5L5 21"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="st-section-title">الشعار والختم</div>
+                                        <div class="st-section-sub">
+                                            png · jpg · webp — الحد الأقصى 5 ميجا لكل ملف
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="st-logo-grid">
+
+                                    @foreach (var slot in Slots)
+                                    {
+                                        var slotKind = slot.Kind;
+                                        <div class="st-logo-card">
+
+                                            @* Preview Area *@
+                                            <div class="st-logo-preview @(string.IsNullOrEmpty(slot.Path) ? "preview-empty" : "preview-filled")">
+                                                @if (!string.IsNullOrEmpty(slot.Path))
+                                                {
+                                                    <img src="@slot.Path"
+                                                         alt="@slot.Label"
+                                                         class="st-logo-img" />
+                                                    <div class="st-logo-overlay">
+                                                        <span>تغيير</span>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="st-logo-placeholder" aria-hidden="true">
+                                                        <svg viewBox="0 0 24 24" width="36" height="36"
+                                                             fill="none" stroke="currentColor" stroke-width="1.4">
+                                                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                                                            <path d="M21 15l-5-5L5 21"/>
+                                                        </svg>
+                                                        <span>لا يوجد</span>
+                                                    </div>
+                                                }
+                                            </div>
+
+                                            @* Meta *@
+                                            <div class="st-logo-meta">
+                                                <div class="st-logo-name">@slot.Label</div>
+                                                @if (!string.IsNullOrEmpty(slot.Path))
+                                                {
+                                                    <div class="st-logo-path" title="@slot.Path">
+                                                        <svg viewBox="0 0 16 16" width="10" height="10"
+                                                             fill="none" stroke="currentColor" stroke-width="1.8"
+                                                             aria-hidden="true">
+                                                            <path d="M13 10V4a1 1 0 00-1-1H4a1 1 0 00-1 1v6"/>
+                                                            <path d="M7 14l-4-4 4-4M9 14l4-4-4-4"/>
+                                                        </svg>
+                                                        @TruncatePath(slot.Path)
+                                                    </div>
+                                                }
+                                            </div>
+
+                                            @* Upload Button *@
+                                            @if (CanManage)
+                                            {
+                                                <label class="st-upload-btn @(string.IsNullOrEmpty(slot.Path) ? "upload-empty" : "upload-replace")">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2"
+                                                         aria-hidden="true">
+                                                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                                        <path d="M17 8l-5-5-5 5M12 3v12" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                    @(string.IsNullOrEmpty(slot.Path) ? "رفع الملف" : "تغيير")
+                                                    <InputFile OnChange="e => OnLogo(e, slot.Kind)"
+                                                               style="display:none"
+                                                               accept=".png,.jpg,.jpeg,.webp" />
+                                                </label>
+                                            }
+
+                                        </div>
+                                    }
+
+                                </div>
+
+                                @* Upload Tips *@
+                                <div class="st-upload-tips">
+                                    <div class="st-tip">
+                                        <svg viewBox="0 0 16 16" width="12" height="12"
+                                             fill="none" stroke="currentColor" stroke-width="1.8"
+                                             aria-hidden="true">
+                                            <circle cx="8" cy="8" r="6"/>
+                                            <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                        </svg>
+                                        الشعار الرئيسي: يفضل 400×200 px على خلفية شفافة (PNG)
+                                    </div>
+                                    <div class="st-tip">
+                                        <svg viewBox="0 0 16 16" width="12" height="12"
+                                             fill="none" stroke="currentColor" stroke-width="1.8"
+                                             aria-hidden="true">
+                                            <circle cx="8" cy="8" r="6"/>
+                                            <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                        </svg>
+                                        الختم: يفضل مربع 300×300 px على خلفية شفافة
+                                    </div>
+                                    <div class="st-tip">
+                                        <svg viewBox="0 0 16 16" width="12" height="12"
+                                             fill="none" stroke="currentColor" stroke-width="1.8"
+                                             aria-hidden="true">
+                                            <circle cx="8" cy="8" r="6"/>
+                                            <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                        </svg>
+                                        الشعار الغامق: للأماكن ذات الخلفية الداكنة — نفس المقاسات
+                                    </div>
+                                </div>
+
+                            </div>
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+                @* ══════════════════════════════════════
+                   TAB 3 — إعدادات الفوترة
+                ══════════════════════════════════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="stab-label">
+                            <div class="stab-icon stab-blue" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <span>الفوترة</span>
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="st-tab-section">
+
+                            <div class="st-section-card">
+                                <div class="st-section-head">
+                                    <div class="st-section-icon icon-blue" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="st-section-title">إعدادات الفوترة</div>
+                                        <div class="st-section-sub">الضريبة الافتراضية والسنة المالية وحاشية الفاتورة</div>
+                                    </div>
+                                </div>
+
+                                <div class="st-form-grid">
+
+                                    <div class="st-field">
+                                        <label class="st-label">نسبة الضريبة الافتراضية</label>
+                                        <div class="st-select-wrap">
+                                            <svg class="st-sel-icon" viewBox="0 0 24 24" width="14" height="14"
+                                                 fill="none" stroke="currentColor" stroke-width="2"
+                                                 aria-hidden="true">
+                                                <path d="M20 12V22H4V12M22 7H2v5h20V7zM12 22V7M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/>
+                                            </svg>
+                                            <select class="st-input st-select" @bind="_pf!.DefaultTaxRateId">
+                                                <option value="">— بدون ضريبة افتراضية —</option>
+                                                @foreach (var t in _taxRates)
+                                                {
+                                                    <option value="@t.TaxRateId">@t.NameAr (@t.Rate%)</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="st-hint">
+                                            <svg viewBox="0 0 16 16" width="10" height="10"
+                                                 fill="none" stroke="currentColor" stroke-width="1.8"
+                                                 aria-hidden="true">
+                                                <circle cx="8" cy="8" r="6"/>
+                                                <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                            </svg>
+                                            بتتطبق على العميل اللي ملهوش نسبة معرّفة
+                                        </div>
+                                    </div>
+
+                                    <div class="st-field">
+                                        <label class="st-label">شهر بداية السنة المالية</label>
+                                        <div class="st-select-wrap">
+                                            <svg class="st-sel-icon" viewBox="0 0 24 24" width="14" height="14"
+                                                 fill="none" stroke="currentColor" stroke-width="2"
+                                                 aria-hidden="true">
+                                                <rect x="3" y="5" width="18" height="16" rx="2"/>
+                                                <path d="M7 3V7M17 3V7M3 10H21" stroke-linecap="round"/>
+                                            </svg>
+                                            <select class="st-input st-select" @bind="_pf!.FiscalYearStartMonth">
+                                                @for (var m = 1; m <= 12; m++)
+                                                {
+                                                    var mm = m;
+                                                    <option value="@mm">@MonthName(mm)</option>
+                                                }
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="st-field st-field-full">
+                                        <label class="st-label">حاشية الفاتورة (عربي)</label>
+                                        <input class="st-input" @bind="_pf!.InvoiceFooterNoteAr"
+                                               placeholder="مثال: شكراً لتعاملكم معنا · جميع المبالغ بالجنيه المصري" />
+                                    </div>
+
+                                    <div class="st-field st-field-full">
+                                        <label class="st-label">حاشية الفاتورة (إنجليزي)</label>
+                                        <input class="st-input" @bind="_pf!.InvoiceFooterNoteEn"
+                                               placeholder="Thank you for your business · All amounts in EGP"
+                                               dir="ltr" />
+                                    </div>
+
+                                </div>
+
+                                @* Preview الحاشية *@
+                                @if (!string.IsNullOrWhiteSpace(_pf?.InvoiceFooterNoteAr) || !string.IsNullOrWhiteSpace(_pf?.InvoiceFooterNoteEn))
+                                {
+                                    <div class="st-invoice-preview">
+                                        <div class="st-inv-prev-label">
+                                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                                 fill="none" stroke="currentColor" stroke-width="2"
+                                                 aria-hidden="true">
+                                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                                <circle cx="12" cy="12" r="3"/>
+                                            </svg>
+                                            معاينة الحاشية
+                                        </div>
+                                        <div class="st-inv-prev-body">
+                                            @if (!string.IsNullOrWhiteSpace(_pf?.InvoiceFooterNoteAr))
+                                            {
+                                                <div class="st-inv-prev-ar">@_pf!.InvoiceFooterNoteAr</div>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(_pf?.InvoiceFooterNoteEn))
+                                            {
+                                                <div class="st-inv-prev-en" dir="ltr">@_pf!.InvoiceFooterNoteEn</div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+
+                            </div>
+
+                            <div class="st-actions-bar">
+                                @if (CanManage)
+                                {
+                                    <button class="st-save-btn" @onclick="SaveProfile" disabled="@_saving">
+                                        @if (_saving)
+                                        {
+                                            <span class="btn-spinner sm" aria-hidden="true"></span>
+                                            <span>جاري الحفظ...</span>
+                                        }
+                                        else
+                                        {
+                                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                                 fill="none" stroke="currentColor" stroke-width="2"
+                                                 aria-hidden="true">
+                                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                                <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                            <span>حفظ إعدادات الفوترة</span>
+                                        }
+                                    </button>
+                                }
+                            </div>
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+                @* ══════════════════════════════════════
+                   TAB 4 — مفاتيح النظام
+                ══════════════════════════════════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="stab-label">
+                            <div class="stab-icon stab-teal" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                    <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <span>مفاتيح النظام</span>
+                            @if (_settings?.Count > 0)
+                            {
+                                <span class="stab-count">@_settings!.Count</span>
+                            }
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="st-tab-section">
+
+                            @* ── Toolbar ── *@
+                            <div class="st-keys-toolbar">
+
+                                <div class="st-keys-search-wrap">
+                                    <svg class="st-keys-search-icon" viewBox="0 0 24 24"
+                                         width="15" height="15" fill="none" stroke="currentColor"
+                                         stroke-width="2" aria-hidden="true">
+                                        <circle cx="11" cy="11" r="8"/>
+                                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                                    </svg>
+                                    <input class="st-keys-search"
+                                           placeholder="ابحث بالمفتاح أو الوصف..."
+                                           @bind="_keySearch"
+                                           @bind:event="oninput"
+                                           aria-label="بحث في المفاتيح" />
+                                </div>
+
+                                <div class="st-keys-type-filter">
+                                    <select class="st-input" @bind="_keyTypeFilter">
+                                        <option value="">كل الأنواع</option>
+                                        @foreach (var vt in _valueTypes)
+                                        {
+                                            <option value="@vt">@vt</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="st-keys-actions">
+                                    @if (CanManage)
+                                    {
+                                        <button class="st-save-btn sm"
+                                                @onclick="SaveBulk"
+                                                disabled="@_saving">
+                                            @if (_saving)
+                                            {
+                                                <span class="btn-spinner sm" aria-hidden="true"></span>
+                                            }
+                                            else
+                                            {
+                                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                                     fill="none" stroke="currentColor" stroke-width="2"
+                                                     aria-hidden="true">
+                                                    <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                                    <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                                                </svg>
+                                            }
+                                            حفظ التعديلات
+                                        </button>
+                                        <button class="st-add-key-btn" @onclick="OpenNew">
+                                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                                 fill="none" stroke="currentColor" stroke-width="2.5"
+                                                 aria-hidden="true">
+                                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                            </svg>
+                                            مفتاح جديد
+                                        </button>
+                                    }
+                                    <span class="st-keys-count">
+                                        @FilteredKeys.Count() من @(_settings?.Count ?? 0)
+                                    </span>
+                                </div>
+
+                            </div>
+
+                            @* ── Keys Table ── *@
+                            @if (_settings is null || !_settings.Any())
+                            {
+                                <div class="st-keys-empty">
+                                    <div class="st-keys-empty-icon" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="40" height="40"
+                                             fill="none" stroke="currentColor" stroke-width="1.4">
+                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                            <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round"/>
+                                        </svg>
+                                    </div>
+                                    <div class="st-keys-empty-title">مافيش مفاتيح لسه</div>
+                                    <div class="st-keys-empty-sub">
+                                        دوس «مفتاح جديد» وضيف الأول،
+                                        أو نفّذ <code>sql/FastCom-settings-seed.sql</code>
+                                    </div>
+                                    @if (CanManage)
+                                    {
+                                        <button class="st-add-key-btn mt-10" @onclick="OpenNew">
+                                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                                 fill="none" stroke="currentColor" stroke-width="2.5"
+                                                 aria-hidden="true">
+                                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                            </svg>
+                                            مفتاح جديد
+                                        </button>
+                                    }
+                                </div>
                             }
                             else
                             {
-                                <MudIcon Icon="@Icons.Material.Filled.ImageNotSupported" Style="color:#C3CCDA" />
-                            }
-                        </div>
-                        <div class="fc-logo-meta">
-                            <div class="fc-logo-name">@slot.Label</div>
-                            <div class="fc-logo-path">@(slot.Path ?? "مافيش")</div>
-                            @if (CanManage)
-                            {
-                                <div>
-                                    <label class="fc-mini-btn" style="cursor:pointer">
-                                        @(string.IsNullOrEmpty(slot.Path) ? "رفع" : "تغيير")
-                                        <InputFile OnChange="e => OnLogo(e, slot.Kind)" style="display:none"
-                                                   accept=".png,.jpg,.jpeg,.webp" />
-                                    </label>
+                                <div class="st-keys-table-wrap">
+                                    <table class="st-keys-table" aria-label="جدول مفاتيح النظام">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col" class="th-start" style="min-width:200px">المفتاح</th>
+                                                <th scope="col" style="min-width:220px">القيمة</th>
+                                                <th scope="col">النوع</th>
+                                                <th scope="col" style="min-width:220px">الوصف</th>
+                                                <th scope="col">آخر تحديث</th>
+                                                @if (CanManage)
+                                                {
+                                                    <th scope="col" style="width:80px"></th>
+                                                }
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var s in FilteredKeys)
+                                            {
+                                                <tr>
+                                                    <td class="td-start">
+                                                        <div class="st-key-cell">
+                                                            <div class="st-key-name" dir="ltr">@s.SettingKey</div>
+                                                            @if (s.IsSystem)
+                                                            {
+                                                                <span class="st-system-badge">أساسي</span>
+                                                            }
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div class="st-val-cell">
+                                                            @if (s.ValueType == "Bool")
+                                                            {
+                                                                <select class="st-input-sm" @bind="s.SettingValue">
+                                                                    <option value="true">✅ نعم</option>
+                                                                    <option value="false">❌ لا</option>
+                                                                </select>
+                                                            }
+                                                            else if (s.ValueType == "Date")
+                                                            {
+                                                                <input type="date" class="st-input-sm"
+                                                                       value="@s.SettingValue"
+                                                                       @onchange="e => s.SettingValue = e.Value?.ToString() ?? s.SettingValue" />
+                                                            }
+                                                            else
+                                                            {
+                                                                <input class="st-input-sm" @bind="s.SettingValue" placeholder="—" />
+                                                            }
+                                                            <button class="st-copy-btn"
+        @onclick="() => CopyToClipboard(s.SettingValue ?? string.Empty)"
+        title="نسخ القيمة"
+        aria-label="نسخ قيمة @s.SettingKey">
+                                                                <svg viewBox="0 0 24 24" width="12" height="12"
+                                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                                    <rect x="9" y="9" width="13" height="13" rx="2"/>
+                                                                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                                                                </svg>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span class="st-type-chip @TypeChipClass(s.ValueType)">
+                                                            @s.ValueType
+                                                        </span>
+                                                    </td>
+                                                    <td class="td-desc">@(s.Description ?? "—")</td>
+                                                    <td class="td-muted">@(s.UpdatedAt ?? "—")</td>
+                                                    @if (CanManage)
+                                                    {
+                                                        <td>
+                                                            @if (!s.IsSystem)
+                                                            {
+                                                                <button class="st-del-key"
+                                                                        @onclick="() => DeleteKey(s)"
+                                                                        title="حذف"
+                                                                        aria-label="حذف @s.SettingKey">
+                                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                                        <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                                    </svg>
+                                                                </button>
+                                                            }
+                                                        </td>
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
                                 </div>
                             }
+
                         </div>
-                    </div>
-                }
-            </div>
+                    </ChildContent>
+                </MudTabPanel>
 
-            <div class="fc-set-actions">
-                @if (CanManage)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                               StartIcon="@Icons.Material.Filled.Save"
-                               Disabled="@_saving" OnClick="SaveProfile">
-                        @(_saving ? "بيحفظ…" : "حفظ بيانات الشركة")
-                    </MudButton>
-                    <span class="fc-note">الحقول اللي عليها <b style="color:#B3261E">*</b> مطلوبة</span>
-                }
-                else
-                {
-                    <MudIcon Icon="@Icons.Material.Filled.Lock" Style="color:#8896AC" />
-                    <span class="fc-note">معاك صلاحية عرض بس — التعديل محتاج <code>SETTINGS.MANAGE</code></span>
-                }
-            </div>
-        }
 
-        @* ══════════════════ مفاتيح النظام ══════════════════ *@
-        @if (_tab == 1)
-        {
-            <div class="fc-rep-sec" style="margin-top:6px">
-                <div>
-                    <h3><MudIcon Icon="@Icons.Material.Filled.Tune" /> مفاتيح النظام</h3>
-                    <div class="fc-rep-sec-sub">
-                        قيم عامة بيقرأها النظام — عدّل القيمة بعدين دوس «حفظ التعديلات»
-                    </div>
-                </div>
-                @if (CanManage)
-                {
-                    <div class="fc-rep-head-actions">
-                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
-                                   StartIcon="@Icons.Material.Filled.Save"
-                                   Disabled="@_saving" OnClick="SaveBulk">حفظ التعديلات</MudButton>
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined"
-                                   StartIcon="@Icons.Material.Filled.Add"
-                                   OnClick="OpenNew">مفتاح جديد</MudButton>
-                    </div>
-                }
-            </div>
+            </MudTabs>
+        </div>
+    }
 
-            <div class="fc-table-wrap" style="max-height:600px">
-                <table class="fc-table-pro2">
-                    <thead>
-                        <tr>
-                            <th style="min-width:230px">المفتاح</th>
-                            <th style="min-width:200px">القيمة</th>
-                            <th>النوع</th>
-                            <th style="min-width:250px">الوصف</th>
-                            <th>آخر تحديث</th>
-                            @if (CanManage)
-                            {
-                                <th style="width:56px"></th>
-                            }
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var s in _settings ?? NoSet)
-                        {
-                            <tr>
-                                <td>
-                                    <div class="id">@s.SettingKey</div>
-                                    @if (s.IsSystem)
-                                    {
-                                        <span class="fc-chip fc-chip-gold">أساسي</span>
-                                    }
-                                </td>
-                                <td>
-                                    @if (s.ValueType == "Bool")
-                                    {
-                                        <select class="fc-field-in" @bind="s.SettingValue">
-                                            <option value="true">نعم</option>
-                                            <option value="false">لا</option>
-                                        </select>
-                                    }
-                                    else if (s.ValueType == "Date")
-                                    {
-                                        <input type="date" class="fc-field-in" value="@s.SettingValue"
-                                               @onchange="e => s.SettingValue = e.Value?.ToString() ?? s.SettingValue" />
-                                    }
-                                    else
-                                    {
-                                        <input class="fc-field-in" @bind="s.SettingValue"
-                                               placeholder="—" />
-                                    }
-                                </td>
-                                <td><span class="fc-chip @TypeChip(s.ValueType)">@s.ValueType</span></td>
-                                <td class="fc-cell-sub">@(s.Description ?? "—")</td>
-                                <td class="fc-cell-sub">@(s.UpdatedAt ?? "—")</td>
-                                @if (CanManage)
-                                {
-                                    <td>
-                                        @if (!s.IsSystem)
-                                        {
-                                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
-                                                           Size="Size.Small" title="حذف"
-                                                           OnClick="@(() => DeleteKey(s))" />
-                                        }
-                                    </td>
-                                }
-                            </tr>
-                        }
-                        @if (_settings is null || _settings.Count == 0)
-                        {
-                            <tr>
-                                <td colspan="6" class="fc-empty">
-                                    مافيش مفاتيح لسه — دوس «مفتاح جديد» وضيف الأول،
-                                    أو نفّذ <code>sql/FastCom-settings-seed.sql</code> في SSMS
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
-    </div>
 </div>
 
-@* ══════════════════ مودال مفتاح جديد ══════════════════ *@
+
+@* ═══════════════════════════════════════════
+   MODAL — مفتاح جديد
+═══════════════════════════════════════════ *@
 @if (_newOpen)
 {
-    <div class="fc-modal-backdrop" @onclick="CloseNew"></div>
-    <div class="fc-modal fc-modal-sm">
-        <div class="fc-modal-head">
-            <div>
-                <div class="fc-modal-title">مفتاح جديد</div>
-                <div class="fc-modal-sub">الحروف الكبيرة والأرقام والنقطة والشرطة السفلية بس</div>
-            </div>
-            <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseNew" />
-        </div>
-        <div class="fc-modal-body">
-            <div class="fc-field">
-                <div class="fc-field-lb">اسم المفتاح <b>*</b></div>
-                <input class="fc-field-in" @bind="_nf.SettingKey" placeholder="CUSTODY.MAX_AMOUNT" />
-            </div>
+    <div class="st-modal-backdrop" @onclick="CloseNew"
+         role="dialog" aria-modal="true" aria-label="إضافة مفتاح جديد">
+        <div class="st-modal" @onclick:stopPropagation="true">
 
-            <div class="fc-field" style="margin-top:13px">
-                <div class="fc-field-lb">النوع</div>
-                <select class="fc-field-in" @bind="_nf.ValueType">
-                    @foreach (var vt in _valueTypes)
-                    {
-                        <option value="@vt">@vt</option>
-                    }
-                </select>
-                <div class="fc-field-hint">@TypeHint(_nf.ValueType)</div>
-            </div>
-
-            <div class="fc-field" style="margin-top:13px">
-                <div class="fc-field-lb">القيمة</div>
-                <input class="fc-field-in" @bind="_nf.SettingValue" placeholder="سيبها فاضية لو مش عايز تحدد" />
-            </div>
-
-            <div class="fc-field" style="margin-top:13px">
-                <div class="fc-field-lb">الوصف</div>
-                <input class="fc-field-in" @bind="_nf.Description" placeholder="بيظهر في الجدول" />
+            <div class="st-modal-head">
+                <div class="st-modal-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="st-modal-title">مفتاح جديد</div>
+                    <div class="st-modal-sub">الحروف الكبيرة والأرقام والنقطة والشرطة السفلية فقط</div>
+                </div>
+                <button class="st-modal-close" @onclick="CloseNew" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
             </div>
 
             @if (_newErr is not null)
             {
-                <div class="fc-alert fc-alert-bad" style="margin-top:13px">
-                    <div class="fc-alert-body"><div>@_newErr</div></div>
+                <div class="st-modal-banner banner-error" role="alert">
+                    <span>@_newErr</span>
+                    <button @onclick="() => _newErr = null">✕</button>
                 </div>
             }
-        </div>
-        <div class="fc-modal-foot">
-            <MudButton Variant="Variant.Text" OnClick="CloseNew">إلغاء</MudButton>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                       Disabled="@_saving" OnClick="SaveNew">
-                @(_saving ? "بيحفظ…" : "إضافة")
-            </MudButton>
+
+            <div class="st-modal-body">
+
+                <div class="st-field">
+                    <label class="st-label">
+                        اسم المفتاح
+                        <span class="st-required">*</span>
+                    </label>
+                    <input class="st-input"
+                           @bind="_nf.SettingKey"
+                           placeholder="CUSTODY.MAX_AMOUNT"
+                           dir="ltr"
+                           style="text-transform:uppercase"
+                           aria-required="true" />
+                    <div class="st-hint">
+                        <svg viewBox="0 0 16 16" width="10" height="10"
+                             fill="none" stroke="currentColor" stroke-width="1.8"
+                             aria-hidden="true">
+                            <circle cx="8" cy="8" r="6"/>
+                            <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                        </svg>
+                        حروف كبيرة وأرقام ونقطة وشرطة سفلية — مثال: INVOICE.AUTO_NUMBER
+                    </div>
+                </div>
+
+                <div class="st-field">
+                    <label class="st-label">النوع</label>
+                    <div class="st-select-wrap">
+                        <svg class="st-sel-icon" viewBox="0 0 24 24" width="14" height="14"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                            <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round"/>
+                        </svg>
+                        <select class="st-input st-select" @bind="_nf.ValueType">
+                            @foreach (var vt in _valueTypes)
+                            {
+                                <option value="@vt">@vt</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="st-type-hint-box">
+                        <span class="st-type-chip-sm @TypeChipClass(_nf.ValueType)">@_nf.ValueType</span>
+                        <span>@TypeHint(_nf.ValueType)</span>
+                    </div>
+                </div>
+
+                <div class="st-field">
+                    <label class="st-label">القيمة</label>
+                    <input class="st-input"
+                           @bind="_nf.SettingValue"
+                           placeholder="سيبها فاضية لو مش عايز تحدد قيمة الآن"
+                           dir="ltr" />
+                </div>
+
+                <div class="st-field">
+                    <label class="st-label">الوصف</label>
+                    <input class="st-input"
+                           @bind="_nf.Description"
+                           placeholder="وصف مختصر — بيظهر في الجدول" />
+                </div>
+
+            </div>
+
+            <div class="st-modal-foot">
+                <button class="st-modal-cancel" @onclick="CloseNew">إلغاء</button>
+                <button class="st-modal-save" @onclick="SaveNew" disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <span class="btn-spinner sm" aria-hidden="true"></span>
+                        <span>جاري الإضافة...</span>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="14" height="14"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                        </svg>
+                        <span>إضافة المفتاح</span>
+                    }
+                </button>
+            </div>
+
         </div>
     </div>
 }
 
+
+@* ═══════════════════════════════════════════
+   CSS
+═══════════════════════════════════════════ *@
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-teal:      #0d9488;
+        --fc-teal-lt:   #e6faf8;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    .st-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 200px);
+        padding: 16px 20px 32px;
+        max-width: 1100px; width: 100%;
+        margin: 0 auto;
+    }
+
+    /* ================================================================
+       ERROR / LOADING
+    ================================================================ */
+    .st-error-box {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 14px 18px; border-radius: 12px;
+        background: var(--fc-red-lt); border: 1px solid #ffc8cf;
+        margin-bottom: 16px;
+    }
+    .st-err-icon { flex: 0 0 auto; color: var(--fc-red); }
+    .st-error-box strong { display: block; font-size: 13px; font-weight: 800; color: #b02040; }
+    .st-error-box p { margin: 3px 0 0; font-size: 11.5px; color: var(--fc-red); }
+
+    .st-loading-wrap {
+        display: flex; align-items: center; justify-content: center;
+        gap: 12px; min-height: 200px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        color: var(--fc-muted); font-size: 13px; font-weight: 600;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .st-spinner {
+        width: 28px; height: 28px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: st-spin .75s linear infinite;
+    }
+    @@keyframes st-spin { to { transform: rotate(360deg); } }
+
+    /* ================================================================
+       TABS
+    ================================================================ */
+    .st-tabs-wrap {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden;
+    }
+
+    .st-mud-tabs .mud-tabs-toolbar {
+        background: linear-gradient(180deg, #f9fafd 0%, #f3f6fb 100%);
+        border-bottom: 2px solid #e8edf5;
+        padding: 0 16px; min-height: 56px;
+    }
+
+    .st-mud-tabs .mud-tab {
+        font-family: "Cairo","Tajawal","Inter",Arial,sans-serif;
+        font-size: 12px; font-weight: 700; color: var(--fc-muted);
+        padding: 0 6px; min-width: unset; transition: color .15s ease;
+    }
+    .st-mud-tabs .mud-tab.mud-tab-active { color: var(--fc-blue) !important; font-weight: 800; }
+    .st-mud-tabs .mud-tab-slider { background: var(--fc-blue) !important; height: 3px; border-radius: 3px 3px 0 0; }
+    .st-mud-tabs .mud-tab:hover:not(.mud-tab-active) { color: var(--fc-text); background: rgba(0,0,0,.03); border-radius: 8px; }
+
+    .st-tab-panel { padding: 0; }
+
+    /* Tab Labels */
+    .stab-label { display: flex; align-items: center; gap: 7px; padding: 0 4px; white-space: nowrap; }
+
+    .stab-icon {
+        width: 26px; height: 26px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 7px;
+    }
+    .stab-blue   { background: var(--fc-blue-lt);   color: var(--fc-blue); }
+    .stab-green  { background: var(--fc-green-lt);  color: var(--fc-green); }
+    .stab-gold   { background: var(--fc-amber-lt);  color: #9a6d08; }
+    .stab-purple { background: var(--fc-purple-lt); color: var(--fc-purple); }
+    .stab-teal   { background: var(--fc-teal-lt);   color: var(--fc-teal); }
+
+    .stab-count {
+        min-width: 18px; height: 18px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 5px; padding: 0 4px;
+        background: var(--fc-teal-lt); color: var(--fc-teal);
+        font-size: 10px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    /* ================================================================
+       TAB SECTION
+    ================================================================ */
+    .st-tab-section { padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 18px; }
+
+    /* ================================================================
+       SECTION CARDS
+    ================================================================ */
+    .st-section-card {
+        border: 1px solid #e4edf8; border-radius: 14px;
+        background: linear-gradient(180deg, #fafcff, #f5f8fb);
+        padding: 18px 20px;
+        transition: border-color .15s ease;
+    }
+    .st-section-card:hover { border-color: #c8d8f0; }
+
+    .st-section-head {
+        display: flex; align-items: flex-start; gap: 12px;
+        margin-bottom: 20px; padding-bottom: 16px;
+        border-bottom: 1px solid #e4edf8;
+        flex-wrap: wrap;
+    }
+
+    .st-section-icon {
+        width: 42px; height: 42px; flex: 0 0 42px; border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .icon-blue   { background: var(--fc-blue-lt);   color: var(--fc-blue);   border: 1px solid #bdd4fc; }
+    .icon-green  { background: var(--fc-green-lt);  color: var(--fc-green);  border: 1px solid #b0e0c5; }
+    .icon-purple { background: var(--fc-purple-lt); color: var(--fc-purple); border: 1px solid #d0bfef; }
+    .icon-teal   { background: var(--fc-teal-lt);   color: var(--fc-teal);   border: 1px solid #b0e0dc; }
+
+    .st-section-title { font-size: 14.5px; font-weight: 800; color: #1c2b43; line-height: 1.2; }
+    .st-section-sub   { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
+
+    .st-updated-badge {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 3px 9px; border-radius: 7px;
+        background: var(--fc-green-lt); border: 1px solid #b0e0c5;
+        color: var(--fc-green); font-size: 9.5px; font-weight: 700;
+        margin-right: auto;
+    }
+
+    /* ================================================================
+       FORM
+    ================================================================ */
+    .st-form-grid {
+        display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
+    }
+
+    .st-field { display: flex; flex-direction: column; gap: 6px; }
+    .st-field-full { grid-column: 1 / -1; }
+
+    .st-label { font-size: 12px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 4px; }
+    .st-required { color: var(--fc-red); font-size: 13px; }
+
+    .st-input {
+        height: 42px; width: 100%;
+        border: 1.5px solid #d8e2f0; border-radius: 9px;
+        background: #fff; color: var(--fc-text);
+        font-family: inherit; font-size: 13px; padding: 0 12px;
+        outline: none; transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .st-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .st-input:disabled { opacity: .7; background: #f3f5f8; cursor: not-allowed; }
+    .st-input::placeholder { color: #b0bcc8; }
+
+    .st-input-group { position: relative; display: flex; align-items: center; }
+    .st-prefix {
+        position: absolute; right: 12px;
+        display: flex; align-items: center;
+        color: #9aaabb; pointer-events: none; z-index: 1;
+        font-size: 11px; font-weight: 700;
+    }
+    .st-input.with-prefix { padding-right: 36px; }
+
+    .st-select-wrap { position: relative; }
+    .st-sel-icon {
+        position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+        color: #9aaabb; pointer-events: none; z-index: 1;
+    }
+    .st-select { padding-right: 36px; cursor: pointer; -webkit-appearance: none; appearance: none; }
+
+    .st-hint { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--fc-muted); font-weight: 500; }
+
+    /* ================================================================
+       ACTIONS BAR
+    ================================================================ */
+    .st-actions-bar {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 20px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); box-shadow: 0 2px 8px rgba(15,41,82,.04);
+    }
+
+    .st-save-btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        height: 40px; padding: 0 20px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #1e6ef5, #1558d6);
+        color: #fff; font-family: inherit;
+        font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(30,110,245,.28);
+        transition: all .15s ease;
+    }
+    .st-save-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(30,110,245,.36); }
+    .st-save-btn:disabled { opacity: .6; cursor: not-allowed; }
+    .st-save-btn.sm { height: 36px; padding: 0 14px; font-size: 12px; }
+
+    .st-required-note { font-size: 11px; color: var(--fc-muted); font-weight: 500; }
+
+    .st-no-perm {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 12px; color: var(--fc-muted); font-weight: 600;
+    }
+    .st-no-perm code {
+        padding: 2px 7px; border-radius: 5px;
+        background: #f0f3f8; color: var(--fc-text);
+        font-size: 11px; font-weight: 700;
+    }
+
+    /* ================================================================
+       LOGO SECTION
+    ================================================================ */
+    .st-logo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+
+    .st-logo-card {
+        display: flex; flex-direction: column; gap: 10px;
+        border: 1px solid #e4edf8; border-radius: 12px;
+        background: #fafcff; padding: 14px;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .st-logo-card:hover { border-color: #c8d8f0; box-shadow: 0 4px 14px rgba(15,41,82,.06); }
+
+    .st-logo-preview {
+        position: relative; border-radius: 10px; overflow: hidden;
+        display: flex; align-items: center; justify-content: center;
+        min-height: 130px;
+    }
+
+    .preview-empty {
+        background: #f0f3f8; border: 2px dashed #d8e2f0;
+    }
+
+    .preview-filled {
+        background: #f5f7fa; border: 1px solid #e4eaf3;
+    }
+
+    .st-logo-img {
+        max-width: 100%; max-height: 120px;
+        object-fit: contain; display: block; margin: auto;
+        padding: 10px;
+    }
+
+    .st-logo-overlay {
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(30,110,245,.8); color: #fff;
+        font-size: 13px; font-weight: 800;
+        opacity: 0; transition: opacity .2s ease;
+        border-radius: inherit;
+    }
+    .st-logo-card:hover .st-logo-overlay { opacity: 1; }
+
+    .st-logo-placeholder {
+        display: flex; flex-direction: column; align-items: center; gap: 8px;
+        color: #c0ccd8; font-size: 11px; font-weight: 600; padding: 20px;
+    }
+
+    .st-logo-meta { display: flex; flex-direction: column; gap: 4px; }
+    .st-logo-name { font-size: 12.5px; font-weight: 800; color: #1c2b43; }
+    .st-logo-path { font-size: 10px; color: #9aaabb; font-family: "Inter", Arial, sans-serif; word-break: break-all; }
+
+    .st-upload-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 34px; padding: 0 14px;
+        border-radius: 8px; cursor: pointer;
+        font-family: inherit; font-size: 11.5px; font-weight: 800;
+        transition: all .15s ease;
+    }
+
+    .upload-empty {
+        border: 1.5px solid var(--fc-blue); background: var(--fc-blue-lt); color: var(--fc-blue);
+    }
+    .upload-empty:hover { background: var(--fc-blue); color: #fff; }
+
+    .upload-replace {
+        border: 1.5px solid var(--fc-amber); background: var(--fc-amber-lt); color: #9a6d08;
+    }
+    .upload-replace:hover { background: var(--fc-amber); color: #fff; }
+
+    .st-upload-tips {
+        display: flex; flex-direction: column; gap: 6px;
+        margin-top: 16px; padding: 12px 14px; border-radius: 10px;
+        background: linear-gradient(135deg, #fafbfe, #f5f8ff);
+        border: 1px solid #e4edf8;
+    }
+
+    .st-tip {
+        display: flex; align-items: flex-start; gap: 7px;
+        font-size: 10.5px; color: #6b7d95; font-weight: 500;
+        line-height: 1.5;
+    }
+
+    /* ================================================================
+       INVOICE PREVIEW
+    ================================================================ */
+    .st-invoice-preview {
+        margin-top: 16px; padding: 14px 16px; border-radius: 12px;
+        background: #fff; border: 2px dashed #c8d8fb;
+    }
+
+    .st-inv-prev-label {
+        display: flex; align-items: center; gap: 6px;
+        font-size: 11px; font-weight: 800; color: var(--fc-blue);
+        margin-bottom: 10px;
+    }
+
+    .st-inv-prev-body {
+        padding: 12px; border-radius: 8px;
+        background: #f9fafe; border: 1px solid #e4edf8;
+        text-align: center;
+    }
+
+    .st-inv-prev-ar { font-size: 12px; font-weight: 700; color: #344258; }
+    .st-inv-prev-en { font-size: 11px; color: #6b7d95; margin-top: 4px; font-style: italic; }
+
+    /* ================================================================
+       KEYS TABLE
+    ================================================================ */
+    .st-keys-toolbar {
+        display: flex; align-items: center; gap: 10px;
+        padding: 14px 0 16px; flex-wrap: wrap;
+    }
+
+    .st-keys-search-wrap {
+        position: relative; display: flex; align-items: center;
+        flex: 1; min-width: 180px; max-width: 320px;
+    }
+
+    .st-keys-search-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; }
+
+    .st-keys-search {
+        width: 100%; height: 36px; padding: 0 34px 0 12px;
+        border: 1px solid #d8e2f0; border-radius: 8px;
+        background: #fff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; outline: none;
+        transition: border-color .15s ease;
+    }
+    .st-keys-search:focus { border-color: var(--fc-blue); }
+    .st-keys-search::placeholder { color: #b0bcc8; }
+
+    .st-keys-type-filter select {
+        height: 36px; min-width: 120px; padding: 0 10px;
+        border: 1px solid #d8e2f0; border-radius: 8px;
+        background: #fff; color: var(--fc-text);
+        font-family: inherit; font-size: 11px; outline: none; cursor: pointer;
+    }
+
+    .st-keys-actions { display: flex; align-items: center; gap: 8px; margin-right: auto; }
+
+    .st-add-key-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 12px;
+        border: 1.5px solid var(--fc-teal); border-radius: 8px;
+        background: var(--fc-teal-lt); color: var(--fc-teal);
+        font-family: inherit; font-size: 11.5px; font-weight: 800;
+        cursor: pointer; transition: all .15s ease;
+    }
+    .st-add-key-btn:hover { background: var(--fc-teal); color: #fff; }
+    .st-add-key-btn.mt-10 { margin-top: 10px; }
+
+    .st-keys-count { font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap; }
+
+    /* Empty */
+    .st-keys-empty {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 10px; min-height: 200px; text-align: center; padding: 40px;
+    }
+    .st-keys-empty-icon {
+        width: 72px; height: 72px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: #f0f4fa; color: #b0c4d8;
+    }
+    .st-keys-empty-title { font-size: 15px; font-weight: 800; color: var(--fc-text); }
+    .st-keys-empty-sub   { font-size: 12px; color: var(--fc-muted); }
+    .st-keys-empty-sub code { background: #f0f3f8; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+
+    /* Table */
+    .st-keys-table-wrap { overflow-x: auto; }
+
+    .st-keys-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+
+    .st-keys-table thead th {
+        padding: 9px 12px;
+        background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 10.5px; font-weight: 800;
+        text-align: center; border-bottom: 2px solid #e4eaf3;
+        white-space: nowrap; position: sticky; top: 0; z-index: 1;
+    }
+    .st-keys-table .th-start { text-align: right; }
+
+    .st-keys-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background .12s ease; }
+    .st-keys-table tbody tr:last-child { border-bottom: none; }
+    .st-keys-table tbody tr:hover { background: #fafcff; }
+
+    .st-keys-table tbody td { padding: 10px 12px; color: #526070; text-align: center; vertical-align: middle; }
+    .st-keys-table .td-start { text-align: right !important; }
+    .st-keys-table .td-muted { color: #8899ae; font-size: 11px; }
+    .st-keys-table .td-desc  { font-size: 11.5px; color: #6b7d95; max-width: 220px; }
+
+    .st-key-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+    .st-key-name { font-size: 11.5px; font-weight: 800; color: #1c2c44; font-family: "Inter", Arial, sans-serif; }
+
+    .st-system-badge {
+        display: inline-flex; padding: 1px 6px; border-radius: 4px;
+        background: var(--fc-amber-lt); color: #9a6d08;
+        font-size: 9px; font-weight: 800; border: 1px solid #f0d898;
+    }
+
+    .st-val-cell { display: flex; align-items: center; gap: 6px; }
+
+    .st-input-sm {
+        height: 34px; border: 1px solid #d8e2f0; border-radius: 7px;
+        background: #fff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; padding: 0 8px; outline: none;
+        transition: border-color .12s ease; min-width: 120px;
+    }
+    .st-input-sm:focus { border-color: var(--fc-blue); }
+
+    .st-copy-btn {
+        width: 26px; height: 26px; border-radius: 6px; flex: 0 0 26px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid #e4eaf3; background: #f5f7fa;
+        color: #8899ae; cursor: pointer; transition: all .12s ease;
+    }
+    .st-copy-btn:hover { background: var(--fc-blue-lt); border-color: #c0d4fb; color: var(--fc-blue); }
+
+    /* Type Chips */
+    .st-type-chip {
+        display: inline-flex; padding: 2px 8px; border-radius: 6px;
+        font-size: 10px; font-weight: 800; white-space: nowrap;
+    }
+    .st-type-chip-sm { display: inline-flex; padding: 2px 7px; border-radius: 5px; font-size: 10px; font-weight: 800; }
+
+    .chip-string  { background: #f0f3f8; color: #6b7d95; border: 1px solid #dde5f0; }
+    .chip-int     { background: var(--fc-blue-lt); color: var(--fc-blue); border: 1px solid #c0d4fb; }
+    .chip-bool    { background: var(--fc-purple-lt); color: var(--fc-purple); border: 1px solid #d0bfef; }
+    .chip-decimal { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .chip-date    { background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898; }
+    .chip-json    { background: var(--fc-teal-lt); color: var(--fc-teal); border: 1px solid #b0e0dc; }
+
+    .st-del-key {
+        width: 28px; height: 28px; border-radius: 7px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; background: transparent;
+        color: var(--fc-red); cursor: pointer; transition: all .15s ease;
+    }
+    .st-del-key:hover { background: var(--fc-red-lt); border-color: #ffc8cf; }
+
+    /* ================================================================
+       MODAL
+    ================================================================ */
+    .st-modal-backdrop {
+        position: fixed; inset: 0; z-index: 9999;
+        background: rgba(10,20,40,.58); backdrop-filter: blur(5px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px; animation: st-fade-in .2s ease;
+    }
+    @@keyframes st-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+    .st-modal {
+        width: 100%; max-width: 500px;
+        background: var(--fc-card); border: 1px solid rgba(0,0,0,.08);
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(10,20,50,.18), 0 30px 80px rgba(10,20,50,.22);
+        overflow: hidden;
+        animation: st-modal-in .28s cubic-bezier(.34,1.3,.64,1);
+        max-height: calc(100vh - 40px);
+        display: flex; flex-direction: column;
+    }
+    @@keyframes st-modal-in {
+        from { opacity: 0; transform: scale(.94) translateY(12px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .st-modal-head {
+        display: flex; align-items: center; gap: 12px;
+        padding: 18px 22px; flex: 0 0 auto;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+        box-shadow: 0 2px 8px rgba(15,41,82,.05);
+    }
+
+    .st-modal-icon {
+        width: 44px; height: 44px; flex: 0 0 44px; border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--fc-teal-lt); color: var(--fc-teal); border: 1px solid #b0e0dc;
+    }
+
+    .st-modal-title { font-size: 15px; font-weight: 900; color: #1c2b43; }
+    .st-modal-sub   { font-size: 10.5px; color: var(--fc-muted); margin-top: 2px; }
+
+    .st-modal-close {
+        margin-right: auto; width: 32px; height: 32px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid #e4eaf2; border-radius: 8px;
+        background: none; color: #9aaabb; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .st-modal-close:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .st-modal-banner {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px; padding: 10px 22px; font-size: 12px; font-weight: 600;
+        flex: 0 0 auto;
+    }
+    .st-modal-banner button { background: none; border: none; cursor: pointer; opacity: .6; }
+    .banner-error { background: #fff0f2; color: var(--fc-red); }
+
+    .st-modal-body {
+        padding: 20px 22px; overflow-y: auto; flex: 1 1 auto; min-height: 0;
+        display: flex; flex-direction: column; gap: 14px;
+    }
+
+    .st-type-hint-box {
+        display: flex; align-items: center; gap: 8px;
+        padding: 8px 10px; border-radius: 8px;
+        background: #f5f7fa; border: 1px solid #e4eaf3;
+        font-size: 10.5px; color: #6b7d95; font-weight: 500;
+    }
+
+    .st-modal-foot {
+        display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+        padding: 14px 22px; flex: 0 0 auto;
+        background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%);
+        border-top: 1px solid #edf1f7;
+    }
+
+    .st-modal-cancel {
+        height: 38px; padding: 0 16px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .st-modal-cancel:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .st-modal-save {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 38px; padding: 0 18px;
+        border: 0; border-radius: 9px;
+        background: linear-gradient(135deg, #0d9488, #0a7a6e);
+        color: #fff; font-family: inherit;
+        font-size: 12px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 3px 10px rgba(13,148,136,.25);
+        transition: all .15s ease;
+    }
+    .st-modal-save:hover:not(:disabled) { transform: translateY(-1px); }
+    .st-modal-save:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* Spinner */
+    .btn-spinner {
+        width: 15px; height: 15px;
+        border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+        border-radius: 50%; animation: st-spin .7s linear infinite;
+    }
+    .btn-spinner.sm { width: 13px; height: 13px; }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 900px) {
+        .st-form-grid { grid-template-columns: 1fr; }
+        .st-logo-grid { grid-template-columns: 1fr; }
+        .st-keys-toolbar { flex-direction: column; align-items: stretch; }
+        .st-keys-actions { margin-right: 0; }
+    }
+
+    @@media (max-width: 680px) {
+        .st-body { padding: 10px 12px 24px; }
+        .st-tab-section { padding: 14px 14px 18px; }
+        .st-section-card { padding: 14px; }
+        .st-actions-bar { flex-direction: column; align-items: stretch; }
+        .st-save-btn { justify-content: center; }
+        .st-modal-backdrop { padding: 10px; }
+        .st-modal { border-radius: 16px; }
+    }
+
+    @@media (max-width: 480px) {
+        .st-logo-grid { grid-template-columns: 1fr; }
+        .st-upload-tips { display: none; }
+    }
+
+</style>
+
+
 @code {
-    // 🔴 `Can` موجودة على AuthUser — مش على AuthService
     private AuthUser? _user;
     private bool CanManage => _user?.Can("SETTINGS.MANAGE") ?? false;
 
-    private int _tab;
-    private bool _loading, _saving;
+    private int    _tab;
+    private bool   _loading, _saving;
     private string? _err;
-    private bool _newOpen;
+    private bool   _newOpen;
     private string? _newErr;
+    private string _keySearch     = "";
+    private string _keyTypeFilter = "";
 
-    private ProfileOut? _p;
-    private ProfileForm? _pf;
+    private ProfileOut?      _p;
+    private ProfileForm?     _pf;
     private List<SettingRow>? _settings;
-    private List<TaxOpt> _taxRates = new();
-    private List<string> _valueTypes = new() { "String", "Int", "Bool", "Decimal", "Json", "Date" };
+    private List<TaxOpt>     _taxRates   = new();
+    private List<string>     _valueTypes = new() { "String", "Int", "Bool", "Decimal", "Json", "Date" };
     private NewForm _nf = new();
 
     private static readonly List<SettingRow> NoSet = new();
 
     private string CompanyName => string.IsNullOrWhiteSpace(_p?.LegalNameAr) ? "—" : _p!.LegalNameAr;
-
     private int SystemKeys => _settings?.Count(s => s.IsSystem) ?? 0;
+    private int LogoCount  => Slots.Count(s => !string.IsNullOrEmpty(s.Path));
+
+    private IEnumerable<SettingRow> FilteredKeys =>
+        (_settings ?? NoSet).Where(s =>
+            (string.IsNullOrEmpty(_keyTypeFilter) || s.ValueType == _keyTypeFilter) &&
+            (string.IsNullOrEmpty(_keySearch) ||
+             s.SettingKey.Contains(_keySearch, StringComparison.OrdinalIgnoreCase) ||
+             (s.Description ?? "").Contains(_keySearch, StringComparison.OrdinalIgnoreCase)));
 
     private List<Slot> Slots => new()
     {
-        new("main",  "الشعار الرئيسي", _p?.LogoPath),
+        new("main",  "الشعار الرئيسي",       _p?.LogoPath),
         new("dark",  "الشعار (نسخة غامقة)", _p?.LogoDarkPath),
-        new("stamp", "الختم", _p?.StampPath)
+        new("stamp", "الختم الرسمي",          _p?.StampPath)
     };
 
+    private static string TruncatePath(string? path)
+    {
+        if (string.IsNullOrEmpty(path)) return "—";
+        var name = System.IO.Path.GetFileName(path);
+        return name.Length > 28 ? name[..25] + "..." : name;
+    }
+
+    /* ── Init ── */
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
@@ -470,7 +1693,7 @@
             var opt = await Http.GetFromJsonAsync<Opts>("api/settings/options");
             if (opt is not null)
             {
-                _taxRates   = opt.TaxRates ?? new();
+                _taxRates   = opt.TaxRates   ?? new();
                 _valueTypes = opt.ValueTypes is { Count: > 0 } ? opt.ValueTypes : _valueTypes;
             }
         }
@@ -478,40 +1701,50 @@
         finally { _loading = false; }
     }
 
-    // ══════════ تنسيق ══════════
-
-    private string TabClass(int i) => _tab == i ? "fc-rtab on" : "fc-rtab";
-
-    private static string TypeChip(string vt) => vt switch
-    {
-        "Bool"    => "fc-chip-purple",
-        "Int"     => "fc-chip-blue",
-        "Decimal" => "fc-chip-green",
-        "Date"    => "fc-chip-gold",
-        "Json"    => "fc-chip-warn",
-        _         => "fc-chip-gray"
-    };
-
+    /* ── Helpers ── */
     private static string TypeHint(string vt) => vt switch
     {
-        "Int"     => "رقم صحيح — زي 30",
-        "Decimal" => "رقم بكسور — زي 50000 أو 5000.50",
-        "Bool"    => "true أو false",
-        "Date"    => "yyyy-MM-dd — زي 2026-01-01",
-        "Json"    => "نص JSON — بيتحفظ زي ما هو",
+        "Int"     => "رقم صحيح — مثال: 30",
+        "Decimal" => "رقم بكسور — مثال: 50000.50",
+        "Bool"    => "قيمة منطقية — true أو false",
+        "Date"    => "تاريخ — yyyy-MM-dd",
+        "Json"    => "نص JSON — بيتحفظ كما هو",
         _         => "نص عادي"
+    };
+
+    private static string TypeChipClass(string vt) => vt switch
+    {
+        "String"  => "st-type-chip chip-string",
+        "Int"     => "st-type-chip chip-int",
+        "Bool"    => "st-type-chip chip-bool",
+        "Decimal" => "st-type-chip chip-decimal",
+        "Date"    => "st-type-chip chip-date",
+        "Json"    => "st-type-chip chip-json",
+        _         => "st-type-chip chip-string"
     };
 
     private static string MonthName(int m) => m switch
     {
-        1 => "يناير", 2 => "فبراير", 3 => "مارس", 4 => "أبريل",
-        5 => "مايو", 6 => "يونيو", 7 => "يوليو", 8 => "أغسطس",
-        9 => "سبتمبر", 10 => "أكتوبر", 11 => "نوفمبر", 12 => "ديسمبر",
-        _ => m.ToString()
+        1  => "يناير",  2  => "فبراير", 3  => "مارس",    4  => "أبريل",
+        5  => "مايو",   6  => "يونيو",  7  => "يوليو",   8  => "أغسطس",
+        9  => "سبتمبر", 10 => "أكتوبر", 11 => "نوفمبر",  12 => "ديسمبر",
+        _  => m.ToString()
     };
 
-    // ══════════ حفظ ══════════
+    private async Task CopyToClipboard(string text)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            Snackbar.Add("اتنسخ ✅", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("مش قادر ينسخ — انسخ يدوي", Severity.Warning);
+        }
+    }
 
+    /* ── حفظ ── */
     private async Task SaveProfile()
     {
         if (_pf is null) return;
@@ -541,12 +1774,9 @@
                 defaultTaxRateId      = _pf.DefaultTaxRateId,
                 fiscalYearStartMonth  = _pf.FiscalYearStartMonth
             });
+
             var msg = await MsgOf(res);
-            if (res.IsSuccessStatusCode)
-            {
-                Snackbar.Add(msg, Severity.Success);
-                await LoadAsync();
-            }
+            if (res.IsSuccessStatusCode) { Snackbar.Add(msg, Severity.Success); await LoadAsync(); }
             else Snackbar.Add(msg, Severity.Error);
         }
         catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
@@ -554,29 +1784,40 @@
     }
 
     private async Task OnLogo(InputFileChangeEventArgs e, string kind)
+{
+    var f = e.File;
+    if (f is null) return;
+    if (f.Size > 5 * 1024 * 1024)
+    { Snackbar.Add("الملف أكبر من 5 ميجا", Severity.Error); return; }
+
+    _saving = true;
+    try
     {
-        var f = e.File;
-        if (f is null) return;
-        if (f.Size > 5 * 1024 * 1024)
-        { Snackbar.Add("الملف أكبر من 5 ميجا", Severity.Error); return; }
+        using var content = new MultipartFormDataContent();
+        var sc = new StreamContent(f.OpenReadStream(5 * 1024 * 1024));
+        sc.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(f.ContentType);
+        content.Add(sc, "file", f.Name);
+        content.Add(new StringContent(kind), "kind");
 
-        _saving = true;
-        try
+        var token = await Auth.GetTokenAsync();
+        using var req = new HttpRequestMessage(HttpMethod.Post, "api/settings/company/logo")
         {
-            using var content = new MultipartFormDataContent();
-            var sc = new StreamContent(f.OpenReadStream(5 * 1024 * 1024));
-            sc.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(f.ContentType);
-            content.Add(sc, "file", f.Name);
-            content.Add(new StringContent(kind), "kind");
+            Content = content
+        };
+        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-            var res = await Http.PostAsync("api/settings/company/logo", content);
-            var msg = await MsgOf(res);
-            if (res.IsSuccessStatusCode) { Snackbar.Add(msg, Severity.Success); await LoadAsync(); }
-            else Snackbar.Add(msg, Severity.Error);
+        var res = await Http.SendAsync(req);
+        var msg = await MsgOf(res);
+        if (res.IsSuccessStatusCode)
+        {
+            Snackbar.Add($"✅ تم رفع {f.Name}", Severity.Success);
+            await LoadAsync();
         }
-        catch (Exception ex) { Snackbar.Add("فشل الرفع: " + ex.Message, Severity.Error); }
-        finally { _saving = false; }
+        else Snackbar.Add(msg, Severity.Error);
     }
+    catch (Exception ex) { Snackbar.Add("فشل الرفع: " + ex.Message, Severity.Error); }
+    finally { _saving = false; }
+}
 
     private async Task SaveBulk()
     {
@@ -604,8 +1845,7 @@
     private void OpenNew()
     {
         _nf = new NewForm { ValueType = _valueTypes.Count > 0 ? _valueTypes[0] : "String" };
-        _newErr = null;
-        _newOpen = true;
+        _newErr = null; _newOpen = true;
     }
 
     private void CloseNew() { _newOpen = false; _newErr = null; _nf = new NewForm(); }
@@ -652,7 +1892,7 @@
             var m = await res.Content.ReadFromJsonAsync<Msg>();
             if (!string.IsNullOrWhiteSpace(m?.Message)) return m!.Message!;
         }
-        catch { /* مش JSON */ }
+        catch { }
         return res.IsSuccessStatusCode ? "تم" : $"فشل ({(int)res.StatusCode})";
     }
 
@@ -660,90 +1900,80 @@
 
     public class NewForm
     {
-        public string SettingKey { get; set; } = "";
-        public string ValueType { get; set; } = "String";
+        public string  SettingKey   { get; set; } = "";
+        public string  ValueType    { get; set; } = "String";
         public string? SettingValue { get; set; }
-        public string? Description { get; set; }
+        public string? Description  { get; set; }
     }
 
     public record Slot(string Kind, string Label, string? Path);
 
-    public class Opts
-    {
-        public List<TaxOpt>? TaxRates { get; set; }
-        public List<string>? ValueTypes { get; set; }
-    }
+    public class Opts { public List<TaxOpt>? TaxRates { get; set; } public List<string>? ValueTypes { get; set; } }
 
-    public class TaxOpt
-    {
-        public int TaxRateId { get; set; }
-        public string Code { get; set; } = "";
-        public string NameAr { get; set; } = "";
-        public decimal Rate { get; set; }
-    }
+    public class TaxOpt { public int TaxRateId { get; set; } public string Code { get; set; } = ""; public string NameAr { get; set; } = ""; public decimal Rate { get; set; } }
 
     public class SettingRow
     {
-        public int SettingId { get; set; }
-        public string SettingKey { get; set; } = "";
+        public int     SettingId    { get; set; }
+        public string  SettingKey   { get; set; } = "";
         public string? SettingValue { get; set; }
-        public string ValueType { get; set; } = "String";
-        public string? Description { get; set; }
-        public bool IsSystem { get; set; }
-        public string? UpdatedAt { get; set; }
+        public string  ValueType    { get; set; } = "String";
+        public string? Description  { get; set; }
+        public bool    IsSystem     { get; set; }
+        public string? UpdatedAt    { get; set; }
     }
 
     public class ProfileOut
     {
-        public int CompanyProfileId { get; set; }
-        public string LegalNameAr { get; set; } = "";
-        public string? LegalNameEn { get; set; }
-        public string? TradeNameAr { get; set; }
-        public string? TradeNameEn { get; set; }
-        public string TaxNumber { get; set; } = "";
+        public int     CompanyProfileId      { get; set; }
+        public string  LegalNameAr           { get; set; } = "";
+        public string? LegalNameEn           { get; set; }
+        public string? TradeNameAr           { get; set; }
+        public string? TradeNameEn           { get; set; }
+        public string  TaxNumber             { get; set; } = "";
         public string? VatRegistrationNumber { get; set; }
-        public string? CommercialRegister { get; set; }
-        public string AddressAr { get; set; } = "";
-        public string? AddressEn { get; set; }
-        public string? CityAr { get; set; }
-        public string? CityEn { get; set; }
-        public string? Phone { get; set; }
-        public string? Mobile { get; set; }
-        public string? Email { get; set; }
-        public string? Website { get; set; }
-        public string? LogoPath { get; set; }
-        public string? LogoDarkPath { get; set; }
-        public string? StampPath { get; set; }
-        public string? InvoiceFooterNoteAr { get; set; }
-        public string? InvoiceFooterNoteEn { get; set; }
-        public string DefaultCurrencyCode { get; set; } = "EGP";
-        public int? DefaultTaxRateId { get; set; }
-        public byte FiscalYearStartMonth { get; set; } = 1;
-        public string? UpdatedAt { get; set; }
+        public string? CommercialRegister    { get; set; }
+        public string  AddressAr             { get; set; } = "";
+        public string? AddressEn             { get; set; }
+        public string? CityAr                { get; set; }
+        public string? CityEn                { get; set; }
+        public string? Phone                 { get; set; }
+        public string? Mobile                { get; set; }
+        public string? Email                 { get; set; }
+        public string? Website               { get; set; }
+        public string? LogoPath              { get; set; }
+        public string? LogoDarkPath          { get; set; }
+        public string? StampPath             { get; set; }
+        public string? InvoiceFooterNoteAr   { get; set; }
+        public string? InvoiceFooterNoteEn   { get; set; }
+        public string  DefaultCurrencyCode   { get; set; } = "EGP";
+        public int?    DefaultTaxRateId      { get; set; }
+        public byte    FiscalYearStartMonth  { get; set; } = 1;
+        public string? UpdatedAt             { get; set; }
     }
 
     public class ProfileForm
     {
-        public string LegalNameAr { get; set; } = "";
-        public string? LegalNameEn { get; set; }
-        public string? TradeNameAr { get; set; }
-        public string? TradeNameEn { get; set; }
-        public string TaxNumber { get; set; } = "";
+        public string  LegalNameAr           { get; set; } = "";
+        public string? LegalNameEn           { get; set; }
+        public string? TradeNameAr           { get; set; }
+        public string? TradeNameEn           { get; set; }
+        public string  TaxNumber             { get; set; } = "";
         public string? VatRegistrationNumber { get; set; }
-        public string? CommercialRegister { get; set; }
-        public string AddressAr { get; set; } = "";
-        public string? AddressEn { get; set; }
-        public string? CityAr { get; set; }
-        public string? CityEn { get; set; }
-        public string? Phone { get; set; }
-        public string? Mobile { get; set; }
-        public string? Email { get; set; }
-        public string? Website { get; set; }
-        public string? InvoiceFooterNoteAr { get; set; }
-        public string? InvoiceFooterNoteEn { get; set; }
-        public string CurrencyCode { get; set; } = "EGP";
-        public int? DefaultTaxRateId { get; set; }
-        public byte FiscalYearStartMonth { get; set; } = 1;
+        public string? CommercialRegister    { get; set; }
+        public string  AddressAr             { get; set; } = "";
+        public string? AddressEn             { get; set; }
+        public string? CityAr                { get; set; }
+        public string? CityEn                { get; set; }
+        public string? Phone                 { get; set; }
+        public string? Mobile                { get; set; }
+        public string? Email                 { get; set; }
+        public string? Website               { get; set; }
+        public string? InvoiceFooterNoteAr   { get; set; }
+        public string? InvoiceFooterNoteEn   { get; set; }
+        public string  CurrencyCode          { get; set; } = "EGP";
+        public int?    DefaultTaxRateId      { get; set; }
+        public byte    FiscalYearStartMonth  { get; set; } = 1;
 
         public static ProfileForm From(ProfileOut p) => new()
         {

@@ -1,5 +1,6 @@
 using System.Data;
 using FastCom.Infrastructure.Persistence;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace FastCom.Server.Services;
@@ -42,7 +43,25 @@ public class NumberingService : INumberingService
         pOut.Size          = 40;
         cmd.Parameters.Add(pOut);
 
-        await cmd.ExecuteNonQueryAsync(ct);
+        /* 🔴 الـ SP بترمي `THROW 50001` (قفل) و`THROW 50002` (سلسلة مش موجودة).
+         *    لو سبناها SqlException هتطلع 500 غير مفهومة + stack trace في اللوج.
+         *    بنحوّلها `InvalidOperationException` برسالة عربية واضحة — فأي Controller
+         *    بيقبض عليها ويرجّع 400 برسالة تتعرض للمستخدم بدل ما السيرفر يقع.
+         *    الإصلاح هنا بيحمي كل الـ 19 مكان اللي بينادوا NextAsync، مش واحد بس. */
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqlException ex) when (ex.Number is 50001 or 50002)
+        {
+            throw new InvalidOperationException(
+                ex.Number == 50001
+                    ? $"تعذّر الحصول على قفل الترقيم لنوع ({documentType}). حاول تاني."
+                    : $"سلسلة الترقيم مش معرّفة لنوع ({documentType}) لسنة {DateTime.UtcNow.Year}. " +
+                      $"ضيفها من شاشة «الترقيم» الأول.",
+                ex);
+        }
+
         return (string)pOut.Value!;
     }
 }

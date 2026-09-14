@@ -4,10 +4,15 @@
 @using FastCom.Client.Auth
 @inject HttpClient Http
 @inject AuthService Auth
+@inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
 <PageTitle>المصروفات — فاست كوم</PageTitle>
 
+
+@* ═══════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════ *@
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
@@ -17,428 +22,1525 @@
                 <p class="fc-hero-sub">وقود ورسوم ميناء ونش وغرامات — المصروف المرتبط بعملية أو رحلة بيدخل في تكلفتها</p>
             </div>
             <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
+                               OnClick="Reload" Style="color:#9FB4CC" />
+                @if (CanManageTypes)
+                {
+                    <MudButton Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.LocalOffer"
+                               OnClick="OpenTypes"
+                               Style="color:#9FB4CC">
+                        أنواع المصروفات
+                    </MudButton>
+                }
                 @if (CanCreate)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="New">مصروف جديد</MudButton>
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="GoNew">مصروف جديد</MudButton>
                 }
             </div>
         </div>
+
         @if (CanView)
         {
             <div class="fc-kpis fc-kpis-glass">
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.ReceiptLong" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">عدد المصروفات</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
-                    <div><div class="fc-kpi-num">@Money(Active.Sum(e => e.Amount))</div><div class="fc-kpi-lb">إجمالي غير الملغي</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.HourglassTop" /></div>
-                    <div><div class="fc-kpi-num">@Money(ThisMonth)</div><div class="fc-kpi-lb">مصروفات الشهر الحالى</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(e => e.Status == "Posted" && !e.IsApproved)</div><div class="fc-kpi-lb">مصروفات لم تعتمد</div></div></div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.ReceiptLong" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">عدد المصروفات</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
+                    <div><div class="fc-kpi-num">@Money(Active.Sum(e => e.Amount))</div><div class="fc-kpi-lb">إجمالي غير الملغي</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.HourglassTop" /></div>
+                    <div><div class="fc-kpi-num">@Money(ThisMonth)</div><div class="fc-kpi-lb">مصروفات الشهر</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
+                    <div>
+                        <div class="fc-kpi-num">@_items.Count(e => e.Status == "Posted" && !e.IsApproved)</div>
+                        <div class="fc-kpi-lb">لم تُعتمد</div>
+                    </div>
+                </div>
             </div>
         }
     </div>
 </div>
 
-<div class="fc-page">
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="ex-list-body">
+
     @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك  صلاحية عرض المصروفات.</MudAlert>
+        <div class="exl-state-box">
+            <div class="exl-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليس لديك صلاحية عرض المصروفات — تواصل مع المسؤول</p>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
-            <div class="fc-toolbar">
-                <div class="fc-filters">
-                    @foreach (var t in Tabs)
+        <div class="exl-card">
+
+            @* ── Toolbar ── *@
+            <div class="exl-toolbar">
+
+                <div class="exl-search-wrap">
+                    <svg class="exl-search-icon" viewBox="0 0 24 24"
+                         width="16" height="16" fill="none" stroke="currentColor"
+                         stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                    </svg>
+                    <input class="exl-search-input"
+                           placeholder="ابحث بالرقم أو البيان أو المرجع..."
+                           @bind="_search"
+                           @bind:event="oninput"
+                           aria-label="بحث" />
+                    @if (!string.IsNullOrWhiteSpace(_search))
                     {
-                        <button class='fc-filter @(_tab == t.Key ? "on" : "")' @onclick="() => SetTab(t.Key)">@t.Value</button>
+                        <button class="exl-search-clear"
+                                @onclick="() => _search = string.Empty"
+                                aria-label="مسح">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
                     }
                 </div>
-                <select class="fc-sel" style="max-width:200px" @bind="_typeFilter">
-                    <option value="0">كل الأنواع</option>
-                    @foreach (var t in _types) { <option value="@t.Id">@t.Label</option> }
-                </select>
-                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
-                              Placeholder="ابحث بالرقم أو البيان أو المرجع..." Variant="Variant.Outlined" Dense="true"
-                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                              Class="fc-search-box" Immediate="true" />
-                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+
+                @* Type Filter *@
+                <div class="exl-type-filter-wrap">
+                    <svg viewBox="0 0 24 24" width="13" height="13"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         class="exl-type-icon" aria-hidden="true">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round"/>
+                    </svg>
+                    <select class="exl-type-select" @bind="_typeFilter">
+                        <option value="0">كل الأنواع</option>
+                        @foreach (var t in _types)
+                        {
+                            <option value="@t.Id">@t.Label</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="exl-results-badge">
+                    عرض <strong>@Filtered.Count()</strong> من <strong>@_items.Count</strong>
+                </div>
+
             </div>
 
+
+            @* ── Status Tabs ── *@
+            <div class="exl-status-bar">
+                <div class="exl-status-tabs" role="group" aria-label="فلتر الحالة">
+                    @foreach (var t in _statusTabs)
+                    {
+                        var count = t.Key == "all"
+                            ? _items.Count
+                            : _items.Count(x => x.Status == t.Key);
+
+                        <button class="exl-status-tab @(_tab == t.Key ? "active" : "")"
+                                @onclick="() => SetTab(t.Key)"
+                                aria-pressed="@(_tab == t.Key)">
+                            <span class="exl-tab-dot @StatusDotColor(t.Key)" aria-hidden="true"></span>
+                            <span>@t.Value</span>
+                            <span class="exl-tab-count">@count</span>
+                        </button>
+                    }
+                </div>
+            </div>
+
+
+            @* ── Content ── *@
             @if (_loading)
             {
-                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+                <div class="exl-loading">
+                    <div class="exl-spinner" aria-label="جاري التحميل"></div>
+                    <span>جاري تحميل المصروفات...</span>
+                </div>
+            }
+            else if (!Filtered.Any())
+            {
+                <div class="exl-empty">
+                    <div class="exl-empty-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="40" height="40"
+                             fill="none" stroke="currentColor" stroke-width="1.4">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="exl-empty-title">
+                        @(string.IsNullOrWhiteSpace(_search) ? "لا توجد مصروفات في هذا الفلتر" : "لا توجد نتائج")
+                    </div>
+                    <div class="exl-empty-sub">
+                        @(string.IsNullOrWhiteSpace(_search)
+                            ? "جرّب فلتر مختلف أو أنشئ مصروف جديد"
+                            : "جرّب كلمة بحث مختلفة")
+                    </div>
+                    @if (CanCreate && string.IsNullOrWhiteSpace(_search))
+                    {
+                        <button class="exl-add-btn" @onclick="GoNew">
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2.5"
+                                 aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                            مصروف جديد
+                        </button>
+                    }
+                </div>
             }
             else
             {
-                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
-                    <thead><tr>
-                        <th>الرقم</th><th>النوع</th><th>البيان</th><th>مربوط بـ</th>
-                        <th>التاريخ</th><th>المبلغ</th><th>الدفع</th><th>الحالة</th>
-                        <th style="width:180px; text-align:left">إجراءات</th>
-                    </tr></thead>
-                    <tbody>
-                        @foreach (var e in Filtered)
-                        {
+                <div class="exl-table-wrap">
+                    <table class="exl-table" aria-label="قائمة المصروفات">
+                        <thead>
                             <tr>
-                                <td><span class="fc-role-chip">@e.ExpenseNumber</span></td>
-                                <td class="fc-cell-main">@e.TypeName</td>
-                                <td class="fc-cell-sub">@(e.Description ?? "—")
-                                    @if (e.DriverName is not null) { <div class="fc-cell-sub">السائق: @e.DriverName</div> }</td>
-                                <td class="fc-cell-sub">
-                                    @if (e.OperationNumber is not null) { <div>عملية @e.OperationNumber</div> }
-                                    @if (e.TripNumber is not null) { <div>رحلة @e.TripNumber</div> }
-                                    @if (e.SupplierName is not null) { <div>@e.SupplierName</div> }
-                                    @if (e.CustodyNumber is not null) { <div>عهدة @e.CustodyNumber</div> }
-                                    @if (e.OperationNumber is null && e.TripNumber is null && e.SupplierName is null) { <span>—</span> }
-                                </td>
-                                <td class="fc-cell-sub">@e.ExpenseDate.ToString("yyyy-MM-dd")</td>
-                                <td><b>@Money(e.Amount)</b>
-                                    @if (e.TaxRate > 0) { <div class="fc-cell-sub">ضريبة @e.TaxRate.ToString("0.##")%</div> }</td>
-                                <td><span class="fc-chip @PayChip(e.PaymentStatus)"><i></i>@PayAr(e.PaymentStatus)</span></td>
-                                <td>
-                                    <span class="fc-chip @StatusChip(e.Status)"><i></i>@StatusAr(e.Status)</span>
-                                    @if (e.IsApproved) { <div class="fc-cell-sub">✓ معتمد</div> }
-                                </td>
-                                <td><div class="fc-row-actions">
-                                    @if (e.Status != "Cancelled" && CanEdit)
-                                    {
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
-                                                       Color="Color.Primary" title="تعديل" OnClick="() => Edit(e)" />
-                                    }
-                                    @if (e.Status == "Draft" && CanEdit)
-                                    {
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle"
-                                                       Color="Color.Success" title="تأكيد" OnClick='() => SetStatus(e, "Posted")' />
-                                    }
-                                    @if (e.Status == "Posted" && CanApprove && !e.IsApproved)
-                                    {
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.LockOpen"
-                                                       Color="Color.Warning" title="اعتماد" OnClick="() => Approve(e)" />
-                                    }
-                                    @if (e.Status != "Cancelled" && CanEdit)
-                                    {
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Close"
-                                                       Color="Color.Error" title="إلغاء" OnClick='() => SetStatus(e, "Cancelled")' />
-                                    }
-                                    @if (CanDelete && e.PaymentStatus == "Unpaid")
-                                    {
-                                        @if (_confirmId == e.ExpenseId)
-                                        {
-                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
-                                                       OnClick="() => Delete(e)">حذف؟</MudButton>
-                                        }
-                                        else
-                                        {
-                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
-                                                           Color="Color.Error" title="حذف" OnClick="() => _confirmId = e.ExpenseId" />
-                                        }
-                                    }
-                                </div></td>
+                                <th scope="col" class="th-start">المصروف</th>
+                                <th scope="col">مربوط بـ</th>
+                                <th scope="col">التاريخ</th>
+                                <th scope="col">المبلغ</th>
+                                <th scope="col">الدفع</th>
+                                <th scope="col">الحالة</th>
+                                <th scope="col" style="width:200px">إجراءات</th>
                             </tr>
-                        }
-                        @if (!Filtered.Any())
-                        {
-                            <tr><td colspan="9"><div class="fc-empty"><div>لاتوجد اى مصروفات لهذا الفلتر</div></div></td></tr>
-                        }
-                    </tbody>
-                </table></div>
-            }
-        </div></div>
-    }
+                        </thead>
+                        <tbody>
+                            @foreach (var e in Filtered)
+                            {
+                                <tr class="@(e.Status == "Cancelled" ? "row-cancelled" : "")">
 
-    @if (_modalOpen && CanCreate)
-    {
-        <div class="fc-modal-backdrop" @onclick="Close">
-            <div class="fc-modal" @onclick:stopPropagation>
-                <div class="fc-modal-head">
-                    <div><div class="fc-modal-title">@(_editId is null ? "مصروف جديد" : "تعديل مصروف")</div>
-                        <div class="fc-modal-sub">الرقم بيتولد تلقائيًا (EXP-)</div></div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="Close" />
+                                    @* ── المصروف: رقم + نوع + بيان ── *@
+                                    <td class="td-start">
+                                        <div class="exl-exp-cell">
+                                            <div class="exl-exp-avatar @ExpAvatarClass(e.Status, e.IsApproved)"
+                                                 aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                                                </svg>
+                                            </div>
+                                            <div class="exl-exp-info">
+                                                <div class="exl-exp-num">
+                                                    <span class="exl-code-chip">@e.ExpenseNumber</span>
+                                                    @if (e.IsApproved)
+                                                    {
+                                                        <span class="exl-approved-badge" title="معتمد">✓</span>
+                                                    }
+                                                </div>
+                                                <div class="exl-type-name">@e.TypeName</div>
+                                                @if (!string.IsNullOrWhiteSpace(e.Description))
+                                                {
+                                                    <div class="exl-desc">@e.Description</div>
+                                                }
+                                                @if (e.DriverName is not null)
+                                                {
+                                                    <div class="exl-driver">
+                                                        <svg viewBox="0 0 16 16" width="10" height="10"
+                                                             fill="none" stroke="currentColor" stroke-width="1.8"
+                                                             aria-hidden="true">
+                                                            <path d="M13 14v-1a3 3 0 00-3-3H6a3 3 0 00-3 3v1"/>
+                                                            <circle cx="8" cy="5" r="3"/>
+                                                        </svg>
+                                                        @e.DriverName
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    @* ── مربوط بـ ── *@
+                                    <td>
+                                        <div class="exl-link-cell">
+                                            @if (e.OperationNumber is not null)
+                                            {
+                                                <span class="exl-link-tag tag-op">
+                                                    <svg viewBox="0 0 16 16" width="10" height="10"
+                                                         fill="none" stroke="currentColor" stroke-width="1.8"
+                                                         aria-hidden="true">
+                                                        <path d="M14 11V5a1 1 0 00-.5-.87l-5-3a1 1 0 00-1 0l-5 3A1 1 0 002 5v6a1 1 0 00.5.87l5 3a1 1 0 001 0l5-3A1 1 0 0014 11z"/>
+                                                    </svg>
+                                                    @e.OperationNumber
+                                                </span>
+                                            }
+                                            @if (e.TripNumber is not null)
+                                            {
+                                                <span class="exl-link-tag tag-trip">
+                                                    <svg viewBox="0 0 16 16" width="10" height="10"
+                                                         fill="none" stroke="currentColor" stroke-width="1.8"
+                                                         aria-hidden="true">
+                                                        <rect x="1" y="2" width="10" height="8" rx="1"/>
+                                                        <path d="M11 5h3l2 2v3h-5V5z"/>
+                                                        <circle cx="3.5" cy="12" r="1.5"/>
+                                                        <circle cx="12.5" cy="12" r="1.5"/>
+                                                    </svg>
+                                                    @e.TripNumber
+                                                </span>
+                                            }
+                                            @if (e.SupplierName is not null)
+                                            {
+                                                <span class="exl-link-tag tag-supplier">
+                                                    <svg viewBox="0 0 16 16" width="10" height="10"
+                                                         fill="none" stroke="currentColor" stroke-width="1.8"
+                                                         aria-hidden="true">
+                                                        <path d="M2 6l6-4 6 4v7a1 1 0 01-1 1H3a1 1 0 01-1-1V6z"/>
+                                                        <path d="M6 14V8h4v6"/>
+                                                    </svg>
+                                                    @e.SupplierName
+                                                </span>
+                                            }
+                                            @if (e.CustodyNumber is not null)
+                                            {
+                                                <span class="exl-link-tag tag-custody">
+                                                    <svg viewBox="0 0 16 16" width="10" height="10"
+                                                         fill="none" stroke="currentColor" stroke-width="1.8"
+                                                         aria-hidden="true">
+                                                        <rect x="2" y="5" width="12" height="9" rx="1"/>
+                                                        <path d="M10 5V4a2 2 0 00-4 0v1"/>
+                                                    </svg>
+                                                    عهدة @e.CustodyNumber
+                                                </span>
+                                            }
+                                            @if (e.OperationNumber is null && e.TripNumber is null &&
+                                                 e.SupplierName is null && e.CustodyNumber is null)
+                                            {
+                                                <span class="td-muted">إداري</span>
+                                            }
+                                        </div>
+                                    </td>
+
+                                    @* ── التاريخ ── *@
+                                    <td class="td-muted">
+                                        <div class="exl-date-cell">
+                                            <svg viewBox="0 0 16 16" width="11" height="11"
+                                                 fill="none" stroke="currentColor" stroke-width="1.7"
+                                                 aria-hidden="true">
+                                                <rect x="2" y="3" width="12" height="11" rx="2"/>
+                                                <path d="M5 1v3M11 1v3M2 7h12" stroke-linecap="round"/>
+                                            </svg>
+                                            @e.ExpenseDate.ToString("yyyy-MM-dd")
+                                        </div>
+                                    </td>
+
+                                    @* ── المبلغ ── *@
+                                    <td>
+                                        <div class="exl-amount-cell">
+                                            <span class="exl-amount-main">@Money(e.Amount)</span>
+                                            <span class="exl-amount-curr">ج.م</span>
+                                        </div>
+                                        @if (e.TaxRate > 0)
+                                        {
+                                            <div class="exl-tax-sub">ضريبة @e.TaxRate.ToString("0.##")%</div>
+                                        }
+                                    </td>
+
+                                    @* ── الدفع ── *@
+                                    <td>
+                                        <span class="exl-chip @PayChipClass(e.PaymentStatus)">
+                                            <span class="exl-chip-dot @PayDotClass(e.PaymentStatus)"
+                                                  aria-hidden="true"></span>
+                                            @PayAr(e.PaymentStatus)
+                                        </span>
+                                    </td>
+
+                                    @* ── الحالة ── *@
+                                    <td>
+                                        <div class="exl-status-cell">
+                                            <span class="exl-chip @StatusChipClass(e.Status)">
+                                                <span class="exl-chip-dot @StatusDotClass(e.Status)"
+                                                      aria-hidden="true"></span>
+                                                @StatusAr(e.Status)
+                                            </span>
+                                        </div>
+                                    </td>
+
+                                    @* ── إجراءات ── *@
+                                    <td>
+                                        <div class="exl-actions">
+
+                                            @* تعديل *@
+                                            @if (e.Status != "Cancelled" && CanEdit)
+                                            {
+                                                <button class="exl-act-btn act-edit"
+                                                        @onclick="() => GoEdit(e)"
+                                                        title="تعديل"
+                                                        aria-label="تعديل @e.ExpenseNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @* تأكيد *@
+                                            @if (e.Status == "Draft" && CanEdit)
+                                            {
+                                                <button class="exl-act-btn act-confirm"
+                                                        @onclick='() => SetStatus(e, "Posted")'
+                                                        title="تأكيد"
+                                                        aria-label="تأكيد @e.ExpenseNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                                                        <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @* اعتماد *@
+                                            @if (e.Status == "Posted" && CanApprove && !e.IsApproved)
+                                            {
+                                                <button class="exl-act-btn act-approve"
+                                                        @onclick="() => Approve(e)"
+                                                        title="اعتماد"
+                                                        aria-label="اعتماد @e.ExpenseNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M9 12l2 2 4-4"/>
+                                                        <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @* علّم مدفوع *@
+                                            @if (e.Status == "Posted" && e.PaymentStatus == "Unpaid" && CanEdit)
+                                            {
+                                                <button class="exl-act-btn act-pay"
+                                                        @onclick="() => SetPaid(e)"
+                                                        title="تعليم مدفوع"
+                                                        aria-label="تعليم @e.ExpenseNumber مدفوع">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <rect x="2" y="7" width="20" height="14" rx="2"/>
+                                                        <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
+                                                        <circle cx="12" cy="14" r="2"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @* إلغاء *@
+                                            @if (e.Status != "Cancelled" && CanEdit)
+                                            {
+                                                <button class="exl-act-btn act-cancel"
+                                                        @onclick='() => SetStatus(e, "Cancelled")'
+                                                        title="إلغاء"
+                                                        aria-label="إلغاء @e.ExpenseNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <circle cx="12" cy="12" r="10"/>
+                                                        <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @* حذف *@
+                                            @if (CanDelete && e.PaymentStatus == "Unpaid")
+                                            {
+                                                @if (_confirmId == e.ExpenseId)
+                                                {
+                                                    <button class="exl-confirm-del"
+                                                            @onclick="() => Delete(e)">
+                                                        حذف؟
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button class="exl-act-btn act-delete"
+                                                            @onclick="() => _confirmId = e.ExpenseId"
+                                                            title="حذف"
+                                                            aria-label="حذف @e.ExpenseNumber">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+                                            }
+
+                                        </div>
+                                    </td>
+
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
                 </div>
-                <div class="fc-modal-body">
-                    @if (_msg is not null)
-                    {
-                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
-                                  Class="mb-4">@_msg</MudAlert>
-                    }
-                    <div class="fc-form-grid">
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">نوع المصروف *</div>
-                            <select class="fc-sel fc-sel-lg" value="@_f.ExpenseTypeId" @onchange="OnTypeChanged">
-                                @foreach (var t in _types) { <option value="@t.Id">@t.Label</option> }
-                            </select>
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">التاريخ</div>
-                            <input type="datetime-local" class="fc-sel fc-sel-lg" value="@_f.ExpenseDate"
-                                   @onchange="e => _f.ExpenseDate = e.Value?.ToString()" />
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">المبلغ *</div>
-                            <input type="number" min="0.01" step="0.01" class="fc-sel fc-sel-lg" value="@_f.Amount"
-                                   @onchange="e => _f.Amount = ParseAmount(e.Value)" />
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">الضريبة</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_f.TaxRateId">
-                                <option value="">بدون</option>
-                                @foreach (var t in _taxRates) { <option value="@t.Id">@t.Label</option> }
-                            </select>
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">العملية</div>
-                            @if (CurrentType?.IsOperationCost == false)
-                            {
-                                <div class="fc-cell-sub" style="padding:12px 0">النوع ده مش بيتحمل على عملية</div>
-                            }
-                            else
-                            {
-                                <select class="fc-sel fc-sel-lg" @bind="_f.OperationId">
-                                    <option value="">—</option>
-                                    @foreach (var o in _operations)
-                                    {
-                                        <option value="@o.OperationId">@o.OperationNumber — @o.CustomerName</option>
-                                    }
-                                </select>
-                            }
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">الرحلة</div>
-                            <select class="fc-sel fc-sel-lg" value="@_f.TripId" @onchange="OnTripChanged">
-                                <option value="">—</option>
-                                @foreach (var t in _trips)
-                                {
-                                    <option value="@t.TripId">@t.TripNumber — @t.DriverName</option>
-                                }
-                            </select>
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">العهدة (لو مدفوع من عهدة)</div>
-                            @if (_f.TripId is null)
-                            {
-                                <div class="fc-cell-sub" style="padding:12px 0">اختار الرحلة الأول</div>
-                            }
-                            else if (!_custodies.Any())
-                            {
-                                <div class="fc-cell-sub" style="padding:12px 0">مافيش عهد مفتوحة على الرحلة دي</div>
-                            }
-                            else
-                            {
-                                <select class="fc-sel fc-sel-lg" value="@_f.CustodyId" @onchange="OnCustodyChanged">
-                                    <option value="">— بدون عهدة —</option>
-                                    @foreach (var c in _custodies)
-                                    {
-                                        <option value="@c.Id">@c.Label</option>
-                                    }
-                                </select>
-                            }
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">المورد (لو مدفوع لجهة)</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_f.SupplierId">
-                                <option value="">—</option>
-                                @foreach (var s in _suppliers) { <option value="@s.Id">@s.Label</option> }
-                            </select>
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">السائق</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_f.DriverId">
-                                <option value="">—</option>
-                                @foreach (var d in _drivers) { <option value="@d.Id">@d.Label</option> }
-                            </select>
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">رقم مرجعي (إيصال/فاتورة)</div>
-                            <input class="fc-sel fc-sel-lg" value="@_f.ReferenceNumber" maxlength="100"
-                                   @onchange="e => _f.ReferenceNumber = e.Value?.ToString()" />
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">البيان</div>
-                            <input class="fc-sel fc-sel-lg" value="@_f.Description" maxlength="500"
-                                   @onchange="e => _f.Description = e.Value?.ToString()" />
-                        </div>
-                    </div>
-                    <div class="fc-panel-sub" style="margin:18px 0 8px">ملاحظات</div>
-                    <textarea class="fc-sel" rows="2" maxlength="500"
-                              @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
-                </div>
-                <div class="fc-modal-foot">
-                    <MudButton Variant="Variant.Outlined" OnClick="Close">إلغاء</MudButton>
-                    @if (CanEdit)
-                    {
-                        <MudButton Variant="Variant.Text" Color="Color.Warning" Disabled="_saving"
-                                   OnClick="() => SaveAsync(true)">حفظ كمسودة</MudButton>
-                    }
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
-                               OnClick="() => SaveAsync(false)">حفظ وتأكيد</MudButton>
-                </div>
-            </div>
+            }
+
         </div>
     }
 </div>
 
+
+@* ═══════════════════════════════════════════
+   MODAL — أنواع المصروفات
+═══════════════════════════════════════════ *@
+@if (_typesOpen && CanManageTypes)
+{
+    <div class="exl-modal-backdrop" @onclick="CloseTypes"
+         role="dialog" aria-modal="true" aria-label="أنواع المصروفات">
+        <div class="exl-modal" @onclick:stopPropagation="true">
+
+            <div class="exl-modal-head">
+                <div class="exl-modal-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="exl-modal-title">أنواع المصروفات</div>
+                    <div class="exl-modal-sub">التصنيف بيحدد هل المصروف تشغيلي ولا إداري</div>
+                </div>
+                <button class="exl-modal-close" @onclick="CloseTypes" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            @if (_typesMsg is not null)
+            {
+                <div class="exl-modal-banner @(_typesOk ? "banner-success" : "banner-error")" role="alert">
+                    <span>@_typesMsg</span>
+                    <button @onclick="() => _typesMsg = null">✕</button>
+                </div>
+            }
+
+            <div class="exl-modal-body">
+
+                @* ── فورم الإضافة/التعديل ── *@
+                <div class="exl-type-form-card">
+
+                    <div class="type-form-head">
+                        <div class="type-form-icon" aria-hidden="true">
+                            @if (_typeEditId is null)
+                            {
+                                <svg viewBox="0 0 24 24" width="16" height="16"
+                                     fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                </svg>
+                            }
+                            else
+                            {
+                                <svg viewBox="0 0 24 24" width="16" height="16"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                </svg>
+                            }
+                        </div>
+                        <div>
+                            <div class="type-form-title">
+                                @(_typeEditId is null ? "نوع جديد" : $"تعديل: {_tf.NameAr}")
+                            </div>
+                            <div class="type-form-sub">الكود بالحروف الإنجليزية — زي FUEL أو RENT</div>
+                        </div>
+                    </div>
+
+                    <div class="exl-type-form-grid">
+
+                        <div class="exl-type-field">
+                            <label class="exl-type-label">
+                                الكود
+                                <span class="field-req">*</span>
+                            </label>
+                            <input class="exl-type-input"
+                                   @bind="_tf.Code"
+                                   maxlength="30"
+                                   placeholder="FUEL"
+                                   dir="ltr"
+                                   disabled="@(_typeEditId is not null && _tf.ExpenseCount > 0)" />
+                        </div>
+
+                        <div class="exl-type-field">
+                            <label class="exl-type-label">
+                                الاسم بالعربي
+                                <span class="field-req">*</span>
+                            </label>
+                            <input class="exl-type-input"
+                                   @bind="_tf.NameAr"
+                                   maxlength="150"
+                                   placeholder="وقود" />
+                        </div>
+
+                        <div class="exl-type-field">
+                            <label class="exl-type-label">الاسم بالإنجليزي</label>
+                            <input class="exl-type-input"
+                                   @bind="_tf.NameEn"
+                                   maxlength="150"
+                                   placeholder="Fuel"
+                                   dir="ltr" />
+                        </div>
+
+                        <div class="exl-type-field">
+                            <label class="exl-type-label">التصنيف</label>
+                            <div class="exl-type-select-wrap">
+                                <svg class="exl-type-sel-icon" viewBox="0 0 24 24"
+                                     width="13" height="13" fill="none"
+                                     stroke="currentColor" stroke-width="2"
+                                     aria-hidden="true">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                    <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round"/>
+                                </svg>
+                                <select class="exl-type-input exl-type-sel"
+                                        @bind="_tf.IsOperationCost"
+                                        disabled="@(_typeEditId is not null && _tf.ExpenseCount > 0)">
+                                    <option value="true">تشغيلي — بيتحمل على عملية</option>
+                                    <option value="false">إداري — بيتحمل على الشركة</option>
+                                </select>
+                            </div>
+                            @if (_typeEditId is not null && _tf.ExpenseCount > 0)
+                            {
+                                <div class="exl-type-hint">
+                                    <svg viewBox="0 0 16 16" width="10" height="10"
+                                         fill="none" stroke="currentColor" stroke-width="1.8"
+                                         aria-hidden="true">
+                                        <rect x="3" y="11" width="10" height="6" rx="1"/>
+                                        <path d="M5 11V7a3 3 0 016 0v4"/>
+                                    </svg>
+                                    مقفول — عليه @_tf.ExpenseCount مصروف
+                                </div>
+                            }
+                        </div>
+
+                    </div>
+
+                    @* Checkboxes *@
+                    <div class="exl-type-checks">
+                        <label class="exl-type-check @(_tf.IsCustodyAllowed ? "check-on" : "")">
+                            <input type="checkbox" @bind="_tf.IsCustodyAllowed" />
+                            <div class="check-indicator" aria-hidden="true"></div>
+                            <span>يُنصرف من العهدة</span>
+                        </label>
+                        <label class="exl-type-check @(_tf.IsTaxDeductible ? "check-on" : "")">
+                            <input type="checkbox" @bind="_tf.IsTaxDeductible" />
+                            <div class="check-indicator" aria-hidden="true"></div>
+                            <span>الضريبة قابلة للخصم</span>
+                        </label>
+                        <label class="exl-type-check @(_tf.IsActive ? "check-on" : "check-inactive")">
+                            <input type="checkbox" @bind="_tf.IsActive" />
+                            <div class="check-indicator" aria-hidden="true"></div>
+                            <span>نشط</span>
+                        </label>
+                    </div>
+
+                    <div class="type-form-actions">
+                        @if (_typeEditId is not null)
+                        {
+                            <button class="type-cancel-btn" @onclick="ResetTypeForm">إلغاء التعديل</button>
+                        }
+                        <button class="type-save-btn"
+                                @onclick="SaveType"
+                                disabled="@_typesSaving">
+                            @if (_typesSaving)
+                            {
+                                <span class="btn-spinner sm" aria-hidden="true"></span>
+                            }
+                            else
+                            {
+                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="2"
+                                     aria-hidden="true">
+                                    <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                    <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            }
+                            حفظ
+                        </button>
+                    </div>
+
+                </div>
+
+
+                @* ── جدول الأنواع ── *@
+                <div class="exl-types-table-section">
+
+                    <div class="types-table-head">
+                        <span>الأنواع الموجودة</span>
+                        <span class="types-count-badge">@_typesList.Count</span>
+                    </div>
+
+                    <div class="exl-types-table-wrap">
+                        <table class="exl-types-table" aria-label="جدول أنواع المصروفات">
+                            <thead>
+                                <tr>
+                                    <th scope="col">الكود</th>
+                                    <th scope="col" class="th-start">الاسم</th>
+                                    <th scope="col">التصنيف</th>
+                                    <th scope="col">مصروفات</th>
+                                    <th scope="col" style="width:80px"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (!_typesList.Any())
+                                {
+                                    <tr>
+                                        <td colspan="5">
+                                            <div class="exl-types-empty">مافيش أنواع — ضيف أول نوع</div>
+                                        </td>
+                                    </tr>
+                                }
+                                @foreach (var t in _typesList)
+                                {
+                                    <tr class="@(!t.IsActive ? "type-row-inactive" : "")">
+                                        <td>
+                                            <span class="exl-code-chip" dir="ltr">@t.Code</span>
+                                        </td>
+                                        <td class="td-start">
+                                            <div class="type-name-cell">
+                                                <span>@t.NameAr</span>
+                                                @if (!t.IsActive)
+                                                {
+                                                    <span class="type-inactive-tag">معطّل</span>
+                                                }
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="type-class-chip @(t.IsOperationCost ? "chip-op" : "chip-admin")">
+                                                @(t.IsOperationCost ? "تشغيلي" : "إداري")
+                                            </span>
+                                        </td>
+                                        <td class="td-num">@t.ExpenseCount</td>
+                                        <td>
+                                            <div class="type-actions">
+                                                <button class="exl-act-btn act-edit"
+                                                        @onclick="() => EditType(t)"
+                                                        title="تعديل">
+                                                    <svg viewBox="0 0 24 24" width="13" height="13"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                    </svg>
+                                                </button>
+                                                @if (t.ExpenseCount == 0)
+                                                {
+                                                    <button class="exl-act-btn act-delete"
+                                                            @onclick="() => DeleteType(t)"
+                                                            title="حذف">
+                                                        <svg viewBox="0 0 24 24" width="13" height="13"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="exl-modal-foot">
+                <button class="exl-modal-close-btn" @onclick="CloseTypes">إغلاق</button>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+@* ═══════════════════════════════════════════
+   CSS
+═══════════════════════════════════════════ *@
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-teal:      #0d9488;
+        --fc-teal-lt:   #e6faf8;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    .ex-list-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 200px);
+        padding: 16px 20px 32px;
+        max-width: 1400px; width: 100%;
+        margin: 0 auto;
+    }
+
+    /* ================================================================
+       STATES
+    ================================================================ */
+    .exl-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .exl-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .exl-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+    .exl-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .exl-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    /* ================================================================
+       CARD
+    ================================================================ */
+    .exl-card {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden;
+    }
+
+    /* ================================================================
+       TOOLBAR
+    ================================================================ */
+    .exl-toolbar {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7; flex-wrap: wrap;
+    }
+
+    .exl-search-wrap {
+        position: relative; display: flex; align-items: center;
+        flex: 1; min-width: 200px; max-width: 380px;
+    }
+
+    .exl-search-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; }
+
+    .exl-search-input {
+        width: 100%; height: 38px; padding: 0 36px 0 12px;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .exl-search-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .exl-search-input::placeholder { color: #b0bcc8; }
+
+    .exl-search-clear {
+        position: absolute; left: 10px;
+        display: flex; align-items: center; justify-content: center;
+        width: 22px; height: 22px; border-radius: 50%;
+        border: none; background: #edf1f7; color: #8899ae; cursor: pointer;
+        transition: all .12s ease;
+    }
+    .exl-search-clear:hover { background: #dde5f0; color: var(--fc-text); }
+
+    .exl-type-filter-wrap {
+        position: relative; display: flex; align-items: center;
+        min-width: 160px; max-width: 200px;
+    }
+    .exl-type-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; z-index: 1; }
+    .exl-type-select {
+        width: 100%; height: 38px; padding: 0 34px 0 10px;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; outline: none; cursor: pointer;
+        -webkit-appearance: none; appearance: none;
+        transition: border-color .15s ease;
+    }
+    .exl-type-select:focus { border-color: var(--fc-blue); }
+
+    .exl-results-badge {
+        display: flex; align-items: center; gap: 5px;
+        margin-right: auto; font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap;
+    }
+    .exl-results-badge strong { color: #5a6e88; }
+
+    /* ================================================================
+       STATUS TABS
+    ================================================================ */
+    .exl-status-bar {
+        padding: 10px 18px; background: #f9fafd; border-bottom: 1px solid #edf1f7; overflow-x: auto;
+    }
+
+    .exl-status-tabs { display: flex; gap: 4px; padding: 3px; border-radius: 10px; background: #f0f3f8; width: fit-content; }
+
+    .exl-status-tab {
+        display: flex; align-items: center; gap: 5px;
+        height: 32px; padding: 0 10px;
+        border: none; border-radius: 7px;
+        background: transparent; color: #6b7d95;
+        font-family: inherit; font-size: 10.5px; font-weight: 700;
+        cursor: pointer; white-space: nowrap; transition: all .15s ease;
+    }
+    .exl-status-tab:hover:not(.active) { color: var(--fc-text); background: rgba(255,255,255,.6); }
+    .exl-status-tab.active {
+        background: var(--fc-card); color: var(--fc-text);
+        box-shadow: 0 1px 4px rgba(15,41,82,.10); font-weight: 800;
+    }
+
+    .exl-tab-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px; }
+
+    .exl-tab-count {
+        min-width: 16px; height: 16px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 4px; padding: 0 3px;
+        font-size: 9px; font-weight: 900; font-family: "Inter", Arial, sans-serif;
+    }
+    .exl-status-tab.active .exl-tab-count { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .exl-status-tab:not(.active) .exl-tab-count { background: #e4eaf3; color: #8899ae; }
+
+    .tdot-all       { background: var(--fc-blue); }
+    .tdot-draft     { background: #9aaabb; }
+    .tdot-posted    { background: var(--fc-green); }
+    .tdot-cancelled { background: var(--fc-red); }
+
+    /* ================================================================
+       LOADING / EMPTY
+    ================================================================ */
+    .exl-loading {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 200px;
+        color: var(--fc-muted); font-size: 12px; font-weight: 600;
+    }
+
+    .exl-spinner {
+        width: 32px; height: 32px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: exl-spin .75s linear infinite;
+    }
+    @@keyframes exl-spin { to { transform: rotate(360deg); } }
+
+    .exl-empty {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 10px; min-height: 240px; padding: 40px 20px; text-align: center;
+    }
+    .exl-empty-icon {
+        width: 72px; height: 72px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: #f0f4fa; color: #b0c4d8;
+    }
+    .exl-empty-title { font-size: 15px; font-weight: 800; color: var(--fc-text); }
+    .exl-empty-sub   { font-size: 12px; color: var(--fc-muted); }
+
+    .exl-add-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 16px; margin-top: 6px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; transition: all .15s ease;
+    }
+    .exl-add-btn:hover { background: var(--fc-blue); color: #fff; }
+
+    /* ================================================================
+       TABLE
+    ================================================================ */
+    .exl-table-wrap { overflow-x: auto; }
+
+    .exl-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+
+    .exl-table thead th {
+        padding: 10px 12px;
+        background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 10.5px; font-weight: 800;
+        text-align: center; border-bottom: 2px solid #e4eaf3;
+        white-space: nowrap; position: sticky; top: 0; z-index: 1;
+    }
+    .exl-table .th-start { text-align: right; }
+
+    .exl-table tbody tr {
+        border-bottom: 1px solid #f0f3f8; transition: background .12s ease;
+    }
+    .exl-table tbody tr:last-child { border-bottom: none; }
+    .exl-table tbody tr:hover { background: #fafcff; }
+    .exl-table tbody tr.row-cancelled { opacity: .55; }
+
+    .exl-table tbody td {
+        padding: 11px 12px; color: #526070; text-align: center; vertical-align: middle;
+    }
+    .td-start { text-align: right !important; }
+    .td-muted { color: #8899ae; font-size: 11px; }
+    .td-num   { font-family: "Inter", Arial, sans-serif; font-size: 12px; font-weight: 600; }
+
+    /* ── Expense Cell ── */
+    .exl-exp-cell { display: flex; align-items: flex-start; gap: 10px; }
+
+    .exl-exp-avatar {
+        width: 34px; height: 34px; flex: 0 0 34px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.10);
+        margin-top: 2px;
+    }
+
+    .av-draft     { background: linear-gradient(135deg, #7a8a9a, #5c6e80); }
+    .av-posted    { background: linear-gradient(135deg, #0d8a48, #16a35b); }
+    .av-approved  { background: linear-gradient(135deg, #1558d6, #1e6ef5); }
+    .av-cancelled { background: linear-gradient(135deg, #b02040, #e03048); }
+
+    .exl-exp-info { min-width: 0; }
+
+    .exl-exp-num { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+    .exl-code-chip {
+        display: inline-flex; align-items: center;
+        padding: 2px 8px; border-radius: 6px;
+        background: #f0f4fa; border: 1px solid #e0e8f4;
+        font-size: 10.5px; font-weight: 800; color: #5a6e88;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .exl-approved-badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 18px; height: 18px; border-radius: 50%;
+        background: var(--fc-green-lt); color: var(--fc-green);
+        font-size: 10px; font-weight: 900; border: 1px solid #b0e0c5;
+    }
+
+    .exl-type-name { font-size: 12px; font-weight: 800; color: #344563; margin-top: 3px; }
+    .exl-desc      { font-size: 10.5px; color: #6b7d95; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+    .exl-driver    { display: flex; align-items: center; gap: 3px; font-size: 10px; color: #9aaabb; margin-top: 2px; }
+
+    /* ── Link Cell ── */
+    .exl-link-cell { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+
+    .exl-link-tag {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 2px 7px; border-radius: 5px;
+        font-size: 9.5px; font-weight: 700;
+    }
+    .tag-op       { background: rgba(30,110,245,.08);  color: var(--fc-blue);   border: 1px solid rgba(30,110,245,.15); }
+    .tag-trip     { background: rgba(224,101,32,.08);  color: #c0501a;          border: 1px solid rgba(224,101,32,.15); }
+    .tag-supplier { background: var(--fc-purple-lt);   color: var(--fc-purple); border: 1px solid #d0bfef; }
+    .tag-custody  { background: var(--fc-amber-lt);    color: #9a6d08;          border: 1px solid #f0d898; }
+
+    /* ── Date Cell ── */
+    .exl-date-cell {
+        display: flex; align-items: center; gap: 4px; justify-content: center;
+        color: #6b7d95; font-size: 11px;
+    }
+
+    /* ── Amount ── */
+    .exl-amount-cell { display: flex; align-items: baseline; gap: 3px; justify-content: center; }
+    .exl-amount-main {
+        font-family: "Inter", Arial, sans-serif;
+        font-size: 13px; font-weight: 800; color: var(--fc-text);
+    }
+    .exl-amount-curr { font-size: 9px; color: #9aaabb; font-weight: 600; }
+    .exl-tax-sub { font-size: 9.5px; color: #9aaabb; text-align: center; margin-top: 2px; }
+
+    /* ── Chips ── */
+    .exl-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 3px 9px; border-radius: 7px;
+        font-size: 10px; font-weight: 800; white-space: nowrap;
+    }
+
+    .exl-chip-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
+
+    /* Status */
+    .chip-draft    { background: #f0f3f8; color: #6b7d95; border: 1px solid #dde5f0; }
+    .chip-posted   { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .chip-cancelled { background: var(--fc-red-lt); color: var(--fc-red); border: 1px solid #ffc8cf; }
+
+    .sdot-draft    { background: #9aaabb; }
+    .sdot-posted   { background: var(--fc-green); }
+    .sdot-cancelled { background: var(--fc-red); }
+
+    /* Payment */
+    .chip-unpaid  { background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898; }
+    .chip-partial { background: var(--fc-blue-lt);  color: var(--fc-blue); border: 1px solid #c0d4fb; }
+    .chip-paid    { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+
+    .pdot-unpaid  { background: var(--fc-amber); }
+    .pdot-partial { background: var(--fc-blue); }
+    .pdot-paid    { background: var(--fc-green); }
+
+    .exl-status-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+
+    /* ── Actions ── */
+    .exl-actions { display: flex; align-items: center; gap: 3px; justify-content: center; flex-wrap: wrap; }
+
+    .exl-act-btn {
+        width: 28px; height: 28px; border-radius: 7px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; cursor: pointer;
+        transition: all .15s ease; background: transparent;
+    }
+
+    .act-edit    { color: var(--fc-blue); }
+    .act-confirm { color: var(--fc-green); }
+    .act-approve { color: var(--fc-teal); }
+    .act-pay     { color: var(--fc-purple); }
+    .act-cancel  { color: var(--fc-red); }
+    .act-delete  { color: var(--fc-red); }
+
+    .act-edit:hover    { background: var(--fc-blue-lt);   border-color: #c0d4fb; }
+    .act-confirm:hover { background: var(--fc-green-lt);  border-color: #b0e0c5; }
+    .act-approve:hover { background: var(--fc-teal-lt);   border-color: #b0e0dc; }
+    .act-pay:hover     { background: var(--fc-purple-lt); border-color: #d0bfef; }
+    .act-cancel:hover  { background: var(--fc-red-lt);    border-color: #ffc8cf; }
+    .act-delete:hover  { background: var(--fc-red-lt);    border-color: #ffc8cf; }
+
+    .exl-confirm-del {
+        height: 26px; padding: 0 9px;
+        border: none; border-radius: 6px;
+        background: linear-gradient(135deg, #e03048, #c0182e);
+        color: #fff; font-family: inherit;
+        font-size: 9.5px; font-weight: 800; cursor: pointer;
+        animation: exl-pulse-del 1s ease infinite; white-space: nowrap;
+    }
+    @@keyframes exl-pulse-del {
+        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.35); }
+        50%     { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
+    }
+
+    /* ================================================================
+       MODAL
+    ================================================================ */
+    .exl-modal-backdrop {
+        position: fixed; inset: 0; z-index: 1000;
+        background: rgba(10,20,40,.55); backdrop-filter: blur(4px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px; animation: exl-fade-in .2s ease;
+    }
+    @@keyframes exl-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+    .exl-modal {
+        width: 100%; max-width: 720px;
+        background: var(--fc-card); border: 1px solid rgba(0,0,0,.08);
+        border-radius: 18px;
+        box-shadow: 0 8px 30px rgba(10,20,50,.15), 0 30px 80px rgba(10,20,50,.20);
+        overflow: hidden;
+        animation: exl-modal-in .25s cubic-bezier(.34,1.3,.64,1);
+        max-height: 90vh; overflow-y: auto;
+    }
+    @@keyframes exl-modal-in {
+        from { opacity: 0; transform: scale(.95) translateY(10px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .exl-modal-head {
+        display: flex; align-items: center; gap: 12px;
+        padding: 18px 20px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .exl-modal-icon {
+        width: 42px; height: 42px; flex: 0 0 42px; border-radius: 11px;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898;
+    }
+
+    .exl-modal-title { font-size: 14.5px; font-weight: 800; color: #1c2b43; }
+    .exl-modal-sub   { font-size: 10.5px; color: var(--fc-muted); margin-top: 2px; }
+
+    .exl-modal-close {
+        margin-right: auto; width: 32px; height: 32px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid #e4eaf2; border-radius: 8px;
+        background: none; color: #9aaabb; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .exl-modal-close:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .exl-modal-banner {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px; padding: 10px 20px; font-size: 12px; font-weight: 600;
+    }
+    .exl-modal-banner button { background: none; border: none; cursor: pointer; opacity: .6; }
+    .banner-success { background: #e9f8f0; color: #0e7a43; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); }
+
+    .exl-modal-body { padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+
+    /* ── Type Form Card ── */
+    .exl-type-form-card {
+        border: 1px solid #e4edf8; border-radius: 12px;
+        background: linear-gradient(180deg, #fafcff, #f5f8fb);
+        overflow: hidden; padding: 16px;
+    }
+
+    .type-form-head {
+        display: flex; align-items: center; gap: 10px;
+        margin-bottom: 16px; padding-bottom: 12px;
+        border-bottom: 1px solid #e4edf8;
+    }
+
+    .type-form-icon {
+        width: 32px; height: 32px; border-radius: 8px; flex: 0 0 32px;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--fc-amber-lt); color: #9a6d08;
+    }
+
+    .type-form-title { font-size: 13px; font-weight: 800; color: #1c2b43; }
+    .type-form-sub   { font-size: 10px; color: var(--fc-muted); margin-top: 2px; }
+
+    .exl-type-form-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;
+    }
+
+    .exl-type-field { display: flex; flex-direction: column; gap: 5px; }
+
+    .exl-type-label {
+        font-size: 11px; font-weight: 800; color: #344258;
+        display: flex; align-items: center; gap: 3px;
+    }
+    .field-req { color: var(--fc-red); font-size: 13px; }
+
+    .exl-type-input {
+        height: 38px; width: 100%;
+        border: 1px solid #d8e2f0; border-radius: 8px;
+        background: #fff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; padding: 0 10px; outline: none;
+        transition: border-color .15s ease;
+    }
+    .exl-type-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .exl-type-input:disabled { opacity: .7; background: #f3f5f8; cursor: not-allowed; }
+    .exl-type-input::placeholder { color: #b0bcc8; }
+
+    .exl-type-select-wrap { position: relative; }
+    .exl-type-sel-icon { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #9aaabb; pointer-events: none; z-index: 1; }
+    .exl-type-sel { padding-right: 32px; cursor: pointer; -webkit-appearance: none; appearance: none; }
+
+    .exl-type-hint { display: flex; align-items: center; gap: 4px; font-size: 10px; color: #9aaabb; font-weight: 500; }
+
+    /* Checkboxes */
+    .exl-type-checks { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+
+    .exl-type-check {
+        display: flex; align-items: center; gap: 8px;
+        padding: 8px 12px; border-radius: 8px;
+        border: 1px solid #e8edf5; background: #fafcff;
+        cursor: pointer; transition: all .12s ease;
+        font-size: 11.5px; font-weight: 600; color: var(--fc-text);
+    }
+    .exl-type-check input { display: none; }
+
+    .check-indicator {
+        width: 17px; height: 17px; border-radius: 5px; flex: 0 0 17px;
+        border: 2px solid #d8e2f0; background: #fff;
+        transition: all .12s ease;
+    }
+    .exl-type-check.check-on { border-color: #bdd4fc; background: var(--fc-blue-lt); }
+    .exl-type-check.check-on .check-indicator { background: var(--fc-blue); border-color: var(--fc-blue); }
+    .exl-type-check.check-inactive { border-color: #e0e5ec; background: #f5f7fa; opacity: .7; }
+
+    .type-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+    .type-cancel-btn {
+        height: 36px; padding: 0 14px;
+        border: 1px solid var(--fc-border); border-radius: 8px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .12s ease;
+    }
+    .type-cancel-btn:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .type-save-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 16px;
+        border: 0; border-radius: 8px;
+        background: linear-gradient(135deg, #1e6ef5, #1558d6);
+        color: #fff; font-family: inherit;
+        font-size: 12px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 3px 10px rgba(30,110,245,.25);
+        transition: all .15s ease;
+    }
+    .type-save-btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .type-save-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* ── Types Table ── */
+    .exl-types-table-section { display: flex; flex-direction: column; gap: 12px; }
+
+    .types-table-head {
+        display: flex; align-items: center; gap: 10px;
+        font-size: 12.5px; font-weight: 800; color: #1c2b43;
+    }
+
+    .types-count-badge {
+        min-width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+        border-radius: 6px; padding: 0 5px;
+        background: var(--fc-amber-lt); color: #9a6d08;
+        font-size: 10px; font-weight: 900; font-family: "Inter", Arial, sans-serif;
+        border: 1px solid #f0d898;
+    }
+
+    .exl-types-table-wrap { overflow-x: auto; }
+
+    .exl-types-table { width: 100%; border-collapse: collapse; font-size: 12.5px; border: 1px solid #e4edf8; border-radius: 10px; overflow: hidden; }
+
+    .exl-types-table thead th {
+        padding: 9px 12px;
+        background: linear-gradient(180deg, #f0f5fc, #eaf1f9);
+        color: #4a5a74; font-size: 10.5px; font-weight: 800;
+        text-align: center; border-bottom: 2px solid #dce8f5;
+    }
+    .exl-types-table .th-start { text-align: right; }
+
+    .exl-types-table tbody tr { border-bottom: 1px solid #f0f5fb; transition: background .12s ease; }
+    .exl-types-table tbody tr:last-child { border-bottom: none; }
+    .exl-types-table tbody tr:hover { background: #f5f8ff; }
+    .exl-types-table tbody tr.type-row-inactive { opacity: .6; }
+
+    .exl-types-table tbody td { padding: 10px 12px; color: #526070; text-align: center; vertical-align: middle; }
+
+    .type-name-cell { display: flex; align-items: center; gap: 7px; text-align: right; font-weight: 700; color: #1c2c44; }
+
+    .type-inactive-tag {
+        display: inline-flex; padding: 1px 6px; border-radius: 4px;
+        background: #f0f3f8; color: #8899ae; font-size: 9px; font-weight: 800;
+        border: 1px solid #dde5f0;
+    }
+
+    .type-class-chip {
+        display: inline-flex; padding: 2px 8px; border-radius: 6px;
+        font-size: 10px; font-weight: 800;
+    }
+    .chip-op    { background: rgba(30,110,245,.08); color: var(--fc-blue); border: 1px solid rgba(30,110,245,.15); }
+    .chip-admin { background: var(--fc-purple-lt); color: var(--fc-purple); border: 1px solid #d0bfef; }
+
+    .type-actions { display: flex; align-items: center; gap: 4px; justify-content: center; }
+
+    .exl-types-empty {
+        padding: 24px; text-align: center;
+        color: #9aaabb; font-size: 12px; font-weight: 600;
+    }
+
+    .exl-modal-foot {
+        display: flex; align-items: center; justify-content: flex-end;
+        padding: 14px 20px;
+        background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%);
+        border-top: 1px solid #edf1f7;
+    }
+
+    .exl-modal-close-btn {
+        height: 38px; padding: 0 18px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .exl-modal-close-btn:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .btn-spinner {
+        width: 14px; height: 14px;
+        border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+        border-radius: 50%; animation: exl-spin .7s linear infinite;
+    }
+    .btn-spinner.sm { width: 12px; height: 12px; }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 1100px) {
+        .exl-desc { max-width: 130px; }
+    }
+
+    @@media (max-width: 900px) {
+        .exl-toolbar { flex-direction: column; align-items: stretch; }
+        .exl-search-wrap { max-width: 100%; }
+        .exl-type-filter-wrap { max-width: 100%; }
+        .exl-results-badge { margin-right: 0; }
+        .exl-type-form-grid { grid-template-columns: 1fr; }
+    }
+
+    @@media (max-width: 680px) {
+        .ex-list-body { padding: 10px 12px 24px; }
+        .exl-toolbar { padding: 10px 12px; }
+        .exl-exp-avatar { display: none; }
+        .exl-status-bar { padding: 8px 12px; }
+        .exl-link-cell { align-items: flex-start; }
+    }
+
+    @@media (max-width: 480px) {
+        .exl-status-tabs { gap: 2px; }
+        .exl-status-tab { padding: 0 7px; font-size: 9.5px; }
+        .exl-tab-dot { display: none; }
+        .exl-type-checks { flex-direction: column; }
+        .exl-modal-backdrop { padding: 10px; }
+        .exl-modal { border-radius: 14px; }
+    }
+
+</style>
+
+
 @code {
     private AuthUser? _user;
-    private bool CanView   => _user?.Can("EXPENSE.VIEW") ?? false;
-    private bool CanCreate => _user?.Can("EXPENSE.CREATE") ?? false;
-    private bool CanEdit   => _user?.Can("EXPENSE.EDIT") ?? false;
-    private bool CanDelete => _user?.Can("EXPENSE.DELETE") ?? false;
-    private bool CanApprove => _user?.Can("EXPENSE.APPROVE") ?? false;
+    private bool CanView        => _user?.Can("EXPENSE.VIEW")       ?? false;
+    private bool CanCreate      => _user?.Can("EXPENSE.CREATE")     ?? false;
+    private bool CanEdit        => _user?.Can("EXPENSE.EDIT")       ?? false;
+    private bool CanDelete      => _user?.Can("EXPENSE.DELETE")     ?? false;
+    private bool CanApprove     => _user?.Can("EXPENSE.APPROVE")    ?? false;
+    private bool CanManageTypes => _user?.Can("MASTERDATA.MANAGE")  ?? false;
 
-    private static readonly Dictionary<string, string> Tabs = new()
+    private static readonly (string Key, string Value)[] _statusTabs =
     {
-        ["all"] = "الكل", ["Draft"] = "مسودة", ["Posted"] = "مؤكد", ["Cancelled"] = "ملغي"
+        ("all",       "الكل"),
+        ("Draft",     "مسودة"),
+        ("Posted",    "مؤكد"),
+        ("Cancelled", "ملغي")
     };
 
-    private List<Item> _items = new();
+    private List<Item>    _items = new();
     private List<ExpType> _types = new();
-    private List<TaxOpt> _taxRates = new();
-    private List<OpOpt> _operations = new();
-    private List<TripOpt> _trips = new();
-    private List<Opt> _suppliers = new();
-    private List<Opt> _drivers = new();
-    private List<CustodyOpt> _custodies = new();
+    private bool   _loading;
+    private string _search     = "";
+    private string _tab        = "all";
+    private int    _typeFilter;
+    private long?  _confirmId;
 
-    private bool _loading; private string _search = ""; private string _tab = "all";
-    private int _typeFilter;
-    private long? _confirmId;
-    private bool _modalOpen; private long? _editId; private bool _saving; private string? _msg; private bool _ok;
-    private Form _f = new();
-
-    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
-    public class TaxOpt { public int Id { get; set; } public string Label { get; set; } = "";
-        public decimal Value { get; set; } }
-    public class ExpType { public int Id { get; set; } public string Label { get; set; } = "";
-        public bool CustodyAllowed { get; set; } public bool IsOperationCost { get; set; }
-        public bool IsTaxDeductible { get; set; } }
-    public class OpOpt { public long OperationId { get; set; } public string OperationNumber { get; set; } = "";
-        public string CustomerName { get; set; } = ""; public string Status { get; set; } = ""; }
-    public class TripOpt { public long TripId { get; set; } public string TripNumber { get; set; } = "";
-        public string DriverName { get; set; } = ""; }
-    public class CustodyOpt { public long Id { get; set; } public string Label { get; set; } = "";
-        public string OwnerType { get; set; } = ""; public int OwnerId { get; set; }
-        public long TripId { get; set; } public decimal AmountIssued { get; set; } }
+    /* ── DTOs ── */
+    public class ExpType { public int Id { get; set; } public string Label { get; set; } = ""; }
 
     public class Item
     {
-        public long ExpenseId { get; set; }
-        public string ExpenseNumber { get; set; } = "";
-        public string TypeName { get; set; } = "";
-        public string? Description { get; set; }
-        public DateTime ExpenseDate { get; set; }
-        public decimal Amount { get; set; }
-        public decimal TaxRate { get; set; }
-        public string? OperationNumber { get; set; }
-        public string? TripNumber { get; set; }
-        public string? SupplierName { get; set; }
-        public string? DriverName { get; set; }
-        public string? CustodyNumber { get; set; }
-        public string PaymentStatus { get; set; } = "";
-        public string Status { get; set; } = "";
-        public bool IsApproved { get; set; }
+        public long     ExpenseId       { get; set; }
+        public string   ExpenseNumber   { get; set; } = "";
+        public string   TypeName        { get; set; } = "";
+        public string?  Description     { get; set; }
+        public DateTime ExpenseDate     { get; set; }
+        public decimal  Amount          { get; set; }
+        public decimal  TaxRate         { get; set; }
+        public string?  OperationNumber { get; set; }
+        public string?  TripNumber      { get; set; }
+        public string?  SupplierName    { get; set; }
+        public string?  DriverName      { get; set; }
+        public string?  CustodyNumber   { get; set; }
+        public string   PaymentStatus   { get; set; } = "";
+        public string   Status          { get; set; } = "";
+        public bool     IsApproved      { get; set; }
     }
 
-    public class Detail
-    {
-        public int ExpenseTypeId { get; set; }
-        public string? ExpenseDate { get; set; }
-        public string? Description { get; set; }
-        public decimal Amount { get; set; }
-        public int? TaxRateId { get; set; }
-        public bool IsTaxDeductible { get; set; }
-        public long? OperationId { get; set; }
-        public long? TripId { get; set; }
-        public int? DriverId { get; set; }
-        public int? SupplierId { get; set; }
-        public long? CustodyId { get; set; }
-        public string? ReferenceNumber { get; set; }
-        public string? Notes { get; set; }
-    }
-
-    public class Form
-    {
-        public int ExpenseTypeId { get; set; }
-        public string? ExpenseDate { get; set; }
-        public string? Description { get; set; }
-        public decimal Amount { get; set; }
-        public long? OperationId { get; set; }
-        public long? TripId { get; set; }
-        public int? DriverId { get; set; }
-        public int? SupplierId { get; set; }
-        public long? CustodyId { get; set; }
-        public int? TaxRateId { get; set; }
-        public bool? IsTaxDeductible { get; set; }
-        public string? ReferenceNumber { get; set; }
-        public string? Notes { get; set; }
-    }
-
-    private ExpType? CurrentType => _types.FirstOrDefault(t => t.Id == _f.ExpenseTypeId);
-
+    /* ── Computed ── */
     private IEnumerable<Item> Active => _items.Where(e => e.Status != "Cancelled");
 
     private decimal ThisMonth => _items
         .Where(e => e.Status != "Cancelled" &&
-                    e.ExpenseDate.Year == DateTime.Now.Year && e.ExpenseDate.Month == DateTime.Now.Month)
+                    e.ExpenseDate.Year == DateTime.Now.Year &&
+                    e.ExpenseDate.Month == DateTime.Now.Month)
         .Sum(e => e.Amount);
-
-    private static string StatusAr(string s) => s switch
-    {
-        "Draft" => "مسودة", "Posted" => "مؤكد", "Cancelled" => "ملغي", _ => s
-    };
-
-    private static string StatusChip(string s) => s switch
-    {
-        "Draft" => "fc-chip-gray", "Posted" => "fc-chip-ok", "Cancelled" => "fc-chip-bad", _ => "fc-chip-gray"
-    };
-
-    private static string PayAr(string p) => p switch
-    {
-        "Unpaid" => "غير مدفوعه", "PartiallyPaid" => "جزئي", "Paid" => "مدفوع", _ => p
-    };
-
-    private static string PayChip(string p) => p switch
-    {
-        "Unpaid" => "fc-chip-warn", "PartiallyPaid" => "fc-chip-blue", "Paid" => "fc-chip-ok", _ => "fc-chip-gray"
-    };
-
-    private static string Money(decimal v) => v.ToString("N0");
-
-    private static decimal ParseAmount(object? v) =>
-        decimal.TryParse(v?.ToString(), out var n) && n > 0 ? n : 0m;
 
     private IEnumerable<Item> Filtered => _items.Where(e =>
         (_tab == "all" || e.Status == _tab) &&
         (_typeFilter == 0 || e.TypeName == _types.FirstOrDefault(t => t.Id == _typeFilter)?.Label) &&
         (string.IsNullOrWhiteSpace(_search) ||
          e.ExpenseNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-         (e.Description ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         (e.Description     ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
          (e.OperationNumber ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase)));
 
+    /* ── Helpers ── */
+    private static string StatusAr(string s) => s switch
+    {
+        "Draft"     => "مسودة", "Posted" => "مؤكد",
+        "Cancelled" => "ملغي",  _        => s
+    };
+
+    private static string StatusChipClass(string s) => s switch
+    {
+        "Draft"     => "chip-draft",
+        "Posted"    => "chip-posted",
+        "Cancelled" => "chip-cancelled",
+        _           => "chip-draft"
+    };
+
+    private static string StatusDotClass(string s) => s switch
+    {
+        "Draft"     => "sdot-draft",
+        "Posted"    => "sdot-posted",
+        "Cancelled" => "sdot-cancelled",
+        _           => "sdot-draft"
+    };
+
+    private static string StatusDotColor(string s) => s switch
+    {
+        "all"       => "tdot-all",
+        "Draft"     => "tdot-draft",
+        "Posted"    => "tdot-posted",
+        "Cancelled" => "tdot-cancelled",
+        _           => "tdot-all"
+    };
+
+    private static string PayAr(string p) => p switch
+    {
+        "Unpaid"        => "غير مدفوع",
+        "PartiallyPaid" => "جزئي",
+        "Paid"          => "مدفوع",
+        _               => p
+    };
+
+    private static string PayChipClass(string p) => p switch
+    {
+        "Unpaid"        => "chip-unpaid",
+        "PartiallyPaid" => "chip-partial",
+        "Paid"          => "chip-paid",
+        _               => "chip-unpaid"
+    };
+
+    private static string PayDotClass(string p) => p switch
+    {
+        "Unpaid"        => "pdot-unpaid",
+        "PartiallyPaid" => "pdot-partial",
+        "Paid"          => "pdot-paid",
+        _               => "pdot-unpaid"
+    };
+
+    private static string ExpAvatarClass(string status, bool approved) =>
+        status == "Cancelled" ? "av-cancelled"
+        : approved            ? "av-approved"
+        : status == "Posted"  ? "av-posted"
+        : "av-draft";
+
+    private static string Money(decimal v) => v.ToString("N0");
+
+    /* ── Init ── */
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
-        if (CanView) await LoadAsync();
-        if (CanCreate) await LoadLookupsAsync();
+        if (!CanView) return;
+        await Task.WhenAll(LoadAsync(), LoadTypesAsync());
     }
 
-    private async Task LoadLookupsAsync()
+    private async Task LoadTypesAsync()
     {
-        _types     = await SafeGetT<ExpType>("api/options/expense-types");
-        _taxRates  = await SafeGetT<TaxOpt>("api/options/tax-rates");
-        _suppliers = await SafeGetT<Opt>("api/options/suppliers");
-        _drivers   = await SafeGetT<Opt>("api/options/drivers");
-        _operations = await SafeGetT<OpOpt>("api/operations?take=200");
-        _trips      = await SafeGetT<TripOpt>("api/trips?take=200");
+        try { _types = await Http.GetFromJsonAsync<List<ExpType>>("api/options/expense-types") ?? new(); }
+        catch { _types = new(); }
     }
 
-    private async Task<List<T>> SafeGetT<T>(string url)
-    {
-        try { return await Http.GetFromJsonAsync<List<T>>(url) ?? new(); }
-        catch { return new(); }
-    }
+    private void GoNew()        => Nav.NavigateTo("/expenses/new");
+    private void GoEdit(Item e) => Nav.NavigateTo($"/expenses/new/{e.ExpenseId}");
 
     private async Task Reload() { await LoadAsync(); }
 
@@ -447,114 +1549,9 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/expenses?take=300") ?? new(); }
+        try   { _items = await Http.GetFromJsonAsync<List<Item>>("api/expenses?take=300") ?? new(); }
         catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
         finally { _loading = false; }
-    }
-
-    private void OnTypeChanged(ChangeEventArgs e)
-    {
-        _f.ExpenseTypeId = int.TryParse(e.Value?.ToString(), out var n) ? n : 0;
-        var t = CurrentType;
-        if (t is not null && !t.IsOperationCost) _f.OperationId = null;
-        _f.IsTaxDeductible = t?.IsTaxDeductible;
-    }
-
-    private void OnTripChanged(ChangeEventArgs e)
-    {
-        _f.TripId = long.TryParse(e.Value?.ToString(), out var t) && t > 0 ? t : null;
-        _f.CustodyId = null;
-        _ = LoadCustodiesAsync();
-    }
-
-    private void OnCustodyChanged(ChangeEventArgs e)
-    {
-        var id = long.TryParse(e.Value?.ToString(), out var c) && c > 0 ? c : (long?)null;
-        _f.CustodyId = id;
-        if (id is null) return;
-        var cus = _custodies.FirstOrDefault(x => x.Id == id);
-        if (cus is null) return;
-        // العهدة على رحلة — فلو الرحلة مش متختارة، نملاها أوتوماتيك
-        _f.TripId ??= cus.TripId;
-        if (cus.OwnerType == "Driver") _f.DriverId ??= cus.OwnerId;
-    }
-
-    private async Task LoadCustodiesAsync()
-    {
-        _custodies = _f.TripId is null
-            ? new()
-            : await SafeGetT<CustodyOpt>($"api/options/custodies?tripId={_f.TripId}");
-    }
-
-    private void New()
-    {
-        _editId = null;
-        _f = new Form
-        {
-            ExpenseTypeId = _types.FirstOrDefault()?.Id ?? 0,
-            ExpenseDate = DateTime.Now.ToString("yyyy-MM-ddTHH:mm")
-        };
-        var t0 = CurrentType;
-        _f.IsTaxDeductible = t0?.IsTaxDeductible;
-        _msg = null; _modalOpen = true;
-    }
-
-    private async Task Edit(Item e)
-    {
-        try
-        {
-            var d = await Http.GetFromJsonAsync<Detail>($"api/expenses/{e.ExpenseId}");
-            if (d is null) return;
-            _editId = e.ExpenseId;
-            _f = new Form
-            {
-                ExpenseTypeId = d.ExpenseTypeId, ExpenseDate = d.ExpenseDate,
-                Description = d.Description, Amount = d.Amount,
-                OperationId = d.OperationId, TripId = d.TripId,
-                DriverId = d.DriverId, SupplierId = d.SupplierId, CustodyId = d.CustodyId,
-                TaxRateId = d.TaxRateId, IsTaxDeductible = d.IsTaxDeductible,
-                ReferenceNumber = d.ReferenceNumber, Notes = d.Notes
-            };
-            _msg = null; _modalOpen = true;
-            await LoadCustodiesAsync();
-        }
-        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
-    }
-
-    private void Close() { _modalOpen = false; }
-
-    private async Task SaveAsync(bool asDraft)
-    {
-        _saving = true; _msg = null;
-        try
-        {
-            var payload = new
-            {
-                expenseTypeId  = _f.ExpenseTypeId,
-                expenseDate    = _f.ExpenseDate,
-                description    = _f.Description,
-                amount         = _f.Amount,
-                operationId    = _f.OperationId,
-                tripId         = _f.TripId,
-                driverId       = _f.DriverId,
-                supplierId     = _f.SupplierId,
-                custodyId      = _f.CustodyId,
-                taxRateId      = _f.TaxRateId,
-                isTaxDeductible = _f.IsTaxDeductible,
-                referenceNumber = _f.ReferenceNumber,
-                notes          = _f.Notes,
-                asDraft        = asDraft
-            };
-
-            var res = _editId is null
-                ? await Http.PostAsJsonAsync("api/expenses", payload)
-                : await Http.PutAsJsonAsync($"api/expenses/{_editId}", payload);
-
-            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
-            if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); Close(); await LoadAsync(); }
-        }
-        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
-        finally { _saving = false; }
     }
 
     private async Task SetStatus(Item e, string to)
@@ -579,6 +1576,17 @@
         catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
     }
 
+    private async Task SetPaid(Item e)
+    {
+        try
+        {
+            var res = await Http.PostAsJsonAsync($"api/expenses/{e.ExpenseId}/pay", new { to = "Paid" });
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
     private async Task Delete(Item e)
     {
         try
@@ -589,6 +1597,116 @@
             if (res.IsSuccessStatusCode) await LoadAsync();
         }
         catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    /* ── أنواع المصروفات ── */
+    private bool      _typesOpen;   private bool _typesSaving;
+    private string?   _typesMsg;    private bool _typesOk = true;
+    private int?      _typeEditId;
+    private List<TypeItem> _typesList = new();
+    private TypeForm  _tf = new();
+
+    public class TypeItem
+    {
+        public int    ExpenseTypeId    { get; set; }
+        public string Code             { get; set; } = "";
+        public string NameAr           { get; set; } = "";
+        public string? NameEn          { get; set; }
+        public bool   IsCustodyAllowed { get; set; }
+        public bool   IsOperationCost  { get; set; }
+        public bool   IsTaxDeductible  { get; set; }
+        public bool   IsActive         { get; set; }
+        public int    ExpenseCount     { get; set; }
+    }
+
+    public class TypeForm
+    {
+        public string  Code             { get; set; } = "";
+        public string  NameAr           { get; set; } = "";
+        public string? NameEn           { get; set; }
+        public bool    IsCustodyAllowed { get; set; } = true;
+        public bool    IsOperationCost  { get; set; } = true;
+        public bool    IsTaxDeductible  { get; set; } = true;
+        public bool    IsActive         { get; set; } = true;
+        public int     ExpenseCount     { get; set; }
+    }
+
+    private async Task OpenTypes()
+    {
+        _typesOpen = true; _typesMsg = null;
+        ResetTypeForm();
+        await LoadTypeListAsync();
+    }
+
+    private void CloseTypes()
+    {
+        _typesOpen = false;
+        _ = LoadAsync();
+    }
+
+    private void ResetTypeForm()
+    {
+        _typeEditId = null;
+        _tf = new TypeForm();
+        _typesMsg = null;
+    }
+
+    private void EditType(TypeItem t)
+    {
+        _typeEditId = t.ExpenseTypeId;
+        _tf = new TypeForm
+        {
+            Code = t.Code, NameAr = t.NameAr, NameEn = t.NameEn,
+            IsCustodyAllowed = t.IsCustodyAllowed, IsOperationCost = t.IsOperationCost,
+            IsTaxDeductible = t.IsTaxDeductible, IsActive = t.IsActive,
+            ExpenseCount = t.ExpenseCount
+        };
+        _typesMsg = null;
+    }
+
+    private async Task LoadTypeListAsync()
+    {
+        try { _typesList = await Http.GetFromJsonAsync<List<TypeItem>>("api/expense-types") ?? new(); }
+        catch (Exception ex) { _typesOk = false; _typesMsg = "فشل التحميل: " + ex.Message; }
+        try { _types = await Http.GetFromJsonAsync<List<ExpType>>("api/options/expense-types") ?? new(); }
+        catch { }
+    }
+
+    private async Task SaveType()
+    {
+        if (_typesSaving) return;
+        if (string.IsNullOrWhiteSpace(_tf.Code))   { _typesOk = false; _typesMsg = "الكود مطلوب"; return; }
+        if (string.IsNullOrWhiteSpace(_tf.NameAr)) { _typesOk = false; _typesMsg = "الاسم بالعربي مطلوب"; return; }
+
+        _typesSaving = true; _typesMsg = null;
+        try
+        {
+            var payload = new
+            {
+                code = _tf.Code, nameAr = _tf.NameAr, nameEn = _tf.NameEn,
+                isCustodyAllowed = _tf.IsCustodyAllowed, isOperationCost = _tf.IsOperationCost,
+                isTaxDeductible = _tf.IsTaxDeductible, isActive = _tf.IsActive
+            };
+            var res = _typeEditId is null
+                ? await Http.PostAsJsonAsync("api/expense-types", payload)
+                : await Http.PutAsJsonAsync($"api/expense-types/{_typeEditId}", payload);
+
+            _typesMsg = await MsgOf(res); _typesOk = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode) { ResetTypeForm(); await LoadTypeListAsync(); }
+        }
+        catch (Exception ex) { _typesOk = false; _typesMsg = "فشل: " + ex.Message; }
+        finally { _typesSaving = false; }
+    }
+
+    private async Task DeleteType(TypeItem t)
+    {
+        try
+        {
+            var res = await Http.DeleteAsync($"api/expense-types/{t.ExpenseTypeId}");
+            _typesMsg = await MsgOf(res); _typesOk = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode) await LoadTypeListAsync();
+        }
+        catch (Exception ex) { _typesOk = false; _typesMsg = "فشل: " + ex.Message; }
     }
 
     private static async Task<string> MsgOf(HttpResponseMessage res)

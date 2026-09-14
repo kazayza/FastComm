@@ -44,6 +44,16 @@ public class OptionsController : ControllerBase
             .Select(s => new Opt(s.SupplierId, s.NameAr + " (" + s.SupplierCode + ")"))
             .ToListAsync(ct));
 
+    /* 🔴 كان ناقص — شاشة الصيانة محتاجاه */
+    [HttpGet("branches")]
+    [Authorize(Policy = "PERM:MASTERDATA.VIEW")]
+    public async Task<IActionResult> Branches(CancellationToken ct) =>
+        Ok(await _db.Branches.AsNoTracking()
+            .Where(b => !b.IsDeleted)
+            .OrderBy(b => b.BranchCode)
+            .Select(b => new Opt(b.BranchId, b.NameAr))
+            .ToListAsync(ct));
+
     [HttpGet("drivers")]
     [Authorize(Policy = "PERM:DRIVER.VIEW")]
     public async Task<IActionResult> Drivers(CancellationToken ct) =>

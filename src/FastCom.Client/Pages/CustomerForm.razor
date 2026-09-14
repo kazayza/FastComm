@@ -1,0 +1,2401 @@
+@page "/customers/new"
+@page "/customers/new/{Id:int}"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_id is null ? "عميل جديد" : "تعديل عميل") — فاست كوم</PageTitle>
+
+
+@* ═══════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════ *@
+<div class="cust-hero">
+
+    <div class="hero-bg-circles" aria-hidden="true">
+        <span class="hbc-1"></span>
+        <span class="hbc-2"></span>
+    </div>
+
+    <div class="cust-hero-inner">
+
+        <div class="cust-hero-top">
+
+            <div class="cust-hero-left">
+
+                <button class="hero-back-btn" @onclick="GoBack" aria-label="رجوع">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         aria-hidden="true">
+                        <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    العملاء
+                </button>
+
+                <div class="cust-hero-crumb">
+                    <svg viewBox="0 0 16 16" width="12" height="12"
+                         fill="none" stroke="currentColor" stroke-width="1.7"
+                         aria-hidden="true">
+                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                    </svg>
+                    @(_id is null ? "إضافة عميل جديد" : "تعديل بيانات العميل")
+                </div>
+
+                <h1 class="cust-hero-title">
+                    @if (_id is null)
+                    {
+                        <span>عميل جديد</span>
+                        <span class="hero-title-badge new">جديد</span>
+                    }
+                    else
+                    {
+                        <span>@_f.NameAr</span>
+                        <span class="hero-title-badge edit">تعديل</span>
+                    }
+                </h1>
+
+                @if (_id is not null && !string.IsNullOrEmpty(CustomerCode))
+                {
+                    <div class="cust-hero-meta">
+                        <span class="meta-chip">
+                            <svg viewBox="0 0 16 16" width="11" height="11"
+                                 fill="none" stroke="currentColor" stroke-width="1.8"
+                                 aria-hidden="true">
+                                <rect x="2" y="2" width="12" height="12" rx="2"/>
+                                <path d="M5 8h6M5 5h6M5 11h4" stroke-linecap="round"/>
+                            </svg>
+                            @CustomerCode
+                        </span>
+                        <span class="meta-chip">
+                            @(IsCompany ? "🏢 شركة" : "👤 فرد")
+                        </span>
+                    </div>
+                }
+
+            </div>
+
+            <div class="cust-hero-actions">
+                @if (CanSave)
+                {
+                    <button class="hero-save-btn"
+                            @onclick="SaveAsync"
+                            disabled="@_saving"
+                            aria-label="حفظ البيانات">
+                        @if (_saving)
+                        {
+                            <span class="btn-spinner" aria-hidden="true"></span>
+                            <span>جاري الحفظ...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="17" height="17"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>حفظ البيانات</span>
+                        }
+                    </button>
+                }
+            </div>
+
+        </div>
+
+        @* Progress Steps *@
+        @if (_id is null)
+        {
+            <div class="cust-steps" aria-label="خطوات الإضافة">
+                <div class="cust-step active">
+                    <span class="step-num">١</span>
+                    <span class="step-label">بيانات العميل</span>
+                </div>
+                <div class="step-arrow" aria-hidden="true">‹</div>
+                <div class="cust-step @(_activeTab == 4 ? "active" : "pending")">
+                    <span class="step-num">٢</span>
+                    <span class="step-label">جهات الاتصال</span>
+                </div>
+            </div>
+        }
+
+    </div>
+</div>
+
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="cust-body">
+
+    @* No Permission *@
+    @if (!CanSave && !CanViewContacts)
+    {
+        <div class="cust-state-box">
+            <div class="state-icon-wrap perm">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7"
+                     aria-hidden="true">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>@(_id is null ? "ليس لديك صلاحية إضافة عميل" : "ليس لديك صلاحية تعديل هذا العميل")</p>
+            <button class="state-back-btn" @onclick="GoBack">العودة للقائمة</button>
+        </div>
+    }
+
+    @* Loading *@
+    else if (_loading)
+    {
+        <div class="cust-loading-wrap">
+            <div class="cust-spinner" aria-label="جاري التحميل..."></div>
+            <div class="cust-loading-text">جاري تحميل بيانات العميل...</div>
+        </div>
+    }
+
+    @* MAIN FORM *@
+    else
+    {
+        @* Error/Success Banner *@
+        @if (_msg is not null)
+        {
+            <div class="cust-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                <div class="banner-icon" aria-hidden="true">
+                    @if (_ok)
+                    {
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+                             stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                            <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+                             stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                        </svg>
+                    }
+                </div>
+                <span>@_msg</span>
+                <button class="banner-close" @onclick="() => _msg = null" aria-label="إغلاق">✕</button>
+            </div>
+        }
+
+
+        @* ═══════════════ MUD TABS ═══════════════ *@
+        <div class="cust-tabs-wrap">
+
+            <MudTabs Elevation="0"
+                     Rounded="false"
+                     ApplyEffectsToContainer="true"
+                     PanelClass="cust-tab-panel"
+                     @bind-ActivePanelIndex="_activeTab"
+                     Class="cust-mud-tabs">
+
+
+               @* ════════════════════════════════════════
+   TAB 1 — التعريف
+════════════════════════════════════════ *@
+<MudTabPanel>
+    <TabContent>
+        <div class="ctab-label">
+            <div class="ctab-icon ctab-icon-blue" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                </svg>
+            </div>
+            <span>التعريف</span>
+            @if (HasTabError(1))
+            {
+                <span class="ctab-err-dot" aria-label="يوجد خطأ"></span>
+            }
+        </div>
+    </TabContent>
+
+    <ChildContent>
+        <div class="tab-section">
+
+            <div class="tab-section-head">
+                <div class="tab-section-icon blue" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="tab-section-title">التعريف الأساسي</div>
+                    <div class="tab-section-sub">اسم العميل ونوعه — الحقول بالنجمة مطلوبة</div>
+                </div>
+            </div>
+
+            <div class="cust-form-grid">
+
+                <div class="form-field">
+                    <label class="field-label">
+                        نوع العميل
+                        <span class="field-required" aria-label="مطلوب">*</span>
+                    </label>
+                    <div class="type-toggle-group" role="group" aria-label="اختر نوع العميل">
+                        <button type="button"
+                                class="type-toggle @(_f.CustomerType == "Company" ? "active-company" : "")"
+                                @onclick='() => { if (_id is null) _f.CustomerType = "Company"; }'
+                                disabled="@(_id is not null)"
+                                aria-pressed="@(_f.CustomerType == "Company")">
+                            <svg viewBox="0 0 24 24" width="18" height="18"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M3 21h18M9 21V7l6-4v18M9 11H7m2 4H7"/>
+                            </svg>
+                            شركة
+                        </button>
+                        <button type="button"
+                                class="type-toggle @(_f.CustomerType == "Individual" ? "active-individual" : "")"
+                                @onclick='() => { if (_id is null) _f.CustomerType = "Individual"; }'
+                                disabled="@(_id is not null)"
+                                aria-pressed="@(_f.CustomerType == "Individual")">
+                            <svg viewBox="0 0 24 24" width="18" height="18"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                <circle cx="12" cy="7" r="4"/>
+                            </svg>
+                            فرد
+                        </button>
+                    </div>
+                    @if (_id is not null)
+                    {
+                        <div class="field-hint">
+                            <svg viewBox="0 0 16 16" width="11" height="11"
+                                 fill="none" stroke="currentColor" stroke-width="1.8"
+                                 aria-hidden="true">
+                                <circle cx="8" cy="8" r="6"/>
+                                <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                            </svg>
+                            نوع العميل لا يمكن تغييره بعد الإنشاء
+                        </div>
+                    }
+                </div>
+
+                <div class="form-field">
+                    <label class="field-label" for="nameAr">
+                        الاسم بالعربي
+                        <span class="field-required" aria-label="مطلوب">*</span>
+                    </label>
+                    <input id="nameAr"
+                           class="field-input @(string.IsNullOrWhiteSpace(_f.NameAr) && _triedSave ? "field-error" : "")"
+                           @bind="_f.NameAr"
+                           maxlength="200"
+                           placeholder="اسم العميل كاملاً"
+                           aria-required="true" />
+                    @if (string.IsNullOrWhiteSpace(_f.NameAr) && _triedSave)
+                    {
+                        <div class="field-err-msg" role="alert">الاسم بالعربي مطلوب</div>
+                    }
+                </div>
+
+                <div class="form-field">
+                    <label class="field-label" for="nameEn">الاسم بالإنجليزي</label>
+                    <input id="nameEn"
+                           class="field-input"
+                           @bind="_f.NameEn"
+                           maxlength="200"
+                           placeholder="Customer name in English"
+                           dir="ltr" />
+                </div>
+
+            </div>
+
+        </div>
+    </ChildContent>
+</MudTabPanel>
+
+
+@* ════════════════════════════════════════
+   TAB 2 — البيانات القانونية
+════════════════════════════════════════ *@
+<MudTabPanel>
+    <TabContent>
+        <div class="ctab-label">
+            <div class="ctab-icon ctab-icon-purple" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <span>@(IsCompany ? "بيانات الشركة" : "الرقم القومي")</span>
+            @if (HasTabError(2))
+            {
+                <span class="ctab-err-dot" aria-label="يوجد خطأ"></span>
+            }
+        </div>
+    </TabContent>
+
+    <ChildContent>
+        <div class="tab-section">
+
+            <div class="tab-section-head">
+                <div class="tab-section-icon purple" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="tab-section-title">
+                        @(IsCompany ? "البيانات الضريبية والقانونية" : "الرقم القومي")
+                    </div>
+                    <div class="tab-section-sub">
+                        @(IsCompany
+                            ? "مطلوبة لإصدار الفواتير الضريبية الرسمية"
+                            : "رقم الهوية الوطنية — 14 رقم")
+                    </div>
+                </div>
+            </div>
+
+            @if (IsCompany)
+            {
+                <div class="cust-form-grid">
+
+                    <div class="form-field">
+                        <label class="field-label" for="taxNum">
+                            الرقم الضريبي
+                            <span class="field-required" aria-label="مطلوب">*</span>
+                        </label>
+                        <div class="field-input-group">
+                            <span class="field-prefix" aria-hidden="true">
+                                <svg viewBox="0 0 16 16" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="1.7">
+                                    <rect x="2" y="2" width="12" height="12" rx="2"/>
+                                    <path d="M5 8h6M5 5h6M5 11h4" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            <input id="taxNum"
+                                   class="field-input with-prefix @(IsCompany && string.IsNullOrWhiteSpace(_f.TaxNumber) && _triedSave ? "field-error" : "")"
+                                   @bind="_f.TaxNumber"
+                                   maxlength="50"
+                                   placeholder="000-000-000"
+                                   dir="ltr"
+                                   aria-required="true" />
+                        </div>
+                        <div class="field-hint">
+                            <svg viewBox="0 0 16 16" width="11" height="11"
+                                 fill="none" stroke="currentColor" stroke-width="1.8"
+                                 aria-hidden="true">
+                                <circle cx="8" cy="8" r="6"/>
+                                <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                            </svg>
+                            مطلوب لإصدار فاتورة ضريبية
+                        </div>
+                        @if (IsCompany && string.IsNullOrWhiteSpace(_f.TaxNumber) && _triedSave)
+                        {
+                            <div class="field-err-msg" role="alert">الرقم الضريبي مطلوب للشركة</div>
+                        }
+                    </div>
+
+                    <div class="form-field">
+                        <label class="field-label" for="cr">السجل التجاري</label>
+                        <div class="field-input-group">
+                            <span class="field-prefix" aria-hidden="true">
+                                <svg viewBox="0 0 16 16" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="1.7">
+                                    <path d="M3 2h10a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z"/>
+                                    <path d="M5 6h6M5 9h4" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            <input id="cr"
+                                   class="field-input with-prefix"
+                                   @bind="_f.CommercialRegister"
+                                   maxlength="50"
+                                   placeholder="رقم السجل التجاري"
+                                   dir="ltr" />
+                        </div>
+                    </div>
+
+                </div>
+            }
+            else
+            {
+                <div class="cust-form-grid">
+
+                    <div class="form-field">
+                        <label class="field-label" for="natId">
+                            الرقم القومي
+                            <span class="field-required" aria-label="مطلوب">*</span>
+                        </label>
+                        <div class="field-input-group">
+                            <span class="field-prefix" aria-hidden="true">
+                                <svg viewBox="0 0 16 16" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="1.7">
+                                    <rect x="2" y="4" width="12" height="9" rx="1"/>
+                                    <circle cx="6" cy="8" r="1.5"/>
+                                    <path d="M9 7h3M9 9.5h2" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            <input id="natId"
+                                   class="field-input with-prefix @(!IsCompany && string.IsNullOrWhiteSpace(_f.NationalId) && _triedSave ? "field-error" : "")"
+                                   @bind="_f.NationalId"
+                                   maxlength="14"
+                                   placeholder="00000000000000"
+                                   dir="ltr"
+                                   aria-required="true" />
+                        </div>
+                        <div class="field-hint">
+                            <svg viewBox="0 0 16 16" width="11" height="11"
+                                 fill="none" stroke="currentColor" stroke-width="1.8"
+                                 aria-hidden="true">
+                                <circle cx="8" cy="8" r="6"/>
+                                <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                            </svg>
+                            14 رقم بالضبط
+                        </div>
+                        @if (!IsCompany && string.IsNullOrWhiteSpace(_f.NationalId) && _triedSave)
+                        {
+                            <div class="field-err-msg" role="alert">الرقم القومي مطلوب</div>
+                        }
+                    </div>
+
+                </div>
+            }
+
+        </div>
+    </ChildContent>
+</MudTabPanel>
+
+
+@* ════════════════════════════════════════
+   TAB 3 — التواصل والعنوان
+════════════════════════════════════════ *@
+<MudTabPanel>
+    <TabContent>
+        <div class="ctab-label">
+            <div class="ctab-icon ctab-icon-green" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8a19.79 19.79 0 01-3.07-8.63A2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.72 6.72l1.28-1.28a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.92z"/>
+                </svg>
+            </div>
+            <span>التواصل</span>
+        </div>
+    </TabContent>
+
+    <ChildContent>
+        <div class="tab-section">
+
+            <div class="tab-section-head">
+                <div class="tab-section-icon green" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8a19.79 19.79 0 01-3.07-8.63A2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.72 6.72l1.28-1.28a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.92z"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="tab-section-title">بيانات التواصل والعنوان</div>
+                    <div class="tab-section-sub">طرق التواصل مع العميل وموقعه الجغرافي</div>
+                </div>
+            </div>
+
+            <div class="cust-form-grid">
+
+                <div class="form-field">
+                    <label class="field-label" for="phone">التليفون</label>
+                    <div class="field-input-group">
+                        <span class="field-prefix" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-4.99-5 19.79 19.79 0 01-3.07-8.67A2 2 0 014 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+                            </svg>
+                        </span>
+                        <input id="phone" class="field-input with-prefix"
+                               @bind="_f.Phone" maxlength="30"
+                               placeholder="02-XXXXXXXX" type="tel" dir="ltr" />
+                    </div>
+                </div>
+
+                <div class="form-field">
+                    <label class="field-label" for="email">البريد الإلكتروني</label>
+                    <div class="field-input-group">
+                        <span class="field-prefix" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                                <path d="M22 6l-10 7L2 6"/>
+                            </svg>
+                        </span>
+                        <input id="email" class="field-input with-prefix"
+                               @bind="_f.Email" maxlength="150"
+                               placeholder="example@company.com"
+                               type="email" dir="ltr" />
+                    </div>
+                </div>
+
+                <div class="form-field">
+                    <label class="field-label" for="city">المدينة</label>
+                    <div class="field-input-group">
+                        <span class="field-prefix" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                                <circle cx="12" cy="10" r="3"/>
+                            </svg>
+                        </span>
+                        <input id="city" class="field-input with-prefix"
+                               @bind="_f.CityAr" maxlength="100"
+                               placeholder="القاهرة" />
+                    </div>
+                </div>
+
+                <div class="form-field form-field-full">
+                    <label class="field-label" for="address">العنوان</label>
+                    <textarea id="address"
+                              class="field-input field-textarea"
+                              @bind="_f.AddressAr"
+                              maxlength="300" rows="2"
+                              placeholder="العنوان بالتفصيل — الشارع، المبنى، الحي...">
+                    </textarea>
+                </div>
+
+            </div>
+
+        </div>
+    </ChildContent>
+</MudTabPanel>
+
+
+@* ════════════════════════════════════════
+   TAB 4 — الائتمان والبورتال
+════════════════════════════════════════ *@
+<MudTabPanel>
+    <TabContent>
+        <div class="ctab-label">
+            <div class="ctab-icon ctab-icon-amber" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="1" y="4" width="22" height="16" rx="2"/>
+                    <path d="M1 10h22"/>
+                </svg>
+            </div>
+            <span>الائتمان</span>
+        </div>
+    </TabContent>
+
+    <ChildContent>
+        <div class="tab-section">
+
+            <div class="tab-section-head">
+                <div class="tab-section-icon amber" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="1" y="4" width="22" height="16" rx="2"/>
+                        <path d="M1 10h22"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="tab-section-title">الائتمان وبوابة العملاء</div>
+                    <div class="tab-section-sub">إعدادات الحد الائتماني ونظام بوابة العملاء الإلكترونية</div>
+                </div>
+            </div>
+
+            <div class="cust-form-grid">
+                <div class="form-field">
+                    <label class="field-label" for="credit">حد الائتمان</label>
+                    <div class="field-input-group">
+                        <span class="field-prefix" aria-hidden="true">ج.م</span>
+                        <input id="credit" class="field-input with-prefix"
+                               type="number" min="0" step="0.01"
+                               value="@_f.CreditLimit"
+                               @onchange="e => _f.CreditLimit = ParseAmount(e.Value)"
+                               placeholder="0" />
+                    </div>
+                    <div class="field-hint">
+                        <svg viewBox="0 0 16 16" width="11" height="11"
+                             fill="none" stroke="currentColor" stroke-width="1.8"
+                             aria-hidden="true">
+                            <circle cx="8" cy="8" r="6"/>
+                            <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                        </svg>
+                        صفر = لا يوجد سقف · النظام يُنبّه عند تجاوز الحد
+                    </div>
+                </div>
+            </div>
+
+            <div class="portal-toggle-box @(_f.PortalEnabled ? "portal-active" : "")">
+                <div class="portal-toggle-content">
+                    <div class="portal-toggle-icon @(_f.PortalEnabled ? "icon-active" : "")"
+                         aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="22" height="22"
+                             fill="none" stroke="currentColor" stroke-width="1.8">
+                            <rect x="2" y="3" width="20" height="14" rx="2"/>
+                            <path d="M8 21h8M12 17v4" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="portal-toggle-text">
+                        <div class="portal-toggle-title">بوابة العملاء الإلكترونية</div>
+                        <div class="portal-toggle-sub">العميل يشوف فواتيره وإيصالاته عبر رابط خاص</div>
+                    </div>
+                </div>
+                <label class="toggle-switch" aria-label="تفعيل بوابة العملاء">
+                    <input type="checkbox" @bind="_f.PortalEnabled"
+                           role="switch" aria-checked="@_f.PortalEnabled" />
+                    <span class="toggle-track">
+                        <span class="toggle-thumb"></span>
+                    </span>
+                </label>
+            </div>
+
+            @if (_f.PortalEnabled)
+            {
+                <div class="portal-info-box" role="status">
+                    <div class="portal-info-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="20" height="20"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                        </svg>
+                    </div>
+                    <div class="portal-info-text">
+                        <strong>البورتال مفعّل ✅</strong>
+                        <p>اعمل رابط دخول للعميل من صفحة العملاء — الرابط له مدة صلاحية وعدد استخدامات محدّد</p>
+                    </div>
+                </div>
+            }
+
+        </div>
+    </ChildContent>
+</MudTabPanel>
+
+
+@* ════════════════════════════════════════
+   TAB 5 — جهات الاتصال
+════════════════════════════════════════ *@
+<MudTabPanel>
+    <TabContent>
+        <div class="ctab-label">
+            <div class="ctab-icon ctab-icon-red" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+                </svg>
+            </div>
+            <span>جهات الاتصال</span>
+            @if (_contacts.Count > 0)
+            {
+                <span class="ctab-count">@_contacts.Count</span>
+            }
+            @if (_id is null)
+            {
+                <span class="ctab-lock" aria-label="متاح بعد الحفظ">🔒</span>
+            }
+        </div>
+    </TabContent>
+
+    <ChildContent>
+        <div class="tab-section">
+
+            <div class="tab-section-head">
+                <div class="tab-section-icon red" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+                    </svg>
+                </div>
+                <div style="flex:1">
+                    <div class="tab-section-title">جهات الاتصال</div>
+                    <div class="tab-section-sub">
+                        الجهة <strong>الرئيسية</strong> تظهر أولاً في الحجز — واحدة فقط لكل عميل
+                    </div>
+                </div>
+                @if (_id is not null && CanEditContacts)
+                {
+                    <button class="add-contact-btn" @onclick="OpenNewContact">
+                        <svg viewBox="0 0 24 24" width="16" height="16"
+                             fill="none" stroke="currentColor" stroke-width="2.5"
+                             aria-hidden="true">
+                            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                        </svg>
+                        جهة جديدة
+                    </button>
+                }
+            </div>
+
+            @if (_id is null)
+            {
+                <div class="contacts-locked-box">
+                    <div class="locked-icon" aria-hidden="true">🔒</div>
+                    <div class="locked-title">احفظ العميل أولاً</div>
+                    <div class="locked-sub">جهات الاتصال تُضاف بعد تسجيل العميل عشان تتربط بيه</div>
+                </div>
+            }
+            else if (_contactsLoading)
+            {
+                <div class="contacts-loading">
+                    <div class="cust-spinner sm" aria-label="جاري التحميل"></div>
+                    <span>جاري تحميل جهات الاتصال...</span>
+                </div>
+            }
+            else if (_contacts.Count == 0)
+            {
+                <div class="contacts-empty">
+                    <div class="empty-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="36" height="36"
+                             fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+                        </svg>
+                    </div>
+                    <div class="empty-title">لا توجد جهات اتصال</div>
+                    <div class="empty-sub">لابد من إضافة جهة اتصال واحدة على الأقل</div>
+                    @if (CanEditContacts)
+                    {
+                        <button class="add-contact-btn mt-10" @onclick="OpenNewContact">
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2.5"
+                                 aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                            أضف جهة اتصال
+                        </button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="contacts-list">
+                    @foreach (var c in _contacts)
+                    {
+                        <div class="contact-card @(c.IsPrimary ? "contact-primary" : "")">
+
+                            <div class="contact-avatar" aria-hidden="true">
+                                @(c.ContactName.Length > 0 ? c.ContactName[0].ToString() : "؟")
+                            </div>
+
+                            <div class="contact-info">
+                                <div class="contact-name">@c.ContactName</div>
+                                @if (!string.IsNullOrWhiteSpace(c.JobTitle))
+                                {
+                                    <div class="contact-job">@c.JobTitle</div>
+                                }
+                                <div class="contact-meta">
+                                    @if (!string.IsNullOrWhiteSpace(c.Phone))
+                                    {
+                                        <span class="contact-meta-item" dir="ltr">📞 @c.Phone</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(c.Mobile))
+                                    {
+                                        <span class="contact-meta-item" dir="ltr">📱 @c.Mobile</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(c.Email))
+                                    {
+                                        <span class="contact-meta-item" dir="ltr">✉️ @c.Email</span>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="contact-chips">
+                                @if (c.IsPrimary)
+                                {
+                                    <span class="contact-chip chip-primary">⭐ رئيسية</span>
+                                }
+                                @if (c.CanReceiveInvoices)
+                                {
+                                    <span class="contact-chip chip-invoice">📄 فواتير</span>
+                                }
+                                @if (!c.IsActive)
+                                {
+                                    <span class="contact-chip chip-inactive">غير نشطة</span>
+                                }
+                            </div>
+
+                            <div class="contact-actions">
+                                @if (CanEditContacts)
+                                {
+                                    <button class="contact-btn edit-btn"
+                                            @onclick="() => OpenEditContact(c)"
+                                            title="تعديل"
+                                            aria-label="تعديل @c.ContactName">
+                                        <svg viewBox="0 0 24 24" width="16" height="16"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                        </svg>
+                                    </button>
+                                }
+                                @if (CanDeleteContact)
+                                {
+                                    <button class="contact-btn del-btn"
+                                            @onclick="() => AskDelete(c)"
+                                            title="حذف"
+                                            aria-label="حذف @c.ContactName">
+                                        <svg viewBox="0 0 24 24" width="16" height="16"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                        </svg>
+                                    </button>
+                                }
+                            </div>
+
+                        </div>
+                    }
+                </div>
+            }
+
+        </div>
+    </ChildContent>
+</MudTabPanel>
+
+
+            </MudTabs>
+        </div>
+
+
+        @* Bottom Actions *@
+        <div class="cust-bottom-actions">
+            <button class="bottom-back-btn" @onclick="GoBack">
+                <svg viewBox="0 0 24 24" width="16" height="16"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     aria-hidden="true">
+                    <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                رجوع للقائمة
+            </button>
+
+            @if (CanSave)
+            {
+                <div class="bottom-save-group">
+                    <button class="bottom-save-btn"
+                            @onclick="SaveAsync"
+                            disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="btn-spinner sm" aria-hidden="true"></span>
+                            <span>جاري الحفظ...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>حفظ البيانات</span>
+                        }
+                    </button>
+                </div>
+            }
+        </div>
+
+    }
+</div>
+
+
+@* ═══════════════════════════════════════════
+   MODAL — جهة اتصال
+═══════════════════════════════════════════ *@
+@if (_contactOpen)
+{
+    <div class="cust-modal-backdrop" @onclick="CloseContactModal" role="dialog"
+         aria-modal="true" aria-label="@(_editId is null ? "جهة اتصال جديدة" : "تعديل جهة اتصال")">
+        <div class="cust-modal" @onclick:stopPropagation="true">
+
+            <div class="modal-head">
+                <div class="modal-head-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="modal-title">
+                        @(_editId is null ? "جهة اتصال جديدة" : "تعديل جهة اتصال")
+                    </div>
+                    <div class="modal-sub">بتظهر في قائمة الاختيار عند فتح الحجز</div>
+                </div>
+                <button class="modal-close-btn" @onclick="CloseContactModal" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            @if (_cmsg is not null)
+            {
+                <div class="modal-banner @(_cok ? "banner-success" : "banner-error")" role="alert">
+                    <span>@_cmsg</span>
+                    <button @onclick="() => _cmsg = null" aria-label="إغلاق">✕</button>
+                </div>
+            }
+
+            <div class="modal-body">
+
+                <div class="cust-form-grid">
+
+                    <div class="form-field">
+                        <label class="field-label" for="cname">
+                            الاسم
+                            <span class="field-required">*</span>
+                        </label>
+                        <input id="cname"
+                               class="field-input"
+                               @bind="_cf.ContactName"
+                               maxlength="150"
+                               placeholder="الاسم الكامل"
+                               aria-required="true" />
+                    </div>
+
+                    <div class="form-field">
+                        <label class="field-label" for="cjob">المسمى الوظيفي</label>
+                        <input id="cjob"
+                               class="field-input"
+                               @bind="_cf.JobTitle"
+                               maxlength="100"
+                               placeholder="مدير، محاسب، مشتريات..." />
+                    </div>
+
+                    <div class="form-field">
+                        <label class="field-label" for="cphone">تليفون</label>
+                        <input id="cphone"
+                               class="field-input"
+                               @bind="_cf.Phone"
+                               maxlength="50"
+                               placeholder="02-XXXXXXXX"
+                               type="tel"
+                               dir="ltr" />
+                    </div>
+
+                    <div class="form-field">
+                        <label class="field-label" for="cmobile">
+                            موبايل
+                        </label>
+                        <input id="cmobile"
+                               class="field-input"
+                               @bind="_cf.Mobile"
+                               maxlength="50"
+                               placeholder="01X-XXXXXXXX"
+                               type="tel"
+                               dir="ltr" />
+                        <div class="field-hint">
+                            <svg viewBox="0 0 16 16" width="11" height="11"
+                                 fill="none" stroke="currentColor" stroke-width="1.8"
+                                 aria-hidden="true">
+                                <circle cx="8" cy="8" r="6"/>
+                                <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                            </svg>
+                            تليفون أو موبايل — واحد على الأقل مطلوب
+                        </div>
+                    </div>
+
+                    <div class="form-field form-field-full">
+                        <label class="field-label" for="cemail">البريد الإلكتروني</label>
+                        <input id="cemail"
+                               class="field-input"
+                               @bind="_cf.Email"
+                               maxlength="254"
+                               placeholder="contact@company.com"
+                               type="email"
+                               dir="ltr" />
+                    </div>
+
+                </div>
+
+                @* Checkboxes *@
+                <div class="modal-checks">
+
+                    <label class="check-item @(_cf.IsPrimary ? "check-active" : "")">
+                        <input type="checkbox" @bind="_cf.IsPrimary"
+                               aria-label="جهة الاتصال الرئيسية" />
+                        <div class="check-icon primary-icon" aria-hidden="true">⭐</div>
+                        <div class="check-text">
+                            <span class="check-title">جهة الاتصال الرئيسية</span>
+                            <span class="check-sub">واحدة فقط لكل عميل — تظهر أولاً في الحجز</span>
+                        </div>
+                    </label>
+
+                    <label class="check-item @(_cf.CanReceiveInvoices ? "check-active" : "")">
+                        <input type="checkbox" @bind="_cf.CanReceiveInvoices"
+                               aria-label="تستلم الفواتير بالبريد" />
+                        <div class="check-icon invoice-icon" aria-hidden="true">📄</div>
+                        <div class="check-text">
+                            <span class="check-title">تستلم الفواتير بالبريد</span>
+                            <span class="check-sub">الفواتير بتتبعت تلقائياً لهذا البريد</span>
+                        </div>
+                    </label>
+
+                    <label class="check-item @(_cf.IsActive ? "check-active" : "check-inactive-item")">
+                        <input type="checkbox" @bind="_cf.IsActive"
+                               aria-label="نشطة" />
+                        <div class="check-icon active-icon" aria-hidden="true">✅</div>
+                        <div class="check-text">
+                            <span class="check-title">نشطة</span>
+                            <span class="check-sub">غير النشطة لا تظهر في قائمة الاختيار</span>
+                        </div>
+                    </label>
+
+                </div>
+
+            </div>
+
+            <div class="modal-foot">
+                <button class="modal-cancel-btn" @onclick="CloseContactModal">إلغاء</button>
+                <button class="modal-save-btn"
+                        @onclick="SaveContactAsync"
+                        disabled="@_csaving">
+                    @if (_csaving)
+                    {
+                        <span class="btn-spinner sm" aria-hidden="true"></span>
+                        <span>جاري الحفظ...</span>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="16" height="16"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                            <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>حفظ</span>
+                    }
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+@* ═══════════════════════════════════════════
+   MODAL — تأكيد الحذف
+═══════════════════════════════════════════ *@
+@if (_delTarget is not null)
+{
+    <div class="cust-modal-backdrop" @onclick="() => _delTarget = null"
+         role="dialog" aria-modal="true" aria-label="تأكيد الحذف">
+        <div class="cust-modal cust-modal-sm" @onclick:stopPropagation="true">
+
+            <div class="modal-head">
+                <div class="modal-head-icon danger-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="modal-title">حذف جهة اتصال</div>
+                    <div class="modal-sub danger-sub">الحذف نهائي — لا يمكن التراجع</div>
+                </div>
+                <button class="modal-close-btn" @onclick="() => _delTarget = null" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <div class="del-confirm-box">
+                    <div class="del-contact-name">@_delTarget.ContactName</div>
+                    <div class="del-warning">
+                        <svg viewBox="0 0 24 24" width="18" height="18"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                            <path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
+                        </svg>
+                        لو مرتبطة بأي حجز الحذف هيترفض — خلّيها «غير نشطة» بدل الحذف
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-foot">
+                <button class="modal-cancel-btn" @onclick="() => _delTarget = null">إلغاء</button>
+                <button class="modal-delete-btn"
+                        @onclick="DoDeleteAsync"
+                        disabled="@_cdel">
+                    @if (_cdel)
+                    {
+                        <span class="btn-spinner sm" aria-hidden="true"></span>
+                        <span>جاري الحذف...</span>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="16" height="16"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                        </svg>
+                        <span>حذف نهائي</span>
+                    }
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+@* ═══════════════════════════════════════════
+   CSS
+═══════════════════════════════════════════ *@
+<style>
+
+    /* ================================================================
+       VARIABLES
+    ================================================================ */
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-navy:      #0f2952;
+        --fc-navy-2:    #1a3a6b;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+        --fc-radius-sm: 9px;
+    }
+
+    /* ================================================================
+       HERO
+    ================================================================ */
+    .cust-hero {
+        position: relative;
+        background: linear-gradient(135deg, #0d2654 0%, #1a3a6b 45%, #1e4d8c 100%);
+        padding: 24px 24px 72px;
+        overflow: hidden;
+    }
+
+    .hero-bg-circles { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+    .hbc-1,.hbc-2 { position: absolute; border-radius: 50%; opacity: .06; background: #fff; }
+    .hbc-1 { width: 380px; height: 380px; top: -160px; left: -60px; }
+    .hbc-2 { width: 220px; height: 220px; bottom: -70px; right: 100px; opacity: .04; }
+
+    .cust-hero-inner {
+        position: relative; z-index: 1;
+        max-width: 1100px; margin: 0 auto;
+        display: flex; flex-direction: column; gap: 16px;
+    }
+
+    .cust-hero-top {
+        display: flex; align-items: flex-end;
+        justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    }
+
+    .cust-hero-left { display: flex; flex-direction: column; gap: 6px; }
+
+    .hero-back-btn {
+        display: inline-flex; align-items: center; gap: 5px;
+        background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15);
+        border-radius: 8px; color: rgba(255,255,255,.65);
+        font-family: inherit; font-size: 11px; font-weight: 700;
+        padding: 5px 11px; cursor: pointer;
+        transition: background .15s ease;
+        margin-bottom: 4px;
+    }
+    .hero-back-btn:hover { background: rgba(255,255,255,.14); }
+    .hero-back-btn svg { transform: rotate(180deg); }
+
+    .cust-hero-crumb {
+        display: flex; align-items: center; gap: 5px;
+        font-size: 10.5px; font-weight: 600; color: rgba(255,255,255,.5);
+    }
+
+    .cust-hero-title {
+        margin: 0;
+        font-size: clamp(22px, 2.4vw, 30px);
+        font-weight: 900;
+        color: #fff;
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+
+    .hero-title-badge {
+        display: inline-flex; align-items: center;
+        padding: 3px 10px; border-radius: 20px;
+        font-size: 11px; font-weight: 800;
+    }
+
+    .hero-title-badge.new  { background: rgba(34,197,94,.2);  color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+    .hero-title-badge.edit { background: rgba(234,179,8,.2);   color: #fde68a; border: 1px solid rgba(234,179,8,.3); }
+
+    .cust-hero-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    .meta-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 3px 10px; border-radius: 20px;
+        background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.14);
+        color: rgba(255,255,255,.7); font-size: 10.5px; font-weight: 700;
+    }
+
+    .cust-hero-actions { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
+
+    .hero-save-btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        height: 40px; padding: 0 20px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: #fff; font-family: inherit;
+        font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(22,163,74,.35);
+        transition: all .15s ease;
+    }
+    .hero-save-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(22,163,74,.4); }
+    .hero-save-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* Steps */
+    .cust-steps {
+        display: flex; align-items: center; gap: 10px;
+        padding: 8px 14px;
+        background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.10);
+        border-radius: 10px; width: fit-content;
+    }
+
+    .cust-step {
+        display: flex; align-items: center; gap: 7px;
+        font-size: 11px; font-weight: 700;
+    }
+
+    .step-num {
+        width: 22px; height: 22px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 50%; font-size: 11px; font-weight: 900;
+    }
+
+    .cust-step.active  { color: #fff; }
+    .cust-step.active .step-num { background: var(--fc-blue); }
+    .cust-step.pending { color: rgba(255,255,255,.4); }
+    .cust-step.pending .step-num { background: rgba(255,255,255,.15); }
+
+    .step-arrow { color: rgba(255,255,255,.3); font-size: 16px; }
+    .step-label { font-size: 10.5px; }
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    .cust-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 160px);
+        padding: 0 20px 32px;
+        max-width: 1100px;
+        width: 100%;
+        margin: -52px auto 0;
+        position: relative;
+        z-index: 2;
+    }
+
+    /* ================================================================
+       STATES
+    ================================================================ */
+    .cust-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: var(--fc-card);
+        border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .state-icon-wrap {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .state-icon-wrap.perm { background: #fff0f2; color: var(--fc-red); }
+
+    .cust-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .cust-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    .state-back-btn {
+        margin-top: 8px; padding: 9px 20px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-text);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: background .15s ease;
+    }
+    .state-back-btn:hover { background: #f0f4fa; }
+
+    /* ================================================================
+       LOADING
+    ================================================================ */
+    .cust-loading-wrap {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 14px; min-height: 280px;
+        background: var(--fc-card);
+        border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .cust-spinner {
+        width: 40px; height: 40px;
+        border: 3px solid #dde5f0;
+        border-top-color: var(--fc-blue);
+        border-radius: 50%;
+        animation: cust-spin .75s linear infinite;
+    }
+    .cust-spinner.sm { width: 18px; height: 18px; border-width: 2px; }
+
+    @@keyframes cust-spin { to { transform: rotate(360deg); } }
+
+    .cust-loading-text { font-size: 13px; font-weight: 600; color: var(--fc-muted); }
+
+    /* ================================================================
+       BANNER
+    ================================================================ */
+    .cust-banner {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 16px; border-radius: 10px;
+        font-size: 13px; font-weight: 600;
+        margin-bottom: 14px;
+        animation: banner-in .25s ease;
+    }
+
+    @@keyframes banner-in {
+        from { opacity: 0; transform: translateY(-6px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .banner-success { background: #e9f8f0; color: #0e7a43; border: 1px solid #b5e8d0; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8d0; }
+
+    .banner-icon { flex: 0 0 auto; }
+
+    .banner-close {
+        margin-right: auto; background: none; border: none;
+        color: inherit; opacity: .6; cursor: pointer; font-size: 13px;
+        padding: 2px 6px; border-radius: 5px;
+        transition: opacity .12s ease;
+    }
+    .banner-close:hover { opacity: 1; }
+
+    /* ================================================================
+       MUD TABS
+    ================================================================ */
+    .cust-tabs-wrap {
+        background: var(--fc-card);
+        border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow:
+            0 2px 6px rgba(15,41,82,.04),
+            0 10px 30px rgba(15,41,82,.06),
+            0 20px 48px rgba(15,41,82,.03);
+        overflow: hidden;
+    }
+
+    /* تخصيص MudTabs */
+    .cust-mud-tabs .mud-tabs-toolbar {
+        background: linear-gradient(180deg, #f9fafd 0%, #f3f6fb 100%);
+        border-bottom: 2px solid #e8edf5;
+        padding: 0 16px;
+        min-height: 54px;
+    }
+
+    .cust-mud-tabs .mud-tab {
+        font-family: "Cairo","Tajawal","Inter",Arial,sans-serif;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--fc-muted);
+        padding: 0 6px;
+        min-width: unset;
+        transition: color .15s ease;
+    }
+
+    .cust-mud-tabs .mud-tab.mud-tab-active {
+        color: var(--fc-blue) !important;
+        font-weight: 800;
+    }
+
+    .cust-mud-tabs .mud-tab-slider {
+        background: var(--fc-blue) !important;
+        height: 3px;
+        border-radius: 3px 3px 0 0;
+    }
+
+    .cust-mud-tabs .mud-tab:hover:not(.mud-tab-active) {
+        color: var(--fc-text);
+        background: rgba(0,0,0,.03);
+        border-radius: 8px;
+    }
+
+    .cust-tab-panel { padding: 0; }
+
+    /* Tab Label */
+    .ctab-label {
+        display: flex; align-items: center; gap: 7px;
+        padding: 0 4px;
+        white-space: nowrap;
+        position: relative;
+    }
+
+    .ctab-icon {
+        width: 26px; height: 26px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 7px;
+    }
+
+    .ctab-icon-blue   { background: var(--fc-blue-lt);   color: var(--fc-blue); }
+    .ctab-icon-purple { background: var(--fc-purple-lt);  color: var(--fc-purple); }
+    .ctab-icon-green  { background: var(--fc-green-lt);   color: var(--fc-green); }
+    .ctab-icon-amber  { background: var(--fc-amber-lt);   color: var(--fc-amber); }
+    .ctab-icon-red    { background: var(--fc-red-lt);     color: var(--fc-red); }
+
+    .ctab-err-dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--fc-red);
+        animation: cust-pulse 1.5s ease infinite;
+    }
+
+    @@keyframes cust-pulse {
+        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.4); }
+        50%      { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
+    }
+
+    .ctab-count {
+        min-width: 18px; height: 18px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 5px; padding: 0 4px;
+        background: var(--fc-blue-lt);
+        color: var(--fc-blue);
+        font-size: 10px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .ctab-lock { font-size: 11px; opacity: .5; }
+
+    /* ================================================================
+       TAB SECTION
+    ================================================================ */
+    .tab-section { padding: 24px 28px 28px; }
+
+    .tab-section-head {
+        display: flex; align-items: flex-start; gap: 12px;
+        margin-bottom: 22px;
+        padding-bottom: 18px;
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .tab-section-icon {
+        width: 42px; height: 42px; flex: 0 0 42px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 12px; flex-shrink: 0;
+    }
+
+    .tab-section-icon.blue   { background: var(--fc-blue-lt);   color: var(--fc-blue);   border: 1px solid #bdd4fc; }
+    .tab-section-icon.purple { background: var(--fc-purple-lt);  color: var(--fc-purple); border: 1px solid #d0bfef; }
+    .tab-section-icon.green  { background: var(--fc-green-lt);   color: var(--fc-green);  border: 1px solid #b0e0c5; }
+    .tab-section-icon.amber  { background: var(--fc-amber-lt);   color: var(--fc-amber);  border: 1px solid #f0d070; }
+    .tab-section-icon.red    { background: var(--fc-red-lt);     color: var(--fc-red);    border: 1px solid #ffc8cf; }
+
+    .tab-section-title {
+        font-size: 15px; font-weight: 800; color: #1c2b43; line-height: 1.2;
+    }
+
+    .tab-section-sub {
+        font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px;
+    }
+
+    /* ================================================================
+       FORM
+    ================================================================ */
+    .cust-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 18px;
+    }
+
+    .form-field { display: flex; flex-direction: column; gap: 6px; }
+
+    .form-field-full { grid-column: 1 / -1; }
+
+    .field-label {
+        font-size: 12px; font-weight: 800; color: #344258;
+        display: flex; align-items: center; gap: 4px;
+    }
+
+    .field-required { color: var(--fc-red); font-size: 14px; line-height: 1; }
+
+    .field-input {
+        height: 42px; width: 100%;
+        border: 1px solid #d8e2f0;
+        border-radius: 9px;
+        background: #fafcff;
+        color: var(--fc-text);
+        font-family: inherit;
+        font-size: 13px;
+        padding: 0 12px;
+        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+        outline: none;
+    }
+
+    .field-input:focus {
+        border-color: var(--fc-blue);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.10);
+        background: #fff;
+    }
+
+    .field-input.field-error {
+        border-color: var(--fc-red);
+        box-shadow: 0 0 0 3px rgba(224,48,72,.08);
+        background: #fffafb;
+    }
+
+    .field-input::placeholder { color: #b0bcc8; }
+
+    .field-textarea {
+        height: auto; padding: 10px 12px;
+        resize: vertical; min-height: 70px;
+    }
+
+    /* Input with prefix icon */
+    .field-input-group {
+        position: relative; display: flex; align-items: center;
+    }
+
+    .field-prefix {
+        position: absolute; right: 12px;
+        display: flex; align-items: center;
+        color: #9aaabb; pointer-events: none;
+        font-size: 11px; font-weight: 700;
+        z-index: 1;
+    }
+
+    .field-input.with-prefix { padding-right: 36px; }
+
+    .field-input-group .field-input { padding-right: 36px; }
+
+    .field-hint {
+        display: flex; align-items: center; gap: 5px;
+        font-size: 10.5px; color: var(--fc-muted); font-weight: 500;
+    }
+
+    .field-err-msg {
+        font-size: 10.5px; color: var(--fc-red); font-weight: 700;
+        animation: banner-in .2s ease;
+    }
+
+    /* ================================================================
+       TYPE TOGGLE
+    ================================================================ */
+    .type-toggle-group {
+        display: flex; gap: 8px;
+    }
+
+    .type-toggle {
+        flex: 1;
+        display: flex; align-items: center; justify-content: center; gap: 7px;
+        height: 48px;
+        border: 2px solid #d8e2f0;
+        border-radius: 10px;
+        background: #fafcff;
+        color: var(--fc-muted);
+        font-family: inherit; font-size: 13px; font-weight: 700;
+        cursor: pointer;
+        transition: all .18s ease;
+    }
+
+    .type-toggle:hover:not(:disabled):not(.active-company):not(.active-individual) {
+        border-color: #b0c4e0;
+        color: var(--fc-text);
+        background: #f0f4fa;
+    }
+
+    .type-toggle:disabled { opacity: .65; cursor: not-allowed; }
+
+    .type-toggle.active-company {
+        border-color: var(--fc-blue);
+        background: var(--fc-blue-lt);
+        color: var(--fc-blue);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.10);
+    }
+
+    .type-toggle.active-individual {
+        border-color: var(--fc-green);
+        background: var(--fc-green-lt);
+        color: var(--fc-green);
+        box-shadow: 0 0 0 3px rgba(22,163,91,.10);
+    }
+
+    /* ================================================================
+       PORTAL TOGGLE
+    ================================================================ */
+    .portal-toggle-box {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 16px; padding: 16px 18px;
+        border: 1px solid #dde5f0;
+        border-radius: 12px;
+        background: #f8fafc;
+        margin-top: 18px;
+        transition: all .2s ease;
+    }
+
+    .portal-toggle-box.portal-active {
+        border-color: #bdd4fc;
+        background: var(--fc-blue-lt);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.07);
+    }
+
+    .portal-toggle-content { display: flex; align-items: center; gap: 14px; }
+
+    .portal-toggle-icon {
+        width: 44px; height: 44px; flex: 0 0 44px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 11px; background: #edf1f7; color: var(--fc-muted);
+        transition: all .2s ease;
+    }
+
+    .portal-toggle-icon.icon-active { background: var(--fc-blue-lt); color: var(--fc-blue); }
+
+    .portal-toggle-title { font-size: 13px; font-weight: 800; color: var(--fc-text); }
+    .portal-toggle-sub   { font-size: 11px; color: var(--fc-muted); margin-top: 2px; }
+
+    /* Toggle Switch */
+    .toggle-switch { display: flex; align-items: center; cursor: pointer; flex-shrink: 0; }
+    .toggle-switch input { display: none; }
+
+    .toggle-track {
+        position: relative; width: 46px; height: 26px;
+        background: #d8e2f0; border-radius: 999px;
+        transition: background .2s ease;
+        display: flex; align-items: center; padding: 0 3px;
+    }
+
+    .toggle-switch input:checked + .toggle-track { background: var(--fc-blue); }
+
+    .toggle-thumb {
+        position: absolute; left: 3px;
+        width: 20px; height: 20px;
+        border-radius: 50%; background: #fff;
+        box-shadow: 0 2px 6px rgba(0,0,0,.2);
+        transition: left .2s ease;
+    }
+
+    .toggle-switch input:checked + .toggle-track .toggle-thumb {
+        left: calc(100% - 23px);
+    }
+
+    /* Portal Info */
+    .portal-info-box {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 14px 16px; margin-top: 12px;
+        border-radius: 10px;
+        background: var(--fc-blue-lt);
+        border: 1px solid #bdd4fc;
+        animation: banner-in .25s ease;
+    }
+
+    .portal-info-icon { flex: 0 0 auto; color: var(--fc-blue); }
+
+    .portal-info-text strong { display: block; font-size: 12.5px; font-weight: 800; color: var(--fc-blue); }
+    .portal-info-text p { margin: 4px 0 0; font-size: 11.5px; color: #3a6cc0; }
+
+    /* ================================================================
+       CONTACTS
+    ================================================================ */
+    .add-contact-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 14px;
+        border: 1.5px solid var(--fc-blue);
+        border-radius: 9px;
+        background: var(--fc-blue-lt);
+        color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; white-space: nowrap;
+        transition: all .15s ease; flex-shrink: 0;
+    }
+    .add-contact-btn:hover { background: var(--fc-blue); color: #fff; }
+    .add-contact-btn.mt-10 { margin-top: 10px; }
+
+    .contacts-locked-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 10px; min-height: 180px;
+        border: 2px dashed #d8e2f0;
+        border-radius: 12px;
+        background: #f8fafc; text-align: center; padding: 30px;
+    }
+
+    .locked-icon  { font-size: 36px; }
+    .locked-title { font-size: 14px; font-weight: 800; color: var(--fc-text); }
+    .locked-sub   { font-size: 12px; color: var(--fc-muted); }
+
+    .contacts-loading {
+        display: flex; align-items: center; justify-content: center;
+        gap: 10px; min-height: 100px;
+        color: var(--fc-muted); font-size: 12px;
+    }
+
+    .contacts-empty {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 10px; min-height: 180px;
+        border: 2px dashed #f0c0c8;
+        border-radius: 12px; background: #fff8f9;
+        text-align: center; padding: 30px;
+    }
+
+    .contacts-empty .empty-icon {
+        width: 60px; height: 60px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: #fff0f2; color: #f0a0aa;
+    }
+
+    .empty-title { font-size: 14px; font-weight: 800; color: var(--fc-text); }
+    .empty-sub   { font-size: 12px; color: var(--fc-muted); }
+
+    /* Contact Cards */
+    .contacts-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .contact-card {
+        display: flex; align-items: center; gap: 14px;
+        padding: 14px 16px;
+        border: 1px solid #e8edf5;
+        border-radius: 12px;
+        background: #fafcff;
+        transition: all .18s ease;
+    }
+
+    .contact-card:hover {
+        border-color: #c8d8f0;
+        box-shadow: 0 4px 14px rgba(15,41,82,.06);
+        transform: translateY(-1px);
+    }
+
+    .contact-card.contact-primary {
+        border-color: #c0dafb; background: #f3f8ff;
+        border-right: 3px solid var(--fc-blue);
+    }
+
+    .contact-avatar {
+        width: 42px; height: 42px; flex: 0 0 42px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #1a3a6b, #1e6ef5);
+        color: #fff; font-size: 16px; font-weight: 800;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 2px 8px rgba(30,110,245,.2);
+    }
+
+    .contact-info { flex: 1; min-width: 0; }
+
+    .contact-name { font-size: 13.5px; font-weight: 800; color: #1c2c44; }
+
+    .contact-job { font-size: 11px; color: var(--fc-muted); margin-top: 1px; }
+
+    .contact-meta {
+        display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+        margin-top: 5px;
+    }
+
+    .contact-meta-item { font-size: 10.5px; color: #5a6e88; direction: ltr; }
+
+    .contact-chips { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+
+    .contact-chip {
+        display: inline-flex; align-items: center;
+        padding: 3px 9px; border-radius: 8px;
+        font-size: 10px; font-weight: 800;
+    }
+
+    .chip-primary  { background: #e8f1ff; color: var(--fc-blue);  border: 1px solid #bdd4fc; }
+    .chip-invoice  { background: #edf8f0; color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .chip-inactive { background: #f5f5f7; color: #888;            border: 1px solid #ddd; }
+
+    .contact-actions { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+
+    .contact-btn {
+        width: 32px; height: 32px; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; cursor: pointer;
+        transition: all .15s ease; background: transparent;
+    }
+
+    .edit-btn { color: var(--fc-blue); }
+    .edit-btn:hover { background: var(--fc-blue-lt); border-color: #bdd4fc; }
+
+    .del-btn { color: var(--fc-red); }
+    .del-btn:hover { background: var(--fc-red-lt); border-color: #ffc8d0; }
+
+    /* ================================================================
+       BOTTOM ACTIONS
+    ================================================================ */
+    .cust-bottom-actions {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; margin-top: 16px;
+        padding: 14px 20px;
+        background: var(--fc-card);
+        border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 8px rgba(15,41,82,.04);
+    }
+
+    .bottom-back-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 16px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .bottom-back-btn:hover { background: #f0f4fa; border-color: #c0ccd8; color: var(--fc-text); }
+    .bottom-back-btn svg  { transform: rotate(180deg); }
+
+    .bottom-save-group { display: flex; align-items: center; gap: 10px; }
+
+    .bottom-save-btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        height: 40px; padding: 0 22px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #1e6ef5, #1558d6);
+        color: #fff; font-family: inherit;
+        font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(30,110,245,.30);
+        transition: all .15s ease;
+    }
+    .bottom-save-btn:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 18px rgba(30,110,245,.38);
+    }
+    .bottom-save-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* ================================================================
+       MODAL
+    ================================================================ */
+    .cust-modal-backdrop {
+        position: fixed; inset: 0; z-index: 1000;
+        background: rgba(10,20,40,.55);
+        backdrop-filter: blur(4px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px;
+        animation: fade-in .2s ease;
+    }
+
+    @@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+    .cust-modal {
+        width: 100%; max-width: 580px;
+        background: var(--fc-card);
+        border: 1px solid rgba(0,0,0,.08);
+        border-radius: 18px;
+        box-shadow:
+            0 8px 30px rgba(10,20,50,.15),
+            0 30px 80px rgba(10,20,50,.20);
+        overflow: hidden;
+        animation: modal-in .25s cubic-bezier(.34,1.3,.64,1);
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .cust-modal-sm { max-width: 420px; }
+
+    @@keyframes modal-in {
+        from { opacity: 0; transform: scale(.95) translateY(10px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-head {
+        display: flex; align-items: center; gap: 12px;
+        padding: 18px 20px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .modal-head-icon {
+        width: 42px; height: 42px; flex: 0 0 42px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 11px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        border: 1px solid #bdd4fc;
+    }
+
+    .modal-head-icon.danger-icon {
+        background: var(--fc-red-lt); color: var(--fc-red); border-color: #ffc8d0;
+    }
+
+    .modal-title { font-size: 14.5px; font-weight: 800; color: #1c2b43; }
+
+    .modal-sub { font-size: 10.5px; color: var(--fc-muted); margin-top: 2px; }
+    .modal-sub.danger-sub { color: var(--fc-red); }
+
+    .modal-close-btn {
+        margin-right: auto; width: 32px; height: 32px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid #e4eaf2; border-radius: 8px;
+        background: none; color: #9aaabb; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .modal-close-btn:hover { background: #f0f4fa; color: var(--fc-text); border-color: #c0ccd8; }
+
+    .modal-banner {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        padding: 10px 20px; font-size: 12px; font-weight: 600;
+    }
+    .modal-banner button { background: none; border: none; cursor: pointer; opacity: .6; }
+    .modal-banner.banner-success { background: #e9f8f0; color: #0e7a43; }
+    .modal-banner.banner-error   { background: #fff0f2; color: var(--fc-red); }
+
+    .modal-body { padding: 20px; }
+
+    /* Checkboxes */
+    .modal-checks { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+
+    .check-item {
+        display: flex; align-items: center; gap: 12px;
+        padding: 12px 14px; border-radius: 10px;
+        border: 1px solid #e8edf5; background: #fafcff;
+        cursor: pointer; transition: all .15s ease;
+    }
+
+    .check-item input { display: none; }
+
+    .check-item.check-active {
+        border-color: #bdd4fc; background: var(--fc-blue-lt);
+    }
+
+    .check-item.check-inactive-item {
+        border-color: #e0e5ec; background: #f5f7fa;
+    }
+
+    .check-icon { font-size: 20px; flex: 0 0 auto; }
+
+    .check-text { display: flex; flex-direction: column; gap: 2px; }
+
+    .check-title { font-size: 12.5px; font-weight: 800; color: var(--fc-text); }
+    .check-sub   { font-size: 10.5px; color: var(--fc-muted); }
+
+    .check-item input:checked ~ .check-text .check-title { color: var(--fc-blue); }
+
+    .modal-foot {
+        display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+        padding: 16px 20px;
+        background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%);
+        border-top: 1px solid #edf1f7;
+    }
+
+    .modal-cancel-btn {
+        height: 38px; padding: 0 18px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .modal-cancel-btn:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .modal-save-btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        height: 38px; padding: 0 20px;
+        border: 0; border-radius: 9px;
+        background: linear-gradient(135deg, #1e6ef5, #1558d6);
+        color: #fff; font-family: inherit;
+        font-size: 12px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 3px 10px rgba(30,110,245,.28);
+        transition: all .15s ease;
+    }
+    .modal-save-btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .modal-save-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    .modal-delete-btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        height: 38px; padding: 0 20px;
+        border: 0; border-radius: 9px;
+        background: linear-gradient(135deg, #e03048, #c0182e);
+        color: #fff; font-family: inherit;
+        font-size: 12px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 3px 10px rgba(224,48,72,.28);
+        transition: all .15s ease;
+    }
+    .modal-delete-btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .modal-delete-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* Delete confirm */
+    .del-confirm-box {
+        display: flex; flex-direction: column; gap: 12px;
+    }
+
+    .del-contact-name {
+        font-size: 18px; font-weight: 900; color: var(--fc-text); text-align: center;
+        padding: 16px;
+        background: #f8fafc; border-radius: 10px;
+        border: 1px solid #e8edf5;
+    }
+
+    .del-warning {
+        display: flex; align-items: flex-start; gap: 10px;
+        padding: 12px 14px; border-radius: 10px;
+        background: #fffbeb; border: 1px solid #fde68a;
+        color: #92400e; font-size: 12px; font-weight: 600;
+    }
+
+    /* Spinner */
+    .btn-spinner {
+        width: 15px; height: 15px;
+        border: 2px solid rgba(255,255,255,.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: cust-spin .7s linear infinite;
+    }
+    .btn-spinner.sm { width: 14px; height: 14px; }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 900px) {
+        .cust-form-grid { grid-template-columns: 1fr; }
+        .cust-body { padding: 0 14px 24px; }
+        .tab-section { padding: 18px 16px 22px; }
+    }
+
+    @@media (max-width: 680px) {
+        .cust-hero { padding: 18px 14px 64px; }
+        .cust-hero-title { font-size: 20px; }
+        .hero-save-btn span:not(.btn-spinner) { display: none; }
+        .hero-save-btn { padding: 0 14px; }
+        .type-toggle-group { flex-direction: column; }
+        .contact-card { flex-wrap: wrap; }
+        .contact-chips { width: 100%; }
+        .cust-steps { display: none; }
+        .cust-bottom-actions { flex-direction: column; }
+        .bottom-back-btn, .bottom-save-btn { width: 100%; justify-content: center; }
+    }
+
+    @@media (max-width: 480px) {
+        .cust-body { padding: 0 10px 20px; margin-top: -40px; }
+        .cust-modal { border-radius: 14px; }
+        .cust-modal-backdrop { padding: 12px; }
+        .hero-title-badge { display: none; }
+        .contacts-list { gap: 8px; }
+    }
+
+</style>
+
+
+@code {
+    [Parameter] public int? Id { get; set; }
+    private int?   _id;
+    private string CustomerCode = "";
+    private int    _activeTab;
+    private bool   _triedSave;
+
+    private AuthUser? _user;
+    private bool CanCreate => _user?.Can("CUSTOMER.CREATE") ?? false;
+    private bool CanEdit   => _user?.Can("CUSTOMER.EDIT")   ?? false;
+    private bool CanSave   => _id is null ? CanCreate : CanEdit;
+
+    private bool _loading; private bool _saving;
+    private string? _msg; private bool _ok = true;
+
+    private Form _f = new();
+
+    /* ══ جهات الاتصال ══ */
+    private bool CanViewContacts  => _user?.Can("CUSTOMER.VIEW")   ?? false;
+    private bool CanEditContacts  => _user?.Can("CUSTOMER.EDIT")   ?? false;
+    private bool CanDeleteContact => _user?.Can("CUSTOMER.DELETE") ?? false;
+
+    private List<Contact> _contacts = new();
+    private bool          _contactsLoading;
+    private bool          _contactOpen, _csaving;
+    private string?       _cmsg; private bool _cok = true;
+    private int?          _editId;
+    private Contact       _cf = new();
+    private Contact?      _delTarget; private bool _cdel;
+
+    /* Tab Error Detection */
+    private bool HasTabError(int tab) => _triedSave && tab switch
+    {
+        1 => string.IsNullOrWhiteSpace(_f.NameAr),
+        2 => (IsCompany  && string.IsNullOrWhiteSpace(_f.TaxNumber)) ||
+             (!IsCompany && string.IsNullOrWhiteSpace(_f.NationalId)),
+        _ => false
+    };
+
+    private class Contact
+    {
+        public int     CustomerContactId  { get; set; }
+        public int     CustomerId         { get; set; }
+        public string  ContactName        { get; set; } = "";
+        public string? JobTitle           { get; set; }
+        public string? Phone              { get; set; }
+        public string? Mobile             { get; set; }
+        public string? Email              { get; set; }
+        public bool    IsPrimary          { get; set; }
+        public bool    CanReceiveInvoices { get; set; }
+        public bool    IsActive           { get; set; }
+    }
+
+    private string CApi => $"api/customers/{_id}/contacts";
+
+    private async Task LoadContactsAsync()
+    {
+        if (_id is null) return;
+        _contactsLoading = true;
+        try   { _contacts = await Http.GetFromJsonAsync<List<Contact>>(CApi) ?? new(); }
+        catch { _contacts = new(); }
+        finally { _contactsLoading = false; }
+    }
+
+    private void OpenNewContact()
+    {
+        _editId = null;
+        _cf = new Contact { IsActive = true, IsPrimary = _contacts.Count == 0 };
+        _cmsg = null; _cok = true; _contactOpen = true;
+    }
+
+    private void OpenEditContact(Contact c)
+    {
+        _editId = c.CustomerContactId;
+        _cf = new Contact
+        {
+            CustomerContactId  = c.CustomerContactId,
+            ContactName        = c.ContactName,
+            JobTitle           = c.JobTitle,
+            Phone              = c.Phone,
+            Mobile             = c.Mobile,
+            Email              = c.Email,
+            IsPrimary          = c.IsPrimary,
+            CanReceiveInvoices = c.CanReceiveInvoices,
+            IsActive           = c.IsActive
+        };
+        _cmsg = null; _cok = true; _contactOpen = true;
+    }
+
+    private void CloseContactModal()
+    {
+        _contactOpen = false; _editId = null; _cmsg = null;
+        _cf = new Contact();
+    }
+
+    private async Task SaveContactAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_cf.ContactName))
+        { _cok = false; _cmsg = "اسم جهة الاتصال مطلوب"; return; }
+
+        if (string.IsNullOrWhiteSpace(_cf.Phone) && string.IsNullOrWhiteSpace(_cf.Mobile))
+        { _cok = false; _cmsg = "لازم تليفون أو موبايل على الأقل"; return; }
+
+        var payload = new
+        {
+            contactName        = _cf.ContactName.Trim(),
+            jobTitle           = _cf.JobTitle,
+            phone              = _cf.Phone,
+            mobile             = _cf.Mobile,
+            email              = _cf.Email,
+            isPrimary          = _cf.IsPrimary,
+            canReceiveInvoices = _cf.CanReceiveInvoices,
+            isActive           = _cf.IsActive
+        };
+
+        _csaving = true; _cmsg = null;
+        try
+        {
+            var res = _editId is null
+                ? await Http.PostAsJsonAsync(CApi, payload)
+                : await Http.PutAsJsonAsync($"{CApi}/{_editId}", payload);
+
+            var body = await res.Content.ReadAsStringAsync();
+            if (!res.IsSuccessStatusCode)
+            { _cok = false; _cmsg = Msg(body, "الحفظ فشل"); return; }
+
+            Snackbar.Add(Msg(body, "✅ اتحفظت"), Severity.Success);
+            CloseContactModal();
+            await LoadContactsAsync();
+        }
+        catch (Exception ex) { _cok = false; _cmsg = "الحفظ فشل: " + ex.Message; }
+        finally { _csaving = false; }
+    }
+
+    private void AskDelete(Contact c) { _delTarget = c; }
+
+    private async Task DoDeleteAsync()
+    {
+        if (_delTarget is null) return;
+        _cdel = true;
+        try
+        {
+            var res  = await Http.DeleteAsync($"{CApi}/{_delTarget.CustomerContactId}");
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+            { Snackbar.Add(Msg(body, "الحذف فشل"), Severity.Error); return; }
+
+            Snackbar.Add(Msg(body, "✅ اتحذفت"), Severity.Success);
+            _delTarget = null;
+            await LoadContactsAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("الحذف فشل: " + ex.Message, Severity.Error); }
+        finally { _cdel = false; }
+    }
+
+    private static string Msg(string body, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(body) || body.TrimStart().StartsWith("<")) return fallback;
+        try
+        {
+            using var d = System.Text.Json.JsonDocument.Parse(body);
+            if (d.RootElement.TryGetProperty("message", out var m)) return m.GetString() ?? fallback;
+        }
+        catch { }
+        return fallback;
+    }
+
+    private bool IsCompany => _f.CustomerType == "Company";
+
+    public class Form
+    {
+        public string  CustomerType       { get; set; } = "Company";
+        public string  NameAr             { get; set; } = "";
+        public string? NameEn             { get; set; }
+        public string? TaxNumber          { get; set; }
+        public string? NationalId         { get; set; }
+        public string? CommercialRegister { get; set; }
+        public string? Phone              { get; set; }
+        public string? Email              { get; set; }
+        public string? AddressAr          { get; set; }
+        public string? CityAr             { get; set; }
+        public decimal CreditLimit        { get; set; }
+        public bool    PortalEnabled      { get; set; }
+    }
+
+    public class Detail
+    {
+        public int     CustomerId         { get; set; }
+        public string  CustomerCode       { get; set; } = "";
+        public string  CustomerType       { get; set; } = "";
+        public string  NameAr             { get; set; } = "";
+        public string? NameEn             { get; set; }
+        public string? TaxNumber          { get; set; }
+        public string? NationalId         { get; set; }
+        public string? CommercialRegister { get; set; }
+        public string? Phone              { get; set; }
+        public string? Email              { get; set; }
+        public string? AddressAr          { get; set; }
+        public string? CityAr             { get; set; }
+        public decimal CreditLimit        { get; set; }
+        public bool    PortalEnabled      { get; set; }
+        public bool    IsActive           { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        _id   = Id;
+
+        if (!CanSave && !CanViewContacts) return;
+
+        _loading = true;
+        try   { if (_id is not null) await LoadAsync(_id.Value); }
+        catch (Exception ex) { _msg = "فشل التحميل: " + ex.Message; _ok = false; }
+        finally { _loading = false; }
+
+        if (_id is not null && CanViewContacts) await LoadContactsAsync();
+    }
+
+    private async Task LoadAsync(int id)
+    {
+        var d = await Http.GetFromJsonAsync<Detail>($"api/customers/{id}");
+        if (d is null) { _msg = "العميل غير موجود"; _ok = false; return; }
+
+        CustomerCode = d.CustomerCode;
+        _f = new Form
+        {
+            CustomerType       = d.CustomerType,
+            NameAr             = d.NameAr,
+            NameEn             = d.NameEn,
+            TaxNumber          = d.TaxNumber,
+            NationalId         = d.NationalId,
+            CommercialRegister = d.CommercialRegister,
+            Phone              = d.Phone,
+            Email              = d.Email,
+            AddressAr          = d.AddressAr,
+            CityAr             = d.CityAr,
+            CreditLimit        = d.CreditLimit,
+            PortalEnabled      = d.PortalEnabled
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_saving) return;
+        _triedSave = true;
+
+        /* Validate */
+        if (string.IsNullOrWhiteSpace(_f.NameAr))
+        { _msg = "الاسم بالعربي مطلوب"; _ok = false; _activeTab = 0; return; }
+
+        if (IsCompany && string.IsNullOrWhiteSpace(_f.TaxNumber))
+        { _msg = "الرقم الضريبي مطلوب للشركة"; _ok = false; _activeTab = 1; return; }
+
+        if (!IsCompany && string.IsNullOrWhiteSpace(_f.NationalId))
+        { _msg = "الرقم القومي مطلوب للفرد"; _ok = false; _activeTab = 1; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var payload = new
+            {
+                customerType       = _f.CustomerType,
+                nameAr             = _f.NameAr,
+                nameEn             = _f.NameEn,
+                taxNumber          = _f.TaxNumber,
+                nationalId         = _f.NationalId,
+                commercialRegister = _f.CommercialRegister,
+                phone              = _f.Phone,
+                email              = _f.Email,
+                addressAr          = _f.AddressAr,
+                cityAr             = _f.CityAr,
+                creditLimit        = _f.CreditLimit,
+                portalEnabled      = _f.PortalEnabled
+            };
+
+            var res = _id is null
+                ? await Http.PostAsJsonAsync("api/customers", payload)
+                : await Http.PutAsJsonAsync($"api/customers/{_id}", payload);
+
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) GoBack();
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private void GoBack() => Nav.NavigateTo("/customers");
+
+    private static decimal ParseAmount(object? v) =>
+        decimal.TryParse(v?.ToString(), out var n) && n > 0 ? n : 0m;
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "✅ تم الحفظ" : "حصل خطأ — حاول تاني"; }
+    }
+}

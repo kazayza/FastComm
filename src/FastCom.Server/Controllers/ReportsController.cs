@@ -77,7 +77,8 @@ public class ReportsController : ControllerBase
         operations = await Can("REPORT.OPERATIONS", ct),
         financial  = await Can("REPORT.FINANCIAL", ct),
         fleet      = await Can("REPORT.FLEET", ct),
-        export     = await Can("REPORT.EXPORT", ct)
+        export     = await Can("REPORT.EXPORT", ct),
+        suppliers  = await Can("SUPPLIER.VIEW", ct)
     });
 
     // ══════════════════════════════════════════════════════════════════
@@ -320,6 +321,832 @@ public class ReportsController : ControllerBase
     //  3) الأسطول
     // ══════════════════════════════════════════════════════════════════
 
+    /// <summary>
+    /// 📊 <c>GET api/reports/pnl?from=&amp;to=</c> — **قائمة الدخل**.
+    ///
+    /// 🔴 الإيراد = <c>SubTotal − DiscountTotal</c> (صافي قبل الضريبة) —
+    /// **مش <c>GrandTotal</c>** لأنه شامل الضريبة، والضريبة فلوس الحكومة مش إيراد.
+    ///
+    /// 🔴 التكلفة المباشرة = المصروفات اللي نوعها <c>IsOperationCost = 1</c>
+    /// (وقود · طرق · ميناء · انتظار · تحميل · تفريغ · أوناش · وجبات · إصلاح · غرامات · أخرى)
+    /// والباقي (<c>IsOperationCost = 0</c>) = مصروفات تشغيلية/إدارية.
+    ///
+    /// 🔐 بصلاحية <c>REPORT.FINANCIAL</c> الموجودة — مافيش كود صلاحية جديد.
+    /// </summary>
+    [HttpGet("pnl")]
+    public async Task<IActionResult> Pnl(string? from, string? to, CancellationToken ct)
+    {
+        if (!await Can("REPORT.FINANCIAL", ct)) return Forbid();
+
+        var (f, t, fs, ts) = Range(from, to);
+        var (summary, months, costRows) = await BuildPnlAsync(f, t, ct);
+
+        return Ok(new
+        {
+            range   = new { from = fs, to = ts },
+            summary,
+            months,
+            costRows
+        });
+    }
+
+    /// <summary>
+    /// بيبني قائمة الدخل — مشترك بين الـ endpoint وتصدير Excel.
+    /// </summary>
+    private async Task<(PnlSummary Summary, List<PnlMonth> Months, List<PnlCostRow> CostRows)>
+        BuildPnlAsync(DateTime f, DateTime t, CancellationToken ct)
+    {
+        // ── الإيرادات: فواتير معتمدة (مش مسودة ولا ملغاة) ──
+        var inv = await _db.Invoices.AsNoTracking()
+            .Where(i => !i.IsDeleted && i.Status != "Draft" && i.Status != "Cancelled"
+                        && i.InvoiceDate >= DateOnly.FromDateTime(f)
+                        && i.InvoiceDate <= DateOnly.FromDateTime(t))
+            .Select(i => new { i.InvoiceDate, i.SubTotal, i.DiscountTotal, i.TaxTotal })
+            .ToListAsync(ct);
+
+        // ── المصروفات + نوعها (IsOperationCost بيحدد مباشر/إداري) ──
+        var exp = await _db.Expenses.AsNoTracking()
+            .Where(e => !e.IsDeleted && e.Status != "Cancelled"
+                        && e.ExpenseDate >= f && e.ExpenseDate <= t)
+            .Select(e => new { e.ExpenseDate, e.Amount, e.ExpenseType.IsOperationCost })
+            .ToListAsync(ct);
+
+        // ── أسماء أنواع المصروفات (للتفصيل) ──
+        var typeId = await _db.ExpenseTypes.AsNoTracking()
+            .Select(x => new { x.ExpenseTypeId, x.NameAr, x.IsOperationCost })
+            .ToListAsync(ct);
+        var typeName = typeId.ToDictionary(x => x.ExpenseTypeId, x => x.NameAr);
+
+        // ── تفصيل التكلفة المباشرة حسب النوع ──
+        var expDetail = await _db.Expenses.AsNoTracking()
+            .Where(e => !e.IsDeleted && e.Status != "Cancelled"
+                        && e.ExpenseDate >= f && e.ExpenseDate <= t
+                        && e.ExpenseType.IsOperationCost)
+            .Select(e => new { e.ExpenseTypeId, e.Amount })
+            .ToListAsync(ct);
+
+        var costRows = expDetail
+            .GroupBy(x => x.ExpenseTypeId)
+            .Select(g => new PnlCostRow(
+                typeName.TryGetValue(g.Key, out var n) ? n : "—",
+                g.Count(), g.Sum(x => x.Amount)))
+            .OrderByDescending(x => x.Amount)
+            .ToList();
+
+        // ── تجميع شهري في الذاكرة (مافيش GroupBy في SQL — §EF translation) ──
+        string Mn(int y, int m) => new DateTime(y, m, 1).ToString("MMMM yyyy", new CultureInfo("ar-EG"));
+
+        var months = inv.Select(x => (x.InvoiceDate.Year, x.InvoiceDate.Month,
+                                      Rev: x.SubTotal - x.DiscountTotal,
+                                      Tax: x.TaxTotal, Cost: 0m, Opex: 0m))
+            .Concat(exp.Select(x => (DateOnly.FromDateTime(x.ExpenseDate).Year,
+                                     DateOnly.FromDateTime(x.ExpenseDate).Month,
+                                     Rev: 0m, Tax: 0m,
+                                     Cost: x.IsOperationCost ? x.Amount : 0m,
+                                     Opex: x.IsOperationCost ? 0m : x.Amount)))
+            .GroupBy(x => (x.Year, x.Month))
+            .Select(g => new PnlMonth(
+                $"{g.Key.Year}-{g.Key.Month:D2}", Mn(g.Key.Year, g.Key.Month),
+                g.Sum(x => x.Rev), g.Sum(x => x.Tax), g.Sum(x => x.Cost), g.Sum(x => x.Opex)))
+            .OrderBy(x => x.Month, StringComparer.Ordinal)
+            .ToList();
+
+        // ── الإجمالي ──
+        var revenue = inv.Sum(x => x.SubTotal - x.DiscountTotal);
+        var tax     = inv.Sum(x => x.TaxTotal);
+        var cost    = exp.Where(x => x.IsOperationCost).Sum(x => x.Amount);
+        var opex    = exp.Where(x => !x.IsOperationCost).Sum(x => x.Amount);
+
+        var gross = revenue - cost;
+        var net   = gross - opex;
+
+        var summary = new PnlSummary(
+            revenue, tax, cost, gross, opex, net,
+            revenue != 0 ? Math.Round(gross / revenue * 100m, 2) : 0m,
+            revenue != 0 ? Math.Round(net / revenue * 100m, 2) : 0m,
+            inv.Count, exp.Count);
+
+        return (summary, months, costRows);
+    }
+
+    /// <summary>
+    /// ⏰ <c>GET api/reports/overdue</c> — **فواتير عدى ميعاد سدادها**.
+    ///
+    /// <para>
+    /// 🔴 الفلتر: <c>DueDate &lt; النهاردة</c> و<c>PaymentStatus</c> مش <c>Paid</c>.
+    /// <c>DaysOverdue</c> و<c>Balance</c> بيتحسبوا **في الذاكرة** —
+    /// <c>DateOnly</c> ما بيتترجمش لطرح في SQL (§EF translation).
+    /// </para>
+    /// </summary>
+    [HttpGet("overdue")]
+    public async Task<IActionResult> Overdue(CancellationToken ct)
+    {
+        if (!await Can("REPORT.FINANCIAL", ct)) return Forbid();
+
+        var rows = await BuildOverdueAsync(ct);
+        return Ok(new
+        {
+            asOf   = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            total  = rows.Sum(x => x.Balance),
+            count  = rows.Count,
+            rows
+        });
+    }
+
+    private async Task<List<OverdueRow>> BuildOverdueAsync(CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+
+        /* 🔴 <c>Overpaid</c> خارج — العميل دفع زيادة فمافيش متأخرات */
+        var inv = await _db.Invoices.AsNoTracking()
+            .Where(i => !i.IsDeleted
+                        && i.Status != "Draft" && i.Status != "Cancelled"
+                        && i.DueDate != null && i.DueDate < today
+                        && i.PaymentStatus != "Paid" && i.PaymentStatus != "Overpaid")
+            .Select(i => new
+            {
+                i.InvoiceNumber, i.CustomerId, i.InvoiceDate, i.DueDate,
+                i.GrandTotal, i.PaidAmount, i.PaymentStatus
+            })
+            .ToListAsync(ct);
+
+        var ids = inv.Select(x => x.CustomerId).Distinct().ToList();
+        var names = ids.Count == 0
+            ? new Dictionary<int, string>()
+            : (await _db.Customers.AsNoTracking()
+                    .Where(c => ids.Contains(c.CustomerId))
+                    .Select(c => new { c.CustomerId, c.NameAr }).ToListAsync(ct))
+                .ToDictionary(x => x.CustomerId, x => x.NameAr);
+
+        return inv
+            .Select(x => new OverdueRow(
+                x.InvoiceNumber,
+                names.TryGetValue(x.CustomerId, out var n) ? n : "—",
+                x.InvoiceDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                x.DueDate!.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                today.DayNumber - x.DueDate.Value.DayNumber,
+                x.GrandTotal, x.PaidAmount, x.GrandTotal - x.PaidAmount,
+                x.PaymentStatus))
+            .OrderByDescending(x => x.DaysOverdue)
+            .ToList();
+    }
+
+    /// <summary>
+    /// 📈 <c>GET api/reports/compare?from=&amp;to=</c> — **مقارنة الفترة الحالية بالسابقة**.
+    /// الفترة السابقة = نفس عدد الأيام اللي قبل <c>from</c> على طول.
+    /// </summary>
+    [HttpGet("compare")]
+    public async Task<IActionResult> Compare(string? from, string? to, CancellationToken ct)
+    {
+        if (!await Can("REPORT.FINANCIAL", ct)) return Forbid();
+
+        var (f, t, fs, ts) = Range(from, to);
+        var rows = await BuildCompareAsync(f, t, ct);
+
+        var days = (int)(t.Date - f.Date).TotalDays + 1;
+        return Ok(new
+        {
+            current  = new { from = fs, to = ts, days },
+            previous = new
+            {
+                from = f.AddDays(-days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                to   = f.AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                days
+            },
+            rows
+        });
+    }
+
+    private async Task<List<CompareRow>> BuildCompareAsync(DateTime f, DateTime t, CancellationToken ct)
+    {
+        /* الفترة الحالية = [f, t] شاملة الطرفين (f من أول اليوم، t لآخر اليوم)
+              ⇒ السابقة = [f.AddDays(-days), f.AddSeconds(-1)] — نفس الطول بالظبط.
+
+              🔴 `AddSeconds(-1)` مش `AddTicks(-1)`: المصروف اللي بالظبط
+              `f.AddDays(-1) 00:00:00` كان هيتحسب في الفترتين مع Ticks. */
+        var days = (int)(t.Date - f.Date).TotalDays + 1;
+        var pf   = f.AddDays(-days);
+        var pt   = f.AddSeconds(-1);
+
+        var (cur, _, _)  = await BuildPnlAsync(f,  t,  ct);
+        var (prev, _, _) = await BuildPnlAsync(pf, pt, ct);
+
+        static decimal Pct(decimal c, decimal p) =>
+            p == 0 ? (c == 0 ? 0m : 100m) : Math.Round((c - p) / Math.Abs(p) * 100m, 2);
+
+        return new List<CompareRow>
+        {
+            new("الإيرادات",              cur.Revenue,            prev.Revenue,
+                cur.Revenue - prev.Revenue,                       Pct(cur.Revenue, prev.Revenue)),
+            new("تكلفة التشغيل",           cur.OperationCost,      prev.OperationCost,
+                cur.OperationCost - prev.OperationCost,           Pct(cur.OperationCost, prev.OperationCost)),
+            new("مجمل الربح",              cur.GrossProfit,        prev.GrossProfit,
+                cur.GrossProfit - prev.GrossProfit,               Pct(cur.GrossProfit, prev.GrossProfit)),
+            new("المصروفات التشغيلية",     cur.OperatingExpenses,  prev.OperatingExpenses,
+                cur.OperatingExpenses - prev.OperatingExpenses,   Pct(cur.OperatingExpenses, prev.OperatingExpenses)),
+            new("صافي الربح",              cur.NetProfit,          prev.NetProfit,
+                cur.NetProfit - prev.NetProfit,                   Pct(cur.NetProfit, prev.NetProfit)),
+            new("هامش صافي الربح %",       cur.NetMargin,          prev.NetMargin,
+                cur.NetMargin - prev.NetMargin,                   Pct(cur.NetMargin, prev.NetMargin)),
+            new("عدد الفواتير",            cur.InvoiceCount,       prev.InvoiceCount,
+                cur.InvoiceCount - prev.InvoiceCount,             Pct(cur.InvoiceCount, prev.InvoiceCount)),
+        };
+    }
+
+    /// <summary>
+    /// 🚢 <c>GET api/reports/ports</c> — **ربحية الموانئ والوجهات**.
+    ///
+    /// <para>
+    /// 🔴 الإيراد = <c>Operation.RevenueNet</c> · التكلفة = مصروفات العملية المباشرة
+    /// + نصيبها من تكلفة الرحلات (<c>TripCostAllocations</c>) — نفس منطق تقرير العمليات.
+    /// </para>
+    /// </summary>
+    [HttpGet("ports")]
+    public async Task<IActionResult> Ports(string? from, string? to, CancellationToken ct)
+    {
+        if (!await Can("REPORT.OPERATIONS", ct)) return Forbid();
+
+        var (f, t, fs, ts) = Range(from, to);
+        var ops = await LoadOpProfitAsync(f, t, ct);
+
+        // ── الموانئ ──
+        var portIds = ops.Where(x => x.PortId is not null).Select(x => x.PortId!.Value).Distinct().ToList();
+        var portNames = portIds.Count == 0
+            ? new Dictionary<int, string>()
+            : (await _db.Ports.AsNoTracking().Where(x => portIds.Contains(x.PortId))
+                    .Select(x => new { x.PortId, x.NameAr }).ToListAsync(ct))
+                .ToDictionary(x => x.PortId, x => x.NameAr);
+
+        var ports = ops.Where(x => x.PortId is not null)
+            .GroupBy(x => x.PortId!.Value)
+            .Select(g => GroupRow(portNames.TryGetValue(g.Key, out var n) ? n : "—", g))
+            .OrderByDescending(x => x.Profit)
+            .ToList();
+
+        // ── الوجهات ──
+        var dstIds = ops.Where(x => x.DestinationId is not null).Select(x => x.DestinationId!.Value).Distinct().ToList();
+        var dstNames = dstIds.Count == 0
+            ? new Dictionary<int, string>()
+            : (await _db.Destinations.AsNoTracking().Where(x => dstIds.Contains(x.DestinationId))
+                    .Select(x => new { x.DestinationId, x.NameAr }).ToListAsync(ct))
+                .ToDictionary(x => x.DestinationId, x => x.NameAr);
+
+        var dests = ops.Where(x => x.DestinationId is not null)
+            .GroupBy(x => x.DestinationId!.Value)
+            .Select(g => GroupRow(dstNames.TryGetValue(g.Key, out var n) ? n : "—", g))
+            .OrderByDescending(x => x.Profit)
+            .ToList();
+
+        var noPort = ops.Count(x => x.PortId is null);
+        return Ok(new
+        {
+            range   = new { from = fs, to = ts },
+            ports,
+            destinations = dests,
+            noPort
+        });
+    }
+
+    /// <summary>
+    /// 🧾 <c>GET api/reports/services</c> — **ربحية الخدمات**.
+    /// </summary>
+    [HttpGet("services")]
+    public async Task<IActionResult> Services(string? from, string? to, CancellationToken ct)
+    {
+        if (!await Can("REPORT.OPERATIONS", ct)) return Forbid();
+
+        var (f, t, fs, ts) = Range(from, to);
+        var ops = await LoadOpProfitAsync(f, t, ct);
+
+        var ids = ops.Where(x => x.ServiceId is not null).Select(x => x.ServiceId!.Value).Distinct().ToList();
+        var names = ids.Count == 0
+            ? new Dictionary<int, string>()
+            : (await _db.Services.AsNoTracking().Where(x => ids.Contains(x.ServiceId))
+                    .Select(x => new { x.ServiceId, x.NameAr }).ToListAsync(ct))
+                .ToDictionary(x => x.ServiceId, x => x.NameAr);
+
+        var rows = ops.Where(x => x.ServiceId is not null)
+            .GroupBy(x => x.ServiceId!.Value)
+            .Select(g => GroupRow(names.TryGetValue(g.Key, out var n) ? n : "—", g))
+            .OrderByDescending(x => x.Profit)
+            .ToList();
+
+        return Ok(new
+        {
+            range     = new { from = fs, to = ts },
+            rows,
+            noService = ops.Count(x => x.ServiceId is null)
+        });
+    }
+
+    /// <summary>
+    /// 💵 <c>GET api/reports/cashflow</c> — **تدفق نقدي متوقع**.
+    ///
+    /// <para>
+    /// 🔴 من <c>Invoices.DueDate</c> — الفواتير اللي لسه ما اتحصّلتش كامل،
+    /// مجمّعة بالأسبوع لـ 8 أسابيع جاية + «بعد كده» + «متأخرة».
+    /// </para>
+    /// </summary>
+    [HttpGet("cashflow")]
+    public async Task<IActionResult> Cashflow(CancellationToken ct)
+    {
+        if (!await Can("REPORT.FINANCIAL", ct)) return Forbid();
+
+        const int Weeks = 8;
+        var buckets = await BuildCashflowAsync(ct);
+        var open    = buckets.Sum(x => x.Expected);
+
+        return Ok(new
+        {
+            asOf  = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            weeks = Weeks,
+            total = open,
+            count = buckets.Sum(x => x.Invoices),
+            rows  = buckets
+        });
+    }
+
+    private async Task<List<CashWeek>> BuildCashflowAsync(CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        const int Weeks = 8;
+
+        var inv = await _db.Invoices.AsNoTracking()
+            .Where(i => !i.IsDeleted
+                        && i.Status != "Draft" && i.Status != "Cancelled"
+                        && i.PaymentStatus != "Paid" && i.PaymentStatus != "Overpaid")
+            .Select(i => new { i.DueDate, i.GrandTotal, i.PaidAmount })
+            .ToListAsync(ct);
+
+        var open = inv.Where(x => x.GrandTotal - x.PaidAmount > 0).ToList();
+
+        var buckets = new List<CashWeek>();
+
+        /* ⏰ متأخرة — ميعادها عدّى */
+        var overdue = open.Where(x => x.DueDate is null || x.DueDate < today).ToList();
+        buckets.Add(new CashWeek("overdue", "متأخرة", overdue.Sum(x => x.GrandTotal - x.PaidAmount), overdue.Count));
+
+        /* 📅 8 أسابيع جاية */
+        for (var w = 0; w < Weeks; w++)
+        {
+            var ws = today.AddDays(w * 7);
+            var we = today.AddDays(w * 7 + 6);
+            var inW = open.Where(x => x.DueDate is not null
+                                      && x.DueDate >= ws && x.DueDate <= we).ToList();
+
+            buckets.Add(new CashWeek(
+                $"w{w + 1}",
+                $"{ws.ToString("dd/MM", CultureInfo.InvariantCulture)} – {we.ToString("dd/MM", CultureInfo.InvariantCulture)}",
+                inW.Sum(x => x.GrandTotal - x.PaidAmount), inW.Count));
+        }
+
+        /* 🔮 بعد الأسابيع دي */
+        var limit = today.AddDays(Weeks * 7);
+        var later = open.Where(x => x.DueDate is not null && x.DueDate > limit).ToList();
+        buckets.Add(new CashWeek("later", "بعد كده", later.Sum(x => x.GrandTotal - x.PaidAmount), later.Count));
+
+        return buckets;
+    }
+
+    /* ═══════════ مساعدات الربحية ═══════════ */
+
+    /// <summary>عملية + إيرادها + تكلفتها — أساس تقارير الربحية.</summary>
+    private sealed record OpProfit(long OperationId, int? PortId, int? DestinationId,
+        int? ServiceId, decimal Revenue, decimal Cost);
+
+    private async Task<List<OpProfit>> LoadOpProfitAsync(DateTime f, DateTime t, CancellationToken ct)
+    {
+        var ops = await _db.Operations.AsNoTracking()
+            .Where(o => !o.IsDeleted && o.CreatedAt >= f && o.CreatedAt <= t)
+            .OrderByDescending(o => o.OperationId)
+            .Take(MaxRows)
+            .Select(o => new { o.OperationId, o.PortId, o.DestinationId, o.ServiceId, o.RevenueNet })
+            .ToListAsync(ct);
+
+        if (ops.Count == 0) return new List<OpProfit>();
+
+        var opIds = ops.Select(o => o.OperationId).ToList();
+
+        /* 🔴 التكلفة = مصروفات العملية المباشرة + نصيبها من تكلفة الرحلات
+              (مش `ActualCost` — عشان ما نحسبش نفس الحاجة مرتين) */
+        var exp = await _db.Expenses.AsNoTracking()
+            .Where(e => !e.IsDeleted && e.Status != "Cancelled"
+                        && e.OperationId != null && opIds.Contains(e.OperationId.Value))
+            .Select(e => new { OpId = e.OperationId!.Value, e.Amount }).ToListAsync(ct);
+
+        var alloc = await _db.TripCostAllocations.AsNoTracking()
+            .Where(a => opIds.Contains(a.OperationId))
+            .Select(a => new { a.OperationId, a.AllocatedAmount }).ToListAsync(ct);
+
+        var expByOp = exp.GroupBy(x => x.OpId).ToDictionary(g => g.Key, g => g.Sum(x => x.Amount));
+        var alByOp  = alloc.GroupBy(x => x.OperationId).ToDictionary(g => g.Key, g => g.Sum(x => x.AllocatedAmount));
+
+        return ops.Select(o => new OpProfit(
+            o.OperationId, o.PortId, o.DestinationId, o.ServiceId,
+            o.RevenueNet,
+            (expByOp.TryGetValue(o.OperationId, out var e) ? e : 0m) +
+            (alByOp.TryGetValue(o.OperationId, out var a) ? a : 0m)))
+            .ToList();
+    }
+
+    /// <summary>يحوّل مجموعات لصفوف Excel مرتبة من الأعلى ربحًا.</summary>
+    private static IEnumerable<object[]> Rows(IEnumerable<IGrouping<int, OpProfit>> groups,
+        Func<int, string> nameOf) =>
+        groups.Select(g => GroupRow(nameOf(g.Key), g))
+              .OrderByDescending(r => r.Profit)
+              .Select(r => new object[]
+                  { r.Name, r.Operations, r.Revenue, r.Cost, r.Profit, r.MarginPct });
+
+    private static ProfitRow GroupRow(string name, IEnumerable<OpProfit> g)
+    {
+        var rev  = g.Sum(x => x.Revenue);
+        var cost = g.Sum(x => x.Cost);
+        var prof = rev - cost;
+        return new ProfitRow(name, g.Count(), rev, cost, prof,
+            rev != 0 ? Math.Round(prof / rev * 100m, 2) : 0m);
+    }
+
+    /// <summary>
+    /// 📥 <c>GET api/reports/supplier-aging</c> — **أعمار ديون الموردين**.
+    ///
+    /// <para>
+    /// الفواتير المفتوحة (مش مسودة ولا ملغاة ولا مدفوعة) مقسّمة:
+    /// <c>0–30</c> · <c>31–60</c> · <c>61–90</c> · <c>+90</c> · <c>بدون استحقاق</c>.
+    /// </para>
+    ///
+    /// 🔐 بصلاحية <c>SUPPLIER.VIEW</c> الموجودة — مافيش كود جديد.
+    /// </summary>
+    [HttpGet("supplier-aging")]
+    public async Task<IActionResult> SupplierAging(CancellationToken ct)
+    {
+        if (!await Can("SUPPLIER.VIEW", ct)) return Forbid();
+
+        var rows = await BuildSupplierAgingAsync(ct);
+        return Ok(new
+        {
+            asOf  = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            total = rows.Sum(x => x.Balance),
+            rows
+        });
+    }
+
+    private async Task<List<AgingRow>> BuildSupplierAgingAsync(CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+
+        var inv = await _db.SupplierInvoices.AsNoTracking()
+            .Where(i => !i.IsDeleted && i.Status != "Draft" && i.Status != "Cancelled"
+                        && i.PaymentStatus != "Paid")
+            .Select(i => new { i.SupplierId, i.DueDate, i.GrandTotal, i.PaidAmount })
+            .ToListAsync(ct);
+
+        var ids = inv.Select(x => x.SupplierId).Distinct().ToList();
+        var names = ids.Count == 0
+            ? new Dictionary<int, string>()
+            : (await _db.Suppliers.AsNoTracking()
+                    .Where(s => ids.Contains(s.SupplierId))
+                    .Select(s => new { s.SupplierId, s.NameAr }).ToListAsync(ct))
+                .ToDictionary(x => x.SupplierId, x => x.NameAr);
+
+        return inv
+            .Where(x => x.GrandTotal - x.PaidAmount > 0)
+            .GroupBy(x => x.SupplierId)
+            .Select(g =>
+            {
+                /* 🔴 التقييم في الذاكرة — `DateOnly` ما بيتترجمش لطرح في SQL */
+                var open = g.Select(x => (
+                    Bal : x.GrandTotal - x.PaidAmount,
+                    Days: x.DueDate is null ? (int?)null : today.DayNumber - x.DueDate.Value.DayNumber
+                )).ToList();
+
+                decimal Sum(Func<(decimal Bal, int? Days), bool> f) =>
+                    open.Where(f).Sum(x => x.Bal);
+
+                return new AgingRow(
+                    names.TryGetValue(g.Key, out var n) ? n : "—",
+                    open.Count,
+                    Sum(x => x.Days is not null && x.Days <= 30),
+                    Sum(x => x.Days is not null && x.Days > 30 && x.Days <= 60),
+                    Sum(x => x.Days is not null && x.Days > 60 && x.Days <= 90),
+                    Sum(x => x.Days is not null && x.Days > 90),
+                    Sum(x => x.Days is null),
+                    open.Sum(x => x.Bal));
+            })
+            .OrderByDescending(x => x.Balance)
+            .ToList();
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  10) 💵 التدفق النقدي الفعلي  (🆕 2026-09-13)
+    // ══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// 📥 <c>GET api/reports/cashflow-actual?from=&amp;to=&amp;cashBoxId=</c> —
+    /// **قائمة التدفقات النقدية الفعلية** من <c>CashTransactions</c>.
+    ///
+    /// <para>🔴 ده **غير** <c>api/reports/cashflow</c> — ده الأخير توقّع مبني على
+    /// <c>Invoices.DueDate</c>. هنا الحركة اللي حصلت فعلًا في الخزينة.</para>
+    ///
+    /// <para>🔴 <b>التحويلات بين الخزينتين</b> (<c>TransferIn</c>/<c>TransferOut</c>)
+    /// <b>ما بتتحسبش</b> في الإجمالي — هي نقل فلوس من جيب لجيب مش دخل أو مصروف.
+    /// بتظهر بس في جدول «الحركة حسب الخزينة».</para>
+    ///
+    /// <para>🔴 <c>Status == "Void"</c> مستثناة بالكامل — الحركة الملغية كأنها ما كانتش.</para>
+    /// </summary>
+    [HttpGet("cashflow-actual")]
+    public async Task<IActionResult> CashflowActual(string? from, string? to,
+        int? cashBoxId, CancellationToken ct)
+    {
+        if (!await Can("REPORT.FINANCIAL", ct)) return Forbid();
+
+        var (f, t, fs, ts) = Range(from, to);
+        var res = await BuildCashflowActualAsync(f, t, fs, ts, cashBoxId, ct);
+        return Ok(res);
+    }
+
+    /// <summary>بند في قسم (وارد أو صادر) من قائمة التدفقات.</summary>
+    public record CashLine(string Label, int Count, decimal Amount, decimal Pct);
+
+    /// <summary>عمود شهري في قائمة التدفقات.</summary>
+    public record CashMonth(string Key, string MonthName, decimal Inflow, decimal Outflow, decimal Net);
+
+    /// <summary>صف في جدول الحركة حسب الخزينة.</summary>
+    public record CashBoxRow(string BoxName, decimal Inflow, decimal Outflow,
+        decimal TransferIn, decimal TransferOut, decimal Net, decimal Closing);
+
+    private async Task<object> BuildCashflowActualAsync(
+        DateTime f, DateTime t, string fs, string ts, int? cashBoxId, CancellationToken ct)
+    {
+        /* 🔴 التجميع كله في الذاكرة — مافيش GroupBy داخل سلسلة EF (EF Core 8). */
+        var tx = await _db.CashTransactions.AsNoTracking()
+            .Where(x => !x.IsDeleted
+                        && x.Status == "Posted"
+                        && x.TransactionDate >= f && x.TransactionDate <= t
+                        && (cashBoxId == null || x.CashBoxId == cashBoxId))
+            .Select(x => new
+            {
+                x.CashBoxId, x.TransactionType, x.Amount, x.PaymentMethodId,
+                Day = (DateTime)x.TransactionDate, x.ReferenceNumber
+            })
+            .ToListAsync(ct);
+
+        var methods = (await _db.PaymentMethods.AsNoTracking()
+                .Select(x => new { x.PaymentMethodId, x.NameAr, x.IsCashBased }).ToListAsync(ct))
+            .ToDictionary(x => x.PaymentMethodId, x => x);
+
+        var boxes = (await _db.CashBoxes.AsNoTracking()
+                .Select(x => new { x.CashBoxId, x.NameAr, x.OpeningBalance, x.CurrentBalance }).ToListAsync(ct))
+            .ToDictionary(x => x.CashBoxId, x => x);
+
+        /* ══════════ 1) الوارد والصادر — التحويلات خارج الحساب ══════════ */
+        var inflow  = tx.Where(x => x.TransactionType == "Receipt").ToList();
+        var outflow = tx.Where(x => x.TransactionType == "Payment").ToList();
+        var totalIn  = inflow.Sum(x => x.Amount);
+        var totalOut = outflow.Sum(x => x.Amount);
+
+        /* 🔴 لازم نمرّر (المبلغ + الطريقة) مع بعض — لو مرّرنا `PaymentMethodId`
+           لوحده، `g.Sum(x => x.Amount)` بيقع بـ CS1061 لأن العنصر `int?`. */
+        List<CashLine> Lines(IEnumerable<(decimal Amt, int? Method)> src, string fallback)
+        {
+            var byKey = src
+                .GroupBy(x => x.Method ?? -1)
+                .Select(g => new { Key = g.Key, Count = g.Count(), Amt = g.Sum(x => x.Amt) })
+                .OrderByDescending(x => x.Amt)
+                .ToList();
+
+            var grand = byKey.Sum(x => x.Amt);
+            return byKey.Select(x => new CashLine(
+                x.Key == -1
+                    ? fallback
+                    : methods.TryGetValue(x.Key, out var m) ? m.NameAr : $"طريقة #{x.Key}",
+                x.Count,
+                x.Amt,
+                grand <= 0 ? 0 : Math.Round(x.Amt / grand * 100, 1))).ToList();
+        }
+
+        var inLines  = Lines(inflow.Select(x => (x.Amount, x.PaymentMethodId)),  "بدون طريقة محددة");
+        var outLines = Lines(outflow.Select(x => (x.Amount, x.PaymentMethodId)), "بدون طريقة محددة");
+
+        /* ══════════ 2) التصنيف حسب المصدر (البادئة في ReferenceNumber) ══════════ */
+        /* ده اللي بيخلي التقرير يقول *إيه* اللي جاب الفلوس، مش بس كام. */
+
+        var inSrc  = BySourceCore(inflow.Select(x => new RefAmt(x.Amount, x.ReferenceNumber)));
+        var outSrc = BySourceCore(outflow.Select(x => new RefAmt(x.Amount, x.ReferenceNumber)));
+
+        /* ══════════ 3) شهريًا ══════════ */
+        var months = tx
+            .Where(x => x.TransactionType == "Receipt" || x.TransactionType == "Payment")
+            .GroupBy(x => new { x.Day.Year, x.Day.Month })
+            .Select(g => new CashMonth(
+                $"{g.Key.Year:D4}-{g.Key.Month:D2}",
+                MonthAr(g.Key.Month) + " " + g.Key.Year,
+                g.Where(x => x.TransactionType == "Receipt").Sum(x => x.Amount),
+                g.Where(x => x.TransactionType == "Payment").Sum(x => x.Amount),
+                g.Where(x => x.TransactionType == "Receipt").Sum(x => x.Amount)
+                    - g.Where(x => x.TransactionType == "Payment").Sum(x => x.Amount)))
+            .OrderBy(x => x.Key)
+            .ToList();
+
+        /* ══════════ 4) حسب الخزينة ══════════ */
+        var boxRows = tx
+            .GroupBy(x => x.CashBoxId)
+            .Select(g =>
+            {
+                var inf  = g.Where(x => x.TransactionType == "Receipt").Sum(x => x.Amount);
+                var outf = g.Where(x => x.TransactionType == "Payment").Sum(x => x.Amount);
+                var tin  = g.Where(x => x.TransactionType == "TransferIn").Sum(x => x.Amount);
+                var tout = g.Where(x => x.TransactionType == "TransferOut").Sum(x => x.Amount);
+                boxes.TryGetValue(g.Key, out var b);
+                return new CashBoxRow(
+                    b?.NameAr ?? $"خزينة #{g.Key}",
+                    inf, outf, tin, tout,
+                    inf + tin - outf - tout,
+                    b?.CurrentBalance ?? 0);
+            })
+            .OrderByDescending(x => x.Inflow + x.Outflow)
+            .ToList();
+
+        /* ══════════ 5) رصيد أول/آخر الفترة ══════════ */
+        var openBal = cashBoxId is null
+            ? boxes.Values.Sum(x => x.OpeningBalance)
+            : boxes.TryGetValue(cashBoxId.Value, out var ob) ? ob.OpeningBalance : 0;
+
+        var before = await _db.CashTransactions.AsNoTracking()
+            .Where(x => !x.IsDeleted && x.Status == "Posted" && x.TransactionDate < f
+                        && (cashBoxId == null || x.CashBoxId == cashBoxId))
+            .Select(x => new { x.TransactionType, x.Amount }).ToListAsync(ct);
+
+        var opening = openBal
+            + before.Where(x => x.TransactionType == "Receipt" || x.TransactionType == "TransferIn").Sum(x => x.Amount)
+            - before.Where(x => x.TransactionType == "Payment" || x.TransactionType == "TransferOut").Sum(x => x.Amount);
+
+        var closing = opening + (totalIn - totalOut);
+
+        return new
+        {
+            range  = new { from = fs, to = ts },
+            opening, closing,
+            totalIn, totalOut,
+            net    = totalIn - totalOut,
+            count  = tx.Count,
+            inLines, outLines, inSrc, outSrc, months, boxes = boxRows
+        };
+    }
+
+    /* 🔴 عنصر مساعد — `anonymous type` مش بيتبعت بين الدوال، و`dynamic` مرفوض
+       في LINQ (CS1978). فبنحوّل لصف بسيط قبل التجميع. */
+    private sealed record RefAmt(decimal Amount, string? ReferenceNumber);
+
+    /// <summary>بيجيب أقسام القائمة بأنواع قوية للتصدير (الـ anonymous ما بيتكاستش).</summary>
+    private async Task<(List<CashLine> In, List<CashLine> Out, List<CashMonth> Months)>
+        CashLinesForExcelAsync(DateTime f, DateTime t, CancellationToken ct)
+    {
+        var tx = await _db.CashTransactions.AsNoTracking()
+            .Where(x => !x.IsDeleted && x.Status == "Posted"
+                        && x.TransactionDate >= f && x.TransactionDate <= t)
+            .Select(x => new { x.TransactionType, x.Amount, x.PaymentMethodId,
+                               Day = (DateTime)x.TransactionDate })
+            .ToListAsync(ct);
+
+        var inf  = tx.Where(x => x.TransactionType == "Receipt").ToList();
+        var outf = tx.Where(x => x.TransactionType == "Payment").ToList();
+
+        /* المبالغ الحقيقية حسب الطريقة — نفس منطق BySource بس على `Receipt`/`Payment` */
+        var methods = (await _db.PaymentMethods.AsNoTracking()
+                .Select(x => new { x.PaymentMethodId, x.NameAr }).ToListAsync(ct))
+            .ToDictionary(x => x.PaymentMethodId, x => x.NameAr);
+
+        List<CashLine> Lines(IEnumerable<(decimal A, int? M)> src)
+        {
+            var g = src.GroupBy(x => x.M ?? -1)
+                       .Select(x => new { K = x.Key, C = x.Count(), A = x.Sum(y => y.A) })
+                       .OrderByDescending(x => x.A).ToList();
+            var tot = g.Sum(x => x.A);
+            return g.Select(x => new CashLine(
+                x.K == -1 ? "بدون طريقة محددة" : methods.TryGetValue(x.K, out var n) ? n : $"طريقة #{x.K}",
+                x.C, x.A, tot <= 0 ? 0 : Math.Round(x.A / tot * 100, 1))).ToList();
+        }
+
+        var months = tx.GroupBy(x => new { x.Day.Year, x.Day.Month })
+            .Select(g => new CashMonth(
+                $"{g.Key.Year:D4}-{g.Key.Month:D2}",
+                MonthAr(g.Key.Month) + " " + g.Key.Year,
+                g.Where(x => x.TransactionType == "Receipt").Sum(x => x.Amount),
+                g.Where(x => x.TransactionType == "Payment").Sum(x => x.Amount),
+                g.Where(x => x.TransactionType == "Receipt").Sum(x => x.Amount)
+                    - g.Where(x => x.TransactionType == "Payment").Sum(x => x.Amount)))
+            .OrderBy(x => x.Key).ToList();
+
+        return (Lines(inf.Select(x => (x.Amount, x.PaymentMethodId))),
+                Lines(outf.Select(x => (x.Amount, x.PaymentMethodId))),
+                months);
+    }
+
+    private static List<CashLine> BySourceCore(IEnumerable<RefAmt> src)
+    {
+        var byKey = src
+            .GroupBy(SourceLabel)
+            .Select(g => new { Label = g.Key, Count = g.Count(), Amt = g.Sum(x => x.Amount) })
+            .OrderByDescending(x => x.Amt)
+            .ToList();
+
+        var grand = byKey.Sum(x => x.Amt);
+        return byKey.Select(x => new CashLine(x.Label, x.Count, x.Amt,
+            grand <= 0 ? 0 : Math.Round(x.Amt / grand * 100, 1))).ToList();
+    }
+
+    /// <summary>
+    /// بيترجم <c>ReferenceNumber</c> لاسم مفهوم للمستخدم.
+    /// 🔴 مافيش مصطلح محاسبي — §59/§66.
+    /// </summary>
+    private static string SourceLabel(RefAmt x)
+    {
+        var r = x.ReferenceNumber ?? "";
+        var p = r.IndexOf(':');
+        var k = (p < 0 ? r : r[..p]).Trim();
+        return k switch
+        {
+            "PAY"           => "تحصيل فواتير العملاء",
+            "CUST-ISSUE"    => "صرف عهد السائقين",
+            "CUST-REFUND"   => "مرتجع عهد السائقين",
+            "EXP"           => "مصروفات التشغيل",
+            "SPAY"          => "سداد فواتير الموردين",
+            "RCV"           => "سند قبض يدوي",
+            "PMT"           => "سند صرف يدوي",
+            ""              => "حركات بدون مرجع",
+            _               => "حركات أخرى"
+        };
+    }
+
+    private static string MonthAr(int m) => m switch
+    {
+        1 => "يناير", 2 => "فبراير", 3 => "مارس", 4 => "أبريل",
+        5 => "مايو", 6 => "يونيو", 7 => "يوليو", 8 => "أغسطس",
+        9 => "سبتمبر", 10 => "أكتوبر", 11 => "نوفمبر", 12 => "ديسمبر",
+        _ => "?"
+    };
+
+    /// <summary>
+    /// 📄 <c>GET api/reports/supplier-statement?id=</c> — **كشف حساب مورد**.
+    /// فواتير (+) ودفعات (−) بالترتيب الزمني مع الرصيد الجاري.
+    /// </summary>
+    [HttpGet("supplier-statement")]
+    public async Task<IActionResult> SupplierStatement(int id, string? from, string? to, CancellationToken ct)
+    {
+        if (!await Can("SUPPLIER.VIEW", ct)) return Forbid();
+        if (id <= 0) return BadRequest(new { message = "لازم تختار المورد" });
+
+        var sup = await _db.Suppliers.AsNoTracking()
+            .Where(s => s.SupplierId == id && !s.IsDeleted)
+            .Select(s => new { s.SupplierId, s.NameAr }).FirstOrDefaultAsync(ct);
+        if (sup is null) return NotFound(new { message = "المورد مش موجود" });
+
+        var f = DateOnly.TryParse(from, out var fd) ? fd : DateOnly.FromDateTime(DateTime.Today).AddMonths(-6);
+        var t = DateOnly.TryParse(to, out var td) ? td : DateOnly.FromDateTime(DateTime.Today);
+
+        var inv = await _db.SupplierInvoices.AsNoTracking()
+            .Where(i => i.SupplierId == id && !i.IsDeleted
+                        && i.Status != "Draft" && i.Status != "Cancelled"
+                        && i.InvoiceDate >= f && i.InvoiceDate <= t)
+            .Select(i => new { i.SupplierInvoiceNumber, i.InvoiceDate, i.GrandTotal })
+            .ToListAsync(ct);
+
+        var pay = await _db.SupplierPayments.AsNoTracking()
+            .Where(x => x.SupplierId == id && !x.IsDeleted && x.Status != "Cancelled"
+                        && x.PaymentDate >= f && x.PaymentDate <= t)
+            .Select(x => new { x.SupplierPaymentNumber, x.PaymentDate, x.Amount })
+            .ToListAsync(ct);
+
+        var tx = inv.Select(x => new StmtRow("فاتورة", x.SupplierInvoiceNumber,
+                Iso(x.InvoiceDate), x.GrandTotal, 0m))
+            .Concat(pay.Select(x => new StmtRow("دفعة", x.SupplierPaymentNumber,
+                Iso(x.PaymentDate), 0m, x.Amount)))
+            .OrderBy(x => x.Date, StringComparer.Ordinal)
+            .ThenBy(x => x.RefNo, StringComparer.Ordinal)
+            .ToList();
+
+        decimal bal = 0m;
+        var withBal = new List<StmtRowBal>(tx.Count);
+        foreach (var r in tx)
+        {
+            bal += r.Debit - r.Credit;
+            withBal.Add(new StmtRowBal(r.Kind, r.RefNo, r.Date, r.Debit, r.Credit, bal));
+        }
+
+        return Ok(new
+        {
+            supplierId   = sup.SupplierId,
+            supplierName = sup.NameAr,
+            range        = new { from = Iso(f), to = Iso(t) },
+            totalDebit   = tx.Sum(x => x.Debit),
+            totalCredit  = tx.Sum(x => x.Credit),
+            balance      = bal,
+            rows         = withBal
+        });
+    }
+
+    private static string Iso(DateOnly d) => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
     [HttpGet("fleet")]
     public async Task<IActionResult> Fleet(string? from, string? to, CancellationToken ct)
     {
@@ -542,6 +1369,184 @@ public class ReportsController : ControllerBase
 
             name = $"fleet_{fs}_{ts}.xlsx";
         }
+        else if (report == "pnl")
+        {
+            if (!await Can("REPORT.FINANCIAL", ct)) return Forbid();
+            var (sm, mo, cr) = await BuildPnlAsync(f, t, ct);
+
+            /* ── ورقة 1: القائمة ── */
+            Write(wb, "قائمة الدخل", "قائمة الدخل", fs, ts,
+                new[] { "البند", "المبلغ" },
+                new[]
+                {
+                    new object[] { "الإيرادات (قبل الضريبة)",        sm.Revenue },
+                    new object[] { "ضريبة القيمة المضافة المحصّلة",  sm.Tax },
+                    new object[] { "(-) تكلفة التشغيل المباشرة",     sm.OperationCost },
+                    new object[] { "= مجمل الربح",                   sm.GrossProfit },
+                    new object[] { "هامش مجمل الربح %",              sm.GrossMargin },
+                    new object[] { "(-) المصروفات التشغيلية",        sm.OperatingExpenses },
+                    new object[] { "= صافي الربح",                   sm.NetProfit },
+                    new object[] { "هامش صافي الربح %",              sm.NetMargin },
+                    new object[] { "عدد الفواتير",                   sm.InvoiceCount },
+                    new object[] { "عدد المصروفات",                  sm.ExpenseCount },
+                });
+            /* 🔴 `.Style.Font.Bold` خاصية — مش `SetBold()` (بترجع IFont ⇒ CS1061) */
+            var p1 = wb.Worksheet(1);
+            p1.Range(8, 1, 8, 2).Style.Font.Bold = true;
+            p1.Range(11, 1, 11, 2).Style.Font.Bold = true;
+
+            /* ── ورقة 2: شهريًا ── */
+            Write(wb, "شهريًا", "قائمة الدخل — شهريًا", fs, ts,
+                new[] { "الشهر", "الإيراد", "الضريبة", "تكلفة التشغيل",
+                        "مجمل الربح", "إداري", "صافي الربح" },
+                mo.Select(m => new object[]
+                {
+                    m.MonthName, m.Revenue, m.Tax, m.OperationCost,
+                    m.Revenue - m.OperationCost, m.OperatingExpenses,
+                    m.Revenue - m.OperationCost - m.OperatingExpenses
+                }));
+
+            /* ── ورقة 3: تفصيل التكلفة ── */
+            Write(wb, "تفصيل التكلفة", "تكلفة التشغيل حسب النوع", fs, ts,
+                new[] { "نوع المصروف", "العدد", "المبلغ" },
+                cr.Select(x => new object[] { x.TypeName, x.Count, x.Amount }));
+
+            name = $"pnl_{fs}_{ts}.xlsx";
+        }
+        else if (report == "overdue")
+        {
+            if (!await Can("REPORT.FINANCIAL", ct)) return Forbid();
+            var od = await BuildOverdueAsync(ct);
+
+            Write(wb, "المتأخرات", "فواتير عدى ميعاد سدادها", fs, ts,
+                new[] { "رقم الفاتورة", "العميل", "تاريخ الإصدار", "تاريخ الاستحقاق",
+                        "أيام تأخير", "الإجمالي", "المحصّل", "المتبقي", "الحالة" },
+                od.Select(x => new object[]
+                {
+                    x.InvoiceNumber, x.CustomerName, x.InvoiceDate, x.DueDate,
+                    x.DaysOverdue, x.GrandTotal, x.PaidAmount, x.Balance, x.PaymentStatus
+                }));
+
+            var s4 = wb.Worksheet(1);
+            var lr4 = od.Count + 5;
+            s4.Cell(lr4, 1).Value = "الإجمالي";
+            s4.Cell(lr4, 6).Value = od.Sum(x => x.GrandTotal);
+            s4.Cell(lr4, 7).Value = od.Sum(x => x.PaidAmount);
+            s4.Cell(lr4, 8).Value = od.Sum(x => x.Balance);
+            s4.Range(lr4, 1, lr4, 9).Style.Font.Bold = true;
+
+            name = $"overdue_{fs}_{ts}.xlsx";
+        }
+        else if (report == "compare")
+        {
+            if (!await Can("REPORT.FINANCIAL", ct)) return Forbid();
+            var cp = await BuildCompareAsync(f, t, ct);
+
+            Write(wb, "مقارنة", "مقارنة الفترة الحالية بالسابقة", fs, ts,
+                new[] { "البند", "الفترة الحالية", "الفترة السابقة", "الفرق", "نسبة التغير %" },
+                cp.Select(x => new object[]
+                {
+                    x.Label, x.Current, x.Previous, x.Delta, x.ChangePct
+                }));
+
+            name = $"compare_{fs}_{ts}.xlsx";
+        }
+        else if (report == "ports" || report == "services")
+        {
+            if (!await Can("REPORT.OPERATIONS", ct)) return Forbid();
+            var o2 = await LoadOpProfitAsync(f, t, ct);
+
+            if (report == "ports")
+            {
+                var pids = o2.Where(x => x.PortId is not null).Select(x => x.PortId!.Value).Distinct().ToList();
+                var pn = pids.Count == 0 ? new Dictionary<int, string>()
+                    : (await _db.Ports.AsNoTracking().Where(x => pids.Contains(x.PortId))
+                            .Select(x => new { x.PortId, x.NameAr }).ToListAsync(ct))
+                        .ToDictionary(x => x.PortId, x => x.NameAr);
+                Write(wb, "الموانئ", "ربحية الموانئ", fs, ts,
+                    new[] { "الميناء", "عدد العمليات", "الإيراد", "التكلفة", "الربح", "الهامش %" },
+                    Rows(o2.Where(x => x.PortId is not null).GroupBy(x => x.PortId!.Value),
+                         k => pn.TryGetValue(k, out var n) ? n : "—"));
+
+                var dids = o2.Where(x => x.DestinationId is not null).Select(x => x.DestinationId!.Value).Distinct().ToList();
+                var dn = dids.Count == 0 ? new Dictionary<int, string>()
+                    : (await _db.Destinations.AsNoTracking().Where(x => dids.Contains(x.DestinationId))
+                            .Select(x => new { x.DestinationId, x.NameAr }).ToListAsync(ct))
+                        .ToDictionary(x => x.DestinationId, x => x.NameAr);
+                Write(wb, "الوجهات", "ربحية الوجهات", fs, ts,
+                    new[] { "الوجهة", "عدد العمليات", "الإيراد", "التكلفة", "الربح", "الهامش %" },
+                    Rows(o2.Where(x => x.DestinationId is not null).GroupBy(x => x.DestinationId!.Value),
+                         k => dn.TryGetValue(k, out var n) ? n : "—"));
+            }
+            else
+            {
+                var sids = o2.Where(x => x.ServiceId is not null).Select(x => x.ServiceId!.Value).Distinct().ToList();
+                var sn = sids.Count == 0 ? new Dictionary<int, string>()
+                    : (await _db.Services.AsNoTracking().Where(x => sids.Contains(x.ServiceId))
+                            .Select(x => new { x.ServiceId, x.NameAr }).ToListAsync(ct))
+                        .ToDictionary(x => x.ServiceId, x => x.NameAr);
+                Write(wb, "الخدمات", "ربحية الخدمات", fs, ts,
+                    new[] { "الخدمة", "عدد العمليات", "الإيراد", "التكلفة", "الربح", "الهامش %" },
+                    Rows(o2.Where(x => x.ServiceId is not null).GroupBy(x => x.ServiceId!.Value),
+                         k => sn.TryGetValue(k, out var n) ? n : "—"));
+            }
+
+            name = $"{report}_{fs}_{ts}.xlsx";
+        }
+        else if (report == "cashflow")
+        {
+            if (!await Can("REPORT.FINANCIAL", ct)) return Forbid();
+            var cf = await BuildCashflowAsync(ct);
+
+            Write(wb, "التدفق المتوقع", "تدفق نقدي متوقع", fs, ts,
+                new[] { "الفترة", "المتوقع", "عدد الفواتير" },
+                cf.Select(x => new object[] { x.Label, x.Expected, x.Invoices }));
+
+            name = $"cashflow_{fs}_{ts}.xlsx";
+        }
+        else if (report == "supplier-aging")
+        {
+            if (!await Can("SUPPLIER.VIEW", ct)) return Forbid();
+            var ag = await BuildSupplierAgingAsync(ct);
+
+            Write(wb, "أعمار الموردين", "أعمار ديون الموردين", fs, ts,
+                new[] { "المورد", "فواتير", "0–30 يوم", "31–60", "61–90", "أكثر من 90",
+                        "بدون استحقاق", "الإجمالي" },
+                ag.Select(x => new object[] { x.SupplierName, x.Invoices, x.D0_30, x.D31_60,
+                    x.D61_90, x.D90Plus, x.NoDue, x.Balance }));
+
+            var s5 = wb.Worksheet(1);
+            var lr5 = ag.Count + 5;
+            s5.Cell(lr5, 1).Value = "الإجمالي";
+            for (var c = 3; c <= 8; c++)
+                s5.Cell(lr5, c).Value = ag.Sum(x => c switch
+                {
+                    3 => x.D0_30, 4 => x.D31_60, 5 => x.D61_90,
+                    6 => x.D90Plus, 7 => x.NoDue, _ => x.Balance
+                });
+            s5.Range(lr5, 1, lr5, 8).Style.Font.Bold = true;
+
+            name = $"supplier-aging_{fs}_{ts}.xlsx";
+        }
+        else if (report == "cashflow-actual")
+        {
+            if (!await Can("REPORT.FINANCIAL", ct)) return Forbid();
+            var ca = await BuildCashflowActualAsync(f, t, fs, ts, null, ct);
+
+            /* 🔴 `BuildCashflowActualAsync` بترجع `Task<object>` (anonymous) —
+               فبنرجّع للتجميع نفسه عشان يبقى لنا نوع قوي، مش كاست. */
+            var (caIn, caOut, caMonths) = await CashLinesForExcelAsync(f, t, ct);
+
+            Write(wb, "التدفق النقدي", "قائمة التدفقات النقدية الفعلية", fs, ts,
+                new[] { "البند", "عدد الحركات", "المبلغ", "%" },
+                caIn.Select(x => new object[] { "وارد: " + x.Label, x.Count, x.Amount, x.Pct })
+                    .Concat(caOut.Select(x => new object[]
+                        { "صادر: " + x.Label, x.Count, x.Amount, x.Pct }))
+                    .Concat(caMonths.Select(x => new object[]
+                        { "صافي " + x.MonthName, x.Inflow > 0 ? 1 : 0, x.Net, 0m })));
+
+            name = $"cashflow-actual_{fs}_{ts}.xlsx";
+        }
         else
         {
             return BadRequest(new { message = "نوع التقرير غير معروف" });
@@ -562,8 +1567,12 @@ public class ReportsController : ControllerBase
 
         ws.Cell(1, 1).Value = title;
         ws.Cell(2, 1).Value = $"الفترة: {from} → {to}";
-        ws.Cell(1, 1).Style.Font.SetBold().Font.SetFontSize(14);
-        ws.Cell(2, 1).Style.Font.SetItalic().Font.SetFontSize(10);
+        /* 🔴 CS1061: `SetBold()` و`SetItalic()` بترجع `IFont` — فـ`.Font.` بعدهم مش موجودة.
+           الحل: الخصائص (زي سطر 504 في نفس الملف). */
+        ws.Cell(1, 1).Style.Font.Bold = true;
+        ws.Cell(1, 1).Style.Font.FontSize = 14;
+        ws.Cell(2, 1).Style.Font.Italic = true;
+        ws.Cell(2, 1).Style.Font.FontSize = 10;
 
         var hr = 4;
         for (var c = 0; c < cols.Length; c++)
@@ -619,6 +1628,56 @@ public class ReportsController : ControllerBase
 
     public record OpTotals(int Count, decimal Revenue, decimal Cost, decimal Profit,
         decimal MarginPct, decimal Invoiced, decimal Collected, int Open, int NotInvoiced);
+
+    /* ═══════════ 📥 الذمم الدائنة ═══════════ */
+
+    /// <summary>صف في أعمار ديون الموردين.</summary>
+    public record AgingRow(string SupplierName, int Invoices,
+        decimal D0_30, decimal D31_60, decimal D61_90, decimal D90Plus,
+        decimal NoDue, decimal Balance);
+
+    /// <summary>حركة في كشف حساب مورد (قبل الرصيد الجاري).</summary>
+    public record StmtRow(string Kind, string RefNo, string Date, decimal Debit, decimal Credit);
+
+    /// <summary>حركة + الرصيد الجاري.</summary>
+    public record StmtRowBal(string Kind, string RefNo, string Date,
+        decimal Debit, decimal Credit, decimal Balance);
+
+    /* ═══════════ 🚢 الموانئ · 🧾 الخدمات · 💵 التدفق ═══════════ */
+
+    /// <summary>صف ربحية مجمّع (ميناء / وجهة / خدمة).</summary>
+    public record ProfitRow(string Name, int Operations, decimal Revenue,
+        decimal Cost, decimal Profit, decimal MarginPct);
+
+    /// <summary>أسبوع في التدفق النقدي المتوقع.</summary>
+    public record CashWeek(string Key, string Label, decimal Expected, int Invoices);
+
+    /* ═══════════ ⏰ المتأخرات + 📈 المقارنة ═══════════ */
+
+    /// <summary>فاتورة عدى ميعاد سدادها.</summary>
+    public record OverdueRow(string InvoiceNumber, string CustomerName,
+        string InvoiceDate, string DueDate, int DaysOverdue,
+        decimal GrandTotal, decimal PaidAmount, decimal Balance, string PaymentStatus);
+
+    /// <summary>بند في مقارنة الفترتين.</summary>
+    public record CompareRow(string Label, decimal Current, decimal Previous,
+        decimal Delta, decimal ChangePct);
+
+    /* ═══════════ 📊 قائمة الدخل ═══════════ */
+
+    /// <summary>شهر واحد في قائمة الدخل.</summary>
+    public record PnlMonth(string Month, string MonthName,
+        decimal Revenue, decimal Tax, decimal OperationCost, decimal OperatingExpenses);
+
+    /// <summary>تفصيل التكلفة المباشرة حسب نوع المصروف.</summary>
+    public record PnlCostRow(string TypeName, int Count, decimal Amount);
+
+    /// <summary>إجماليات الفترة.</summary>
+    public record PnlSummary(
+        decimal Revenue, decimal Tax, decimal OperationCost, decimal GrossProfit,
+        decimal OperatingExpenses, decimal NetProfit,
+        decimal GrossMargin, decimal NetMargin,
+        int InvoiceCount, int ExpenseCount);
 
     public record FinSummary(decimal Invoiced, decimal Collected, decimal Expenses,
         decimal Receivable, decimal NetCash, int InvoiceCount, int PaymentCount);

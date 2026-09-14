@@ -22,10 +22,12 @@ namespace FastCom.Server.Controllers.Finance;
 public class TreasuryController : ControllerBase
 {
     private readonly FastComDbContext _db;
+    private readonly IAuditService _audit;
     private readonly IPermissionService _perms;
+    private readonly ISettingsService _settings;
 
-    public TreasuryController(FastComDbContext db, IPermissionService perms)
-    { _db = db; _perms = perms; }
+    public TreasuryController(FastComDbContext db, IPermissionService perms, ISettingsService settings, IAuditService audit)
+    { _db = db; _audit = audit; _perms = perms; _settings = settings; }
 
     private int CurrentUserId() =>
         int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : -1;
@@ -161,9 +163,17 @@ public class TreasuryController : ControllerBase
     {
         if (req is null) return BadRequest(new { message = "البيانات مش كاملة" });
         if (req.Type is not ("Receipt" or "Payment"))
-            return BadRequest(new { message = "نوع الحركة لازم يكون «قبض» أو «صرف»" });
+            {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "CashTransaction", null, description: "حركة خزينة", ct: ct);
+            
+            }
         if (req.Amount <= 0) return BadRequest(new { message = "المبلغ لازم يكون أكتر من صفر" });
-        if (req.Amount > 100_000_000m) return BadRequest(new { message = "المبلغ كبير بشكل غير منطقي" });
+        /* 🔴 كان hard-coded — بقى من `TREASURY.MAX_AMOUNT`.
+           ⚠️ المفتاح لسه مش في الـ seed — هيشتغل بالافتراضي (100,000,000). */
+        var trMax = await _settings.GetDecimalAsync(SettingKeys.TreasuryMaxAmount,
+                                                   SettingDefaults.TreasuryMaxAmount, ct);
+        if (trMax > 0 && req.Amount > trMax)
+            return BadRequest(new { message = $"المبلغ أكبر من سقف حركة الخزينة المسموح ({trMax:N0})" });
 
         var box = await _db.CashBoxes.AsNoTracking()
             .FirstOrDefaultAsync(b => b.CashBoxId == req.CashBoxId && !b.IsDeleted, ct);
@@ -206,7 +216,7 @@ public class TreasuryController : ControllerBase
             BranchId        = branchId.Value,
             CashBoxId       = req.CashBoxId,
             TransactionDate = Dt(req.TxDate),
-            TransactionType = req.Type,
+            TransactionType = req.Type ?? "Receipt",  /* 🔴 CS8601: Type nullable */
             Amount          = req.Amount,
             PaymentMethodId = req.PaymentMethodId,
             CustomerId      = req.CustomerId,
@@ -247,7 +257,10 @@ public class TreasuryController : ControllerBase
         if (req is null) return BadRequest(new { message = "البيانات مش كاملة" });
         if (req.Amount <= 0) return BadRequest(new { message = "المبلغ لازم يكون أكتر من صفر" });
         if (req.FromCashBoxId == req.ToCashBoxId)
-            return BadRequest(new { message = "اختار خزينة تانية للتحويل" });
+            {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "CashTransaction", null, description: "تحويل بين خزينتين", ct: ct);
+            
+            }
 
         var from = await _db.CashBoxes.AsNoTracking()
             .FirstOrDefaultAsync(b => b.CashBoxId == req.FromCashBoxId && !b.IsDeleted, ct);
@@ -336,6 +349,8 @@ public class TreasuryController : ControllerBase
             try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
             throw;
         }
+
+        await _audit.LogAsync(FastCom.Server.Services.AuditActions.Cancel, "CashTransaction", null, description: "إلغاء حركة خزينة", ct: ct);
 
         return Ok(new
         {

@@ -19,11 +19,12 @@ namespace FastCom.Server.Controllers.Operations;
 public class BookingsController : ControllerBase
 {
     private readonly FastComDbContext _db;
+    private readonly IAuditService _audit;
     private readonly INumberingService _numbers;
     private readonly IPermissionService _perms;
 
-    public BookingsController(FastComDbContext db, INumberingService numbers, IPermissionService perms)
-    { _db = db; _numbers = numbers; _perms = perms; }
+    public BookingsController(FastComDbContext db, INumberingService numbers, IPermissionService perms, IAuditService audit)
+    { _db = db; _audit = audit; _numbers = numbers; _perms = perms; }
 
     private int CurrentUserId() =>
         int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : -1;
@@ -203,6 +204,8 @@ public class BookingsController : ControllerBase
             throw;
         }
 
+        await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "Booking", null, description: "إنشاء حجز", ct: ct);
+
         return Ok(new { id = b.BookingId, number = b.BookingNumber,
             message = $"✅ اتسجل الحجز برقم {b.BookingNumber}" });
     }
@@ -220,7 +223,10 @@ public class BookingsController : ControllerBase
         if (b is null) return NotFound(new { message = "الحجز مش موجود" });
 
         if (b.Status is not ("Draft" or "Confirmed"))
-            return BadRequest(new { message = "الحجز اتحرّك للتشغيل — التعديل مقفول" });
+            {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Update, "Booking", null, description: "تعديل حجز", ct: ct);
+            
+            }
 
         b.CustomerId      = req.CustomerId;
         b.RequestedDate   = D(req.RequestedDate);
@@ -315,7 +321,7 @@ public class BookingsController : ControllerBase
             _           => null
         };
         if (policy is null)
-            return BadRequest(new { message = "الحالة المطلوبة مش صالحة" });
+            return BadRequest(new { message = "طلب غير صالح" });
 
         if (!await _perms.HasAsync(CurrentUserId(), policy, ct))
             return StatusCode(403, new { message = "ليس لديك صلاحية للحركة دي" });
@@ -368,7 +374,10 @@ public class BookingsController : ControllerBase
         if (b is null) return NotFound(new { message = "الحجز مش موجود" });
 
         if (b.Status is not ("Draft" or "Cancelled"))
-            return BadRequest(new { message = "الحجز المؤكد بيتلغى الأول قبل الحذف" });
+            {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Delete, "Booking", null, description: "حذف حجز", ct: ct);
+            
+            }
 
         b.IsDeleted = true;
         b.DeletedAt = DateTime.UtcNow;

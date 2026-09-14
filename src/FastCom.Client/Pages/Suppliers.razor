@@ -4,6 +4,7 @@
 @using FastCom.Client.Auth
 @inject HttpClient Http
 @inject AuthService Auth
+@inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
 <PageTitle>الموردين — فاست كوم</PageTitle>
@@ -21,7 +22,7 @@
                 @if (CanCreate)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="New">مورد جديد</MudButton>
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="GoNew">مورد جديد</MudButton>
                 }
             </div>
         </div>
@@ -75,7 +76,7 @@
                                 @if (CanEdit)
                                 {
                                     <td><div class="fc-row-actions">
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="() => Edit(s)" />
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="() => GoEdit(s)" />
                                         <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Refresh"
                                                        Color="@(s.IsActive ? Color.Error : Color.Success)"
                                                        title="@(s.IsActive ? "إيقاف" : "تفعيل")"
@@ -102,40 +103,6 @@
         </div></div>
     }
 
-    @if (_modalOpen && CanCreate)
-    {
-        <div class="fc-modal-backdrop" @onclick="Close">
-            <div class="fc-modal" @onclick:stopPropagation>
-                <div class="fc-modal-head">
-                    <div><div class="fc-modal-title">@(_editId is null ? "مورد جديد" : "تعديل مورد")</div>
-                        <div class="fc-modal-sub">الكود بيتولد تلقائيًا (SUP-)</div></div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="Close" />
-                </div>
-                <div class="fc-modal-body">
-                    @if (_msg is not null)
-                    {
-                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
-                    }
-                    <div class="fc-form-grid">
-                        <div><div class="fc-panel-sub" style="margin-bottom:6px">نوع المورد</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_f.SupplierType">
-                                @foreach (var t in Types) { <option value="@t.Key">@t.Value</option> }
-                            </select></div>
-                        <MudTextField T="string" @bind-Value="_f.NameAr" Label="الاسم بالعربي *" Variant="Variant.Outlined" />
-                        <MudTextField T="string" @bind-Value="_f.NameEn" Label="الاسم بالإنجليزي" Variant="Variant.Outlined" />
-                        <MudTextField T="string" @bind-Value="_f.TaxNumber" Label="الرقم الضريبي" Variant="Variant.Outlined" />
-                        <MudTextField T="string" @bind-Value="_f.Phone" Label="التليفون" Variant="Variant.Outlined" />
-                        <MudTextField T="string" @bind-Value="_f.Email" Label="البريد" Variant="Variant.Outlined" />
-                        <MudTextField T="string" @bind-Value="_f.Address" Label="العنوان" Variant="Variant.Outlined" />
-                    </div>
-                </div>
-                <div class="fc-modal-foot">
-                    <MudButton Variant="Variant.Outlined" OnClick="Close">إلغاء</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveAsync">حفظ</MudButton>
-                </div>
-            </div>
-        </div>
-    }
 </div>
 
 @code {
@@ -153,20 +120,10 @@
 
     private List<Item> _items = new();
     private bool _loading; private string _search = ""; private int? _confirmId;
-    private bool _modalOpen; private int? _editId; private bool _saving; private string? _msg; private bool _ok;
-    private Form _f = new();
 
     public class Item { public int SupplierId { get; set; } public string SupplierCode { get; set; } = "";
         public string SupplierType { get; set; } = ""; public string NameAr { get; set; } = "";
         public string? Phone { get; set; } public bool IsActive { get; set; } }
-
-    public class Detail { public string SupplierType { get; set; } = ""; public string NameAr { get; set; } = "";
-        public string? NameEn { get; set; } public string? TaxNumber { get; set; } public string? Phone { get; set; }
-        public string? Email { get; set; } public string? Address { get; set; } }
-
-    public class Form { public string SupplierType { get; set; } = "TransportCompany"; public string NameAr { get; set; } = "";
-        public string? NameEn { get; set; } public string? TaxNumber { get; set; } public string? Phone { get; set; }
-        public string? Email { get; set; } public string? Address { get; set; } }
 
     private static string TypeName(string t) => Types.TryGetValue(t, out var v) ? v : t;
 
@@ -179,6 +136,10 @@
 
     private async Task Reload() { await LoadAsync(); }
 
+    /* 🔴 الفورم بقى شاشة مستقلة — `/suppliers/new` */
+    private void GoNew() => Nav.NavigateTo("/suppliers/new");
+    private void GoEdit(Item s) => Nav.NavigateTo($"/suppliers/new/{s.SupplierId}");
+
     private async Task LoadAsync()
     {
         _loading = true;
@@ -187,38 +148,7 @@
         finally { _loading = false; }
     }
 
-    private void New() { _editId = null; _f = new Form(); _msg = null; _modalOpen = true; }
 
-    private async Task Edit(Item s)
-    {
-        try
-        {
-            var d = await Http.GetFromJsonAsync<Detail>($"api/suppliers/{s.SupplierId}");
-            if (d is null) return;
-            _editId = s.SupplierId;
-            _f = new Form { SupplierType = d.SupplierType, NameAr = d.NameAr, NameEn = d.NameEn,
-                TaxNumber = d.TaxNumber, Phone = d.Phone, Email = d.Email, Address = d.Address };
-            _msg = null; _modalOpen = true;
-        }
-        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
-    }
-
-    private void Close() { _modalOpen = false; }
-
-    private async Task SaveAsync()
-    {
-        _saving = true; _msg = null;
-        try
-        {
-            var res = _editId is null
-                ? await Http.PostAsJsonAsync("api/suppliers", _f)
-                : await Http.PutAsJsonAsync($"api/suppliers/{_editId}", _f);
-            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
-            if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); Close(); await LoadAsync(); }
-        }
-        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
-        finally { _saving = false; }
-    }
 
     private async Task ToggleActive(Item s)
     {

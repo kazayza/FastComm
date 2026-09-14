@@ -8,7 +8,10 @@
 
 <PageTitle>الأدوار والصلاحيات — فاست كوم</PageTitle>
 
-@* ═══════════════ الهيرو هيدر ═══════════════ *@
+
+@* ═══════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════ *@
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
@@ -50,246 +53,1303 @@
     </div>
 </div>
 
-<div class="fc-page">
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="rl-body">
+
     @if (!CanManage)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">
-            ليس لديك صلاحية إدارة الأدوار (ROLE.MANAGE).
-        </MudAlert>
+        <div class="rl-state-box">
+            <div class="rl-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليس لديك صلاحية إدارة الأدوار (ROLE.MANAGE)</p>
+        </div>
+    }
+    else if (_loading && !_roles.Any())
+    {
+        <div class="rl-loading-wrap">
+            <div class="rl-spinner" aria-label="جاري التحميل"></div>
+            <div class="rl-loading-text">جاري تحميل الأدوار والصلاحيات...</div>
+        </div>
     }
     else
     {
-        <div class="fc-overlap">
-            <div class="fc-roles-wrap">
+        <div class="rl-layout">
 
-                @* ── عمود الأدوار ── *@
-                <div class="fc-role-list">
-                    @foreach (var r in _roles)
-                    {
-                        <button class='fc-role-card @(_selId == r.Id ? "sel" : "")'
-                                @onclick="() => SelectRole(r)">
-                            <span class="fc-avatar fc-av-@(r.Id % 5)">@(r.NameAr.FirstOrDefault())</span>
-                            <span class="fc-role-card-txt">
-                                <b>@r.NameAr</b>
-                                <small>@r.RoleCode @(r.IsSystem ? "· أساسي" : "") @(r.IsActive ? "" : "· موقوف")</small>
-                            </span>
-                            <span class="fc-role-card-meta">
-                                <span class="fc-meta-num">@r.PermissionCount</span>
-                                <span class="fc-meta-lb">صلاحية · @r.UserCount مستخدم</span>
-                            </span>
-                        </button>
-                    }
-                    @if (!_roles.Any() && !_loading)
-                    {
-                        <div class="fc-empty"><div>مافيش أدوار</div></div>
-                    }
+            @* ══════════════════════════════════════
+               عمود الأدوار
+            ══════════════════════════════════════ *@
+            <div class="rl-sidebar">
+
+                <div class="rl-sidebar-head">
+                    <div class="rl-sidebar-title">
+                        <svg viewBox="0 0 24 24" width="16" height="16"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+                        </svg>
+                        الأدوار
+                    </div>
+                    <span class="rl-sidebar-count">@_roles.Count</span>
                 </div>
 
-                @* ── مصفوفة الصلاحيات ── *@
-                <div class="fc-card">
-                    @if (_loading)
+                <div class="rl-roles-list">
+
+                    @if (!_roles.Any())
                     {
-                        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
-                    }
-                    else if (_sel is null)
-                    {
-                        <div class="fc-empty">
-                            <MudIcon Icon="@Icons.Material.Filled.Badge" Size="Size.Large" />
-                            <div>اختار دور من القائمة عشان تعدّل صلاحياته</div>
+                        <div class="rl-roles-empty">
+                            <span>مافيش أدوار</span>
                         </div>
                     }
-                    else
+
+                    @foreach (var r in _roles)
                     {
-                        <div class="fc-matrix-head-bar">
-                            <div>
-                                <div class="fc-cell-main" style="font-size:16px">صلاحيات دور: @_sel.NameAr</div>
-                                <div class="fc-cell-sub">@_sel.RoleCode · @_sel.UserCount مستخدم · @SelCount صلاحية مختارة</div>
+                        <button class="rl-role-card @(_selId == r.Id ? "rl-card-active" : "")"
+                                @onclick="() => SelectRole(r)"
+                                aria-pressed="@(_selId == r.Id)"
+                                aria-label="@r.NameAr">
+
+                            <div class="rl-role-avatar rl-av-@(r.Id % 6)"
+                                 aria-hidden="true">
+                                @(r.NameAr.Length > 0 ? r.NameAr[0].ToString() : "؟")
                             </div>
-                            <div class="fc-head-actions">
-                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
-                                           OnClick="OpenEdit">تعديل الدور</MudButton>
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                                           Disabled="_saving" OnClick="SaveMatrixAsync">
+
+                            <div class="rl-role-info">
+                                <div class="rl-role-name">@r.NameAr</div>
+                                <div class="rl-role-meta">
+                                    <span class="rl-role-code">@r.RoleCode</span>
+                                    @if (r.IsSystem)
+                                    {
+                                        <span class="rl-system-badge" title="دور أساسي">⚙️</span>
+                                    }
+                                    @if (!r.IsActive)
+                                    {
+                                        <span class="rl-inactive-badge">موقوف</span>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="rl-role-stats">
+                                <div class="rl-stat">
+                                    <span class="rl-stat-num">@r.PermissionCount</span>
+                                    <span class="rl-stat-lb">صلاحية</span>
+                                </div>
+                                <div class="rl-stat-sep" aria-hidden="true"></div>
+                                <div class="rl-stat">
+                                    <span class="rl-stat-num">@r.UserCount</span>
+                                    <span class="rl-stat-lb">مستخدم</span>
+                                </div>
+                            </div>
+
+                        </button>
+                    }
+
+                </div>
+
+            </div>
+
+
+            @* ══════════════════════════════════════
+               لوحة المصفوفة
+            ══════════════════════════════════════ *@
+            <div class="rl-matrix-panel">
+
+                @if (_sel is null)
+                {
+                    <div class="rl-matrix-empty">
+                        <div class="rl-matrix-empty-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="44" height="44"
+                                 fill="none" stroke="currentColor" stroke-width="1.4">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            </svg>
+                        </div>
+                        <div class="rl-matrix-empty-title">اختار دور من القائمة</div>
+                        <div class="rl-matrix-empty-sub">وزّع الصلاحيات من الشاشة دي</div>
+                    </div>
+                }
+                else
+                {
+                    @* ── Panel Header ── *@
+                    <div class="rl-matrix-head">
+
+                        <div class="rl-matrix-head-info">
+                            <div class="rl-matrix-role-avatar rl-av-@(_sel.Id % 6)"
+                                 aria-hidden="true">
+                                @(_sel.NameAr.Length > 0 ? _sel.NameAr[0].ToString() : "؟")
+                            </div>
+                            <div>
+                                <div class="rl-matrix-role-name">
+                                    @_sel.NameAr
+                                    @if (_sel.IsSystem)
+                                    {
+                                        <span class="rl-system-chip">أساسي</span>
+                                    }
+                                    @if (!_sel.IsActive)
+                                    {
+                                        <span class="rl-inactive-chip">موقوف</span>
+                                    }
+                                </div>
+                                <div class="rl-matrix-role-sub">
+                                    <span>@_sel.RoleCode</span>
+                                    <span class="rl-dot" aria-hidden="true">·</span>
+                                    <span>@_sel.UserCount مستخدم</span>
+                                    <span class="rl-dot" aria-hidden="true">·</span>
+                                    <span class="rl-sel-count">@SelCount صلاحية مختارة</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="rl-matrix-head-actions">
+                            <button class="rl-edit-role-btn"
+                                    @onclick="OpenEdit"
+                                    aria-label="تعديل الدور">
+                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                     fill="none" stroke="currentColor" stroke-width="2"
+                                     aria-hidden="true">
+                                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                </svg>
+                                تعديل الدور
+                            </button>
+
+                            @if (!_sel.IsSystem)
+                            {
+                                <button class="rl-save-matrix-btn"
+                                        @onclick="SaveMatrixAsync"
+                                        disabled="@_saving">
                                     @if (_saving)
                                     {
-                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                                        <span class="btn-spinner sm" aria-hidden="true"></span>
+                                        <span>جاري الحفظ...</span>
                                     }
-                                    حفظ المصفوفة
-                                </MudButton>
+                                    else
+                                    {
+                                        <svg viewBox="0 0 24 24" width="15" height="15"
+                                             fill="none" stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                            <path d="M17 21v-8H7v8M7 3v5h8"
+                                                  stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                        <span>حفظ الصلاحيات</span>
+                                    }
+                                </button>
+                            }
+                        </div>
+
+                    </div>
+
+                    @* ── System Lock Banner ── *@
+                    @if (_sel.IsSystem)
+                    {
+                        <div class="rl-system-banner" role="status">
+                            <div class="system-banner-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="20" height="20"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <div class="system-banner-text">
+                                <strong>دور أساسي — صلاحياته مقفولة</strong>
+                                <span>الأدوار الأساسية صلاحياتها كاملة ومقفولة حمايةً للنظام من القفل الذاتي</span>
                             </div>
                         </div>
+                    }
+
+                    @* ── Quick Stats ── *@
+                    @if (!_sel.IsSystem)
+                    {
+                        <div class="rl-quick-stats">
+                            <div class="rl-qs-item">
+                                <div class="rl-qs-num">@SelCount</div>
+                                <div class="rl-qs-label">مختارة</div>
+                            </div>
+                            <div class="rl-qs-sep" aria-hidden="true"></div>
+                            <div class="rl-qs-item">
+                                <div class="rl-qs-num">@(TotalPerms - SelCount)</div>
+                                <div class="rl-qs-label">غير مختارة</div>
+                            </div>
+                            <div class="rl-qs-sep" aria-hidden="true"></div>
+                            <div class="rl-qs-item">
+                                <div class="rl-qs-num">@TotalPerms</div>
+                                <div class="rl-qs-label">الإجمالي</div>
+                            </div>
+                            <div class="rl-qs-bar-wrap">
+                                <div class="rl-qs-bar">
+                                    <div class="rl-qs-bar-fill"
+                                         style="width:@(TotalPerms > 0 ? (SelCount * 100 / TotalPerms) : 0)%"></div>
+                                </div>
+                                <span class="rl-qs-pct">
+                                    @(TotalPerms > 0 ? (SelCount * 100 / TotalPerms) : 0)%
+                                </span>
+                            </div>
+                        </div>
+                    }
+
+                    @* ── Permissions Matrix ── *@
+                    <div class="rl-modules-wrap">
 
                         @if (_sel.IsSystem)
                         {
-                            <MudAlert Severity="Severity.Info" Variant="Variant.Filled" Class="fc-locked-note">
-                                ده دور أساسي — صلاحياته كاملة ومقفولة من التعديل حمايةً للنظام من القفل الذاتي.
-                            </MudAlert>
+                            @* عرض فقط بدون تعديل للأدوار الأساسية *@
+                            @foreach (var mod in _catalog)
+                            {
+                                <div class="rl-module-card rl-module-locked">
+                                    <div class="rl-module-head">
+                                        <div class="rl-module-title-wrap">
+                                            <div class="rl-module-icon" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                                                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                                                </svg>
+                                            </div>
+                                            <span class="rl-module-name">@mod.ModuleCode</span>
+                                            <span class="rl-module-count-badge locked">
+                                                @mod.Items.Count / @mod.Items.Count
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="rl-perms-grid">
+                                        @foreach (var p in mod.Items)
+                                        {
+                                            <div class="rl-perm-item rl-perm-active">
+                                                <div class="rl-perm-check-icon active" aria-hidden="true">
+                                                    <svg viewBox="0 0 24 24" width="12" height="12"
+                                                         fill="none" stroke="currentColor" stroke-width="2.5">
+                                                        <path d="M20 6L9 17l-5-5" stroke-linecap="round"
+                                                              stroke-linejoin="round"/>
+                                                    </svg>
+                                                </div>
+                                                <span class="rl-perm-name">@p.NameAr</span>
+                                                <span class="rl-perm-code">@p.PermissionCode</span>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
                         }
                         else
                         {
                             @foreach (var mod in _catalog)
                             {
-                                <details class="fc-matrix-mod" open="@(mod.Items.Any(i => _selIds.Contains(i.PermissionId)))">
-                                    <summary class="fc-matrix-mod-head">
-                                        <span>@mod.ModuleCode <small style="color:var(--fc-muted)">(@ModCount(mod) مختار)</small></span>
-                                        <button class="fc-mini-btn" type="button"
-                                                @onclick="() => ToggleModule(mod)" @onclick:stopPropagation>
-                                            @(ModCount(mod) == mod.Items.Count ? "إلغاء الكل" : "اختيار الكل")
+                                var modCount   = ModCount(mod);
+                                var modAll     = modCount == mod.Items.Count;
+                                var modPartial = modCount > 0 && !modAll;
+
+                                <details class="rl-module-card"
+                                         open="@(modCount > 0)">
+
+                                    <summary class="rl-module-head" aria-label="@mod.ModuleCode">
+
+                                        <div class="rl-module-title-wrap">
+                                            <div class="rl-module-chevron" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M6 9l6 6 6-6" stroke-linecap="round"
+                                                          stroke-linejoin="round"/>
+                                                </svg>
+                                            </div>
+                                            <span class="rl-module-name">@mod.ModuleCode</span>
+                                            <span class="rl-module-count-badge @(modAll ? "badge-all" : modPartial ? "badge-partial" : "badge-none")">
+                                                @modCount / @mod.Items.Count
+                                            </span>
+                                        </div>
+
+                                        <button class="rl-toggle-all-btn @(modAll ? "toggle-all-active" : "")"
+                                                type="button"
+                                                @onclick="() => ToggleModule(mod)"
+                                                @onclick:stopPropagation
+                                                aria-label="@(modAll ? "إلغاء تحديد الكل" : "تحديد الكل")">
+                                            @if (modAll)
+                                            {
+                                                <svg viewBox="0 0 24 24" width="13" height="13"
+                                                     fill="none" stroke="currentColor" stroke-width="2.5"
+                                                     aria-hidden="true">
+                                                    <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                                                </svg>
+                                                <span>إلغاء الكل</span>
+                                            }
+                                            else
+                                            {
+                                                <svg viewBox="0 0 24 24" width="13" height="13"
+                                                     fill="none" stroke="currentColor" stroke-width="2.5"
+                                                     aria-hidden="true">
+                                                    <path d="M20 6L9 17l-5-5" stroke-linecap="round"
+                                                          stroke-linejoin="round"/>
+                                                </svg>
+                                                <span>اختيار الكل</span>
+                                            }
                                         </button>
+
                                     </summary>
-                                    <div class="fc-matrix-mod-body">
+
+                                    <div class="rl-perms-grid">
                                         @foreach (var p in mod.Items)
                                         {
-                                            <div class="fc-matrix-item">
-                                                <MudCheckBox T="bool" Dense="true" Color="Color.Primary"
-                                                             Value="_selIds.Contains(p.PermissionId)"
-                                                             ValueChanged="@(v => TogglePerm(p.PermissionId, v))"
-                                                             Label="@p.NameAr" />
-                                            </div>
+                                            var isOn = _selIds.Contains(p.PermissionId);
+
+                                            <label class="rl-perm-item @(isOn ? "rl-perm-active" : "")"
+                                                   aria-label="@p.NameAr">
+                                                <input type="checkbox"
+                                                       checked="@isOn"
+                                                       @onchange="e => TogglePerm(p.PermissionId, (bool)e.Value!)"
+                                                       class="rl-perm-checkbox" />
+                                                <div class="rl-perm-check-icon @(isOn ? "active" : "")"
+                                                     aria-hidden="true">
+                                                    @if (isOn)
+                                                    {
+                                                        <svg viewBox="0 0 24 24" width="12" height="12"
+                                                             fill="none" stroke="currentColor" stroke-width="2.5">
+                                                            <path d="M20 6L9 17l-5-5" stroke-linecap="round"
+                                                                  stroke-linejoin="round"/>
+                                                        </svg>
+                                                    }
+                                                </div>
+                                                <div class="rl-perm-text">
+                                                    <span class="rl-perm-name">@p.NameAr</span>
+                                                    <span class="rl-perm-code">@p.PermissionCode</span>
+                                                </div>
+                                            </label>
                                         }
                                     </div>
+
                                 </details>
                             }
                         }
-                    }
-                </div>
-            </div>
-        </div>
-    }
 
-    @* ═══════════════ مودال دور جديد / تعديل ═══════════════ *@
-    @if (_roleModalOpen)
-    {
-        <div class="fc-modal-backdrop" @onclick="CloseRoleModal">
-            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation>
-                <div class="fc-modal-head">
-                    <div>
-                        <div class="fc-modal-title">@(_editId is null ? "دور جديد" : "تعديل دور")</div>
-                        <div class="fc-modal-sub">الدور الجديد بيبدأ بصفر صلاحيات — وزّعها من المصفوفة</div>
                     </div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseRoleModal" />
-                </div>
+                }
 
-                <div class="fc-modal-body">
-                    @if (_roleMsg is not null)
-                    {
-                        <MudAlert Severity="@(_roleOk ? Severity.Success : Severity.Error)"
-                                  Variant="Variant.Outlined" Class="mb-4">@_roleMsg</MudAlert>
-                    }
-
-                    @if (_editId is null)
-                    {
-                        <MudTextField T="string" @bind-Value="_roleCode" Label="كود الدور (إنجليزي زي SALES)"
-                                      Variant="Variant.Outlined" Class="mb-3" />
-                    }
-                    <MudTextField T="string" @bind-Value="_roleNameAr" Label="الاسم بالعربي"
-                                  Variant="Variant.Outlined" Class="mb-3" />
-                    <MudTextField T="string" @bind-Value="_roleNameEn" Label="الاسم بالإنجليزي (اختياري)"
-                                  Variant="Variant.Outlined" Class="mb-3" />
-                    @if (_editId is not null)
-                    {
-                        <MudCheckBox T="bool" @bind-Value="_roleActive" Label="الدور مفعّل" Color="Color.Success" />
-                    }
-                </div>
-
-                <div class="fc-modal-foot">
-                    @if (_editId is not null && !_editIsSystem)
-                    {
-                        @if (_confirmDel)
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Error"
-                                       OnClick="DeleteRoleAsync">حذف نهائي — متأكد؟</MudButton>
-                        }
-                        else
-                        {
-                            <MudButton Variant="Variant.Outlined" Color="Color.Error"
-                                       StartIcon="@Icons.Material.Filled.Delete"
-                                       OnClick="() => _confirmDel = true">حذف</MudButton>
-                        }
-                        <span style="flex:1"></span>
-                    }
-                    <MudButton Variant="Variant.Outlined" OnClick="CloseRoleModal">إلغاء</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                               Disabled="_roleSaving" OnClick="SaveRoleAsync">حفظ</MudButton>
-                </div>
             </div>
+
         </div>
     }
 </div>
+
+
+@* ═══════════════════════════════════════════
+   MODAL — دور جديد / تعديل
+═══════════════════════════════════════════ *@
+@if (_roleModalOpen)
+{
+    <div class="cust-modal-backdrop" @onclick="CloseRoleModal"
+         role="dialog" aria-modal="true"
+         aria-label="@(_editId is null ? "دور جديد" : "تعديل دور")">
+        <div class="cust-modal cust-modal-sm" @onclick:stopPropagation="true">
+
+            <div class="modal-head">
+                <div class="modal-head-icon @(_editId is null ? "icon-blue" : "icon-amber")"
+                     aria-hidden="true">
+                    @if (_editId is null)
+                    {
+                        <svg viewBox="0 0 24 24" width="20" height="20"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="20" height="20"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                    }
+                </div>
+                <div>
+                    <div class="modal-title">@(_editId is null ? "دور جديد" : "تعديل دور")</div>
+                    <div class="modal-sub">
+                        @(_editId is null
+                            ? "الدور الجديد بيبدأ بصفر صلاحيات — وزّعها من المصفوفة"
+                            : "تعديل اسم الدور وحالته")
+                    </div>
+                </div>
+                <button class="modal-close-btn" @onclick="CloseRoleModal" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            @if (_roleMsg is not null)
+            {
+                <div class="modal-banner @(_roleOk ? "banner-success" : "banner-error")" role="alert">
+                    <span>@_roleMsg</span>
+                    <button @onclick="() => _roleMsg = null">✕</button>
+                </div>
+            }
+
+            <div class="modal-body">
+
+                @if (_editId is null)
+                {
+                    <div class="modal-form-field">
+                        <label class="modal-field-label">
+                            كود الدور
+                            <span class="field-required">*</span>
+                        </label>
+                        <div class="modal-field-hint">إنجليزي كابيتال — مثال: SALES أو MANAGER</div>
+                        <input class="modal-field-input @(string.IsNullOrWhiteSpace(_roleCode) && _roleSaving ? "field-error" : "")"
+                               @bind="_roleCode"
+                               placeholder="ROLE_CODE"
+                               maxlength="50"
+                               dir="ltr"
+                               aria-required="true" />
+                    </div>
+                }
+
+                <div class="modal-form-field">
+                    <label class="modal-field-label">
+                        الاسم بالعربي
+                        <span class="field-required">*</span>
+                    </label>
+                    <input class="modal-field-input"
+                           @bind="_roleNameAr"
+                           placeholder="اسم الدور بالعربي"
+                           maxlength="100"
+                           aria-required="true" />
+                </div>
+
+                <div class="modal-form-field">
+                    <label class="modal-field-label">الاسم بالإنجليزي</label>
+                    <input class="modal-field-input"
+                           @bind="_roleNameEn"
+                           placeholder="Role name in English"
+                           maxlength="100"
+                           dir="ltr" />
+                </div>
+
+                @if (_editId is not null)
+                {
+                    <div class="modal-toggle-field">
+                        <div class="modal-toggle-text">
+                            <div class="modal-toggle-title">الدور مفعّل</div>
+                            <div class="modal-toggle-sub">الأدوار الموقوفة لا تظهر عند تعيين مستخدمين</div>
+                        </div>
+                        <label class="toggle-switch" aria-label="تفعيل الدور">
+                            <input type="checkbox" @bind="_roleActive" role="switch" aria-checked="@_roleActive" />
+                            <span class="toggle-track">
+                                <span class="toggle-thumb"></span>
+                            </span>
+                        </label>
+                    </div>
+                }
+
+            </div>
+
+            <div class="modal-foot">
+                @if (_editId is not null && !_editIsSystem)
+                {
+                    @if (_confirmDel)
+                    {
+                        <button class="modal-delete-btn pulse-del"
+                                @onclick="DeleteRoleAsync">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                            </svg>
+                            حذف نهائي — متأكد؟
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="modal-delete-outline-btn"
+                                @onclick="() => _confirmDel = true">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                            </svg>
+                            حذف
+                        </button>
+                    }
+                    <span style="flex:1"></span>
+                }
+                <button class="modal-cancel-btn" @onclick="CloseRoleModal">إلغاء</button>
+                <button class="modal-save-btn"
+                        @onclick="SaveRoleAsync"
+                        disabled="@_roleSaving">
+                    @if (_roleSaving)
+                    {
+                        <span class="btn-spinner sm" aria-hidden="true"></span>
+                        <span>جاري الحفظ...</span>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="14" height="14"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                            <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>حفظ</span>
+                    }
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+@* ═══════════════════════════════════════════
+   CSS
+═══════════════════════════════════════════ *@
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    .rl-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 200px);
+        padding: 16px 20px 32px;
+        max-width: 1400px; width: 100%;
+        margin: 0 auto;
+    }
+
+    /* ================================================================
+       STATES
+    ================================================================ */
+    .rl-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .rl-state-icon {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .rl-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+
+    .rl-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .rl-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    /* ================================================================
+       LOADING
+    ================================================================ */
+    .rl-loading-wrap {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 14px; min-height: 300px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .rl-spinner {
+        width: 36px; height: 36px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: rl-spin .75s linear infinite;
+    }
+    @@keyframes rl-spin { to { transform: rotate(360deg); } }
+
+    .rl-loading-text { font-size: 13px; font-weight: 600; color: var(--fc-muted); }
+
+    /* ================================================================
+       LAYOUT
+    ================================================================ */
+    .rl-layout {
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+        gap: 18px;
+        align-items: start;
+    }
+
+    /* ================================================================
+       SIDEBAR — قائمة الأدوار
+    ================================================================ */
+    .rl-sidebar {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 8px 24px rgba(15,41,82,.05);
+        overflow: hidden; position: sticky; top: 16px;
+    }
+
+    .rl-sidebar-head {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 8px; padding: 14px 16px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .rl-sidebar-title {
+        display: flex; align-items: center; gap: 7px;
+        font-size: 12.5px; font-weight: 800; color: var(--fc-text);
+    }
+
+    .rl-sidebar-count {
+        min-width: 22px; height: 22px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 6px; padding: 0 5px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-size: 10px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .rl-roles-list { display: flex; flex-direction: column; padding: 8px; gap: 4px; max-height: 70vh; overflow-y: auto; }
+
+    .rl-roles-empty {
+        padding: 30px; text-align: center;
+        color: #9aaabb; font-size: 12px; font-weight: 600;
+    }
+
+    /* ── Role Card ── */
+    .rl-role-card {
+        width: 100%; display: flex; align-items: center; gap: 10px;
+        padding: 10px 12px; border-radius: 10px;
+        border: 1px solid transparent; background: transparent;
+        cursor: pointer; text-align: right; font-family: inherit;
+        transition: all .15s ease;
+    }
+    .rl-role-card:hover { background: #f5f7fc; border-color: #e4eaf3; }
+
+    .rl-card-active {
+        background: var(--fc-blue-lt) !important;
+        border-color: #bdd4fc !important;
+        box-shadow: 0 2px 10px rgba(30,110,245,.10);
+    }
+
+    /* Avatars */
+    .rl-role-avatar,
+    .rl-matrix-role-avatar {
+        width: 36px; height: 36px; flex: 0 0 36px; border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 15px; font-weight: 900; color: #fff;
+        box-shadow: 0 2px 6px rgba(0,0,0,.10);
+    }
+
+    .rl-matrix-role-avatar { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 12px; font-size: 18px; }
+
+    .rl-av-0 { background: linear-gradient(135deg, #1558d6, #1e6ef5); }
+    .rl-av-1 { background: linear-gradient(135deg, #6035a0, #7c4dbd); }
+    .rl-av-2 { background: linear-gradient(135deg, #0d8a48, #16a35b); }
+    .rl-av-3 { background: linear-gradient(135deg, #b87d08, #e09a10); }
+    .rl-av-4 { background: linear-gradient(135deg, #b02040, #e03048); }
+    .rl-av-5 { background: linear-gradient(135deg, #0a7a6e, #0d9488); }
+
+    .rl-role-info { flex: 1; min-width: 0; }
+
+    .rl-role-name {
+        font-size: 12.5px; font-weight: 800; color: #1c2c44;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .rl-card-active .rl-role-name { color: var(--fc-blue); }
+
+    .rl-role-meta {
+        display: flex; align-items: center; gap: 5px; margin-top: 2px;
+    }
+
+    .rl-role-code {
+        font-size: 9.5px; font-weight: 700; color: #8899ae;
+        font-family: "Inter", Arial, sans-serif;
+    }
+    .rl-card-active .rl-role-code { color: #6b9bd2; }
+
+    .rl-system-badge { font-size: 12px; }
+
+    .rl-inactive-badge {
+        display: inline-flex; padding: 0 5px; border-radius: 4px;
+        background: #fff0f2; color: var(--fc-red);
+        font-size: 9px; font-weight: 800; border: 1px solid #ffc8cf;
+    }
+
+    .rl-role-stats {
+        display: flex; align-items: center; gap: 0; flex: 0 0 auto;
+    }
+
+    .rl-stat {
+        display: flex; flex-direction: column; align-items: center; gap: 1px;
+        padding: 0 7px;
+    }
+    .rl-stat-num { font-size: 13px; font-weight: 900; color: var(--fc-text); font-family: "Inter", Arial, sans-serif; }
+    .rl-stat-lb  { font-size: 8.5px; color: #9aaabb; font-weight: 600; white-space: nowrap; }
+    .rl-card-active .rl-stat-num { color: var(--fc-blue); }
+
+    .rl-stat-sep { width: 1px; height: 24px; background: #e4eaf3; flex: 0 0 1px; }
+
+    /* ================================================================
+       MATRIX PANEL
+    ================================================================ */
+    .rl-matrix-panel {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden;
+    }
+
+    /* ── Empty ── */
+    .rl-matrix-empty {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 340px; text-align: center; padding: 40px;
+    }
+
+    .rl-matrix-empty-icon {
+        width: 80px; height: 80px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: #f0f4fa; color: #b0c4d8;
+    }
+    .rl-matrix-empty-title { font-size: 16px; font-weight: 800; color: var(--fc-text); }
+    .rl-matrix-empty-sub   { font-size: 12px; color: var(--fc-muted); }
+
+    /* ── Panel Head ── */
+    .rl-matrix-head {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 14px; padding: 16px 20px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+        flex-wrap: wrap;
+    }
+
+    .rl-matrix-head-info { display: flex; align-items: center; gap: 12px; }
+
+    .rl-matrix-role-name {
+        display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+        font-size: 15px; font-weight: 900; color: #1c2b43;
+    }
+
+    .rl-system-chip {
+        display: inline-flex; align-items: center;
+        padding: 2px 9px; border-radius: 7px;
+        background: #fff8e0; color: #9a6d08;
+        font-size: 10px; font-weight: 800; border: 1px solid #f0d898;
+    }
+
+    .rl-inactive-chip {
+        display: inline-flex; align-items: center;
+        padding: 2px 9px; border-radius: 7px;
+        background: var(--fc-red-lt); color: var(--fc-red);
+        font-size: 10px; font-weight: 800; border: 1px solid #ffc8cf;
+    }
+
+    .rl-matrix-role-sub {
+        display: flex; align-items: center; gap: 6px;
+        font-size: 11px; color: var(--fc-muted); margin-top: 3px;
+    }
+
+    .rl-dot { opacity: .4; }
+
+    .rl-sel-count { color: var(--fc-blue); font-weight: 800; }
+
+    .rl-matrix-head-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+    .rl-edit-role-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 14px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-text);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .rl-edit-role-btn:hover { background: #f0f4fa; border-color: #c0ccd8; }
+
+    .rl-save-matrix-btn {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 38px; padding: 0 18px;
+        border: 0; border-radius: 9px;
+        background: linear-gradient(135deg, #1e6ef5, #1558d6);
+        color: #fff; font-family: inherit;
+        font-size: 12px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 3px 10px rgba(30,110,245,.25);
+        transition: all .15s ease;
+    }
+    .rl-save-matrix-btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .rl-save-matrix-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* ── System Banner ── */
+    .rl-system-banner {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 20px;
+        background: linear-gradient(135deg, #fff8e0, #fffbef);
+        border-bottom: 1px solid #f0d898;
+    }
+
+    .system-banner-icon { flex: 0 0 auto; color: #d97706; }
+    .system-banner-text { display: flex; flex-direction: column; gap: 2px; }
+    .system-banner-text strong { font-size: 13px; font-weight: 800; color: #92400e; }
+    .system-banner-text span   { font-size: 11px; color: #b45309; }
+
+    /* ── Quick Stats ── */
+    .rl-quick-stats {
+        display: flex; align-items: center; gap: 0;
+        padding: 12px 20px;
+        background: #f9fafd; border-bottom: 1px solid #edf1f7;
+    }
+
+    .rl-qs-item {
+        display: flex; flex-direction: column; align-items: center; gap: 2px;
+        padding: 0 16px; flex: 0 0 auto;
+    }
+    .rl-qs-num { font-family: "Inter", Arial, sans-serif; font-size: 18px; font-weight: 900; color: var(--fc-text); }
+    .rl-qs-label { font-size: 9.5px; color: #9aaabb; font-weight: 600; }
+
+    .rl-qs-sep { width: 1px; height: 34px; background: #e4eaf3; flex: 0 0 1px; }
+
+    .rl-qs-bar-wrap {
+        flex: 1; display: flex; align-items: center; gap: 10px; padding: 0 16px;
+    }
+
+    .rl-qs-bar {
+        flex: 1; height: 8px; border-radius: 5px;
+        background: #e4eaf3; overflow: hidden;
+    }
+
+    .rl-qs-bar-fill {
+        height: 100%; border-radius: inherit;
+        background: linear-gradient(90deg, var(--fc-blue), #42a5f5);
+        transition: width .5s cubic-bezier(.34,1.2,.64,1);
+    }
+
+    .rl-qs-pct {
+        font-family: "Inter", Arial, sans-serif;
+        font-size: 12px; font-weight: 800; color: var(--fc-blue);
+        min-width: 38px; text-align: center;
+    }
+
+    /* ── Modules ── */
+    .rl-modules-wrap { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+
+    .rl-module-card {
+        border: 1px solid #e4edf8; border-radius: 12px;
+        background: linear-gradient(180deg, #fafcff, #f5f8fb);
+        overflow: hidden;
+        transition: border-color .15s ease;
+    }
+    .rl-module-card:hover { border-color: #c8d8f0; }
+    .rl-module-locked { border-color: #f0d898; background: linear-gradient(180deg, #fffcf0, #fffbef); }
+
+    .rl-module-head {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px; padding: 12px 14px;
+        background: linear-gradient(180deg, #f0f5fc, #eaf1f9);
+        border-bottom: 1px solid #dce8f5;
+        cursor: pointer; list-style: none;
+        transition: background .12s ease;
+    }
+    .rl-module-head:hover { background: linear-gradient(180deg, #e8f0fc, #dfe9f8); }
+    .rl-module-locked .rl-module-head { background: linear-gradient(180deg, #fdf5e0, #faefd0); border-color: #f0d898; }
+
+    .rl-module-head::-webkit-details-marker { display: none; }
+    .rl-module-head::marker { display: none; }
+
+    .rl-module-title-wrap { display: flex; align-items: center; gap: 8px; }
+
+    .rl-module-chevron {
+        color: #9aaabb; transition: transform .2s ease;
+        display: flex; align-items: center;
+    }
+    details[open] .rl-module-chevron { transform: rotate(180deg); }
+
+    .rl-module-icon { color: #d97706; display: flex; }
+
+    .rl-module-name {
+        font-size: 12.5px; font-weight: 800; color: var(--fc-text);
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .rl-module-count-badge {
+        display: inline-flex; align-items: center;
+        padding: 2px 8px; border-radius: 6px;
+        font-size: 10px; font-weight: 800;
+        font-family: "Inter", Arial, sans-serif;
+    }
+    .badge-all     { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .badge-partial { background: var(--fc-amber-lt); color: #9a6d08;         border: 1px solid #f0d898; }
+    .badge-none    { background: #f0f3f8;             color: #8899ae;         border: 1px solid #dde5f0; }
+    .locked        { background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898; }
+
+    .rl-toggle-all-btn {
+        display: inline-flex; align-items: center; gap: 5px;
+        height: 28px; padding: 0 10px;
+        border: 1px solid #bdd4fc; border-radius: 7px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 10px; font-weight: 800;
+        cursor: pointer; white-space: nowrap;
+        transition: all .12s ease;
+    }
+    .rl-toggle-all-btn:hover { background: var(--fc-blue); color: #fff; }
+
+    .toggle-all-active {
+        background: var(--fc-red-lt) !important; color: var(--fc-red) !important;
+        border-color: #ffc8cf !important;
+    }
+    .toggle-all-active:hover { background: var(--fc-red) !important; color: #fff !important; }
+
+    /* ── Permissions Grid ── */
+    .rl-perms-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 6px; padding: 12px 14px;
+    }
+
+    .rl-perm-item {
+        display: flex; align-items: flex-start; gap: 8px;
+        padding: 8px 10px; border-radius: 8px;
+        border: 1px solid #e8edf5; background: #fafcff;
+        cursor: pointer; transition: all .12s ease;
+        user-select: none;
+    }
+    .rl-perm-item:hover { border-color: #bdd4fc; background: var(--fc-blue-lt); }
+    .rl-perm-active {
+        border-color: #bdd4fc !important; background: var(--fc-blue-lt) !important;
+    }
+
+    .rl-perm-checkbox { display: none; }
+
+    .rl-perm-check-icon {
+        width: 18px; height: 18px; flex: 0 0 18px; border-radius: 5px;
+        display: flex; align-items: center; justify-content: center;
+        border: 2px solid #d8e2f0; background: #fff;
+        transition: all .12s ease;
+    }
+    .rl-perm-check-icon.active {
+        background: var(--fc-blue); border-color: var(--fc-blue); color: #fff;
+    }
+
+    .rl-perm-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+    .rl-perm-name {
+        font-size: 11.5px; font-weight: 700; color: var(--fc-text);
+        line-height: 1.3;
+    }
+    .rl-perm-active .rl-perm-name { color: var(--fc-blue); }
+
+    .rl-perm-code {
+        font-size: 9px; color: #9aaabb; font-weight: 600;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    /* ================================================================
+       MODAL — مشترك
+    ================================================================ */
+    .cust-modal-backdrop {
+        position: fixed; inset: 0; z-index: 1000;
+        background: rgba(10,20,40,.55); backdrop-filter: blur(4px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px; animation: rl-fade-in .2s ease;
+    }
+    @@keyframes rl-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+    .cust-modal {
+        width: 100%; max-width: 580px;
+        background: var(--fc-card); border: 1px solid rgba(0,0,0,.08);
+        border-radius: 18px;
+        box-shadow: 0 8px 30px rgba(10,20,50,.15), 0 30px 80px rgba(10,20,50,.20);
+        overflow: hidden;
+        animation: rl-modal-in .25s cubic-bezier(.34,1.3,.64,1);
+        max-height: 90vh; overflow-y: auto;
+    }
+    .cust-modal-sm { max-width: 460px; }
+
+    @@keyframes rl-modal-in {
+        from { opacity: 0; transform: scale(.95) translateY(10px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-head {
+        display: flex; align-items: center; gap: 12px;
+        padding: 18px 20px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .modal-head-icon {
+        width: 42px; height: 42px; flex: 0 0 42px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 11px;
+    }
+    .icon-blue  { background: var(--fc-blue-lt); color: var(--fc-blue); border: 1px solid #bdd4fc; }
+    .icon-amber { background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898; }
+
+    .modal-title { font-size: 14.5px; font-weight: 800; color: #1c2b43; }
+    .modal-sub   { font-size: 10.5px; color: var(--fc-muted); margin-top: 2px; }
+
+    .modal-close-btn {
+        margin-right: auto; width: 32px; height: 32px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid #e4eaf2; border-radius: 8px;
+        background: none; color: #9aaabb; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .modal-close-btn:hover { background: #f0f4fa; color: var(--fc-text); border-color: #c0ccd8; }
+
+    .modal-banner {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px; padding: 10px 20px; font-size: 12px; font-weight: 600;
+    }
+    .modal-banner button { background: none; border: none; cursor: pointer; opacity: .6; }
+    .banner-success { background: #e9f8f0; color: #0e7a43; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); }
+
+    .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+
+    .modal-form-field { display: flex; flex-direction: column; gap: 6px; }
+
+    .modal-field-label {
+        font-size: 12px; font-weight: 800; color: #344258;
+        display: flex; align-items: center; gap: 4px;
+    }
+
+    .field-required { color: var(--fc-red); font-size: 14px; line-height: 1; }
+
+    .modal-field-hint { font-size: 10px; color: #9aaabb; font-weight: 500; }
+
+    .modal-field-input {
+        height: 42px; width: 100%;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 13px; padding: 0 12px;
+        outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .modal-field-input:focus {
+        border-color: var(--fc-blue);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.10);
+        background: #fff;
+    }
+    .modal-field-input.field-error { border-color: var(--fc-red); }
+    .modal-field-input::placeholder { color: #b0bcc8; }
+
+    /* Toggle */
+    .modal-toggle-field {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 14px; padding: 12px 14px; border-radius: 10px;
+        border: 1px solid #e8edf5; background: #fafcff;
+    }
+
+    .modal-toggle-title { font-size: 13px; font-weight: 800; color: var(--fc-text); }
+    .modal-toggle-sub   { font-size: 10.5px; color: var(--fc-muted); margin-top: 2px; }
+
+    .toggle-switch { display: flex; align-items: center; cursor: pointer; flex-shrink: 0; }
+    .toggle-switch input { display: none; }
+
+    .toggle-track {
+        position: relative; width: 44px; height: 24px;
+        background: #d8e2f0; border-radius: 999px;
+        transition: background .2s ease;
+        display: flex; align-items: center; padding: 0 3px;
+    }
+    .toggle-switch input:checked + .toggle-track { background: var(--fc-blue); }
+
+    .toggle-thumb {
+        position: absolute; left: 3px;
+        width: 18px; height: 18px; border-radius: 50%; background: #fff;
+        box-shadow: 0 2px 5px rgba(0,0,0,.2);
+        transition: left .2s ease;
+    }
+    .toggle-switch input:checked + .toggle-track .toggle-thumb { left: calc(100% - 21px); }
+
+    .modal-foot {
+        display: flex; align-items: center; gap: 8px;
+        padding: 14px 20px;
+        background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%);
+        border-top: 1px solid #edf1f7;
+    }
+
+    .modal-cancel-btn {
+        height: 38px; padding: 0 16px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .modal-cancel-btn:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .modal-save-btn {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 38px; padding: 0 18px;
+        border: 0; border-radius: 9px;
+        background: linear-gradient(135deg, #1e6ef5, #1558d6);
+        color: #fff; font-family: inherit;
+        font-size: 12px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 3px 10px rgba(30,110,245,.25);
+        transition: all .15s ease;
+    }
+    .modal-save-btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .modal-save-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    .modal-delete-btn {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 38px; padding: 0 14px;
+        border: 0; border-radius: 9px;
+        background: linear-gradient(135deg, #e03048, #c0182e);
+        color: #fff; font-family: inherit;
+        font-size: 12px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 3px 10px rgba(224,48,72,.25);
+    }
+
+    .modal-delete-outline-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 14px;
+        border: 1px solid #ffc8cf; border-radius: 9px;
+        background: var(--fc-red-lt); color: var(--fc-red);
+        font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .modal-delete-outline-btn:hover { background: var(--fc-red); color: #fff; }
+
+    .pulse-del { animation: rl-pulse-del 1s ease infinite; }
+    @@keyframes rl-pulse-del {
+        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.35); }
+        50%     { box-shadow: 0 0 0 6px rgba(224,48,72,0); }
+    }
+
+    /* Spinner */
+    .btn-spinner {
+        width: 15px; height: 15px;
+        border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+        border-radius: 50%; animation: rl-spin .7s linear infinite;
+    }
+    .btn-spinner.sm { width: 13px; height: 13px; }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 1100px) {
+        .rl-layout { grid-template-columns: 240px minmax(0, 1fr); }
+        .rl-perms-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+    }
+
+    @@media (max-width: 900px) {
+        .rl-layout { grid-template-columns: 1fr; }
+        .rl-sidebar { position: static; }
+        .rl-roles-list { max-height: 260px; }
+        .rl-qs-item:last-of-type { display: none; }
+    }
+
+    @@media (max-width: 680px) {
+        .rl-body { padding: 10px 12px 24px; }
+        .rl-perms-grid { grid-template-columns: 1fr 1fr; }
+        .rl-matrix-head { flex-direction: column; align-items: flex-start; }
+        .rl-matrix-head-actions { width: 100%; }
+        .rl-save-matrix-btn { flex: 1; justify-content: center; }
+        .rl-qs-bar-wrap { display: none; }
+    }
+
+    @@media (max-width: 480px) {
+        .rl-perms-grid { grid-template-columns: 1fr; }
+        .rl-role-stats { display: none; }
+        .cust-modal-backdrop { padding: 10px; }
+        .cust-modal { border-radius: 14px; }
+    }
+
+</style>
+
 
 @code {
     private AuthUser? _user;
     private bool CanManage => _user?.Can("ROLE.MANAGE") ?? false;
 
-    private List<RoleItem> _roles = new();
+    private List<RoleItem>   _roles   = new();
     private List<PermModule> _catalog = new();
-    private bool _loading;
+    private bool   _loading;
     private string? _loadError;
 
-    private RoleItem? _sel;
-    private int? _selId;
-    private HashSet<int> _selIds = new();
-    private bool _saving;
+    private RoleItem?      _sel;
+    private int?           _selId;
+    private HashSet<int>   _selIds = new();
+    private bool           _saving;
 
-    // مودال الدور
-    private bool _roleModalOpen;
-    private int? _editId;
-    private bool _editIsSystem;
-    private string _roleCode = "";
-    private string _roleNameAr = "";
+    /* Modal */
+    private bool    _roleModalOpen;
+    private int?    _editId;
+    private bool    _editIsSystem;
+    private string  _roleCode   = "";
+    private string  _roleNameAr = "";
     private string? _roleNameEn;
-    private bool _roleActive = true;
-    private bool _roleSaving;
+    private bool    _roleActive = true;
+    private bool    _roleSaving;
     private string? _roleMsg;
-    private bool _roleOk;
-    private bool _confirmDel;
+    private bool    _roleOk;
+    private bool    _confirmDel;
 
+    /* DTOs */
     public class RoleItem
     {
-        public int Id { get; set; }
-        public string RoleCode { get; set; } = "";
-        public string NameAr { get; set; } = "";
-        public string? NameEn { get; set; }
-        public bool IsSystem { get; set; }
-        public bool IsActive { get; set; }
-        public int UserCount { get; set; }
-        public int PermissionCount { get; set; }
+        public int    Id              { get; set; }
+        public string RoleCode        { get; set; } = "";
+        public string NameAr          { get; set; } = "";
+        public string? NameEn         { get; set; }
+        public bool   IsSystem        { get; set; }
+        public bool   IsActive        { get; set; }
+        public int    UserCount       { get; set; }
+        public int    PermissionCount { get; set; }
     }
 
     public class PermItem
     {
-        public int PermissionId { get; set; }
+        public int    PermissionId   { get; set; }
         public string PermissionCode { get; set; } = "";
-        public string NameAr { get; set; } = "";
+        public string NameAr         { get; set; } = "";
     }
 
     public class PermModule
     {
-        public string ModuleCode { get; set; } = "";
-        public List<PermItem> Items { get; set; } = new();
+        public string         ModuleCode { get; set; } = "";
+        public List<PermItem> Items      { get; set; } = new();
     }
 
-    private int TotalPerms => _catalog.Sum(m => m.Items.Count);
+    private int TotalPerms        => _catalog.Sum(m => m.Items.Count);
     private int TotalUsersOnRoles => _roles.Sum(r => r.UserCount);
-    private int SelCount => _selIds.Count;
-
+    private int SelCount          => _selIds.Count;
     private int ModCount(PermModule m) => m.Items.Count(i => _selIds.Contains(i.PermissionId));
 
+    /* ── Init ── */
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
         if (CanManage) await LoadAsync();
     }
 
-    private async Task Reload() { await LoadAsync(); Snackbar.Add("اتحدّث", Severity.Success); }
+    private async Task Reload()
+    {
+        await LoadAsync();
+        Snackbar.Add("تم التحديث", Severity.Success);
+    }
 
     private async Task LoadAsync()
     {
-        _loading = true;
-        _loadError = null;
+        _loading = true; _loadError = null;
         try
         {
-            _roles = await Http.GetFromJsonAsync<List<RoleItem>>("api/roles") ?? new();
+            _roles   = await Http.GetFromJsonAsync<List<RoleItem>>("api/roles")       ?? new();
             _catalog = await Http.GetFromJsonAsync<List<PermModule>>("api/permissions") ?? new();
 
             if (_selId is not null)
@@ -307,33 +1367,25 @@
             _loadError = "فشل التحميل: " + ex.Message;
             Snackbar.Add(_loadError, Severity.Error);
         }
-        finally
-        {
-            _loading = false;
-        }
+        finally { _loading = false; }
     }
 
     private async Task SelectRole(RoleItem r)
     {
-        _selId = r.Id;
-        _sel = r;
+        _selId = r.Id; _sel = r;
         await LoadMatrix(r);
     }
 
     private async Task LoadMatrix(RoleItem r)
     {
         _selIds = new();
-        if (r.IsSystem) return;   // الأساسي مقفول — مش بنحمّل مصفوفته
-
+        if (r.IsSystem) return;
         try
         {
             var ids = await Http.GetFromJsonAsync<List<int>>($"api/roles/{r.Id}/permissions");
             _selIds = ids is null ? new() : ids.ToHashSet();
         }
-        catch
-        {
-            _selIds = new();
-        }
+        catch { _selIds = new(); }
     }
 
     private void TogglePerm(int pid, bool v)
@@ -360,41 +1412,26 @@
             Snackbar.Add(msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
             if (res.IsSuccessStatusCode) await LoadAsync();
         }
-        catch (Exception ex)
-        {
-            Snackbar.Add("فشل الحفظ: " + ex.Message, Severity.Error);
-        }
-        finally
-        {
-            _saving = false;
-        }
+        catch (Exception ex) { Snackbar.Add("فشل الحفظ: " + ex.Message, Severity.Error); }
+        finally { _saving = false; }
     }
 
-    // ═══════════════════════ مودال الدور ═══════════════════════
-
+    /* ── Modal ── */
     private void OpenCreate()
     {
-        _editId = null;
-        _editIsSystem = false;
-        _roleCode = _roleNameAr = "";
-        _roleNameEn = null;
-        _roleActive = true;
-        _roleMsg = null;
-        _confirmDel = false;
+        _editId = null; _editIsSystem = false;
+        _roleCode = _roleNameAr = ""; _roleNameEn = null;
+        _roleActive = true; _roleMsg = null; _confirmDel = false;
         _roleModalOpen = true;
     }
 
     private void OpenEdit()
     {
         if (_sel is null) return;
-        _editId = _sel.Id;
-        _editIsSystem = _sel.IsSystem;
-        _roleCode = _sel.RoleCode;
-        _roleNameAr = _sel.NameAr;
-        _roleNameEn = _sel.NameEn;
-        _roleActive = _sel.IsActive;
-        _roleMsg = null;
-        _confirmDel = false;
+        _editId = _sel.Id; _editIsSystem = _sel.IsSystem;
+        _roleCode = _sel.RoleCode; _roleNameAr = _sel.NameAr;
+        _roleNameEn = _sel.NameEn; _roleActive = _sel.IsActive;
+        _roleMsg = null; _confirmDel = false;
         _roleModalOpen = true;
     }
 
@@ -405,8 +1442,7 @@
         if (string.IsNullOrWhiteSpace(_roleNameAr))
         { _roleOk = false; _roleMsg = "الاسم العربي مطلوب"; return; }
 
-        _roleSaving = true;
-        _roleMsg = null;
+        _roleSaving = true; _roleMsg = null;
         try
         {
             HttpResponseMessage res;
@@ -433,8 +1469,7 @@
             }
 
             var msg = await MsgOf(res);
-            _roleOk = res.IsSuccessStatusCode;
-            _roleMsg = msg;
+            _roleOk = res.IsSuccessStatusCode; _roleMsg = msg;
 
             if (res.IsSuccessStatusCode)
             {
@@ -443,15 +1478,8 @@
                 await LoadAsync();
             }
         }
-        catch (Exception ex)
-        {
-            _roleOk = false;
-            _roleMsg = "فشل الحفظ: " + ex.Message;
-        }
-        finally
-        {
-            _roleSaving = false;
-        }
+        catch (Exception ex) { _roleOk = false; _roleMsg = "فشل الحفظ: " + ex.Message; }
+        finally { _roleSaving = false; }
     }
 
     private async Task DeleteRoleAsync()
@@ -464,15 +1492,11 @@
             Snackbar.Add(msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
             if (res.IsSuccessStatusCode)
             {
-                CloseRoleModal();
-                _selId = null;
+                CloseRoleModal(); _selId = null;
                 await LoadAsync();
             }
         }
-        catch (Exception ex)
-        {
-            Snackbar.Add("فشل الحذف: " + ex.Message, Severity.Error);
-        }
+        catch (Exception ex) { Snackbar.Add("فشل الحذف: " + ex.Message, Severity.Error); }
     }
 
     private static async Task<string> MsgOf(HttpResponseMessage res)
@@ -485,9 +1509,6 @@
             if (doc.TryGetProperty("message", out var m)) return m.GetString() ?? body;
             return body;
         }
-        catch
-        {
-            return res.IsSuccessStatusCode ? "تم" : $"خطأ HTTP {(int)res.StatusCode}";
-        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ HTTP {(int)res.StatusCode}"; }
     }
 }

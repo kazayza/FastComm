@@ -1,0 +1,256 @@
+@page "/master/paymentterms"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject ISnackbar Snackbar
+
+<PageTitle>شروط الدفع — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">البيانات الأساسية</div>
+                <h1 class="fc-hero-title">شروط الدفع</h1>
+                <p class="fc-hero-sub">نقدي · 15 يوم · 30 يوم — بتحدد تاريخ استحقاق الفاتورة</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="LoadAsync" Style="color:#9FB4CC" />
+                @if (CanManage)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="ResetForm">شرط جديد</MudButton>
+                }
+            </div>
+        </div>
+
+        <div class="fc-kpis-glass">
+            <div class="fc-kpi"><div class="fc-kpi-lb">الشروط</div><div class="fc-kpi-num">@_items.Count</div></div>
+            <div class="fc-kpi"><div class="fc-kpi-lb">أطول مدة</div>
+                <div class="fc-kpi-num">@(_items.Count == 0 ? 0 : _items.Max(i => i.DueDays)) يوم</div></div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanView)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض البيانات الأساسية.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+
+            <div class="fc-alert fc-alert-info">
+                <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Info" /></div>
+                <div class="fc-alert-body">
+                    <div class="fc-alert-title">تاريخ الاستحقاق = تاريخ الفاتورة + عدد الأيام</div>
+                    <div>الشرط بيتربط بالعميل، وبيتطبق على فواتيره تلقائيًا.
+                        <b>نقدي</b> = صفر يوم (الاستحقاق فورًا).</div>
+                </div>
+            </div>
+
+            @if (CanManage)
+            {
+                <div class="fc-fsec">
+                    <div class="fc-fsec-head">
+                        <span class="fc-fsec-n">1</span>
+                        <div>
+                            <div class="fc-fsec-t">@(_editId is null ? "شرط دفع جديد" : $"تعديل: {_f.NameAr}")</div>
+                            <div class="fc-fsec-d">الكود بالحروف الإنجليزية — زي 30D أو CASH</div>
+                        </div>
+                        <span class="fc-fsec-ic"><MudIcon Icon="@Icons.Material.Filled.Event" Size="Size.Small" /></span>
+                    </div>
+
+                    @if (_msg is not null)
+                    {
+                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                                  Class="mb-4">@_msg</MudAlert>
+                    }
+
+                    <div class="fc-form-grid">
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">الكود<i>*</i></div>
+                            <input class="fc-sel fc-sel-lg" @bind="_f.Code" maxlength="30" dir="ltr"
+                                   disabled="@(_editId is not null && _f.UsageCount > 0)" />
+                            @if (_editId is not null && _f.UsageCount > 0)
+                            {
+                                <div class="fc-fld-hint">مقفل — مستخدم في @_f.UsageCount عميل</div>
+                            }
+                        </div>
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">الاسم بالعربي<i>*</i></div>
+                            <input class="fc-sel fc-sel-lg" @bind="_f.NameAr" maxlength="100" />
+                        </div>
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">الاسم بالإنجليزي</div>
+                            <input class="fc-sel fc-sel-lg" @bind="_f.NameEn" maxlength="100" />
+                        </div>
+                        <div class="fc-fld">
+                            <div class="fc-fld-lb">عدد الأيام<i>*</i></div>
+                            <input type="number" min="0" max="730" class="fc-sel fc-sel-lg" value="@_f.DueDays"
+                                   @onchange="e => _f.DueDays = (int)ParseLong(e.Value)" />
+                            <div class="fc-fld-hint">صفر = نقدي (الاستحقاق فورًا)</div>
+                        </div>
+                    </div>
+
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+                        @if (_editId is not null)
+                        {
+                            <MudButton Variant="Variant.Text" OnClick="ResetForm">إلغاء التعديل</MudButton>
+                        }
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
+                                   StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">حفظ</MudButton>
+                    </div>
+                </div>
+            }
+
+            <div class="fc-fsec" style="margin-top:26px">
+                <div class="fc-fsec-head">
+                    <span class="fc-fsec-n">2</span>
+                    <div><div class="fc-fsec-t">الشروط الموجودة</div></div>
+                </div>
+
+                <div class="fc-table-wrap"><table class="fc-table">
+                    <thead><tr>
+                        <th>الكود</th><th>الاسم</th><th>المدة</th><th>عملاء</th><th style="width:70px"></th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach (var t in _items)
+                        {
+                            <tr>
+                                <td><span class="fc-role-chip">@t.Code</span></td>
+                                <td class="fc-cell-main">
+                                    @t.NameAr
+                                    @if (!string.IsNullOrWhiteSpace(t.NameEn))
+                                    {
+                                        <div class="fc-cell-sub">@t.NameEn</div>
+                                    }
+                                </td>
+                                <td>
+                                    @if (t.DueDays == 0)
+                                    {
+                                        <span class="fc-chip fc-chip-ok">نقدي</span>
+                                    }
+                                    else
+                                    {
+                                        <b>@t.DueDays</b> <span class="fc-cell-sub">يوم</span>
+                                    }
+                                </td>
+                                <td>@t.UsageCount</td>
+                                <td>
+                                    @if (CanManage)
+                                    {
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
+                                                       Color="Color.Primary" title="تعديل" OnClick="() => Edit(t)" />
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (_items.Count == 0)
+                        {
+                            <tr><td colspan="5"><div class="fc-empty">مافيش شروط — ضيف أول شرط</div></td></tr>
+                        }
+                    </tbody>
+                </table></div>
+            </div>
+
+        </div></div>
+    }
+</div>
+
+@code {
+    private AuthUser? _user;
+    private bool CanView   => _user?.Can("MASTERDATA.VIEW") ?? false;
+    private bool CanManage => _user?.Can("MASTERDATA.MANAGE") ?? false;
+
+    private List<Item> _items = new();
+    private bool _saving;
+    private string? _msg; private bool _ok = true;
+    private int? _editId;
+    private Form _f = new();
+
+    /// <summary>مطابق لـ <c>MasterDataController.TermItem</c> — 6 حقول.</summary>
+    public class Item
+    {
+        public int PaymentTermId { get; set; }
+        public string Code { get; set; } = "";
+        public string NameAr { get; set; } = "";
+        public string? NameEn { get; set; }
+        public int DueDays { get; set; }
+        public int UsageCount { get; set; }
+    }
+
+    /// <summary>مطابق لـ <c>MasterDataController.TermUpsert</c> — 4 حقول.</summary>
+    public class Form
+    {
+        public string Code { get; set; } = "";
+        public string NameAr { get; set; } = "";
+        public string? NameEn { get; set; }
+        public int DueDays { get; set; } = 30;
+        public int UsageCount { get; set; }   /* للـ UI بس — قفل الكود */
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (!CanView) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/master/payment-terms") ?? new(); }
+        catch (Exception ex) { _ok = false; _msg = "فشل التحميل: " + ex.Message; }
+    }
+
+    private void ResetForm() { _editId = null; _f = new Form(); _msg = null; }
+
+    private void Edit(Item t)
+    {
+        _editId = t.PaymentTermId;
+        _f = new Form
+        {
+            Code = t.Code, NameAr = t.NameAr, NameEn = t.NameEn,
+            DueDays = t.DueDays, UsageCount = t.UsageCount
+        };
+        _msg = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_saving) return;
+        if (string.IsNullOrWhiteSpace(_f.Code))   { _ok = false; _msg = "الكود مطلوب"; return; }
+        if (string.IsNullOrWhiteSpace(_f.NameAr)) { _ok = false; _msg = "الاسم بالعربي مطلوب"; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var payload = new { code = _f.Code, nameAr = _f.NameAr, nameEn = _f.NameEn, dueDays = _f.DueDays };
+            var res = _editId is null
+                ? await Http.PostAsJsonAsync("api/master/payment-terms", payload)
+                : await Http.PutAsJsonAsync($"api/master/payment-terms/{_editId}", payload);
+
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) { ResetForm(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private static long ParseLong(object? v) => long.TryParse(v?.ToString(), out var n) && n >= 0 ? n : 0;
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "✅ تم" : "حصل خطأ — حاول تاني"; }
+    }
+}

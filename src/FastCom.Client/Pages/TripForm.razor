@@ -10,330 +10,1703 @@
 
 <PageTitle>@(_id is null ? "رحلة جديدة" : "تعديل رحلة") — فاست كوم</PageTitle>
 
+
+@* ═══════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════ *@
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
+
             <div>
                 <div class="fc-crumb">التشغيل · الرحلات</div>
-                <h1 class="fc-hero-title">@(_id is null ? "رحلة جديدة" : $"تعديل {TripNumber}")</h1>
+                <h1 class="fc-hero-title">
+                    @if (_id is null)
+                    {
+                        <span>رحلة جديدة</span>
+                        <span class="tf-hero-badge badge-new">جديدة</span>
+                    }
+                    else
+                    {
+                        <span>@TripNumber</span>
+                        <span class="tf-hero-badge @StatusBadgeClass(_status)">@StatusAr(_status)</span>
+                    }
+                </h1>
                 <p class="fc-hero-sub">اختار السائق والسيارة، واربط العمليات اللي هتتنفذ في الخروج ده</p>
             </div>
+
             <div class="fc-head-actions">
-                <MudButton Variant="Variant.Outlined" OnClick="GoBack" Style="color:#9FB4CC">رجوع</MudButton>
+                <button class="tf-back-btn" @onclick="GoBack">
+                    <svg viewBox="0 0 24 24" width="16" height="16"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         aria-hidden="true">
+                        <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    الرحلات
+                </button>
                 @if (CanSave && !_locked)
                 {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving"
-                               StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="SaveAsync">حفظ</MudButton>
+                    <button class="tf-save-btn"
+                            @onclick="SaveAsync"
+                            disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="btn-spinner" aria-hidden="true"></span>
+                            <span>جاري الحفظ...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                <path d="M17 21v-8H7v8M7 3v5h8"
+                                      stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>حفظ الرحلة</span>
+                        }
+                    </button>
                 }
             </div>
+
         </div>
+
+        @* ── ملخص الرحلة (تعديل فقط) ── *@
+        @if (_id is not null && !_loading)
+        {
+            <div class="tf-hero-summary">
+
+                <div class="tf-sum-item">
+                    <div class="tf-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                            <circle cx="12" cy="7" r="4"/>
+                        </svg>
+                    </div>
+                    <div class="tf-sum-text">
+                        <div class="tf-sum-label">السائق</div>
+                        <div class="tf-sum-val">
+                            @(_drivers.FirstOrDefault(d => d.Id == _f.DriverId)?.Label ?? "—")
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tf-sum-div" aria-hidden="true"></div>
+
+                <div class="tf-sum-item">
+                    <div class="tf-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="1" y="3" width="15" height="13" rx="2"/>
+                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                        </svg>
+                    </div>
+                    <div class="tf-sum-text">
+                        <div class="tf-sum-label">العمليات</div>
+                        <div class="tf-sum-val">@_ops.Count عملية</div>
+                    </div>
+                </div>
+
+                <div class="tf-sum-div" aria-hidden="true"></div>
+
+                <div class="tf-sum-item">
+                    <div class="tf-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="1" x2="12" y2="23"/>
+                            <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                        </svg>
+                    </div>
+                    <div class="tf-sum-text">
+                        <div class="tf-sum-label">إيراد الرحلة</div>
+                        <div class="tf-sum-val sum-green">@TotalRevenue.ToString("N2")</div>
+                    </div>
+                </div>
+
+                <div class="tf-sum-div" aria-hidden="true"></div>
+
+                <div class="tf-sum-item">
+                    <div class="tf-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2a10 10 0 100 20A10 10 0 0012 2z"/>
+                            <path d="M12 6v6l4 2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="tf-sum-text">
+                        <div class="tf-sum-label">المصروفات</div>
+                        <div class="tf-sum-val sum-red">@_directCost.ToString("N2")</div>
+                    </div>
+                </div>
+
+            </div>
+        }
+
     </div>
 </div>
 
-<div class="fc-page">
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="tf-body">
+
+    @* No Permission *@
     @if (!CanCreate && _id is null)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية إنشاء رحلة.</MudAlert>
+        <div class="tf-state-box">
+            <div class="tf-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليس لديك صلاحية إنشاء رحلة جديدة</p>
+            <button class="tf-state-back" @onclick="GoBack">العودة للقائمة</button>
+        </div>
     }
+
+    @* Loading *@
     else if (_loading)
     {
-        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+        <div class="tf-loading-wrap">
+            <div class="tf-spinner" aria-label="جاري التحميل"></div>
+            <div class="tf-loading-text">جاري تحميل بيانات الرحلة...</div>
+        </div>
     }
+
+    @* Main Form *@
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
-
-            @if (_msg is not null)
-            {
-                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
-            }
-            @if (_locked)
-            {
-                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
-                    الرحلة حالتها «@StatusAr(_status)» — التعديل مغلق.
-                </MudAlert>
-            }
-
-            <div class="fc-panel-sub" style="margin-bottom:14px">بيانات الرحلة</div>
-            <div class="fc-form-grid">
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">السائق *</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.DriverId" disabled="@_locked">
-                        <option value="0">— اختار السائق —</option>
-                        @foreach (var d in _drivers) { <option value="@d.Id">@d.Label</option> }
-                    </select>
+        @* Locked Banner *@
+        @if (_locked)
+        {
+            <div class="tf-locked-banner" role="alert">
+                <div class="locked-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2"/>
+                        <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                    </svg>
                 </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">السيارة *</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.VehicleId" disabled="@_locked">
-                        <option value="0">— اختار السيارة —</option>
-                        @foreach (var v in _vehicles) { <option value="@v.Id">@v.Label</option> }
-                    </select>
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">المقطورة</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.TrailerId" disabled="@_locked">
-                        <option value="">— من غير مقطورة —</option>
-                        @foreach (var t in _trailers) { <option value="@t.Id">@t.Label</option> }
-                    </select>
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">نوع الرحلة</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.TripTypeId" disabled="@_locked">
-                        <option value="">—</option>
-                        @foreach (var t in _tripTypes) { <option value="@t.Id">@t.Label</option> }
-                    </select>
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">التحرك المخطط</div>
-                    <input type="datetime-local" class="fc-sel fc-sel-lg" value="@_f.PlannedStartAt" disabled="@_locked"
-                           @onchange="e => _f.PlannedStartAt = e.Value?.ToString()" />
+                <div class="locked-text">
+                    <strong>الرحلة مقفولة للتعديل</strong>
+                    <span>الحالة «@StatusAr(_status)» — الرحلة في هذه الحالة لا تقبل التعديل</span>
                 </div>
             </div>
+        }
 
-            <div class="fc-panel-sub" style="margin:26px 0 10px">
-                العمليات على الرحلة
-                <span class="fc-cell-sub" style="font-weight:600"> — @_ops.Count عملية · إيراد @TotalRevenue.ToString("N2")</span>
-            </div>
-
-            <div class="fc-lines">
-                <div class="fc-lines-head" style="grid-template-columns: 44px minmax(240px, 2fr) 190px 190px 46px">
-                    <div>#</div><div>العملية</div><div>استلام من الميناء</div><div>تسليم للعميل</div><div></div>
+        @* Banner *@
+        @if (_msg is not null)
+        {
+            <div class="tf-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                <div aria-hidden="true">
+                    @if (_ok)
+                    {
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                            <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                        </svg>
+                    }
                 </div>
-                @if (_ops.Count == 0)
-                {
-                    <div class="fc-lines-empty">لايوجد عمليات — الرحلة لازم يكون عليها عملية واحدة على الأقل قبل التحرك</div>
-                }
-                @foreach (var op in _ops)
-                {
-                    <div class="fc-lines-row" style="grid-template-columns: 44px minmax(240px, 2fr) 190px 190px 46px">
-                        <div class="fc-cell-sub">@(_ops.IndexOf(op) + 1)</div>
-                        <div>
-                            <select class="fc-sel" @bind="op.OperationId" disabled="@_locked">
-                                <option value="0">— اختار عملية —</option>
-                                @foreach (var a in _available)
-                                {
-                                    <option value="@a.OperationId">@a.OperationNumber — @a.CustomerName (@a.Route)</option>
-                                }
-                            </select>
-                        </div>
-                        <div>
-                            <input type="datetime-local" class="fc-sel" value="@op.PickupAt" disabled="@_locked"
-                                   @onchange="e => op.PickupAt = e.Value?.ToString()" />
-                        </div>
-                        <div>
-                            <input type="datetime-local" class="fc-sel" value="@op.DeliveryAt" disabled="@_locked"
-                                   @onchange="e => op.DeliveryAt = e.Value?.ToString()" />
-                        </div>
-                        <div>
-                            @if (!_locked)
+                <span>@_msg</span>
+                <button class="banner-close" @onclick="() => _msg = null">✕</button>
+            </div>
+        }
+
+
+        @* ═══════ TABS ═══════ *@
+        <div class="tf-tabs-wrap">
+
+            <MudTabs Elevation="0"
+                     Rounded="false"
+                     ApplyEffectsToContainer="true"
+                     PanelClass="tf-tab-panel"
+                     @bind-ActivePanelIndex="_activeTab"
+                     Class="tf-mud-tabs">
+
+
+                @* ══════════════════════════════════════
+                   TAB 1 — بيانات الرحلة
+                ══════════════════════════════════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="ttab-label">
+                            <div class="ttab-icon ttab-blue" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                                </svg>
+                            </div>
+                            <span>بيانات الرحلة</span>
+                            @if (HasTabError(1))
                             {
-                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
-                                               Color="Color.Error" OnClick="() => _ops.Remove(op)" />
+                                <span class="ttab-err-dot" aria-label="يوجد خطأ"></span>
                             }
                         </div>
-                    </div>
-                }
-            </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="tab-section">
+
+                            <div class="tab-section-head">
+                                <div class="tab-section-icon blue" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18"
+                                         fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                        <path d="M16 8h4l3 3v5h-7V8z"/>
+                                        <circle cx="5.5" cy="18.5" r="2.5"/>
+                                        <circle cx="18.5" cy="18.5" r="2.5"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="tab-section-title">بيانات الرحلة الأساسية</div>
+                                    <div class="tab-section-sub">السائق والسيارة والمقطورة والتاريخ</div>
+                                </div>
+                            </div>
+
+                            <div class="tf-form-grid">
+
+                                @* السائق *@
+                                <div class="form-field">
+                                    <label class="field-label">
+                                        السائق
+                                        <span class="field-required">*</span>
+                                    </label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                            <circle cx="12" cy="7" r="4"/>
+                                        </svg>
+                                        <select class="field-input field-select @(_f.DriverId == 0 && _triedSave ? "field-error" : "")"
+                                                @bind="_f.DriverId"
+                                                disabled="@_locked"
+                                                aria-required="true">
+                                            <option value="0">— اختار السائق —</option>
+                                            @foreach (var d in _drivers)
+                                            {
+                                                <option value="@d.Id">@d.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    @if (_f.DriverId == 0 && _triedSave)
+                                    {
+                                        <div class="field-err-msg" role="alert">اختيار السائق مطلوب</div>
+                                    }
+                                </div>
+
+                                @* السيارة *@
+                                <div class="form-field">
+                                    <label class="field-label">
+                                        السيارة
+                                        <span class="field-required">*</span>
+                                    </label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                                        </svg>
+                                        <select class="field-input field-select @(_f.VehicleId == 0 && _triedSave ? "field-error" : "")"
+                                                @bind="_f.VehicleId"
+                                                disabled="@_locked"
+                                                aria-required="true">
+                                            <option value="0">— اختار السيارة —</option>
+                                            @foreach (var v in _vehicles)
+                                            {
+                                                <option value="@v.Id">@v.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    @if (_f.VehicleId == 0 && _triedSave)
+                                    {
+                                        <div class="field-err-msg" role="alert">اختيار السيارة مطلوب</div>
+                                    }
+                                </div>
+
+                                @* المقطورة *@
+                                <div class="form-field">
+                                    <label class="field-label">المقطورة</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <rect x="2" y="7" width="20" height="10" rx="2"/>
+                                            <path d="M6 7V5M18 7V5" stroke-linecap="round"/>
+                                        </svg>
+                                        <select class="field-input field-select"
+                                                @bind="_f.TrailerId"
+                                                disabled="@_locked">
+                                            <option value="">— من غير مقطورة —</option>
+                                            @foreach (var t in _trailers)
+                                            {
+                                                <option value="@t.Id">@t.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="field-hint">
+                                        <svg viewBox="0 0 16 16" width="10" height="10"
+                                             fill="none" stroke="currentColor" stroke-width="1.8"
+                                             aria-hidden="true">
+                                            <circle cx="8" cy="8" r="6"/>
+                                            <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                        </svg>
+                                        اختياري
+                                    </div>
+                                </div>
+
+                                @* نوع الرحلة *@
+                                <div class="form-field">
+                                    <label class="field-label">نوع الرحلة</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <circle cx="12" cy="12" r="10"/>
+                                            <path d="M12 8v4l3 3" stroke-linecap="round"/>
+                                        </svg>
+                                        <select class="field-input field-select"
+                                                @bind="_f.TripTypeId"
+                                                disabled="@_locked">
+                                            <option value="">—</option>
+                                            @foreach (var t in _tripTypes)
+                                            {
+                                                <option value="@t.Id">@t.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
+                                @* التحرك المخطط *@
+                                <div class="form-field">
+                                    <label class="field-label">التحرك المخطط</label>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="3" y="5" width="18" height="16" rx="2"/>
+                                                <path d="M7 3V7M17 3V7M3 10H21" stroke-linecap="round"/>
+                                            </svg>
+                                        </span>
+                                        <input type="datetime-local"
+                                               class="field-input with-prefix"
+                                               value="@_f.PlannedStartAt"
+                                               disabled="@_locked"
+                                               @onchange="e => _f.PlannedStartAt = e.Value?.ToString()" />
+                                    </div>
+                                </div>
+
+                            </div>
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+                @* ══════════════════════════════════════
+                   TAB 2 — العمليات
+                ══════════════════════════════════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="ttab-label">
+                            <div class="ttab-icon ttab-orange" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                </svg>
+                            </div>
+                            <span>العمليات</span>
+                            @if (_ops.Count > 0)
+                            {
+                                <span class="ttab-count">@_ops.Count</span>
+                            }
+                            @if (HasTabError(2))
+                            {
+                                <span class="ttab-err-dot" aria-label="يوجد خطأ"></span>
+                            }
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="tab-section">
+
+                            <div class="tab-section-head">
+                                <div class="tab-section-icon orange" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18"
+                                         fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                    </svg>
+                                </div>
+                                <div style="flex:1">
+                                    <div class="tab-section-title">العمليات على الرحلة</div>
+                                    <div class="tab-section-sub">
+                                        @_ops.Count عملية · إيراد إجمالي
+                                        <strong>@TotalRevenue.ToString("N2") ج.م</strong>
+                                    </div>
+                                </div>
+                                @if (!_locked)
+                                {
+                                    <button class="tf-add-op-btn" @onclick="AddOp">
+                                        <svg viewBox="0 0 24 24" width="15" height="15"
+                                             fill="none" stroke="currentColor" stroke-width="2.5"
+                                             aria-hidden="true">
+                                            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                        </svg>
+                                        أضف عملية
+                                    </button>
+                                }
+                            </div>
+
+                            @if (_ops.Count == 0)
+                            {
+                                <div class="tf-ops-empty">
+                                    <div class="ops-empty-icon" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="40" height="40"
+                                             fill="none" stroke="currentColor" stroke-width="1.4">
+                                            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                        </svg>
+                                    </div>
+                                    <div class="ops-empty-title">لا توجد عمليات</div>
+                                    <div class="ops-empty-sub">
+                                        الرحلة لازم يكون عليها عملية واحدة على الأقل قبل التحرك
+                                    </div>
+                                    @if (!_locked)
+                                    {
+                                        <button class="tf-add-op-btn mt-10" @onclick="AddOp">
+                                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                                 fill="none" stroke="currentColor" stroke-width="2.5"
+                                                 aria-hidden="true">
+                                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                            </svg>
+                                            أضف عملية
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="tf-op-cards">
+
+                                    @foreach (var op in _ops)
+                                    {
+                                        var idx    = _ops.IndexOf(op);
+                                        var avail  = _available.FirstOrDefault(a => a.OperationId == op.OperationId);
+                                        var hasOp  = op.OperationId > 0;
+
+                                        <div class="tf-op-card">
+
+                                            @* Card Header *@
+                                            <div class="tf-op-head">
+                                                <div class="tf-op-num">@(idx + 1)</div>
+                                                @if (hasOp && avail is not null)
+                                                {
+                                                    <div class="tf-op-badge">
+                                                        <svg viewBox="0 0 24 24" width="12" height="12"
+                                                             fill="none" stroke="currentColor" stroke-width="2"
+                                                             aria-hidden="true">
+                                                            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                                        </svg>
+                                                        @avail.OperationNumber
+                                                    </div>
+                                                    <div class="tf-op-customer">@avail.CustomerName</div>
+                                                    @if (!string.IsNullOrWhiteSpace(avail.Route))
+                                                    {
+                                                        <div class="tf-op-route">📍 @avail.Route</div>
+                                                    }
+                                                    <div class="tf-op-revenue">
+                                                        إيراد: <strong>@avail.RevenueNet.ToString("N2") ج.م</strong>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="tf-op-badge unselected">اختار عملية</div>
+                                                }
+                                                @if (!_locked)
+                                                {
+                                                    <button class="tf-op-del"
+                                                            @onclick="() => _ops.Remove(op)"
+                                                            title="حذف السطر"
+                                                            aria-label="حذف العملية @(idx + 1)">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+                                            </div>
+
+                                            @* Card Body *@
+                                            <div class="tf-op-body">
+
+                                                <div class="form-field">
+                                                    <label class="field-label">العملية</label>
+                                                    <div class="field-select-wrap">
+                                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                                             width="13" height="13" fill="none"
+                                                             stroke="currentColor" stroke-width="2"
+                                                             aria-hidden="true">
+                                                            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                                        </svg>
+                                                        <select class="field-input field-select"
+                                                                @bind="op.OperationId"
+                                                                disabled="@_locked">
+                                                            <option value="0">— اختار عملية —</option>
+                                                            @foreach (var a in _available)
+                                                            {
+                                                                <option value="@a.OperationId">
+                                                                    @a.OperationNumber — @a.CustomerName (@a.Route)
+                                                                </option>
+                                                            }
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                <div class="form-field">
+                                                    <label class="field-label">استلام من الميناء</label>
+                                                    <div class="field-input-group">
+                                                        <span class="field-prefix" aria-hidden="true">
+                                                            <svg viewBox="0 0 24 24" width="13" height="13"
+                                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                                <circle cx="12" cy="12" r="10"/>
+                                                                <path d="M12 6v6l4 2" stroke-linecap="round"/>
+                                                            </svg>
+                                                        </span>
+                                                        <input type="datetime-local"
+                                                               class="field-input with-prefix"
+                                                               value="@op.PickupAt"
+                                                               disabled="@_locked"
+                                                               @onchange="e => op.PickupAt = e.Value?.ToString()" />
+                                                    </div>
+                                                </div>
+
+                                                <div class="form-field">
+                                                    <label class="field-label">تسليم للعميل</label>
+                                                    <div class="field-input-group">
+                                                        <span class="field-prefix" aria-hidden="true">
+                                                            <svg viewBox="0 0 24 24" width="13" height="13"
+                                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                                <path d="M22 11.08V12a10 10 0 11-5.93-9.14"
+                                                                      stroke-linecap="round"/>
+                                                                <path d="M22 4L12 14.01l-3-3"
+                                                                      stroke-linecap="round" stroke-linejoin="round"/>
+                                                            </svg>
+                                                        </span>
+                                                        <input type="datetime-local"
+                                                               class="field-input with-prefix"
+                                                               value="@op.DeliveryAt"
+                                                               disabled="@_locked"
+                                                               @onchange="e => op.DeliveryAt = e.Value?.ToString()" />
+                                                    </div>
+                                                </div>
+
+                                            </div>
+
+                                        </div>
+                                    }
+
+                                </div>
+                            }
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+                @* ══════════════════════════════════════
+                   TAB 3 — توزيع التكلفة والملاحظات
+                ══════════════════════════════════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="ttab-label">
+                            <div class="ttab-icon ttab-green" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="12" y1="1" x2="12" y2="23"/>
+                                    <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                                </svg>
+                            </div>
+                            <span>التكلفة والملاحظات</span>
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="tab-section">
+
+                            <div class="tab-section-head">
+                                <div class="tab-section-icon green" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18"
+                                         fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="12" y1="1" x2="12" y2="23"/>
+                                        <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="tab-section-title">توزيع تكلفة الرحلة والملاحظات</div>
+                                    <div class="tab-section-sub">وزّع المصروفات على العمليات المرتبطة</div>
+                                </div>
+                            </div>
+
+                            @* توزيع التكلفة — تعديل فقط *@
+                            @if (_id is null)
+                            {
+                                <div class="tf-new-hint">
+                                    <svg viewBox="0 0 24 24" width="18" height="18"
+                                         fill="none" stroke="currentColor" stroke-width="2"
+                                         aria-hidden="true">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                                    </svg>
+                                    <div>
+                                        <strong>توزيع التكلفة متاح بعد الحفظ</strong>
+                                        <p>احفظ الرحلة الأول، وبعدين سجّل المصروفات ووزّع التكلفة على العمليات</p>
+                                    </div>
+                                </div>
+                            }
+                            else if (_directCost <= 0)
+                            {
+                                <div class="tf-info-box">
+                                    <svg viewBox="0 0 24 24" width="18" height="18"
+                                         fill="none" stroke="currentColor" stroke-width="2"
+                                         aria-hidden="true">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                                    </svg>
+                                    <div>
+                                        مافيش مصروفات مسجلة على الرحلة لسه —
+                                        سجّل المصروفات الأول وبعدين وزّع
+                                    </div>
+                                </div>
+                            }
+                            else if (_distributableCost <= 0)
+                            {
+                                <div class="tf-info-box">
+                                    <svg viewBox="0 0 24 24" width="18" height="18"
+                                         fill="none" stroke="currentColor" stroke-width="2"
+                                         aria-hidden="true">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                                    </svg>
+                                    <div>
+                                        كل مصروفات الرحلة مربوطة بعمليات مباشرةً — مافيش حاجة تحتاج توزيع.
+                                        (المصروف اللي عليه عملية بيتحسب عليها لوحده)
+                                    </div>
+                                </div>
+                            }
+                            else if (_allocRows.Count == 0)
+                            {
+                                <div class="tf-info-box">
+                                    <svg viewBox="0 0 24 24" width="18" height="18"
+                                         fill="none" stroke="currentColor" stroke-width="2"
+                                         aria-hidden="true">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                                    </svg>
+                                    <div>لا يوجد عمليات مربوطة — احفظ الرحلة بعملياتها الأول</div>
+                                </div>
+                            }
+                            else
+                            {
+                                @* ── Cost Summary Strip ── *@
+                                <div class="tf-cost-strip">
+                                    <div class="cost-strip-item">
+                                        <div class="cost-strip-label">مصروفات الرحلة</div>
+                                        <div class="cost-strip-val cost-red">@_directCost.ToString("N2")</div>
+                                    </div>
+                                    <div class="cost-strip-sep" aria-hidden="true"></div>
+                                    <div class="cost-strip-item">
+                                        <div class="cost-strip-label">القابل للتوزيع</div>
+                                        <div class="cost-strip-val cost-amber">@_distributableCost.ToString("N2")</div>
+                                    </div>
+                                    <div class="cost-strip-sep" aria-hidden="true"></div>
+                                    <div class="cost-strip-item">
+                                        <div class="cost-strip-label">اللي اتوزّع</div>
+                                        <div class="cost-strip-val cost-green">
+                                            @_allocRows.Sum(a => a.Amount).ToString("N2")
+                                        </div>
+                                    </div>
+                                    <div class="cost-strip-sep" aria-hidden="true"></div>
+                                    <div class="cost-strip-item">
+                                        <div class="cost-strip-label">المتبقي</div>
+                                        @{
+                                            var remaining = _distributableCost - _allocRows.Sum(a => a.Amount);
+                                        }
+                                        <div class="cost-strip-val @(remaining <= 0 ? "cost-green" : "cost-red")">
+                                            @remaining.ToString("N2")
+                                        </div>
+                                    </div>
+                                </div>
+
+                                @* ── طريقة التوزيع ── *@
+                                <div class="tf-basis-row">
+                                    <div class="form-field" style="max-width:280px">
+                                        <label class="field-label">طريقة التوزيع</label>
+                                        <div class="field-select-wrap">
+                                            <svg class="field-select-icon" viewBox="0 0 24 24"
+                                                 width="14" height="14" fill="none"
+                                                 stroke="currentColor" stroke-width="2"
+                                                 aria-hidden="true">
+                                                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                                <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round"/>
+                                            </svg>
+                                            <select class="field-input field-select" @bind="_basis">
+                                                <option value="Manual">متساوي</option>
+                                                <option value="RevenueShare">على حسب الإيراد</option>
+                                                <option value="ContainerCount">على حسب عدد الحاويات</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <button class="tf-distribute-btn"
+                                            @onclick="DistributeAsync"
+                                            disabled="@_distributing">
+                                        @if (_distributing)
+                                        {
+                                            <span class="btn-spinner sm" aria-hidden="true"></span>
+                                            <span>جاري التوزيع...</span>
+                                        }
+                                        else
+                                        {
+                                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                                 fill="none" stroke="currentColor" stroke-width="2"
+                                                 aria-hidden="true">
+                                                <line x1="12" y1="1" x2="12" y2="23"/>
+                                                <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                                            </svg>
+                                            <span>وزّع التكلفة</span>
+                                        }
+                                    </button>
+                                    <div class="tf-distribute-note">
+                                        <svg viewBox="0 0 16 16" width="11" height="11"
+                                             fill="none" stroke="currentColor" stroke-width="1.8"
+                                             aria-hidden="true">
+                                            <circle cx="8" cy="8" r="6"/>
+                                            <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                        </svg>
+                                        الباقي على آخر عملية — المجموع بيطابق المصروفات بالظبط
+                                    </div>
+                                </div>
+
+                                @* ── جدول التوزيع ── *@
+                                <div class="tf-alloc-table-wrap">
+                                    <table class="tf-alloc-table" aria-label="جدول توزيع التكلفة">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col" class="th-start">العملية</th>
+                                                <th scope="col">الإيراد</th>
+                                                <th scope="col">النسبة</th>
+                                                <th scope="col">المبلغ المُوزّع</th>
+                                                <th scope="col">شريط</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var a in _allocRows)
+                                            {
+                                                <tr>
+                                                    <td class="td-start">
+                                                        <div class="alloc-op-name">@a.OperationNumber</div>
+                                                    </td>
+                                                    <td class="td-num">@a.Revenue.ToString("N2") <small>ج.م</small></td>
+                                                    <td>
+                                                        <span class="alloc-pct-chip">
+                                                            @a.Percent.ToString("0.##")%
+                                                        </span>
+                                                    </td>
+                                                    <td class="td-num td-strong">
+                                                        @a.Amount.ToString("N2") <small>ج.م</small>
+                                                    </td>
+                                                    <td>
+                                                        <div class="alloc-bar-wrap">
+                                                            <div class="alloc-bar">
+                                                                <div class="alloc-bar-fill"
+                                                                     style="width:@a.Percent%"></div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+
+                            @* ── ملاحظات ── *@
+                            <div class="tf-notes-head">
+                                <svg viewBox="0 0 24 24" width="16" height="16"
+                                     fill="none" stroke="currentColor" stroke-width="2"
+                                     aria-hidden="true">
+                                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                                </svg>
+                                ملاحظات الرحلة
+                            </div>
+
+                            <div class="form-field">
+                                <textarea class="field-input field-textarea"
+                                          rows="4"
+                                          maxlength="1000"
+                                          disabled="@_locked"
+                                          placeholder="أي ملاحظات خاصة بهذه الرحلة..."
+                                          @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
+                            </div>
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+            </MudTabs>
+        </div>
+
+
+        @* ── Bottom Actions ── *@
+        <div class="tf-bottom-actions">
+
+            <button class="tf-bottom-back" @onclick="GoBack">
+                <svg viewBox="0 0 24 24" width="15" height="15"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     aria-hidden="true">
+                    <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                رجوع للقائمة
+            </button>
 
             @if (CanSave && !_locked)
             {
-                <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-3"
-                           StartIcon="@Icons.Material.Filled.Add" OnClick="AddOp">ضيف عملية</MudButton>
-            }
+                <div class="tf-bottom-right">
 
-            @if (_id is not null)
-            {
-                <div class="fc-panel-sub" style="margin:30px 0 10px">
-                    توزيع تكلفة الرحلة على العمليات
-                    <span class="fc-cell-sub" style="font-weight:600">
-                        — مصروفات الرحلة @_directCost.ToString("N2") · اللي اتوزّع @_allocRows.Sum(a => a.Amount).ToString("N2")
-                    </span>
-                </div>
+                    @if (_activeTab < 2)
+                    {
+                        <button class="tf-next-btn" @onclick="() => _activeTab++">
+                            التالي
+                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    }
 
-                @if (_directCost <= 0)
-                {
-                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-                        مافيش مصروفات مسجلة على الرحلة لسه — سجّل المصروفات الأول (Step 8) وبعدين وزّع.
-                    </MudAlert>
-                }
-                else if (_allocRows.Count == 0)
-                {
-                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-                        لايوجد عمليات مربوطة — احفظ الرحلة بعملياتها الأول.
-                    </MudAlert>
-                }
-                else
-                {
-                    <div class="fc-form-grid" style="max-width:560px; margin-bottom:14px">
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">طريقة التوزيع</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_basis">
-                                <option value="Manual">متساوي</option>
-                                <option value="RevenueShare">على حسب الإيراد</option>
-                                <option value="ContainerCount">على حسب عدد الحاويات</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="fc-lines">
-                        <div class="fc-lines-head" style="grid-template-columns: minmax(180px, 2fr) 130px 130px 140px">
-                            <div>العملية</div><div>الإيراد</div><div>النسبة %</div><div>المبلغ</div>
-                        </div>
-                        @foreach (var a in _allocRows)
+                    <button class="tf-bottom-save"
+                            @onclick="SaveAsync"
+                            disabled="@_saving">
+                        @if (_saving)
                         {
-                            <div class="fc-lines-row" style="grid-template-columns: minmax(180px, 2fr) 130px 130px 140px">
-                                <div class="fc-cell-main">@a.OperationNumber</div>
-                                <div class="fc-cell-sub">@a.Revenue.ToString("N2")</div>
-                                <div class="fc-cell-sub">@a.Percent.ToString("0.##")%</div>
-                                <div class="fc-rev-total">@a.Amount.ToString("N2")</div>
-                            </div>
+                            <span class="btn-spinner sm" aria-hidden="true"></span>
+                            <span>جاري الحفظ...</span>
                         }
-                    </div>
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                <path d="M17 21v-8H7v8M7 3v5h8"
+                                      stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>حفظ الرحلة</span>
+                        }
+                    </button>
 
-                    <div style="display:flex; gap:10px; align-items:center; margin-top:14px; flex-wrap:wrap">
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_distributing"
-                                   StartIcon="@Icons.Material.Filled.Savings" OnClick="DistributeAsync">وزّع التكلفة</MudButton>
-                        <span class="fc-cell-sub">باقي التوزيع على آخر عملية — فالمجموع بيطابق المصروفات بالظبط</span>
-                    </div>
-                }
+                </div>
             }
 
-            <div class="fc-panel-sub" style="margin:26px 0 8px">ملاحظات</div>
-            <textarea class="fc-sel" rows="3" maxlength="1000" disabled="@_locked"
-                      @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
+        </div>
 
-            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:26px">
-                <MudButton Variant="Variant.Outlined" OnClick="GoBack">رجوع</MudButton>
-                @if (CanSave && !_locked)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveAsync">حفظ</MudButton>
-                }
-            </div>
-
-        </div></div>
     }
 </div>
 
+
+@* ═══════════════════════════════════════════
+   CSS
+═══════════════════════════════════════════ *@
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-orange:    #e06520;
+        --fc-orange-lt: #fff3ec;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ================================================================
+       HERO ADDITIONS
+    ================================================================ */
+    .tf-hero-badge {
+        display: inline-flex; align-items: center;
+        padding: 3px 10px; border-radius: 20px;
+        font-size: 11px; font-weight: 800;
+    }
+
+    .badge-new       { background: rgba(34,197,94,.2);  color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+    .badge-planned   { background: rgba(255,255,255,.12); color: rgba(255,255,255,.75); border: 1px solid rgba(255,255,255,.2); }
+    .badge-assigned  { background: rgba(59,130,246,.25); color: #93c5fd; border: 1px solid rgba(59,130,246,.3); }
+    .badge-started   { background: rgba(224,101,32,.25); color: #fdba74; border: 1px solid rgba(224,101,32,.3); }
+    .badge-completed { background: rgba(34,197,94,.25);  color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+    .badge-cancelled { background: rgba(239,68,68,.25);  color: #fca5a5; border: 1px solid rgba(239,68,68,.3); }
+
+    .tf-back-btn {
+        display: inline-flex; align-items: center; gap: 5px;
+        height: 36px; padding: 0 13px;
+        border: 1px solid rgba(255,255,255,.2); border-radius: 9px;
+        background: rgba(255,255,255,.08); color: rgba(255,255,255,.75);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: background .15s ease;
+    }
+    .tf-back-btn:hover { background: rgba(255,255,255,.14); }
+    .tf-back-btn svg  { transform: rotate(180deg); }
+
+    .tf-save-btn {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 38px; padding: 0 18px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: #fff; font-family: inherit;
+        font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(22,163,74,.35);
+        transition: all .15s ease;
+    }
+    .tf-save-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(22,163,74,.4); }
+    .tf-save-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* Hero Summary */
+    .tf-hero-summary {
+        display: flex; align-items: stretch;
+        background: rgba(0,0,0,.15); border: 1px solid rgba(255,255,255,.10);
+        border-radius: 12px; overflow: hidden; backdrop-filter: blur(8px);
+        margin-top: 4px;
+    }
+
+    .tf-sum-item {
+        flex: 1; display: flex; align-items: center; gap: 10px;
+        padding: 12px 16px;
+    }
+
+    .tf-sum-div { width: 1px; background: rgba(255,255,255,.10); align-self: stretch; }
+
+    .tf-sum-icon {
+        width: 32px; height: 32px; flex: 0 0 32px; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(255,255,255,.10); color: rgba(255,255,255,.7);
+    }
+
+    .tf-sum-label { font-size: 9.5px; color: rgba(255,255,255,.5); font-weight: 600; }
+    .tf-sum-val   { font-size: 13px; font-weight: 800; color: #fff; margin-top: 2px; }
+    .sum-green    { color: #6ee7b7; }
+    .sum-red      { color: #fca5a5; }
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    .tf-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 180px);
+        padding: 16px 20px 32px;
+        max-width: 1050px; width: 100%;
+        margin: 0 auto;
+        display: flex; flex-direction: column; gap: 14px;
+    }
+
+    /* ================================================================
+       STATES
+    ================================================================ */
+    .tf-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 280px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .tf-state-icon {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .tf-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+
+    .tf-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .tf-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    .tf-state-back {
+        margin-top: 8px; padding: 9px 20px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-text);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: background .15s ease;
+    }
+    .tf-state-back:hover { background: #f0f4fa; }
+
+    /* ================================================================
+       LOADING
+    ================================================================ */
+    .tf-loading-wrap {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 14px; min-height: 260px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .tf-spinner {
+        width: 36px; height: 36px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: tf-spin .75s linear infinite;
+    }
+    @@keyframes tf-spin { to { transform: rotate(360deg); } }
+
+    .tf-loading-text { font-size: 13px; font-weight: 600; color: var(--fc-muted); }
+
+    /* ================================================================
+       BANNERS
+    ================================================================ */
+    .tf-locked-banner {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px; border-radius: 12px;
+        background: linear-gradient(135deg, #fffbeb, #fff8e0);
+        border: 1px solid #fde68a;
+    }
+    .locked-icon  { flex: 0 0 auto; color: #d97706; }
+    .locked-text  { display: flex; flex-direction: column; gap: 2px; }
+    .locked-text strong { font-size: 13px; font-weight: 800; color: #92400e; }
+    .locked-text span   { font-size: 11.5px; color: #b45309; }
+
+    .tf-banner {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 16px; border-radius: 10px;
+        font-size: 13px; font-weight: 600;
+        animation: tf-banner-in .25s ease;
+    }
+    @@keyframes tf-banner-in {
+        from { opacity: 0; transform: translateY(-6px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .banner-success { background: #e9f8f0; color: #0e7a43; border: 1px solid #b5e8d0; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8d0; }
+    .banner-close {
+        margin-right: auto; background: none; border: none;
+        color: inherit; opacity: .6; cursor: pointer; font-size: 13px;
+    }
+    .banner-close:hover { opacity: 1; }
+
+    /* ================================================================
+       TABS
+    ================================================================ */
+    .tf-tabs-wrap {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden; flex: 1;
+    }
+
+    .tf-mud-tabs .mud-tabs-toolbar {
+        background: linear-gradient(180deg, #f9fafd 0%, #f3f6fb 100%);
+        border-bottom: 2px solid #e8edf5;
+        padding: 0 16px; min-height: 54px;
+    }
+
+    .tf-mud-tabs .mud-tab {
+        font-family: "Cairo","Tajawal","Inter",Arial,sans-serif;
+        font-size: 12px; font-weight: 700; color: var(--fc-muted);
+        padding: 0 6px; min-width: unset; transition: color .15s ease;
+    }
+
+    .tf-mud-tabs .mud-tab.mud-tab-active { color: var(--fc-blue) !important; font-weight: 800; }
+    .tf-mud-tabs .mud-tab-slider {
+        background: var(--fc-blue) !important;
+        height: 3px; border-radius: 3px 3px 0 0;
+    }
+    .tf-mud-tabs .mud-tab:hover:not(.mud-tab-active) {
+        color: var(--fc-text); background: rgba(0,0,0,.03); border-radius: 8px;
+    }
+
+    .tf-tab-panel { padding: 0; }
+
+    .ttab-label { display: flex; align-items: center; gap: 7px; padding: 0 4px; white-space: nowrap; }
+
+    .ttab-icon {
+        width: 26px; height: 26px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 7px;
+    }
+
+    .ttab-blue   { background: var(--fc-blue-lt);   color: var(--fc-blue); }
+    .ttab-orange { background: var(--fc-orange-lt);  color: var(--fc-orange); }
+    .ttab-green  { background: var(--fc-green-lt);   color: var(--fc-green); }
+
+    .ttab-err-dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--fc-red); flex: 0 0 7px;
+        animation: tf-pulse 1.5s ease infinite;
+    }
+    @@keyframes tf-pulse {
+        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.4); }
+        50%      { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
+    }
+
+    .ttab-count {
+        min-width: 18px; height: 18px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 5px; padding: 0 4px;
+        background: var(--fc-orange-lt); color: var(--fc-orange);
+        font-size: 10px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    /* ================================================================
+       TAB SECTION
+    ================================================================ */
+    .tab-section { padding: 24px 28px 28px; }
+
+    .tab-section-head {
+        display: flex; align-items: flex-start; gap: 12px;
+        margin-bottom: 22px; padding-bottom: 18px;
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .tab-section-icon {
+        width: 42px; height: 42px; flex: 0 0 42px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 12px;
+    }
+    .tab-section-icon.blue   { background: var(--fc-blue-lt);   color: var(--fc-blue);   border: 1px solid #bdd4fc; }
+    .tab-section-icon.orange { background: var(--fc-orange-lt); color: var(--fc-orange); border: 1px solid #f0c8a8; }
+    .tab-section-icon.green  { background: var(--fc-green-lt);  color: var(--fc-green);  border: 1px solid #b0e0c5; }
+
+    .tab-section-title { font-size: 15px; font-weight: 800; color: #1c2b43; line-height: 1.2; }
+    .tab-section-sub   { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
+
+    /* ================================================================
+       FORM
+    ================================================================ */
+    .tf-form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+
+    .form-field { display: flex; flex-direction: column; gap: 6px; }
+
+    .field-label { font-size: 12px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 4px; }
+
+    .field-required { color: var(--fc-red); font-size: 14px; line-height: 1; }
+
+    .field-input {
+        height: 42px; width: 100%;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 13px; padding: 0 12px;
+        outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .field-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); background: #fff; }
+    .field-input:disabled { opacity: .7; background: #f3f5f8; cursor: not-allowed; }
+    .field-input.field-error { border-color: var(--fc-red); box-shadow: 0 0 0 3px rgba(224,48,72,.08); }
+    .field-input::placeholder { color: #b0bcc8; }
+
+    .field-textarea { height: auto; padding: 10px 12px; resize: vertical; min-height: 90px; }
+
+    .field-select-wrap { position: relative; display: flex; align-items: center; }
+    .field-select-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; z-index: 1; }
+    .field-select { padding-right: 36px; cursor: pointer; -webkit-appearance: none; appearance: none; }
+    .field-select:disabled { cursor: not-allowed; }
+
+    .field-input-group { position: relative; display: flex; align-items: center; }
+    .field-prefix {
+        position: absolute; right: 12px;
+        display: flex; align-items: center;
+        color: #9aaabb; pointer-events: none; z-index: 1;
+    }
+    .field-input.with-prefix { padding-right: 36px; }
+
+    .field-hint { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--fc-muted); font-weight: 500; }
+
+    .field-err-msg { font-size: 10.5px; color: var(--fc-red); font-weight: 700; }
+
+    /* ================================================================
+       OPERATION CARDS
+    ================================================================ */
+    .tf-ops-empty {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 10px; min-height: 180px;
+        border: 2px dashed #f0c8a8; border-radius: 12px;
+        background: #fff8f5; text-align: center; padding: 30px;
+    }
+
+    .ops-empty-icon {
+        width: 70px; height: 70px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: #fff0e8; color: #f0b0a0;
+    }
+    .ops-empty-title { font-size: 14px; font-weight: 800; color: var(--fc-text); }
+    .ops-empty-sub   { font-size: 12px; color: var(--fc-muted); max-width: 300px; text-align: center; }
+
+    .tf-add-op-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 14px;
+        border: 1.5px solid var(--fc-orange); border-radius: 9px;
+        background: var(--fc-orange-lt); color: var(--fc-orange);
+        font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; white-space: nowrap; flex-shrink: 0;
+        transition: all .15s ease;
+    }
+    .tf-add-op-btn:hover { background: var(--fc-orange); color: #fff; }
+    .tf-add-op-btn.mt-10 { margin-top: 10px; }
+
+    .tf-op-cards { display: flex; flex-direction: column; gap: 12px; }
+
+    .tf-op-card {
+        border: 1px solid #e8edf8; border-radius: 12px;
+        background: linear-gradient(180deg, #fafcff, #f5f8fb);
+        overflow: hidden;
+        transition: border-color .18s ease, box-shadow .18s ease;
+    }
+    .tf-op-card:hover { border-color: #c8d8f0; box-shadow: 0 4px 14px rgba(15,41,82,.06); }
+
+    .tf-op-head {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px;
+        background: linear-gradient(180deg, #f0f5fc, #eaf1f9);
+        border-bottom: 1px solid #dce8f5;
+        flex-wrap: wrap;
+    }
+
+    .tf-op-num {
+        width: 26px; height: 26px; border-radius: 8px; flex: 0 0 26px;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--fc-orange); color: #fff;
+        font-size: 11px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .tf-op-badge {
+        display: flex; align-items: center; gap: 5px;
+        padding: 3px 10px; border-radius: 7px;
+        background: rgba(224,101,32,.08); border: 1px solid rgba(224,101,32,.15);
+        color: var(--fc-orange); font-size: 11px; font-weight: 800; white-space: nowrap;
+    }
+    .tf-op-badge.unselected { background: #f0f3f8; border-color: #dde5f0; color: #9aaabb; }
+
+    .tf-op-customer { font-size: 11px; font-weight: 700; color: #344563; }
+    .tf-op-route    { font-size: 10px; color: #9aaabb; }
+    .tf-op-revenue  { font-size: 10.5px; color: #5a6e88; margin-right: auto; }
+    .tf-op-revenue strong { color: var(--fc-green); font-weight: 900; }
+
+    .tf-op-del {
+        width: 28px; height: 28px; border-radius: 7px; flex: 0 0 28px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; background: transparent;
+        color: var(--fc-red); cursor: pointer; transition: all .15s ease;
+    }
+    .tf-op-del:hover { background: var(--fc-red-lt); border-color: #ffc8cf; }
+
+    .tf-op-body {
+        display: grid;
+        grid-template-columns: 2fr 1.5fr 1.5fr;
+        gap: 14px; padding: 14px 16px;
+    }
+
+    /* ================================================================
+       COST SECTION
+    ================================================================ */
+    .tf-new-hint {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 16px 18px; border-radius: 12px;
+        background: var(--fc-blue-lt); border: 1px solid #bdd4fc;
+        margin-bottom: 20px;
+    }
+    .tf-new-hint svg { flex: 0 0 auto; color: var(--fc-blue); margin-top: 2px; }
+    .tf-new-hint strong { font-size: 13px; font-weight: 800; color: var(--fc-blue); display: block; }
+    .tf-new-hint p { margin: 3px 0 0; font-size: 11.5px; color: #3a6cc0; }
+
+    .tf-info-box {
+        display: flex; align-items: flex-start; gap: 10px;
+        padding: 12px 14px; border-radius: 10px;
+        background: #fafbfe; border: 1px solid #e4eaf3;
+        color: var(--fc-muted); font-size: 12px; font-weight: 600;
+        margin-bottom: 20px;
+    }
+    .tf-info-box svg { flex: 0 0 auto; color: var(--fc-blue); }
+
+    /* Cost Strip */
+    .tf-cost-strip {
+        display: flex; align-items: stretch;
+        background: linear-gradient(135deg, #f5f8ff, #eef4ff);
+        border: 1px solid #c8d8fb; border-radius: 12px;
+        overflow: hidden; margin-bottom: 18px;
+    }
+
+    .cost-strip-item {
+        flex: 1; display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 4px; padding: 14px 10px; text-align: center;
+    }
+
+    .cost-strip-sep { width: 1px; background: #c8d8fb; align-self: stretch; }
+
+    .cost-strip-label { font-size: 9.5px; color: #8899ae; font-weight: 600; }
+    .cost-strip-val {
+        font-family: "Inter", Arial, sans-serif;
+        font-size: 16px; font-weight: 900; color: var(--fc-text);
+    }
+    .cost-red   { color: var(--fc-red); }
+    .cost-amber { color: #b87d08; }
+    .cost-green { color: var(--fc-green); }
+
+    /* Basis Row */
+    .tf-basis-row {
+        display: flex; align-items: flex-end; gap: 12px;
+        flex-wrap: wrap; margin-bottom: 14px;
+    }
+
+    .tf-distribute-btn {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 42px; padding: 0 18px;
+        border: 0; border-radius: 9px;
+        background: linear-gradient(135deg, #16a35b, #0d8a48);
+        color: #fff; font-family: inherit;
+        font-size: 12px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 3px 10px rgba(22,163,91,.25);
+        transition: all .15s ease;
+    }
+    .tf-distribute-btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .tf-distribute-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    .tf-distribute-note {
+        display: flex; align-items: center; gap: 5px;
+        font-size: 10.5px; color: #9aaabb; font-weight: 500;
+    }
+
+    /* Allocation Table */
+    .tf-alloc-table-wrap { overflow-x: auto; margin-bottom: 24px; }
+
+    .tf-alloc-table {
+        width: 100%; border-collapse: collapse; font-size: 12.5px;
+        border: 1px solid #e4edf8; border-radius: 10px; overflow: hidden;
+    }
+
+    .tf-alloc-table thead th {
+        padding: 10px 14px;
+        background: linear-gradient(180deg, #f0f5fc, #eaf1f9);
+        color: #4a5a74; font-size: 10.5px; font-weight: 800;
+        text-align: center; border-bottom: 2px solid #dce8f5;
+        white-space: nowrap;
+    }
+    .tf-alloc-table .th-start { text-align: right; }
+
+    .tf-alloc-table tbody tr { border-bottom: 1px solid #f0f5fb; transition: background .12s ease; }
+    .tf-alloc-table tbody tr:last-child { border-bottom: none; }
+    .tf-alloc-table tbody tr:hover { background: #f5f8ff; }
+
+    .tf-alloc-table tbody td { padding: 11px 14px; color: #526070; text-align: center; vertical-align: middle; }
+    .tf-alloc-table .td-start { text-align: right !important; }
+
+    .alloc-op-name { font-size: 12.5px; font-weight: 800; color: #1c2c44; }
+
+    .td-num { font-family: "Inter", Arial, sans-serif; font-size: 12px; font-weight: 600; }
+    .td-num small { font-size: 9px; color: #9aaabb; }
+    .td-strong { font-weight: 900 !important; color: var(--fc-text) !important; }
+
+    .alloc-pct-chip {
+        display: inline-flex; align-items: center;
+        padding: 3px 8px; border-radius: 6px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-size: 10px; font-weight: 800; border: 1px solid #c0d4fb;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .alloc-bar-wrap { display: flex; align-items: center; justify-content: center; }
+    .alloc-bar {
+        width: 80px; height: 6px; border-radius: 5px;
+        background: #e4eaf3; overflow: hidden;
+    }
+    .alloc-bar-fill {
+        height: 100%; border-radius: inherit;
+        background: linear-gradient(90deg, var(--fc-green), #42a5f5);
+        transition: width .5s ease;
+    }
+
+    /* Notes Head */
+    .tf-notes-head {
+        display: flex; align-items: center; gap: 7px;
+        font-size: 12px; font-weight: 800; color: #344258;
+        margin: 22px 0 10px;
+        padding-top: 18px; border-top: 1px solid #edf1f7;
+    }
+
+    /* ================================================================
+       BOTTOM ACTIONS
+    ================================================================ */
+    .tf-bottom-actions {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; padding: 14px 20px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); box-shadow: 0 2px 8px rgba(15,41,82,.04);
+    }
+
+    .tf-bottom-back {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 16px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .tf-bottom-back:hover { background: #f0f4fa; color: var(--fc-text); }
+    .tf-bottom-back svg { transform: rotate(180deg); }
+
+    .tf-bottom-right { display: flex; align-items: center; gap: 10px; }
+
+    .tf-next-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 16px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .tf-next-btn:hover { background: var(--fc-blue); color: #fff; }
+    .tf-next-btn svg { transform: rotate(180deg); }
+
+    .tf-bottom-save {
+        display: inline-flex; align-items: center; gap: 8px;
+        height: 40px; padding: 0 22px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #1e6ef5, #1558d6);
+        color: #fff; font-family: inherit;
+        font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(30,110,245,.30);
+        transition: all .15s ease;
+    }
+    .tf-bottom-save:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(30,110,245,.38); }
+    .tf-bottom-save:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* ================================================================
+       SPINNER
+    ================================================================ */
+    .btn-spinner {
+        width: 15px; height: 15px;
+        border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+        border-radius: 50%; animation: tf-spin .7s linear infinite;
+    }
+    .btn-spinner.sm { width: 13px; height: 13px; }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 900px) {
+        .tf-form-grid { grid-template-columns: 1fr; }
+        .tf-op-body   { grid-template-columns: 1fr 1fr; }
+        .tab-section  { padding: 18px 16px 22px; }
+        .tf-hero-summary { flex-wrap: wrap; }
+        .tf-sum-item { flex: 0 0 50%; }
+        .tf-sum-div:nth-child(4) { display: none; }
+        .tf-basis-row { flex-direction: column; align-items: flex-start; }
+    }
+
+    @@media (max-width: 680px) {
+        .tf-body { padding: 10px 12px 24px; }
+        .tf-op-body { grid-template-columns: 1fr; }
+        .tf-bottom-actions { flex-direction: column; }
+        .tf-bottom-back, .tf-bottom-save { width: 100%; justify-content: center; }
+        .tf-bottom-right { width: 100%; flex-direction: column; }
+        .tf-next-btn { width: 100%; justify-content: center; }
+        .tf-sum-item { flex: 0 0 100%; }
+        .tf-sum-div { display: none; }
+        .alloc-bar-wrap { display: none; }
+    }
+
+    @@media (max-width: 480px) {
+        .tf-hero-summary { display: none; }
+        .tf-op-head { flex-wrap: wrap; gap: 6px; }
+        .tf-op-revenue { margin-right: 0; }
+    }
+
+</style>
+
+
 @code {
     [Parameter] public long? Id { get; set; }
-    private long? _id;
+    private long?  _id;
     private string TripNumber = "";
-    private string _status = "Planned";
-    private bool _locked;
+    private string _status    = "Planned";
+    private bool   _locked;
+    private int    _activeTab;
+    private bool   _triedSave;
 
     private AuthUser? _user;
     private bool CanCreate => _user?.Can("TRIP.CREATE") ?? false;
-    private bool CanEdit   => _user?.Can("TRIP.EDIT") ?? false;
+    private bool CanEdit   => _user?.Can("TRIP.EDIT")   ?? false;
     private bool CanSave   => _id is null ? CanCreate : CanEdit;
 
-    private bool _loading; private bool _saving; private bool _distributing;
-    private string? _msg; private bool _ok;
+    private bool    _loading; private bool _saving; private bool _distributing;
+    private string? _msg;     private bool _ok;
 
-    private List<Opt> _drivers = new();
-    private List<Opt> _vehicles = new();
-    private List<Opt> _trailers = new();
-    private List<Opt> _tripTypes = new();
+    private List<Opt>   _drivers   = new();
+    private List<Opt>   _vehicles  = new();
+    private List<Opt>   _trailers  = new();
+    private List<Opt>   _tripTypes = new();
     private List<Avail> _available = new();
 
-    private List<OpRow> _ops = new();
+    private List<OpRow>    _ops       = new();
     private List<AllocRow> _allocRows = new();
-    private decimal _directCost;
-    private string _basis = "Manual";
-    private Form _f = new();
+    private decimal        _directCost;
+    private decimal        _distributableCost;
+    private string         _basis = "Manual";
+    private Form           _f     = new();
 
+    /* ── Validation ── */
+    private bool HasTabError(int tab) => _triedSave && tab switch
+    {
+        1 => _f.DriverId == 0 || _f.VehicleId == 0,
+        2 => _id is not null && _ops.Count == 0,
+        _ => false
+    };
+
+    /* ── DTOs ── */
     public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
 
     public class Avail
     {
-        public long OperationId { get; set; }
-        public string OperationNumber { get; set; } = "";
-        public string CustomerName { get; set; } = "";
-        public string Route { get; set; } = "";
-        public decimal RevenueNet { get; set; }
+        public long    OperationId     { get; set; }
+        public string  OperationNumber { get; set; } = "";
+        public string  CustomerName    { get; set; } = "";
+        public string  Route           { get; set; } = "";
+        public decimal RevenueNet      { get; set; }
     }
 
     public class OpRow
     {
-        public long OperationId { get; set; }
-        public string OperationNumber { get; set; } = "";
-        public string? PickupAt { get; set; }
-        public string? DeliveryAt { get; set; }
+        public long    OperationId     { get; set; }
+        public string  OperationNumber { get; set; } = "";
+        public string? PickupAt        { get; set; }
+        public string? DeliveryAt      { get; set; }
     }
 
     public class AllocRow
     {
-        public long OperationId { get; set; }
-        public string OperationNumber { get; set; } = "";
-        public decimal Revenue { get; set; }
-        public decimal Percent { get; set; }
-        public decimal Amount { get; set; }
+        public long    OperationId     { get; set; }
+        public string  OperationNumber { get; set; } = "";
+        public decimal Revenue         { get; set; }
+        public decimal Percent         { get; set; }
+        public decimal Amount          { get; set; }
     }
 
     public class Form
     {
-        public int DriverId { get; set; }
-        public int VehicleId { get; set; }
-        public int? TrailerId { get; set; }
-        public int? TripTypeId { get; set; }
+        public int     DriverId       { get; set; }
+        public int     VehicleId      { get; set; }
+        public int?    TrailerId      { get; set; }
+        public int?    TripTypeId     { get; set; }
         public string? PlannedStartAt { get; set; }
-        public string? Notes { get; set; }
+        public string? Notes          { get; set; }
     }
 
     public class OpDto
     {
-        public long OperationId { get; set; }
-        public string OperationNumber { get; set; } = "";
-        public string CustomerName { get; set; } = "";
-        public string Route { get; set; } = "";
-        public decimal RevenueNet { get; set; }
-        public int SequenceNo { get; set; }
-        public string? PickupAt { get; set; }
-        public string? DeliveryAt { get; set; }
+        public long    OperationId     { get; set; }
+        public string  OperationNumber { get; set; } = "";
+        public string  CustomerName    { get; set; } = "";
+        public string  Route           { get; set; } = "";
+        public decimal RevenueNet      { get; set; }
+        public int     SequenceNo      { get; set; }
+        public string? PickupAt        { get; set; }
+        public string? DeliveryAt      { get; set; }
     }
 
     public class AllocDto
     {
-        public long OperationId { get; set; }
-        public string OperationNumber { get; set; } = "";
+        public long    OperationId     { get; set; }
+        public string  OperationNumber { get; set; } = "";
         public decimal AllocationPercent { get; set; }
-        public decimal AllocatedAmount { get; set; }
-        public decimal RevenueNet { get; set; }
+        public decimal AllocatedAmount   { get; set; }
+        public decimal RevenueNet        { get; set; }
     }
 
     public class DetailTrip
     {
-        public string TripNumber { get; set; } = "";
-        public int DriverId { get; set; }
-        public int VehicleId { get; set; }
-        public int? TrailerId { get; set; }
-        public int? TripTypeId { get; set; }
-        public string? PlannedStartAt { get; set; }
-        public string? Notes { get; set; }
-        public string Status { get; set; } = "Planned";
-        public decimal DirectCost { get; set; }
+        public string  TripNumber        { get; set; } = "";
+        public int     DriverId          { get; set; }
+        public int     VehicleId         { get; set; }
+        public int?    TrailerId         { get; set; }
+        public int?    TripTypeId        { get; set; }
+        public string? PlannedStartAt    { get; set; }
+        public string? Notes             { get; set; }
+        public string  Status            { get; set; } = "Planned";
+        public decimal DirectCost        { get; set; }
+        public decimal DistributableCost { get; set; }
     }
 
     public class DetailResponse
     {
-        public DetailTrip Trip { get; set; } = new();
-        public List<OpDto> Operations { get; set; } = new();
+        public DetailTrip   Trip       { get; set; } = new();
+        public List<OpDto>  Operations { get; set; } = new();
         public List<AllocDto> Allocations { get; set; } = new();
     }
 
+    /* ── Helpers ── */
     private static string StatusAr(string s) => s switch
     {
-        "Planned" => "مخططة", "Assigned" => "متعين", "Started" => "في الطريق",
-        "Completed" => "خلصت", "Cancelled" => "ملغاة", _ => s
+        "Planned"   => "مخططة",
+        "Assigned"  => "متعين",
+        "Started"   => "في الطريق",
+        "Completed" => "خلصت",
+        "Cancelled" => "ملغاة",
+        _           => s
+    };
+
+    private static string StatusBadgeClass(string s) => s switch
+    {
+        "Planned"   => "badge-planned",
+        "Assigned"  => "badge-assigned",
+        "Started"   => "badge-started",
+        "Completed" => "badge-completed",
+        "Cancelled" => "badge-cancelled",
+        _           => "badge-planned"
     };
 
     private decimal TotalRevenue =>
         _ops.Sum(o => _available.FirstOrDefault(a => a.OperationId == o.OperationId)?.RevenueNet ?? 0m);
 
+    /* ── Init ── */
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
-        _id = Id;
+        _id   = Id;
         if (!CanSave) return;
 
         _loading = true;
@@ -375,42 +1748,52 @@
         var d = await Http.GetFromJsonAsync<DetailResponse>($"api/trips/{id}");
         if (d is null) { _msg = "الرحلة مش موجودة"; _ok = false; return; }
 
-        TripNumber = d.Trip.TripNumber;
-        _status = d.Trip.Status;
-        _locked = _status is "Completed" or "Cancelled";
-        _directCost = d.Trip.DirectCost;
+        TripNumber         = d.Trip.TripNumber;
+        _status            = d.Trip.Status;
+        _locked            = _status is "Completed" or "Cancelled";
+        _directCost        = d.Trip.DirectCost;
+        _distributableCost = d.Trip.DistributableCost;
 
         _f = new Form
         {
-            DriverId = d.Trip.DriverId, VehicleId = d.Trip.VehicleId,
-            TrailerId = d.Trip.TrailerId, TripTypeId = d.Trip.TripTypeId,
-            PlannedStartAt = d.Trip.PlannedStartAt, Notes = d.Trip.Notes
+            DriverId       = d.Trip.DriverId,
+            VehicleId      = d.Trip.VehicleId,
+            TrailerId      = d.Trip.TrailerId,
+            TripTypeId     = d.Trip.TripTypeId,
+            PlannedStartAt = d.Trip.PlannedStartAt,
+            Notes          = d.Trip.Notes
         };
 
         _ops = d.Operations.Select(o => new OpRow
         {
-            OperationId = o.OperationId, OperationNumber = o.OperationNumber,
-            PickupAt = o.PickupAt, DeliveryAt = o.DeliveryAt
+            OperationId     = o.OperationId,
+            OperationNumber = o.OperationNumber,
+            PickupAt        = o.PickupAt,
+            DeliveryAt      = o.DeliveryAt
         }).ToList();
 
-        // عمليات الرحلة نفسها مش في قائمة "المتاح" — ضيفها عشان الدروبداون يعرض اسمها
         foreach (var o in d.Operations)
         {
             if (_available.Any(a => a.OperationId == o.OperationId)) continue;
             _available.Add(new Avail
             {
-                OperationId = o.OperationId, OperationNumber = o.OperationNumber,
-                CustomerName = o.CustomerName, Route = o.Route, RevenueNet = o.RevenueNet
+                OperationId     = o.OperationId,
+                OperationNumber = o.OperationNumber,
+                CustomerName    = o.CustomerName,
+                Route           = o.Route,
+                RevenueNet      = o.RevenueNet
             });
         }
 
         _allocRows = d.Allocations.Select(a => new AllocRow
         {
-            OperationId = a.OperationId, OperationNumber = a.OperationNumber,
-            Revenue = a.RevenueNet, Percent = a.AllocationPercent, Amount = a.AllocatedAmount
+            OperationId     = a.OperationId,
+            OperationNumber = a.OperationNumber,
+            Revenue         = a.RevenueNet,
+            Percent         = a.AllocationPercent,
+            Amount          = a.AllocatedAmount
         }).ToList();
 
-        // لو مافيش توزيع لسه، ابنى الصفوف من عمليات الرحلة
         if (_allocRows.Count == 0)
         {
             _allocRows = _ops.Select(o =>
@@ -418,9 +1801,9 @@
                 var av = _available.FirstOrDefault(a => a.OperationId == o.OperationId);
                 return new AllocRow
                 {
-                    OperationId = o.OperationId,
+                    OperationId     = o.OperationId,
                     OperationNumber = av?.OperationNumber ?? o.OperationNumber,
-                    Revenue = av?.RevenueNet ?? 0m
+                    Revenue         = av?.RevenueNet ?? 0m
                 };
             }).ToList();
         }
@@ -432,26 +1815,34 @@
 
     private async Task SaveAsync()
     {
-        _msg = null;
-        if (_f.DriverId <= 0) { _ok = false; _msg = "لازم تختار السائق"; return; }
-        if (_f.VehicleId <= 0) { _ok = false; _msg = "لازم تختار العربية"; return; }
+        _triedSave = true;
+        _msg       = null;
+
+        if (_f.DriverId <= 0)
+        { _ok = false; _msg = "لازم تختار السائق"; _activeTab = 0; return; }
+
+        if (_f.VehicleId <= 0)
+        { _ok = false; _msg = "لازم تختار العربية"; _activeTab = 0; return; }
 
         var ops = _ops.Where(o => o.OperationId > 0).ToList();
         if (_id is not null && ops.Count == 0)
-        { _ok = false; _msg = "الرحلة لازم يكون عليها عملية واحدة على الأقل"; return; }
+        { _ok = false; _msg = "الرحلة لازم يكون عليها عملية واحدة على الأقل"; _activeTab = 1; return; }
 
         var payload = new
         {
-            driverId    = _f.DriverId,
-            vehicleId   = _f.VehicleId,
-            trailerId   = _f.TrailerId,
-            tripTypeId  = _f.TripTypeId,
+            driverId       = _f.DriverId,
+            vehicleId      = _f.VehicleId,
+            trailerId      = _f.TrailerId,
+            tripTypeId     = _f.TripTypeId,
             plannedStartAt = _f.PlannedStartAt,
-            notes       = _f.Notes,
-            operations  = ops.Select((o, i) => new
+            notes          = _f.Notes,
+            operations     = ops.Select((o, i) => new
             {
-                operationId = o.OperationId, sequenceNo = i + 1,
-                pickupAt = o.PickupAt, deliveryAt = o.DeliveryAt, notes = (string?)null
+                operationId = o.OperationId,
+                sequenceNo  = i + 1,
+                pickupAt    = o.PickupAt,
+                deliveryAt  = o.DeliveryAt,
+                notes       = (string?)null
             })
         };
 
@@ -468,7 +1859,6 @@
                 Snackbar.Add(msg, Severity.Success);
                 if (_id is null)
                 {
-                    // فاضل على الصفحة — عشان المستخدم يوزّع تكلفة الرحلة
                     var body = await res.Content.ReadAsStringAsync();
                     var json = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(body);
                     var newId = json.TryGetProperty("id", out var idEl) ? idEl.GetInt64() : (long?)null;
@@ -489,7 +1879,11 @@
         {
             var res = await Http.PostAsJsonAsync($"api/trips/{_id}/distribute", new { basis = _basis });
             var msg = await MsgOf(res);
-            if (res.IsSuccessStatusCode) { Snackbar.Add(msg, Severity.Success); await LoadTripAsync(_id!.Value); }
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(msg, Severity.Success);
+                await LoadTripAsync(_id!.Value);
+            }
             else { _ok = false; _msg = msg; }
         }
         catch (Exception ex) { _ok = false; _msg = "فشل التوزيع: " + ex.Message; }

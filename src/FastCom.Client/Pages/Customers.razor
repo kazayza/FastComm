@@ -10,7 +10,10 @@
 
 <PageTitle>العملاء — فاست كوم</PageTitle>
 
-@* ═══════════════ الهيرو ═══════════════ *@
+
+@* ═══════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════ *@
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
@@ -26,7 +29,7 @@
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Secondary"
                                StartIcon="@Icons.Material.Filled.Add"
-                               OnClick="NewCustomer">عميل جديد</MudButton>
+                               OnClick="GoNew">عميل جديد</MudButton>
                 }
             </div>
         </div>
@@ -55,420 +58,1330 @@
     </div>
 </div>
 
-<div class="fc-page">
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="cl-body">
+
     @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض العملاء.</MudAlert>
+        <div class="cl-state-box">
+            <div class="cl-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليس لديك صلاحية عرض العملاء — تواصل مع المسؤول</p>
+        </div>
     }
     else
     {
-        <div class="fc-overlap">
-            <div class="fc-card">
-                <div class="fc-toolbar">
-                    <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
-                                  Placeholder="دوّر بالاسم أو الكود أو الرقم الضريبي..."
-                                  Variant="Variant.Outlined" Dense="true"
-                                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                                  Class="fc-search-box" Immediate="true" />
-                    <div class="fc-filters">
-                        <button class='fc-filter @(_filter == "all" ? "on" : "")' @onclick='() => _filter = "all"'>الكل</button>
-                        <button class='fc-filter @(_filter == "co" ? "on" : "")' @onclick='() => _filter = "co"'>شركات</button>
-                        <button class='fc-filter @(_filter == "ind" ? "on" : "")' @onclick='() => _filter = "ind"'>أفراد</button>
-                    </div>
-                    <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+        @* ── الكارد الرئيسي ── *@
+        <div class="cl-card">
+
+            @* ── Toolbar ── *@
+            <div class="cl-toolbar">
+
+                <div class="cl-search-wrap">
+                    <svg class="cl-search-icon" viewBox="0 0 24 24"
+                         width="16" height="16" fill="none" stroke="currentColor"
+                         stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                    </svg>
+                    <input class="cl-search-input"
+                           placeholder="ابحث بالاسم أو الكود أو الرقم الضريبي..."
+                           @bind="_search"
+                           @bind:event="oninput"
+                           aria-label="بحث" />
+                    @if (!string.IsNullOrWhiteSpace(_search))
+                    {
+                        <button class="cl-search-clear"
+                                @onclick="() => _search = string.Empty"
+                                aria-label="مسح البحث">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    }
                 </div>
 
-                @if (_loading)
-                {
-                    <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
-                }
-                else if (_loadError is not null)
-                {
-                    <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="ma-4">@_loadError</MudAlert>
-                }
-                else
-                {
-                    <div class="fc-table-wrap">
-                        <table class="fc-table fc-table-pro">
-                            <thead>
-                                <tr>
-                                    <th>الكود</th>
-                                    <th>الاسم</th>
-                                    <th>النوع</th>
-                                    <th>التليفون</th>
-                                    <th>الرقم الضريبي</th>
-                                    <th>الحالة</th>
-                                    <th style="width:96px"></th>
-                                    @if (CanEdit)
-                                    {
-                                        <th style="width:150px; text-align:left">إجراءات</th>
-                                    }
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var c in Filtered)
+                <div class="cl-filters" role="group" aria-label="فلتر النوع">
+                    <button class="cl-filter @(_filter == "all" ? "active" : "")"
+                            @onclick='() => _filter = "all"'
+                            aria-pressed="@(_filter == "all")">
+                        الكل
+                        <span class="cl-filter-count">@_items.Count</span>
+                    </button>
+                    <button class="cl-filter @(_filter == "co" ? "active" : "")"
+                            @onclick='() => _filter = "co"'
+                            aria-pressed="@(_filter == "co")">
+                        🏢 شركات
+                        <span class="cl-filter-count">@_items.Count(c => c.CustomerType == "Company")</span>
+                    </button>
+                    <button class="cl-filter @(_filter == "ind" ? "active" : "")"
+                            @onclick='() => _filter = "ind"'
+                            aria-pressed="@(_filter == "ind")">
+                        👤 أفراد
+                        <span class="cl-filter-count">@_items.Count(c => c.CustomerType == "Individual")</span>
+                    </button>
+                </div>
+
+                <div class="cl-results-badge">
+                    <svg viewBox="0 0 16 16" width="11" height="11"
+                         fill="none" stroke="currentColor" stroke-width="1.8"
+                         aria-hidden="true">
+                        <circle cx="8" cy="8" r="6"/>
+                        <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                    </svg>
+                    عرض <strong>@Filtered.Count()</strong> من <strong>@_items.Count</strong>
+                </div>
+
+            </div>
+
+
+            @* ── المحتوى ── *@
+            @if (_loading)
+            {
+                <div class="cl-loading">
+                    <div class="cl-spinner" aria-label="جاري التحميل"></div>
+                    <span>جاري تحميل العملاء...</span>
+                </div>
+            }
+            else if (_loadError is not null)
+            {
+                <div class="cl-error-box" role="alert">
+                    <div class="cl-error-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="28" height="28"
+                             fill="none" stroke="currentColor" stroke-width="1.8">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="cl-error-text">@_loadError</div>
+                    <button class="cl-retry-btn" @onclick="Reload">
+                        <svg viewBox="0 0 24 24" width="14" height="14"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M23 4v6h-6" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M1 20v-6h6" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"
+                                  stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        إعادة المحاولة
+                    </button>
+                </div>
+            }
+            else if (!Filtered.Any())
+            {
+                <div class="cl-empty">
+                    <div class="cl-empty-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="40" height="40"
+                             fill="none" stroke="currentColor" stroke-width="1.4">
+                            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+                        </svg>
+                    </div>
+                    <div class="cl-empty-title">
+                        @(string.IsNullOrWhiteSpace(_search) ? "مافيش عملاء لسه" : "مافيش نتائج")
+                    </div>
+                    <div class="cl-empty-sub">
+                        @(string.IsNullOrWhiteSpace(_search)
+                            ? "ابدأ بإضافة أول عميل من زر «عميل جديد»"
+                            : "جرّب بكلمة بحث مختلفة")
+                    </div>
+                    @if (CanCreate && string.IsNullOrWhiteSpace(_search))
+                    {
+                        <button class="cl-add-btn" @onclick="GoNew">
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2.5"
+                                 aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                            أضف عميل جديد
+                        </button>
+                    }
+                </div>
+            }
+            else
+            {
+                @* ── الجدول ── *@
+                <div class="cl-table-wrap">
+                    <table class="cl-table" aria-label="قائمة العملاء">
+                        <thead>
+                            <tr>
+                                <th scope="col" class="th-start">العميل</th>
+                                <th scope="col">النوع</th>
+                                <th scope="col">التليفون</th>
+                                <th scope="col">الرقم الضريبي</th>
+                                <th scope="col">الحالة</th>
+                                <th scope="col" style="width:100px">أدوات</th>
+                                @if (CanEdit)
                                 {
-                                    <tr>
-                                        <td><span class="fc-role-chip">@c.CustomerCode</span></td>
-                                        <td>
-                                            <div class="fc-cell-main">@c.NameAr</div>
-                                            <div class="fc-cell-sub">@(c.CityAr ?? "—")</div>
-                                        </td>
-                                        <td>
-                                            @if (c.CustomerType == "Company")
-                                            {
-                                                <span class="fc-chip fc-chip-blue"><i></i>شركة</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="fc-chip fc-chip-purple"><i></i>فرد</span>
-                                            }
-                                        </td>
-                                        <td class="fc-cell-sub">@(c.Phone ?? "—")</td>
-                                        <td class="fc-cell-sub">@(c.TaxNumber ?? "—")</td>
-                                        <td>
-                                            @if (c.IsActive)
-                                            {
-                                                <span class="fc-chip fc-chip-ok"><i></i>نشط</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="fc-chip fc-chip-bad"><i></i>موقوف</span>
-                                            }
-                                        </td>
-                                        <td>
+                                    <th scope="col" style="width:130px">إجراءات</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var (c, idx) in Filtered.Select((x, i) => (x, i + 1)))
+                            {
+                                <tr class="@(!c.IsActive ? "row-inactive" : "")">
+
+                                    @* ── العميل: Avatar + اسم + كود + مدينة ── *@
+                                    <td class="td-start">
+                                        <div class="cl-customer-cell">
+                                            <div class="cl-avatar @(c.CustomerType == "Company" ? "av-blue" : "av-green")">
+                                                @(c.NameAr.Length > 0 ? c.NameAr[0].ToString() : "؟")
+                                            </div>
+                                            <div class="cl-customer-info">
+                                                <div class="cl-customer-name">@c.NameAr</div>
+                                                <div class="cl-customer-meta">
+                                                    <span class="cl-code-chip">@c.CustomerCode</span>
+                                                    @if (!string.IsNullOrWhiteSpace(c.CityAr))
+                                                    {
+                                                        <span class="cl-city">📍 @c.CityAr</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    @* ── النوع ── *@
+                                    <td>
+                                        @if (c.CustomerType == "Company")
+                                        {
+                                            <span class="cl-chip chip-blue">🏢 شركة</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="cl-chip chip-purple">👤 فرد</span>
+                                        }
+                                    </td>
+
+                                    @* ── التليفون ── *@
+                                    <td class="td-muted" dir="ltr">@(c.Phone ?? "—")</td>
+
+                                    @* ── الرقم الضريبي ── *@
+                                    <td class="td-muted" dir="ltr">@(c.TaxNumber ?? "—")</td>
+
+                                    @* ── الحالة ── *@
+                                    <td>
+                                        @if (c.IsActive)
+                                        {
+                                            <span class="cl-chip chip-green">
+                                                <span class="chip-dot dot-green" aria-hidden="true"></span>
+                                                نشط
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="cl-chip chip-red">
+                                                <span class="chip-dot dot-red" aria-hidden="true"></span>
+                                                موقوف
+                                            </span>
+                                        }
+                                    </td>
+
+                                    @* ── أدوات ── *@
+                                    <td>
+                                        <div class="cl-tools">
                                             @if (CanStatement)
                                             {
-                                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.FactCheck"
-                                                               Color="Color.Info" title="كشف حساب"
-                                                               OnClick="() => OpenStatement(c)" />
+                                                <button class="cl-tool-btn tool-info"
+                                                        @onclick="() => OpenStatement(c)"
+                                                        title="كشف حساب"
+                                                        aria-label="كشف حساب @c.NameAr">
+                                                    <svg viewBox="0 0 24 24" width="16" height="16"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                                        <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"
+                                                              stroke-linecap="round"/>
+                                                    </svg>
+                                                </button>
                                             }
                                             @if (CanPortal)
                                             {
-                                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.LocalOffer"
-                                                               Color="Color.Success" title="رابط بوابة العميل"
-                                                               OnClick="() => OpenPortal(c)" />
+                                                <button class="cl-tool-btn tool-success"
+                                                        @onclick="() => OpenPortal(c)"
+                                                        title="رابط بوابة العميل"
+                                                        aria-label="بوابة @c.NameAr">
+                                                    <svg viewBox="0 0 24 24" width="16" height="16"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
+                                                        <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
+                                                    </svg>
+                                                </button>
                                             }
+                                        </div>
+                                    </td>
+
+                                    @* ── إجراءات ── *@
+                                    @if (CanEdit)
+                                    {
+                                        <td>
+                                            <div class="cl-actions">
+
+                                                <button class="cl-act-btn act-edit"
+                                                        @onclick="() => GoEdit(c)"
+                                                        title="تعديل"
+                                                        aria-label="تعديل @c.NameAr">
+                                                    <svg viewBox="0 0 24 24" width="15" height="15"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                    </svg>
+                                                </button>
+
+                                                <button class="cl-act-btn @(c.IsActive ? "act-stop" : "act-start")"
+                                                        @onclick="() => ToggleActive(c)"
+                                                        title="@(c.IsActive ? "إيقاف" : "تفعيل")"
+                                                        aria-label="@(c.IsActive ? "إيقاف" : "تفعيل") @c.NameAr">
+                                                    @if (c.IsActive)
+                                                    {
+                                                        <svg viewBox="0 0 24 24" width="15" height="15"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <circle cx="12" cy="12" r="10"/>
+                                                            <path d="M10 15V9M14 15V9" stroke-linecap="round"/>
+                                                        </svg>
+                                                    }
+                                                    else
+                                                    {
+                                                        <svg viewBox="0 0 24 24" width="15" height="15"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <circle cx="12" cy="12" r="10"/>
+                                                            <path d="M10 8l6 4-6 4V8z" fill="currentColor"
+                                                                  stroke="none"/>
+                                                        </svg>
+                                                    }
+                                                </button>
+
+                                                @if (_confirmId == c.CustomerId)
+                                                {
+                                                    <button class="cl-confirm-del"
+                                                            @onclick="() => Delete(c)">
+                                                        متأكد؟
+                                                    </button>
+                                                }
+                                                else if (CanDelete)
+                                                {
+                                                    <button class="cl-act-btn act-delete"
+                                                            @onclick="() => _confirmId = c.CustomerId"
+                                                            title="حذف"
+                                                            aria-label="حذف @c.NameAr">
+                                                        <svg viewBox="0 0 24 24" width="15" height="15"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+
+                                            </div>
                                         </td>
-                                        @if (CanEdit)
-                                        {
-                                            <td>
-                                                <div class="fc-row-actions">
-                                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
-                                                                   Color="Color.Primary" title="تعديل" OnClick="() => Edit(c)" />
-                                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Refresh"
-                                                                   Color="@(c.IsActive ? Color.Error : Color.Success)"
-                                                                   title='@(c.IsActive ? "إيقاف" : "تفعيل")'
-                                                                   OnClick="() => ToggleActive(c)" />
-                                                    @if (_confirmId == c.CustomerId)
-                                                    {
-                                                        <MudButton Size="Size.Small" Variant="Variant.Filled"
-                                                                   Color="Color.Error" OnClick="() => Delete(c)">متأكد؟</MudButton>
-                                                    }
-                                                    else if (CanDelete)
-                                                    {
-                                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
-                                                                       Color="Color.Error" title="حذف"
-                                                                       OnClick="() => _confirmId = c.CustomerId" />
-                                                    }
-                                                </div>
-                                            </td>
-                                        }
-                                    </tr>
-                                }
-                                @if (!Filtered.Any())
-                                {
-                                    <tr><td colspan="7"><div class="fc-empty">
-                                        <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" />
-                                        <div>مافيش نتائج — ابدأ بإضافة أول عميل</div></div></td></tr>
-                                }
-                            </tbody>
-                        </table>
+                                    }
+
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+        </div>
+    }
+</div>
+
+
+@* ═══════════════════════════════════════════
+   MODAL — بوابة العميل
+═══════════════════════════════════════════ *@
+@if (_portalOpen && CanPortal && _pt is not null)
+{
+    <div class="cust-modal-backdrop" @onclick="ClosePortal"
+         role="dialog" aria-modal="true" aria-label="بوابة العميل">
+        <div class="cust-modal cust-modal-lg" @onclick:stopPropagation="true">
+
+            <div class="modal-head">
+                <div class="modal-head-icon portal-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
+                        <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="modal-title">بوابة العميل — @_pt.NameAr</div>
+                    <div class="modal-sub">رابط يفتح فواتيره وإيصالاته من غير تسجيل دخول</div>
+                </div>
+                <button class="modal-close-btn" @onclick="ClosePortal" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="modal-body">
+
+                @if (_pmsg is not null)
+                {
+                    <div class="cust-banner @(_pok ? "banner-success" : "banner-error")" role="alert">
+                        <span>@_pmsg</span>
+                        <button class="banner-close" @onclick="() => _pmsg = null">✕</button>
                     </div>
                 }
-            </div>
-        </div>
-    }
 
-    @* ═══════════════ مودال العميل ═══════════════ *@
-    @if (_modalOpen && CanCreate)
-    {
-        <div class="fc-modal-backdrop" @onclick="CloseModal">
-            <div class="fc-modal" @onclick:stopPropagation>
-                <div class="fc-modal-head">
-                    <div>
-                        <div class="fc-modal-title">@(_editingId is null ? "عميل جديد" : $"تعديل: {_form.NameAr}")</div>
-                        <div class="fc-modal-sub">@(_editingId is null ? "الكود بيتولد تلقائيًا (CST-)" : _code)</div>
+                @if (_pt.PortalEnabled == false)
+                {
+                    <div class="portal-warn-box" role="alert">
+                        <svg viewBox="0 0 24 24" width="18" height="18"
+                             fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                            <path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
+                        </svg>
+                        البوابة مش مفعّلة للعميل ده — فعّلها من تعديل بيانات العميل الأول
                     </div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseModal" />
-                </div>
+                }
 
-                <div class="fc-modal-body">
-                    @if (_msg is not null)
-                    {
-                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)"
-                                  Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
-                    }
+                @* ── إنشاء رابط ── *@
+                <div class="portal-create-section">
 
-                    <div class="fc-form-grid">
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">نوع العميل</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_form.CustomerType" disabled="@(_editingId is not null)">
-                                <option value="Company">شركة</option>
-                                <option value="Individual">فرد</option>
-                            </select>
-                        </div>
-                        <MudTextField T="string" @bind-Value="_form.NameAr" Label="الاسم بالعربي *"
-                                      Variant="Variant.Outlined" />
-                        <MudTextField T="string" @bind-Value="_form.NameEn" Label="الاسم بالإنجليزي"
-                                      Variant="Variant.Outlined" />
-                        @if (_form.CustomerType == "Company")
-                        {
-                            <MudTextField T="string" @bind-Value="_form.TaxNumber" Label="الرقم الضريبي *"
-                                          Variant="Variant.Outlined" />
-                            <MudTextField T="string" @bind-Value="_form.CommercialRegister" Label="السجل التجاري"
-                                          Variant="Variant.Outlined" />
-                        }
-                        else
-                        {
-                            <MudTextField T="string" @bind-Value="_form.NationalId" Label="الرقم القومي *"
-                                          Variant="Variant.Outlined" />
-                        }
-                        <MudTextField T="string" @bind-Value="_form.Phone" Label="التليفون"
-                                      Variant="Variant.Outlined" />
-                        <MudTextField T="string" @bind-Value="_form.Email" Label="البريد الإلكتروني"
-                                      Variant="Variant.Outlined" InputType="InputType.Email" />
-                        <MudTextField T="string" @bind-Value="_form.CityAr" Label="المدينة"
-                                      Variant="Variant.Outlined" />
-                        <MudTextField T="decimal" @bind-Value="_form.CreditLimit" Label="حد الائتمان"
-                                      Variant="Variant.Outlined" />
-                        <MudTextField T="string" @bind-Value="_form.AddressAr" Label="العنوان"
-                                      Variant="Variant.Outlined" />
-                        <div class="fc-active-toggle">
-                            <MudCheckBox T="bool" @bind-Value="_form.PortalEnabled"
-                                         Label="تفعيل بورتال العملاء (يشوف فواتيره برابط)" Color="Color.Secondary" />
-                        </div>
-                    </div>
-                </div>
+                    <div class="section-label">إنشاء رابط جديد</div>
 
-                <div class="fc-modal-foot">
-                    <MudButton Variant="Variant.Outlined" OnClick="CloseModal">إلغاء</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                               Disabled="_saving" OnClick="SaveAsync">
-                        @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" /> }
-                        حفظ
-                    </MudButton>
-                </div>
-            </div>
-        </div>
-    }
-
-    @* ═══════════ مودال: روابط بوابة العميل ═══════════ *@
-    @if (_portalOpen && CanPortal && _pt is not null)
-    {
-        <div class="fc-modal-backdrop" @onclick="ClosePortal">
-            <div class="fc-modal" @onclick:stopPropagation="true">
-                <div class="fc-modal-head">
-                    <div><div class="fc-modal-title">بوابة العميل — @_pt.NameAr</div>
-                        <div class="fc-modal-sub">رابط يفتح فواتيره وإيصالاته من غير تسجيل دخول</div></div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="ClosePortal" />
-                </div>
-                <div class="fc-modal-body">
-                    @if (_pmsg is not null)
-                    {
-                        <MudAlert Severity="@(_pok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
-                                  Class="mb-4">@_pmsg</MudAlert>
-                    }
-                    @if (_pt.PortalEnabled == false)
-                    {
-                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
-                            البوابة مش مفعّلة للعميل ده — فعّلها من تعديل بيانات العميل الأول.
-                        </MudAlert>
-                    }
-
-                    <div class="fc-form-grid">
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">الغرض</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_pf.Purpose">
+                    <div class="portal-create-grid">
+                        <div class="form-field">
+                            <label class="field-label">الغرض</label>
+                            <select class="field-input" @bind="_pf.Purpose">
                                 <option value="Portal">البوابة كاملة</option>
                                 <option value="Statement">كشف الحساب</option>
                             </select>
                         </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">مدة الصلاحية (يوم)</div>
-                            <input type="number" min="1" max="365" class="fc-sel fc-sel-lg" @bind="_pf.ExpiresInDays" />
+                        <div class="form-field">
+                            <label class="field-label">مدة الصلاحية (يوم)</label>
+                            <input type="number" min="1" max="365"
+                                   class="field-input" @bind="_pf.ExpiresInDays" />
                         </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">عدد مرات الاستخدام</div>
-                            <input type="number" min="1" max="1000" class="fc-sel fc-sel-lg" @bind="_pf.MaxUses" />
+                        <div class="form-field">
+                            <label class="field-label">عدد الاستخدامات</label>
+                            <input type="number" min="1" max="1000"
+                                   class="field-input" @bind="_pf.MaxUses" />
                         </div>
-                        <div style="align-self:end">
-                            <MudButton Variant="Variant.Filled" Color="Color.Success" Disabled="_psaving"
-                                       StartIcon="@Icons.Material.Filled.Add" OnClick="CreateToken">إنشاء رابط</MudButton>
+                        <div class="form-field" style="align-self:end">
+                            <button class="portal-create-btn"
+                                    @onclick="CreateToken"
+                                    disabled="@_psaving">
+                                @if (_psaving)
+                                {
+                                    <span class="btn-spinner sm" aria-hidden="true"></span>
+                                }
+                                else
+                                {
+                                    <svg viewBox="0 0 24 24" width="16" height="16"
+                                         fill="none" stroke="currentColor" stroke-width="2.5"
+                                         aria-hidden="true">
+                                        <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                    </svg>
+                                }
+                                إنشاء رابط
+                            </button>
                         </div>
                     </div>
 
-                    @if (_newToken is not null)
-                    {
-                        <MudAlert Severity="Severity.Success" Variant="Variant.Filled" Class="mt-4">
-                            <div style="font-weight:700;margin-bottom:6px">🔗 الرابط الجديد (بيتعرض مرة واحدة)</div>
-                            <div style="word-break:break-all;font-size:.8rem">@_newToken.FullUrl</div>
-                            <MudButton Size="Size.Small" Class="mt-2" Variant="Variant.Outlined"
-                                       StartIcon="@Icons.Material.Filled.LocalOffer"
-                                       OnClick="() => CopyLink(_newToken.FullUrl)">نسخ الرابط</MudButton>
-                        </MudAlert>
-                    }
+                </div>
 
-                    <div class="fc-panel-sub" style="margin:18px 0 8px">الروابط السابقة</div>
-                    <table class="fc-table">
-                        <thead><tr>
-                            <th>الغرض</th><th>إنشاء</th><th>الانتهاء</th>
-                            <th>الاستخدام</th><th>آخر استخدام</th><th>الحالة</th><th></th>
-                        </tr></thead>
+                @* ── الرابط الجديد ── *@
+                @if (_newToken is not null)
+                {
+                    <div class="new-token-box" role="status">
+                        <div class="new-token-head">
+                            <svg viewBox="0 0 24 24" width="18" height="18"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
+                                <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
+                            </svg>
+                            <strong>🔗 الرابط الجديد — بيتعرض مرة واحدة</strong>
+                        </div>
+                        <div class="new-token-url">@_newToken.FullUrl</div>
+                        <button class="copy-link-btn" @onclick="() => CopyLink(_newToken.FullUrl)">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <rect x="9" y="9" width="13" height="13" rx="2"/>
+                                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                            </svg>
+                            نسخ الرابط
+                        </button>
+                    </div>
+                }
+
+                @* ── الروابط السابقة ── *@
+                <div class="section-label" style="margin-top:20px">الروابط السابقة</div>
+
+                <div class="cl-table-wrap">
+                    <table class="cl-table cl-table-compact" aria-label="جدول الروابط">
+                        <thead>
+                            <tr>
+                                <th scope="col">الغرض</th>
+                                <th scope="col">إنشاء</th>
+                                <th scope="col">الانتهاء</th>
+                                <th scope="col">الاستخدام</th>
+                                <th scope="col">آخر استخدام</th>
+                                <th scope="col">الحالة</th>
+                                <th scope="col"></th>
+                            </tr>
+                        </thead>
                         <tbody>
                             @foreach (var t in _ptokens)
                             {
+                                var status = TokenChip(t);
                                 <tr>
                                     <td>@PurposeAr(t.Purpose)</td>
-                                    <td class="fc-cell-sub">@t.CreatedAt.ToString("yyyy-MM-dd")</td>
-                                    <td class="fc-cell-sub">@(t.ExpiresAt?.ToString("yyyy-MM-dd") ?? "—")</td>
-                                    <td class="fc-cell-sub">@t.UsedCount@(t.MaxUses is null ? "" : " / " + t.MaxUses)</td>
-                                    <td class="fc-cell-sub">@(t.LastUsedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
-                                    <td>@TokenChip(t)</td>
+                                    <td class="td-muted">@t.CreatedAt.ToString("yyyy-MM-dd")</td>
+                                    <td class="td-muted">@(t.ExpiresAt?.ToString("yyyy-MM-dd") ?? "—")</td>
+                                    <td class="td-muted">
+                                        @t.UsedCount@(t.MaxUses is null ? "" : " / " + t.MaxUses)
+                                    </td>
+                                    <td class="td-muted">
+                                        @(t.LastUsedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")
+                                    </td>
+                                    <td>
+                                        <span class="cl-chip @(status == "نشط" ? "chip-green" :
+                                                               status == "منتهي" ? "chip-amber" :
+                                                               status == "مُبطل" ? "chip-red" : "chip-gray")">
+                                            @status
+                                        </span>
+                                    </td>
                                     <td>
                                         @if (t.IsActive)
                                         {
-                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
-                                                       OnClick="() => Revoke(t)">إبطال</MudButton>
+                                            <button class="cl-revoke-btn"
+                                                    @onclick="() => Revoke(t)">
+                                                إبطال
+                                            </button>
                                         }
                                     </td>
                                 </tr>
                             }
                             @if (!_ptokens.Any())
                             {
-                                <tr><td colspan="7"><div class="fc-empty"><div>مافيش روابط</div></div></td></tr>
+                                <tr>
+                                    <td colspan="7">
+                                        <div class="cl-table-empty">مافيش روابط</div>
+                                    </td>
+                                </tr>
                             }
                         </tbody>
                     </table>
                 </div>
-                <div class="fc-modal-foot">
-                    <MudButton OnClick="ClosePortal">إغلاق</MudButton>
-                </div>
-            </div>
-        </div>
-    }
 
-    @* ═══════════ مودال: كشف حساب ═══════════ *@
-    @if (_stmtOpen && _stmt is not null)
-    {
-        <div class="fc-modal-backdrop" @onclick="CloseStatement">
-            <div class="fc-modal" @onclick:stopPropagation="true">
-                <div class="fc-modal-head">
-                    <div><div class="fc-modal-title">كشف حساب @_stmt.CustomerName</div>
-                        <div class="fc-modal-sub">
-                            رصيد أول المدة @Money(_stmt.Opening) · إجمالي المديونية @Money(_stmt.TotalDebit)
-                            · إجمالي المسدّد @Money(_stmt.TotalCredit)
-                        </div></div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseStatement" />
+            </div>
+
+            <div class="modal-foot">
+                <button class="modal-cancel-btn" @onclick="ClosePortal">إغلاق</button>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+@* ═══════════════════════════════════════════
+   MODAL — كشف حساب
+═══════════════════════════════════════════ *@
+@if (_stmtOpen && _stmt is not null)
+{
+    <div class="cust-modal-backdrop" @onclick="CloseStatement"
+         role="dialog" aria-modal="true" aria-label="كشف حساب">
+        <div class="cust-modal cust-modal-lg" @onclick:stopPropagation="true">
+
+            <div class="modal-head">
+                <div class="modal-head-icon stmt-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                    </svg>
                 </div>
-                <div class="fc-modal-body">
-                    <div class="fc-toolbar">
-                        <input type="date" class="fc-sel" style="max-width:170px" value="@_stmtFrom"
+                <div>
+                    <div class="modal-title">كشف حساب @_stmt.CustomerName</div>
+                    <div class="modal-sub">
+                        رصيد أول المدة @Money(_stmt.Opening)
+                        · مديونية @Money(_stmt.TotalDebit)
+                        · مسدّد @Money(_stmt.TotalCredit)
+                    </div>
+                </div>
+                <button class="modal-close-btn" @onclick="CloseStatement" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="modal-body">
+
+                @* ── فلتر التاريخ ── *@
+                <div class="stmt-date-bar">
+                    <div class="form-field">
+                        <label class="field-label">من</label>
+                        <input type="date" class="field-input"
+                               value="@_stmtFrom"
                                @onchange="e => _stmtFrom = e.Value?.ToString()" />
-                        <input type="date" class="fc-sel" style="max-width:170px" value="@_stmtTo"
+                    </div>
+                    <div class="form-field">
+                        <label class="field-label">إلى</label>
+                        <input type="date" class="field-input"
+                               value="@_stmtTo"
                                @onchange="e => _stmtTo = e.Value?.ToString()" />
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
-                                   StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadStatement">تطبيق</MudButton>
                     </div>
-                    <div class="fc-lines" style="margin-top:14px">
-                        <div class="fc-lines-head"><span>رصيد أول المدة</span><span>المديونية</span><span>المسدّد</span><span>الرصيد</span></div>
-                        <div class="fc-lines-row">
-                            <span>@Money(_stmt.Opening)</span>
-                            <span>@Money(_stmt.TotalDebit)</span>
-                            <span>@Money(_stmt.TotalCredit)</span>
-                            <b>@Money(_stmt.Closing)</b>
-                        </div>
+                    <button class="stmt-apply-btn" @onclick="LoadStatement">
+                        <svg viewBox="0 0 24 24" width="14" height="14"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M23 4v6h-6" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M1 20v-6h6" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"
+                                  stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        تطبيق
+                    </button>
+                </div>
+
+                @* ── ملخص ── *@
+                <div class="stmt-summary">
+                    <div class="stmt-sum-item">
+                        <div class="stmt-sum-label">رصيد أول المدة</div>
+                        <div class="stmt-sum-value">@Money(_stmt.Opening)</div>
                     </div>
-                    <div class="fc-table-wrap" style="margin-top:14px"><table class="fc-table">
-                        <thead><tr><th>التاريخ</th><th>النوع</th><th>المرجع</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead>
+                    <div class="stmt-sum-item">
+                        <div class="stmt-sum-label">المديونية</div>
+                        <div class="stmt-sum-value sum-red">@Money(_stmt.TotalDebit)</div>
+                    </div>
+                    <div class="stmt-sum-item">
+                        <div class="stmt-sum-label">المسدّد</div>
+                        <div class="stmt-sum-value sum-green">@Money(_stmt.TotalCredit)</div>
+                    </div>
+                    <div class="stmt-sum-item sum-total">
+                        <div class="stmt-sum-label">الرصيد</div>
+                        <div class="stmt-sum-value">@Money(_stmt.Closing)</div>
+                    </div>
+                </div>
+
+                @* ── الجدول ── *@
+                <div class="cl-table-wrap" style="margin-top:14px">
+                    <table class="cl-table cl-table-compact" aria-label="جدول كشف الحساب">
+                        <thead>
+                            <tr>
+                                <th scope="col">التاريخ</th>
+                                <th scope="col">النوع</th>
+                                <th scope="col">المرجع</th>
+                                <th scope="col">مدين</th>
+                                <th scope="col">دائن</th>
+                                <th scope="col">الرصيد</th>
+                            </tr>
+                        </thead>
                         <tbody>
                             @foreach (var l in _stmt.Lines)
                             {
                                 <tr>
-                                    <td class="fc-cell-sub">@l.Date.ToString("yyyy-MM-dd")</td>
-                                    <td><span class="fc-chip @KindChip(l.Kind)"><i></i>@KindAr(l.Kind)</span></td>
-                                    <td class="fc-cell-main">@l.Ref
-                                        @if (l.Description is not null) { <div class="fc-cell-sub">@l.Description</div> }</td>
-                                    <td>@(l.Debit == 0 ? "—" : Money(l.Debit))</td>
-                                    <td>@(l.Credit == 0 ? "—" : Money(l.Credit))</td>
-                                    <td><b>@Money(l.Balance)</b></td>
+                                    <td class="td-muted">@l.Date.ToString("yyyy-MM-dd")</td>
+                                    <td>
+                                        <span class="cl-chip @(l.Kind == "Invoice" ? "chip-amber" :
+                                                               l.Kind == "Payment" ? "chip-green" :
+                                                               l.Kind == "CreditNote" ? "chip-purple" : "chip-gray")">
+                                            @KindAr(l.Kind)
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="stmt-ref">@l.Ref</div>
+                                        @if (l.Description is not null)
+                                        {
+                                            <div class="stmt-desc">@l.Description</div>
+                                        }
+                                    </td>
+                                    <td class="td-money @(l.Debit > 0 ? "money-red" : "")">
+                                        @(l.Debit == 0 ? "—" : Money(l.Debit))
+                                    </td>
+                                    <td class="td-money @(l.Credit > 0 ? "money-green" : "")">
+                                        @(l.Credit == 0 ? "—" : Money(l.Credit))
+                                    </td>
+                                    <td class="td-money td-bold">@Money(l.Balance)</td>
                                 </tr>
                             }
                             @if (!_stmt.Lines.Any())
                             {
-                                <tr><td colspan="6"><div class="fc-lines-empty">مافيش حركات في الفترة دي</div></td></tr>
+                                <tr>
+                                    <td colspan="6">
+                                        <div class="cl-table-empty">مافيش حركات في الفترة دي</div>
+                                    </td>
+                                </tr>
                             }
                         </tbody>
-                    </table></div>
+                    </table>
                 </div>
-                <div class="fc-modal-foot">
-                    <MudButton OnClick="CloseStatement">إغلاق</MudButton>
-                </div>
+
             </div>
+
+            <div class="modal-foot">
+                <button class="modal-cancel-btn" @onclick="CloseStatement">إغلاق</button>
+            </div>
+
         </div>
+    </div>
+}
+
+
+@* ═══════════════════════════════════════════
+   CSS
+═══════════════════════════════════════════ *@
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
     }
-</div>
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    .cl-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 200px);
+        padding: 16px 20px 32px;
+        max-width: 1200px;
+        width: 100%;
+        margin: 0 auto;
+    }
+
+    /* ================================================================
+       STATES
+    ================================================================ */
+    .cl-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .cl-state-icon {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .cl-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+
+    .cl-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .cl-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    /* ================================================================
+       CARD
+    ================================================================ */
+    .cl-card {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden;
+    }
+
+    /* ================================================================
+       TOOLBAR
+    ================================================================ */
+    .cl-toolbar {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+        flex-wrap: wrap;
+    }
+
+    .cl-search-wrap {
+        position: relative; display: flex; align-items: center;
+        flex: 1; min-width: 200px; max-width: 360px;
+    }
+
+    .cl-search-icon {
+        position: absolute; right: 12px; color: #9aaabb; pointer-events: none;
+    }
+
+    .cl-search-input {
+        width: 100%; height: 38px;
+        padding: 0 36px 0 12px;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .cl-search-input:focus {
+        border-color: var(--fc-blue);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.10);
+    }
+    .cl-search-input::placeholder { color: #b0bcc8; }
+
+    .cl-search-clear {
+        position: absolute; left: 10px;
+        display: flex; align-items: center; justify-content: center;
+        width: 22px; height: 22px; border-radius: 50%;
+        border: none; background: #edf1f7; color: #8899ae;
+        cursor: pointer; transition: all .12s ease;
+    }
+    .cl-search-clear:hover { background: #dde5f0; color: var(--fc-text); }
+
+    .cl-filters {
+        display: flex; gap: 4px;
+        padding: 3px; border-radius: 9px; background: #f0f3f8;
+    }
+
+    .cl-filter {
+        display: flex; align-items: center; gap: 5px;
+        height: 32px; padding: 0 12px;
+        border: none; border-radius: 7px;
+        background: transparent; color: #6b7d95;
+        font-family: inherit; font-size: 11px; font-weight: 700;
+        cursor: pointer; white-space: nowrap;
+        transition: all .15s ease;
+    }
+    .cl-filter:hover:not(.active) { color: var(--fc-text); background: rgba(0,0,0,.04); }
+    .cl-filter.active {
+        background: var(--fc-card); color: var(--fc-text);
+        box-shadow: 0 1px 4px rgba(15,41,82,.10);
+        font-weight: 800;
+    }
+
+    .cl-filter-count {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 18px; height: 18px; padding: 0 4px;
+        border-radius: 5px; font-size: 10px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+    .cl-filter.active .cl-filter-count { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .cl-filter:not(.active) .cl-filter-count { background: #e4eaf3; color: #8899ae; }
+
+    .cl-results-badge {
+        display: flex; align-items: center; gap: 5px;
+        margin-right: auto;
+        font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap;
+    }
+    .cl-results-badge strong { color: #5a6e88; }
+
+    /* ================================================================
+       LOADING / ERROR / EMPTY
+    ================================================================ */
+    .cl-loading {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 200px;
+        color: var(--fc-muted); font-size: 12px; font-weight: 600;
+    }
+
+    .cl-spinner {
+        width: 32px; height: 32px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: cl-spin .75s linear infinite;
+    }
+    @@keyframes cl-spin { to { transform: rotate(360deg); } }
+
+    .cl-error-box {
+        display: flex; flex-direction: column; align-items: center;
+        gap: 10px; padding: 40px 20px;
+        text-align: center;
+    }
+    .cl-error-icon { color: var(--fc-red); }
+    .cl-error-text { font-size: 13px; color: var(--fc-red); font-weight: 600; }
+
+    .cl-retry-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 34px; padding: 0 14px;
+        border: 1px solid var(--fc-border); border-radius: 8px;
+        background: var(--fc-card); color: var(--fc-text);
+        font-family: inherit; font-size: 11px; font-weight: 700;
+        cursor: pointer; transition: all .15s ease;
+    }
+    .cl-retry-btn:hover { background: #f0f4fa; border-color: #c0ccd8; }
+
+    .cl-empty {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 10px; min-height: 240px; padding: 40px 20px;
+        text-align: center;
+    }
+    .cl-empty-icon {
+        width: 72px; height: 72px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: #f0f4fa; color: #b0c4d8;
+    }
+    .cl-empty-title { font-size: 15px; font-weight: 800; color: var(--fc-text); }
+    .cl-empty-sub   { font-size: 12px; color: var(--fc-muted); }
+
+    .cl-add-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 16px; margin-top: 6px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; transition: all .15s ease;
+    }
+    .cl-add-btn:hover { background: var(--fc-blue); color: #fff; }
+
+    /* ================================================================
+       TABLE
+    ================================================================ */
+    .cl-table-wrap { overflow-x: auto; }
+
+    .cl-table {
+        width: 100%; border-collapse: collapse; font-size: 13px;
+    }
+
+    .cl-table thead th {
+        padding: 11px 14px;
+        background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 11px; font-weight: 800;
+        text-align: center; border-bottom: 2px solid #e4eaf3;
+        white-space: nowrap; position: sticky; top: 0; z-index: 1;
+    }
+    .cl-table .th-start { text-align: right; }
+
+    .cl-table tbody tr {
+        border-bottom: 1px solid #f0f3f8; transition: background .12s ease;
+    }
+    .cl-table tbody tr:last-child { border-bottom: none; }
+    .cl-table tbody tr:hover { background: #fafcff; }
+    .cl-table tbody tr.row-inactive { opacity: .6; }
+
+    .cl-table tbody td {
+        padding: 12px 14px; color: #526070; text-align: center; vertical-align: middle;
+    }
+    .td-start { text-align: right !important; }
+    .td-muted { color: #8899ae; font-size: 12px; }
+
+    .cl-table-compact tbody td { padding: 9px 12px; font-size: 12px; }
+    .cl-table-compact thead th { padding: 9px 12px; font-size: 10px; }
+
+    .cl-table-empty {
+        padding: 30px; text-align: center;
+        color: #99aabb; font-size: 12px; font-weight: 600;
+    }
+
+    /* Customer Cell */
+    .cl-customer-cell { display: flex; align-items: center; gap: 11px; }
+
+    .cl-avatar {
+        width: 38px; height: 38px; flex: 0 0 38px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 15px; font-weight: 800; color: #fff;
+        box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    }
+    .av-blue  { background: linear-gradient(135deg, #1a3a6b, #1e6ef5); }
+    .av-green { background: linear-gradient(135deg, #0d6e3e, #16a35b); }
+
+    .cl-customer-name { font-size: 13px; font-weight: 800; color: #1c2c44; }
+
+    .cl-customer-meta { display: flex; align-items: center; gap: 7px; margin-top: 3px; }
+
+    .cl-code-chip {
+        display: inline-flex; align-items: center;
+        padding: 1px 7px; border-radius: 5px;
+        background: #f0f4fa; border: 1px solid #e0e8f4;
+        font-size: 10px; font-weight: 800; color: #5a6e88;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .cl-city { font-size: 10.5px; color: #8899ae; }
+
+    /* Chips */
+    .cl-chip {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 3px 9px; border-radius: 7px;
+        font-size: 10.5px; font-weight: 800;
+    }
+    .chip-blue   { background: var(--fc-blue-lt);   color: var(--fc-blue);   border: 1px solid #c0d4fb; }
+    .chip-green  { background: var(--fc-green-lt);  color: var(--fc-green);  border: 1px solid #b0e0c5; }
+    .chip-red    { background: var(--fc-red-lt);    color: var(--fc-red);    border: 1px solid #ffc8cf; }
+    .chip-purple { background: var(--fc-purple-lt); color: var(--fc-purple); border: 1px solid #d0bfef; }
+    .chip-amber  { background: var(--fc-amber-lt);  color: #9a6d08;         border: 1px solid #f0d898; }
+    .chip-gray   { background: #f0f3f8;             color: #8899ae;         border: 1px solid #dde5f0; }
+
+    .chip-dot {
+        width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px;
+    }
+    .dot-green { background: var(--fc-green); }
+    .dot-red   { background: var(--fc-red); }
+
+    /* Tools + Actions */
+    .cl-tools, .cl-actions {
+        display: flex; align-items: center; gap: 4px; justify-content: center;
+    }
+
+    .cl-tool-btn, .cl-act-btn {
+        width: 30px; height: 30px; border-radius: 7px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; cursor: pointer;
+        transition: all .15s ease; background: transparent;
+    }
+
+    .tool-info    { color: var(--fc-blue); }
+    .tool-success { color: var(--fc-green); }
+    .act-edit     { color: var(--fc-blue); }
+    .act-stop     { color: var(--fc-red); }
+    .act-start    { color: var(--fc-green); }
+    .act-delete   { color: var(--fc-red); }
+
+    .tool-info:hover    { background: var(--fc-blue-lt);  border-color: #c0d4fb; }
+    .tool-success:hover { background: var(--fc-green-lt); border-color: #b0e0c5; }
+    .act-edit:hover     { background: var(--fc-blue-lt);  border-color: #c0d4fb; }
+    .act-stop:hover     { background: var(--fc-red-lt);   border-color: #ffc8cf; }
+    .act-start:hover    { background: var(--fc-green-lt); border-color: #b0e0c5; }
+    .act-delete:hover   { background: var(--fc-red-lt);   border-color: #ffc8cf; }
+
+    .cl-confirm-del {
+        height: 28px; padding: 0 10px;
+        border: none; border-radius: 6px;
+        background: linear-gradient(135deg, #e03048, #c0182e);
+        color: #fff; font-family: inherit;
+        font-size: 10px; font-weight: 800; cursor: pointer;
+        animation: pulse-del 1s ease infinite;
+    }
+    @@keyframes pulse-del {
+        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.35); }
+        50%     { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
+    }
+
+    /* ================================================================
+       MODAL — مشترك مع شاشة الفورم
+    ================================================================ */
+    .cust-modal-backdrop {
+        position: fixed; inset: 0; z-index: 1000;
+        background: rgba(10,20,40,.55); backdrop-filter: blur(4px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px; animation: fade-in .2s ease;
+    }
+    @@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+    .cust-modal {
+        width: 100%; max-width: 580px;
+        background: var(--fc-card); border: 1px solid rgba(0,0,0,.08);
+        border-radius: 18px;
+        box-shadow: 0 8px 30px rgba(10,20,50,.15), 0 30px 80px rgba(10,20,50,.20);
+        overflow: hidden;
+        animation: modal-in .25s cubic-bezier(.34,1.3,.64,1);
+        max-height: 90vh; overflow-y: auto;
+    }
+    .cust-modal-lg { max-width: 780px; }
+
+    @@keyframes modal-in {
+        from { opacity: 0; transform: scale(.95) translateY(10px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-head {
+        display: flex; align-items: center; gap: 12px;
+        padding: 18px 20px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .modal-head-icon {
+        width: 42px; height: 42px; flex: 0 0 42px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 11px;
+    }
+    .portal-icon { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .stmt-icon   { background: var(--fc-blue-lt);  color: var(--fc-blue);  border: 1px solid #c0d4fb; }
+
+    .modal-title { font-size: 14.5px; font-weight: 800; color: #1c2b43; }
+    .modal-sub   { font-size: 10.5px; color: var(--fc-muted); margin-top: 2px; }
+
+    .modal-close-btn {
+        margin-right: auto; width: 32px; height: 32px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid #e4eaf2; border-radius: 8px;
+        background: none; color: #9aaabb; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .modal-close-btn:hover { background: #f0f4fa; color: var(--fc-text); border-color: #c0ccd8; }
+
+    .modal-body { padding: 20px; }
+
+    .modal-foot {
+        display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+        padding: 14px 20px;
+        background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%);
+        border-top: 1px solid #edf1f7;
+    }
+
+    .modal-cancel-btn {
+        height: 38px; padding: 0 18px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .modal-cancel-btn:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    /* ================================================================
+       BANNERS
+    ================================================================ */
+    .cust-banner {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px; border-radius: 9px;
+        font-size: 12px; font-weight: 600; margin-bottom: 14px;
+    }
+    .banner-success { background: #e9f8f0; color: #0e7a43; border: 1px solid #b5e8d0; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8d0; }
+    .banner-close {
+        margin-right: auto; background: none; border: none;
+        color: inherit; opacity: .6; cursor: pointer; font-size: 13px;
+    }
+
+    .portal-warn-box {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 14px; border-radius: 10px;
+        background: #fffbeb; border: 1px solid #fde68a;
+        color: #92400e; font-size: 12px; font-weight: 600;
+        margin-bottom: 16px;
+    }
+
+    /* ================================================================
+       PORTAL CREATE
+    ================================================================ */
+    .portal-create-section { margin-bottom: 16px; }
+
+    .section-label {
+        font-size: 12px; font-weight: 800; color: #344258;
+        margin-bottom: 10px;
+        padding-bottom: 6px; border-bottom: 1px solid #edf1f7;
+    }
+
+    .portal-create-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+    }
+
+    .form-field { display: flex; flex-direction: column; gap: 5px; }
+
+    .field-label { font-size: 11px; font-weight: 800; color: #344258; }
+
+    .field-input {
+        height: 38px; width: 100%;
+        border: 1px solid #d8e2f0; border-radius: 8px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px;
+        padding: 0 10px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .field-input:focus {
+        border-color: var(--fc-blue);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.10);
+    }
+
+    .portal-create-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 14px;
+        border: none; border-radius: 8px;
+        background: linear-gradient(135deg, #16a35b, #0d8a48);
+        color: #fff; font-family: inherit;
+        font-size: 12px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 3px 10px rgba(22,163,91,.25);
+        transition: all .15s ease; white-space: nowrap;
+    }
+    .portal-create-btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .portal-create-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    .btn-spinner {
+        width: 14px; height: 14px;
+        border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+        border-radius: 50%; animation: cl-spin .7s linear infinite;
+    }
+    .btn-spinner.sm { width: 13px; height: 13px; }
+
+    /* New Token */
+    .new-token-box {
+        margin-top: 14px; padding: 14px 16px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #e9f8f0, #d8f0e4);
+        border: 1px solid #b0e0c5;
+    }
+
+    .new-token-head {
+        display: flex; align-items: center; gap: 8px;
+        color: var(--fc-green); margin-bottom: 8px;
+    }
+    .new-token-head strong { font-size: 12.5px; }
+
+    .new-token-url {
+        font-size: 11px; color: #3a6e50;
+        word-break: break-all; line-height: 1.5;
+        padding: 8px; background: rgba(255,255,255,.6);
+        border-radius: 7px; margin-bottom: 8px;
+    }
+
+    .copy-link-btn {
+        display: inline-flex; align-items: center; gap: 5px;
+        height: 30px; padding: 0 12px;
+        border: 1px solid #b0e0c5; border-radius: 7px;
+        background: #fff; color: var(--fc-green);
+        font-family: inherit; font-size: 11px; font-weight: 700;
+        cursor: pointer; transition: all .12s ease;
+    }
+    .copy-link-btn:hover { background: var(--fc-green); color: #fff; }
+
+    .cl-revoke-btn {
+        height: 26px; padding: 0 10px;
+        border: 1px solid #ffc8cf; border-radius: 6px;
+        background: var(--fc-red-lt); color: var(--fc-red);
+        font-family: inherit; font-size: 10px; font-weight: 800;
+        cursor: pointer; transition: all .12s ease;
+    }
+    .cl-revoke-btn:hover { background: var(--fc-red); color: #fff; }
+
+    /* ================================================================
+       STATEMENT
+    ================================================================ */
+    .stmt-date-bar {
+        display: flex; align-items: flex-end; gap: 10px;
+        flex-wrap: wrap; margin-bottom: 14px;
+    }
+    .stmt-date-bar .form-field { min-width: 140px; }
+
+    .stmt-apply-btn {
+        display: inline-flex; align-items: center; gap: 5px;
+        height: 38px; padding: 0 14px;
+        border: 1px solid var(--fc-blue); border-radius: 8px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 11px; font-weight: 800;
+        cursor: pointer; transition: all .12s ease;
+    }
+    .stmt-apply-btn:hover { background: var(--fc-blue); color: #fff; }
+
+    .stmt-summary {
+        display: grid; grid-template-columns: repeat(4, 1fr);
+        gap: 10px; margin-bottom: 14px;
+    }
+
+    .stmt-sum-item {
+        padding: 12px 14px; border-radius: 10px;
+        background: #f5f7fa; border: 1px solid #e4eaf3;
+        text-align: center;
+    }
+    .stmt-sum-item.sum-total {
+        background: var(--fc-blue-lt); border-color: #c0d4fb;
+    }
+
+    .stmt-sum-label { font-size: 10px; font-weight: 700; color: #8899ae; }
+    .stmt-sum-value {
+        font-family: "Inter", Arial, sans-serif;
+        font-size: 16px; font-weight: 900; color: var(--fc-text);
+        margin-top: 4px;
+    }
+    .sum-red   { color: var(--fc-red); }
+    .sum-green { color: var(--fc-green); }
+
+    .stmt-ref  { font-size: 12px; font-weight: 700; color: #1c2c44; }
+    .stmt-desc { font-size: 10px; color: #8899ae; margin-top: 2px; }
+
+    .td-money {
+        font-family: "Inter", Arial, sans-serif; font-weight: 600;
+    }
+    .money-red   { color: var(--fc-red); }
+    .money-green { color: var(--fc-green); }
+    .td-bold { font-weight: 900; color: var(--fc-text); }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 900px) {
+        .cl-toolbar { flex-direction: column; align-items: stretch; }
+        .cl-search-wrap { max-width: 100%; }
+        .cl-results-badge { margin-right: 0; }
+        .portal-create-grid { grid-template-columns: 1fr 1fr; }
+        .stmt-summary { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @@media (max-width: 680px) {
+        .cl-body { padding: 10px 12px 24px; }
+        .cl-toolbar { padding: 10px 12px; }
+        .cl-avatar { display: none; }
+        .portal-create-grid { grid-template-columns: 1fr; }
+        .stmt-date-bar { flex-direction: column; }
+        .stmt-summary { grid-template-columns: 1fr 1fr; }
+    }
+
+    @@media (max-width: 480px) {
+        .cl-filters { flex-wrap: wrap; }
+    }
+
+</style>
+
 
 @code {
     private AuthUser? _user;
-    private bool CanView   => _user?.Can("CUSTOMER.VIEW") ?? false;
-    private bool CanCreate => _user?.Can("CUSTOMER.CREATE") ?? false;
-    private bool CanEdit   => _user?.Can("CUSTOMER.EDIT") ?? false;
-    private bool CanDelete => _user?.Can("CUSTOMER.DELETE") ?? false;
-    private bool CanStatement => _user?.Can("CUSTOMER.STATEMENT") ?? false;
-    private bool CanPortal    => _user?.Can("CUSTOMER.PORTAL_TOKEN") ?? false;
+    private bool CanView      => _user?.Can("CUSTOMER.VIEW")          ?? false;
+    private bool CanCreate    => _user?.Can("CUSTOMER.CREATE")        ?? false;
+    private bool CanEdit      => _user?.Can("CUSTOMER.EDIT")          ?? false;
+    private bool CanDelete    => _user?.Can("CUSTOMER.DELETE")        ?? false;
+    private bool CanStatement => _user?.Can("CUSTOMER.STATEMENT")     ?? false;
+    private bool CanPortal    => _user?.Can("CUSTOMER.PORTAL_TOKEN")  ?? false;
 
     private bool _stmtOpen; private Statement? _stmt;
     private int _stmtCustomerId; private string? _stmtFrom; private string? _stmtTo;
 
     public class StmtLine
     {
-        public DateTime Date { get; set; }
-        public string Kind { get; set; } = "";
-        public string Ref { get; set; } = "";
-        public string? Description { get; set; }
-        public decimal Debit { get; set; }
-        public decimal Credit { get; set; }
-        public decimal Balance { get; set; }
+        public DateTime Date        { get; set; }
+        public string   Kind        { get; set; } = "";
+        public string   Ref         { get; set; } = "";
+        public string?  Description { get; set; }
+        public decimal  Debit       { get; set; }
+        public decimal  Credit      { get; set; }
+        public decimal  Balance     { get; set; }
     }
 
     public class Statement
     {
-        public string CustomerName { get; set; } = "";
-        public decimal Opening { get; set; }
-        public List<StmtLine> Lines { get; set; } = new();
-        public decimal TotalDebit { get; set; }
-        public decimal TotalCredit { get; set; }
-        public decimal Closing { get; set; }
+        public string         CustomerName { get; set; } = "";
+        public decimal        Opening      { get; set; }
+        public List<StmtLine> Lines        { get; set; } = new();
+        public decimal        TotalDebit   { get; set; }
+        public decimal        TotalCredit  { get; set; }
+        public decimal        Closing      { get; set; }
     }
 
     private static string Money(decimal v) => v.ToString("N2");
 
     private static string KindAr(string k) => k switch
     {
-        "Invoice" => "فاتورة", "CreditNote" => "إشعار دائن", "Payment" => "دفعة", _ => k
-    };
-
-    private static string KindChip(string k) => k switch
-    {
-        "Invoice" => "fc-chip-warn", "CreditNote" => "fc-chip-purple", "Payment" => "fc-chip-ok", _ => "fc-chip-gray"
+        "Invoice"    => "فاتورة",
+        "CreditNote" => "إشعار دائن",
+        "Payment"    => "دفعة",
+        _            => k
     };
 
     private void OpenStatement(Item c)
     {
         _stmtCustomerId = c.CustomerId;
         _stmtFrom = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1).ToString("yyyy-MM-dd");
-        _stmtTo = null;
+        _stmtTo   = null;
         _stmtOpen = true;
         _ = LoadStatement();
     }
@@ -488,66 +1401,24 @@
     }
 
     private List<Item> _items = new();
-    private bool _loading;
-    private string? _loadError;
-    private string _search = "";
-    private string _filter = "all";
-    private int? _confirmId;
-
-    private bool _modalOpen;
-    private int? _editingId;
-    private string _code = "";
-    private Form _form = new();
-    private bool _saving;
-    private string? _msg;
-    private bool _ok;
+    private bool       _loading;
+    private string?    _loadError;
+    private string     _search = "";
+    private string     _filter = "all";
+    private int?       _confirmId;
 
     public class Item
     {
-        public int CustomerId { get; set; }
-        public string CustomerCode { get; set; } = "";
-        public string CustomerType { get; set; } = "";
-        public string NameAr { get; set; } = "";
-        public string? Phone { get; set; }
-        public string? TaxNumber { get; set; }
-        public string? CityAr { get; set; }
-        public bool IsActive { get; set; }
-        public decimal CreditLimit { get; set; }
-        public bool PortalEnabled { get; set; }
-    }
-
-    public class Detail
-    {
-        public int CustomerId { get; set; }
-        public string CustomerCode { get; set; } = "";
-        public string CustomerType { get; set; } = "";
-        public string NameAr { get; set; } = "";
-        public string? NameEn { get; set; }
-        public string? TaxNumber { get; set; }
-        public string? NationalId { get; set; }
-        public string? CommercialRegister { get; set; }
-        public string? Phone { get; set; }
-        public string? Email { get; set; }
-        public string? AddressAr { get; set; }
-        public string? CityAr { get; set; }
-        public decimal CreditLimit { get; set; }
-        public bool PortalEnabled { get; set; }
-    }
-
-    public class Form
-    {
-        public string CustomerType { get; set; } = "Company";
-        public string NameAr { get; set; } = "";
-        public string? NameEn { get; set; }
-        public string? TaxNumber { get; set; }
-        public string? NationalId { get; set; }
-        public string? CommercialRegister { get; set; }
-        public string? Phone { get; set; }
-        public string? Email { get; set; }
-        public string? AddressAr { get; set; }
-        public string? CityAr { get; set; }
-        public decimal CreditLimit { get; set; }
-        public bool PortalEnabled { get; set; }
+        public int     CustomerId    { get; set; }
+        public string  CustomerCode  { get; set; } = "";
+        public string  CustomerType  { get; set; } = "";
+        public string  NameAr        { get; set; } = "";
+        public string? Phone         { get; set; }
+        public string? TaxNumber     { get; set; }
+        public string? CityAr        { get; set; }
+        public bool    IsActive      { get; set; }
+        public decimal CreditLimit   { get; set; }
+        public bool    PortalEnabled { get; set; }
     }
 
     private IEnumerable<Item> Filtered
@@ -576,82 +1447,22 @@
         if (CanView) await LoadAsync();
     }
 
-    private async Task Reload() { await LoadAsync(); Snackbar.Add("اتحدّثت القائمة", Severity.Success); }
+    private async Task Reload()
+    {
+        await LoadAsync();
+        Snackbar.Add("تم تحديث القائمة", Severity.Success);
+    }
 
     private async Task LoadAsync()
     {
         _loading = true; _loadError = null;
-        try
-        {
-            _items = await Http.GetFromJsonAsync<List<Item>>("api/customers") ?? new();
-        }
+        try   { _items = await Http.GetFromJsonAsync<List<Item>>("api/customers") ?? new(); }
         catch (Exception ex) { _loadError = "فشل التحميل: " + ex.Message; }
         finally { _loading = false; }
     }
 
-    private void NewCustomer()
-    {
-        _editingId = null; _form = new Form(); _msg = null; _confirmId = null;
-        _modalOpen = true;
-    }
-
-    private async Task Edit(Item c)
-    {
-        _msg = null; _confirmId = null;
-        try
-        {
-            var d = await Http.GetFromJsonAsync<Detail>($"api/customers/{c.CustomerId}");
-            if (d is null) return;
-            _editingId = d.CustomerId;
-            _code = d.CustomerCode;
-            _form = new Form
-            {
-                CustomerType = d.CustomerType, NameAr = d.NameAr, NameEn = d.NameEn,
-                TaxNumber = d.TaxNumber, NationalId = d.NationalId,
-                CommercialRegister = d.CommercialRegister, Phone = d.Phone, Email = d.Email,
-                AddressAr = d.AddressAr, CityAr = d.CityAr,
-                CreditLimit = d.CreditLimit, PortalEnabled = d.PortalEnabled
-            };
-            _modalOpen = true;
-        }
-        catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
-    }
-
-    private void CloseModal() { _modalOpen = false; _editingId = null; }
-
-    private async Task SaveAsync()
-    {
-        _msg = null; _saving = true;
-        try
-        {
-            var payload = new
-            {
-                customerType = _form.CustomerType,
-                nameAr = _form.NameAr, nameEn = _form.NameEn,
-                taxNumber = _form.TaxNumber, nationalId = _form.NationalId,
-                commercialRegister = _form.CommercialRegister,
-                phone = _form.Phone, email = _form.Email,
-                addressAr = _form.AddressAr, cityAr = _form.CityAr,
-                creditLimit = _form.CreditLimit, portalEnabled = _form.PortalEnabled
-            };
-
-            var res = _editingId is null
-                ? await Http.PostAsJsonAsync("api/customers", payload)
-                : await Http.PutAsJsonAsync($"api/customers/{_editingId}", payload);
-
-            _msg = await MsgOf(res);
-            _ok = res.IsSuccessStatusCode;
-
-            if (res.IsSuccessStatusCode)
-            {
-                Snackbar.Add(_msg, Severity.Success);
-                CloseModal();
-                await LoadAsync();
-            }
-        }
-        catch (Exception ex) { _ok = false; _msg = "مش قادر أوصل للسيرفر: " + ex.Message; }
-        finally { _saving = false; }
-    }
+    private void GoNew()       => Nav.NavigateTo("/customers/new");
+    private void GoEdit(Item c) => Nav.NavigateTo($"/customers/new/{c.CustomerId}");
 
     private async Task ToggleActive(Item c)
     {
@@ -676,55 +1487,52 @@
         catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
     }
 
-    // ══════════════════════════════════════════════════════════════
-    //  🔗 روابط بوابة العميل
-    // ══════════════════════════════════════════════════════════════
-
-    private bool _portalOpen;
-    private Item? _pt;
+    /* ══════════════ Portal ══════════════ */
+    private bool       _portalOpen;
+    private Item?      _pt;
     private List<PToken> _ptokens = new();
-    private PortalForm _pf = new();
-    private NewToken? _newToken;
-    private bool _psaving;
-    private string? _pmsg;
-    private bool _pok;
+    private PortalForm _pf       = new();
+    private NewToken?  _newToken;
+    private bool       _psaving;
+    private string?    _pmsg;
+    private bool       _pok;
 
     public class PortalForm
     {
-        public string Purpose { get; set; } = "Portal";
-        public int ExpiresInDays { get; set; } = 7;
-        public int MaxUses { get; set; } = 50;
+        public string Purpose      { get; set; } = "Portal";
+        public int    ExpiresInDays { get; set; } = 7;
+        public int    MaxUses       { get; set; } = 50;
     }
 
     public class PToken
     {
-        public long PortalTokenId { get; set; }
-        public string Purpose { get; set; } = "";
-        public long? InvoiceId { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public DateTime? ExpiresAt { get; set; }
-        public int? MaxUses { get; set; }
-        public int UsedCount { get; set; }
-        public DateTime? LastUsedAt { get; set; }
-        public bool IsActive { get; set; }
-        public DateTime? RevokedAt { get; set; }
+        public long      PortalTokenId { get; set; }
+        public string    Purpose       { get; set; } = "";
+        public long?     InvoiceId     { get; set; }
+        public DateTime  CreatedAt     { get; set; }
+        public DateTime? ExpiresAt     { get; set; }
+        public int?      MaxUses       { get; set; }
+        public int       UsedCount     { get; set; }
+        public DateTime? LastUsedAt    { get; set; }
+        public bool      IsActive      { get; set; }
+        public DateTime? RevokedAt     { get; set; }
     }
 
     public class NewToken
     {
-        public long PortalTokenId { get; set; }
-        public string Token { get; set; } = "";
-        public string Path { get; set; } = "";
-        public DateTime? ExpiresAt { get; set; }
-
-        /// <summary>الرابط الكامل اللي يتبعت للعميل.</summary>
-        public string FullUrl { get; set; } = "";
+        public long      PortalTokenId { get; set; }
+        public string    Token         { get; set; } = "";
+        public string    Path          { get; set; } = "";
+        public DateTime? ExpiresAt     { get; set; }
+        public string    FullUrl       { get; set; } = "";
     }
 
     private static string PurposeAr(string p) => p switch
     {
-        "Portal" => "البوابة كاملة", "Statement" => "كشف الحساب",
-        "InvoiceView" => "فاتورة واحدة", _ => p
+        "Portal"      => "البوابة كاملة",
+        "Statement"   => "كشف الحساب",
+        "InvoiceView" => "فاتورة واحدة",
+        _             => p
     };
 
     private static string TokenChip(PToken t)
@@ -737,7 +1545,8 @@
 
     private async Task OpenPortal(Item c)
     {
-        _pt = c; _pf = new PortalForm(); _newToken = null; _pmsg = null; _portalOpen = true;
+        _pt = c; _pf = new PortalForm();
+        _newToken = null; _pmsg = null; _portalOpen = true;
         await LoadTokensAsync();
     }
 
@@ -762,11 +1571,11 @@
         {
             var res = await Http.PostAsJsonAsync("api/portal/tokens", new
             {
-                customerId   = _pt.CustomerId,
-                purpose      = _pf.Purpose,
-                invoiceId    = (long?)null,
+                customerId    = _pt.CustomerId,
+                purpose       = _pf.Purpose,
+                invoiceId     = (long?)null,
                 expiresInDays = _pf.ExpiresInDays,
-                maxUses      = _pf.MaxUses
+                maxUses       = _pf.MaxUses
             });
             if (res.IsSuccessStatusCode)
             {

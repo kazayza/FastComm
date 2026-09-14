@@ -1,0 +1,547 @@
+@page "/audit"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>سجل المراجعة — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">الإدارة</div>
+                <h1 class="fc-hero-title">سجل المراجعة</h1>
+                <p class="fc-hero-sub">مين عمل إيه وإمتى — الدخول والتعديلات وتغيير الصلاحيات</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="_busy"
+                           StartIcon="@Icons.Material.Filled.Download" OnClick="ExportFull">تصدير الكل</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Warning" Disabled="_busy"
+                           StartIcon="@Icons.Material.Filled.Archive" OnClick="OpenArchive">أرشفة</MudButton>
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="LoadAsync" Style="color:#9FB4CC" />
+            </div>
+        </div>
+
+        <div class="fc-kpis-glass">
+            <div class="fc-kpi"><div class="fc-kpi-lb">إجمالي السجلات</div><div class="fc-kpi-num">@_total.ToString("N0")</div></div>
+            <div class="fc-kpi"><div class="fc-kpi-lb">في الصفحة دي</div><div class="fc-kpi-num">@_items.Count</div></div>
+            <div class="fc-kpi"><div class="fc-kpi-lb">الصفحة</div><div class="fc-kpi-num">@_page / @Pages</div></div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!Can)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض سجل المراجعة.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+
+            <div class="fc-alert fc-alert-info">
+                <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Info" /></div>
+                <div class="fc-alert-body">
+                    <div class="fc-alert-title">السجل بيتسجّل تلقائيًا</div>
+                    <div>حاليًا بيسجّل <b>الدخول ومحاولات الدخول الفاشلة</b>.
+                        باقي الحركات (تعديل مستخدم · تغيير صلاحيات · اعتماد فاتورة)
+                        هتتضاف تدريجيًا عن طريق <b>IAuditService</b>.</div>
+                </div>
+            </div>
+
+            @if (_msg is not null)
+            {
+                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                          Class="mb-4">@_msg</MudAlert>
+            }
+
+            <div class="fc-fsec">
+                <div class="fc-fsec-head">
+                    <span class="fc-fsec-n">1</span>
+                    <div>
+                        <div class="fc-fsec-t">السجلات</div>
+                        <div class="fc-fsec-d">الأحدث فوق</div>
+                    </div>
+                    <span class="fc-fsec-ic"><MudIcon Icon="@Icons.Material.Filled.FactCheck" Size="Size.Small" /></span>
+                </div>
+
+                <div class="fc-filters">
+                    <select class="fc-sel" value="@_fAction" @onchange="OnActionChanged">
+                        <option value="">كل الحركات</option>
+                        @foreach (var a in _actions) { <option value="@a">@ActionAr(a)</option> }
+                    </select>
+                    <select class="fc-sel" value="@_fEntity" @onchange="OnEntityChanged">
+                        <option value="">كل الكيانات</option>
+                        @foreach (var e in _entities) { <option value="@e">@e</option> }
+                    </select>
+                    <input type="date" class="fc-sel" value="@_fFrom" @onchange="e => _fFrom = e.Value?.ToString()" title="من" />
+                    <input type="date" class="fc-sel" value="@_fTo" @onchange="e => _fTo = e.Value?.ToString()" title="لغاية" />
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                               OnClick="ApplyAsync">تطبيق</MudButton>
+                    @if (HasFilter)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="ClearAsync">مسح الفلاتر</MudButton>
+                    }
+                </div>
+
+                <div class="fc-table-wrap"><table class="fc-table">
+                    <thead><tr>
+                        <th>الوقت</th><th>المستخدم</th><th>الحركة</th>
+                        <th>الكيان</th><th>الوصف</th><th>IP</th><th style="width:60px"></th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach (var a in _items)
+                        {
+                            <tr>
+                                <td class="fc-cell-sub">@a.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm:ss")</td>
+                                <td class="fc-cell-main">@(a.UserName ?? "—")</td>
+                                <td><span class="fc-chip @ActCls(a.Action)">@ActionAr(a.Action)</span></td>
+                                <td class="fc-cell-sub">
+                                    @a.EntityType
+                                    @if (!string.IsNullOrWhiteSpace(a.EntityId))
+                                    {
+                                        <text> #@a.EntityId</text>
+                                    }
+                                </td>
+                                <td>@(a.Description ?? "—")</td>
+                                <td class="fc-cell-sub">@(a.IpAddress ?? "—")</td>
+                                <td>
+                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Search"
+                                                   Color="Color.Primary" title="التفاصيل" OnClick="() => ShowDetail(a)" />
+                                </td>
+                            </tr>
+                        }
+                        @if (_items.Count == 0)
+                        {
+                            <tr><td colspan="7">
+                                <div class="fc-empty">مافيش سجلات — السجل لسه جديد، هيتملأ مع الاستخدام</div>
+                            </td></tr>
+                        }
+                    </tbody>
+                </table></div>
+
+                @* ── ترقيم الصفحات ── *@
+                @if (Pages > 1)
+                {
+                    @* 🔴 مثلثات CSS بدل أيقونات — مافيش اعتماد على اسم Material icon *@
+                    <div class="fc-pager">
+                        <button type="button" class="fc-pager-btn" disabled="@(_page <= 1)"
+                                @onclick="() => GoPage(_page - 1)">
+                            <span class="fc-tri fc-tri-prev"></span>
+                        </button>
+                        <span class="fc-cell-sub">صفحة @_page من @Pages</span>
+                        <button type="button" class="fc-pager-btn" disabled="@(_page >= Pages)"
+                                @onclick="() => GoPage(_page + 1)">
+                            <span class="fc-tri fc-tri-next"></span>
+                        </button>
+                    </div>
+                }
+            </div>
+
+        </div></div>
+    }
+</div>
+
+@* ═══════════ مودال: التفاصيل ═══════════ *@
+@if (_d is not null)
+{
+    <div class="fc-modal-backdrop" @onclick="() => _d = null">
+        <div class="fc-modal" @onclick:stopPropagation="true">
+            <div class="fc-modal-head">
+                <div>
+                    <div class="fc-modal-title">@ActionAr(_d.Action) — @_d.EntityType</div>
+                    <div class="fc-modal-sub">@_d.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</div>
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _d = null" />
+            </div>
+            <div class="fc-modal-body">
+                <div class="fc-form-grid">
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">المستخدم</div>
+                        <div class="fc-sel fc-sel-lg" style="display:flex;align-items:center">
+                            @(_d.UserName ?? "—") @if (_d.UserId is not null) { <span class="fc-cell-sub">(#@_d.UserId)</span> }
+                        </div>
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">الكيان</div>
+                        <div class="fc-sel fc-sel-lg" style="display:flex;align-items:center">
+                            @_d.EntityType @if (!string.IsNullOrWhiteSpace(_d.EntityId)) { <text>#@_d.EntityId</text> }
+                        </div>
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">IP</div>
+                        <div class="fc-sel fc-sel-lg" style="display:flex;align-items:center" dir="ltr">
+                            @(_d.IpAddress ?? "—")
+                        </div>
+                    </div>
+                    <div class="fc-fld">
+                        <div class="fc-fld-lb">المتصفح</div>
+                        <div class="fc-sel fc-sel-lg" style="display:flex;align-items:center;font-size:11px">
+                            @(string.IsNullOrWhiteSpace(_d.UserAgent) ? "—" : Short(_d.UserAgent))
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(_d.Description))
+                    {
+                        <div class="fc-fld fc-field-full">
+                            <div class="fc-fld-lb">الوصف</div>
+                            <div class="fc-sel fc-sel-lg" style="display:flex;align-items:center">@_d.Description</div>
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(_d.OldValues))
+                    {
+                        <div class="fc-fld fc-field-full">
+                            <div class="fc-fld-lb">قبل</div>
+                            <div class="fc-code-box">@_d.OldValues</div>
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(_d.NewValues))
+                    {
+                        <div class="fc-fld fc-field-full">
+                            <div class="fc-fld-lb">بعد</div>
+                            <div class="fc-code-box">@_d.NewValues</div>
+                        </div>
+                    }
+                </div>
+            </div>
+            <div class="fc-modal-foot">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => _d = null">إغلاق</MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@* ═══════════ مودال: الأرشفة ═══════════ *@
+@if (_showArchive)
+{
+    <div class="fc-modal-backdrop" @onclick="CloseArchive">
+        <div class="fc-modal" @onclick:stopPropagation="true">
+            <div class="fc-modal-head">
+                <h3><MudIcon Icon="@Icons.Material.Filled.Archive" /> أرشفة سجل المراجعة</h3>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseArchive" />
+            </div>
+            <div class="fc-modal-body">
+                @if (_ap is null)
+                {
+                    <div class="fc-loading"><MudProgressCircular Indeterminate="true" Size="Size.Small" /> جارٍ الفحص…</div>
+                }
+                else if (_ap.Count == 0)
+                {
+                    <div class="fc-empty"><div>مافيش سجلات أقدم من @_ap.RetentionMonths شهور 🎉</div></div>
+                }
+                else
+                {
+                    <div class="fc-alert fc-alert-warn">
+                        <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
+                        <div class="fc-alert-body">
+                            <div class="fc-alert-title">هيتصدّر ملف Excel وبعدين يتحذف من الجدول</div>
+                            <div>العملية دي <b>ما تتراجعش</b>. احتفظ بالملف في مكان آمن.</div>
+                        </div>
+                    </div>
+
+                    <div class="fc-stats" style="margin-top:14px">
+                        <div class="fc-stat">
+                            <div class="fc-stat-head">
+                                <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.History" /></div>
+                                <div class="fc-stat-lb">سجلات هتتأرشف</div>
+                            </div>
+                            <div class="fc-stat-num">@_ap.Count.ToString("N0")</div>
+                            <div class="fc-stat-sub">أقدم من @_ap.Cutoff</div>
+                        </div>
+                        <div class="fc-stat">
+                            <div class="fc-stat-head">
+                                <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.Storage" /></div>
+                                <div class="fc-stat-lb">حجم تقريبي</div>
+                            </div>
+                            <div class="fc-stat-num">@FmtSize(_ap.EstBytes)</div>
+                            <div class="fc-stat-sub">هتتوفر في قاعدة البيانات</div>
+                        </div>
+                        <div class="fc-stat">
+                            <div class="fc-stat-head">
+                                <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.CalendarToday" /></div>
+                                <div class="fc-stat-lb">أقدم سجل</div>
+                            </div>
+                            <div class="fc-stat-num" style="font-size:1rem">@(_ap.Oldest ?? "—")</div>
+                            <div class="fc-stat-sub">أحدث: @(_ap.Newest ?? "—")</div>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="fc-modal-foot">
+                <MudButton Variant="Variant.Text" OnClick="CloseArchive">إلغاء</MudButton>
+                @if (_ap is not null && _ap.Count > 0)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Warning" Disabled="_busy"
+                               StartIcon="@Icons.Material.Filled.Archive" OnClick="RunArchive">
+                        صدّر واحذف @_ap.Count.ToString("N0") سجل
+                    </MudButton>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private AuthUser? _user;
+    private bool Can => _user?.Can("AUDIT.VIEW") ?? false;
+
+    private List<Item> _items = new();
+    private List<string> _actions = new();
+    private List<string> _entities = new();
+    private int _total; private int _page = 1; private const int PageSize = 50;
+
+    private string? _fAction, _fEntity, _fFrom, _fTo;
+    private string? _msg; private bool _ok = true;
+    private Detail? _d;
+
+    private int Pages => _total <= 0 ? 1 : (int)Math.Ceiling(_total / (double)PageSize);
+    private bool HasFilter => !string.IsNullOrWhiteSpace(_fAction) || !string.IsNullOrWhiteSpace(_fEntity)
+                              || !string.IsNullOrWhiteSpace(_fFrom) || !string.IsNullOrWhiteSpace(_fTo);
+
+    /// <summary>مطابق لـ <c>AuditController.Item</c> — 9 حقول.</summary>
+    public class Item
+    {
+        public long AuditLogId { get; set; }
+        public int? UserId { get; set; }
+        public string? UserName { get; set; }
+        public string Action { get; set; } = "";
+        public string EntityType { get; set; } = "";
+        public string? EntityId { get; set; }
+        public string? Description { get; set; }
+        public string? IpAddress { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    /// <summary>مطابق لـ <c>AuditController.Detail</c> — 12 حقل.</summary>
+    public class Detail
+    {
+        public long AuditLogId { get; set; }
+        public int? UserId { get; set; }
+        public string? UserName { get; set; }
+        public string Action { get; set; } = "";
+        public string EntityType { get; set; } = "";
+        public string? EntityId { get; set; }
+        public string? OldValues { get; set; }
+        public string? NewValues { get; set; }
+        public string? Description { get; set; }
+        public string? IpAddress { get; set; }
+        public string? UserAgent { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    private class PageRes
+    {
+        public int Total { get; set; }
+        public int Page { get; set; }
+        public int Size { get; set; }
+        public List<Item> Items { get; set; } = new();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (!Can) return;
+        try
+        {
+            _actions  = await Http.GetFromJsonAsync<List<string>>("api/audit/actions") ?? new();
+            _entities = await Http.GetFromJsonAsync<List<string>>("api/audit/entity-types") ?? new();
+        }
+        catch { _actions = new(); _entities = new(); }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var qs = $"page={_page}&size={PageSize}";
+            if (!string.IsNullOrWhiteSpace(_fAction)) qs += $"&action={_fAction}";
+            if (!string.IsNullOrWhiteSpace(_fEntity)) qs += $"&entityType={_fEntity}";
+            if (!string.IsNullOrWhiteSpace(_fFrom))   qs += $"&from={_fFrom}";
+            if (!string.IsNullOrWhiteSpace(_fTo))     qs += $"&to={_fTo}";
+
+            /* 🔴 مانستخدمش GetFromJsonAsync على طول — لو السيرفر رجّع HTML
+                  (زي index.html من MapFallbackToFile) الرسالة بتطلع incomprehensible. */
+            var res = await Http.GetAsync("api/audit?" + qs);
+            var body = await res.Content.ReadAsStringAsync();
+
+            if (!res.IsSuccessStatusCode)
+            {
+                _ok = false;
+                _msg = $"❌ السيرفر رجّع {(int)res.StatusCode} — {Diag(body)}";
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(body) || body.TrimStart().StartsWith("<"))
+            {
+                _ok = false;
+                _msg = "❌ السيرفر رجّع صفحة HTML مش بيانات — " + Diag(body);
+                return;
+            }
+
+            var p = System.Text.Json.JsonSerializer.Deserialize<PageRes>(body, JsonOpts);
+            if (p is not null) { _items = p.Items; _total = p.Total; _page = p.Page; }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل التحميل: " + ex.Message; }
+    }
+
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOpts = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    /// <summary>
+    /// 🔴 بيشخّص السبب — لأن `MapFallbackToFile("index.html")` بيرجّع HTML
+    /// لأي route مش موجود، فالرسالة الأصلية بتطلع «'&lt;' is an invalid start of a value».
+    /// </summary>
+    private static string Diag(string body)
+    {
+        var t = body.TrimStart();
+        if (t.StartsWith("<!DOCTYPE", StringComparison.OrdinalIgnoreCase) || t.StartsWith("<html", StringComparison.OrdinalIgnoreCase))
+            return "**الإندبوينت `api/audit` مش موجود على السيرفر.** " +
+                   "اتأكد إن `Controllers/Admin/AuditController.cs` متنسوخ في مشروع " +
+                   "`FastCom.Server` وإنك عملت **rebuild للسيرفر** (مش Client بس).";
+        if (t.StartsWith("<")) return "السيرفر رجّع HTML مش JSON — غالبًا استثناء. بص على console السيرفر.";
+        return t.Length > 300 ? t.Substring(0, 300) + "…" : t;
+    }
+
+    private async Task ApplyAsync() { _page = 1; await LoadAsync(); }
+
+    private async Task ClearAsync()
+    {
+        _fAction = null; _fEntity = null; _fFrom = null; _fTo = null;
+        _page = 1; await LoadAsync();
+    }
+
+    private async Task GoPage(int p)
+    {
+        if (p < 1 || p > Pages) return;
+        _page = p; await LoadAsync();
+    }
+
+    private async Task OnActionChanged(ChangeEventArgs e)
+    {
+        _fAction = string.IsNullOrWhiteSpace(e.Value?.ToString()) ? null : e.Value?.ToString();
+        await ApplyAsync();
+    }
+
+    private async Task OnEntityChanged(ChangeEventArgs e)
+    {
+        _fEntity = string.IsNullOrWhiteSpace(e.Value?.ToString()) ? null : e.Value?.ToString();
+        await ApplyAsync();
+    }
+
+    private async Task ShowDetail(Item a)
+    {
+        try { _d = await Http.GetFromJsonAsync<Detail>($"api/audit/{a.AuditLogId}"); }
+        catch { Snackbar.Add("فشل فتح التفاصيل", Severity.Error); }
+    }
+
+    /* 🔴 أي `"` جوه attribute = RZ1010 — فالـ class من helper */
+
+    private static string ActCls(string a) => a switch
+    {
+        "Login" => "fc-chip-ok",
+        "LoginFailed" => "fc-chip-bad",
+        "PermissionChange" => "fc-chip-warn",
+        "Create" => "fc-chip-blue",
+        "Update" => "fc-chip-gold",
+        "Delete" or "Cancel" or "Reject" => "fc-chip-bad",
+        "Approve" or "Settle" or "Close" => "fc-chip-ok",
+        _ => "fc-chip-gray"
+    };
+
+    private static string ActionAr(string a) => a switch
+    {
+        "Create" => "إنشاء", "Update" => "تعديل", "Delete" => "حذف",
+        "Restore" => "استرجاع", "Approve" => "اعتماد", "Reject" => "رفض",
+        "Cancel" => "إلغاء", "Close" => "إقفال", "Reopen" => "إعادة فتح",
+        "Issue" => "إصدار", "Send" => "إرسال", "Settle" => "تسوية",
+        "Login" => "دخول", "Logout" => "خروج", "LoginFailed" => "دخول فاشل",
+        "PermissionChange" => "تغيير صلاحيات", "Export" => "تصدير",
+        "Print" => "طباعة", "Download" => "تنزيل", "Upload" => "رفع",
+        _ => a
+    };
+
+    private static string Short(string s) => s.Length <= 70 ? s : s.Substring(0, 70) + "…";
+
+    /* ══════════ 🆕 الأرشفة — تصدير ثم حذف ══════════ */
+
+    private bool _showArchive, _busy;
+    private ArchivePreview? _ap;
+
+    private class ArchivePreview
+    {
+        public int      RetentionMonths { get; set; }
+        public string?  Cutoff          { get; set; }
+        public int      Count           { get; set; }
+        public string?  Oldest          { get; set; }
+        public string?  Newest          { get; set; }
+        public long     EstBytes        { get; set; }
+    }
+
+    /* 🔴 Razor بيفسر `<` في الـ switch pattern على إنه HTML tag (RZ9980) — فـ if/else */
+    private static string FmtSize(long b)
+    {
+        if (b < 1024)       return $"{b} بايت";
+        if (b < 1048576)    return $"{b / 1024.0:F1} KB";
+        if (b < 1073741824) return $"{b / 1048576.0:F1} MB";
+        return $"{b / 1073741824.0:F2} GB";
+    }
+
+    private async Task ExportFull()
+    {
+        _busy = true;
+        try
+        {
+            var bytes = await Http.GetByteArrayAsync("api/audit/export");
+            if (bytes is null || bytes.Length == 0) throw new Exception("السيرفر مرجّعش ملف");
+            await JS.InvokeAsync<bool>("fastcom.downloadBase64", Convert.ToBase64String(bytes),
+                $"fastcom-audit-full-{DateTime.Now:yyyyMMdd-HHmm}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            Snackbar.Add("✅ اتصدّر السجل كامل", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add("فشل التصدير: " + ex.Message, Severity.Error); }
+        finally { _busy = false; }
+    }
+
+    private async Task OpenArchive()
+    {
+        _showArchive = true; _ap = null;
+        try { _ap = await Http.GetFromJsonAsync<ArchivePreview>("api/audit/archive-preview"); }
+        catch { Snackbar.Add("فشل فحص السجلات القديمة", Severity.Error); _showArchive = false; }
+    }
+
+    private void CloseArchive() { _showArchive = false; }
+
+    private async Task RunArchive()
+    {
+        _busy = true;
+        try
+        {
+            /* 🔴 POST بيرجّع ملف — فمانستخدمش PostAsJsonAsync + ReadAsJson */
+            var res = await Http.PostAsync("api/audit/archive", null);
+            var bytes = await res.Content.ReadAsByteArrayAsync();
+
+            if (!res.IsSuccessStatusCode)
+            {
+                var msg = System.Text.Encoding.UTF8.GetString(bytes);
+                throw new Exception(Diag(msg));
+            }
+            if (bytes.Length == 0) throw new Exception("السيرفر مرجّعش ملف الأرشيف");
+
+            await JS.InvokeAsync<bool>("fastcom.downloadBase64", Convert.ToBase64String(bytes),
+                $"fastcom-audit-archive-{DateTime.Now:yyyyMMdd-HHmm}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
+            Snackbar.Add($"✅ اتأرشفت {_ap?.Count:N0} سجل واتحذفت من الجدول", Severity.Success);
+            _showArchive = false;
+            _page = 1;
+            await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشلت الأرشفة: " + ex.Message, Severity.Error); }
+        finally { _busy = false; }
+    }
+}
