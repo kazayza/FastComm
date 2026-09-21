@@ -9,6 +9,7 @@
 
 <PageTitle>الموردين — فاست كوم</PageTitle>
 
+
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
@@ -18,137 +19,673 @@
                 <p class="fc-hero-sub">شركات نقل ومحطات وقود وورش — مصادر المصروفات والالتزامات</p>
             </div>
             <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
+                               OnClick="Reload" Style="color:#9FB4CC" />
                 @if (CanCreate)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="GoNew">مورد جديد</MudButton>
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="GoNew">مورد جديد</MudButton>
                 }
             </div>
         </div>
+
         @if (CanView)
         {
             <div class="fc-kpis fc-kpis-glass">
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.LocalShipping" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي الموردين</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(s => s.IsActive)</div><div class="fc-kpi-lb">نشط</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.AirportShuttle" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(s => s.SupplierType == "TransportCompany")</div><div class="fc-kpi-lb">شركات نقل</div></div></div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.LocalShipping" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي الموردين</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(s => s.IsActive)</div><div class="fc-kpi-lb">نشط</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.AirportShuttle" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(s => s.SupplierType == "TransportCompany")</div><div class="fc-kpi-lb">شركات نقل</div></div>
+                </div>
             </div>
         }
     </div>
 </div>
 
-<div class="fc-page">
+
+<div class="sup-body">
+
     @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض الموردين.</MudAlert>
+        <div class="sup-state-box">
+            <div class="sup-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليس لديك صلاحية عرض الموردين</p>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
-            <div class="fc-toolbar">
-                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
-                              Placeholder="ابحث بالاسم أو الكود..." Variant="Variant.Outlined" Dense="true"
-                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                              Class="fc-search-box" Immediate="true" />
-                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+        <div class="sup-card">
+
+            @* ── Toolbar ── *@
+            <div class="sup-toolbar">
+
+                <div class="sup-search-wrap">
+                    <svg class="sup-search-icon" viewBox="0 0 24 24" width="16" height="16"
+                         fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                    </svg>
+                    <input class="sup-search-input"
+                           placeholder="ابحث بالاسم أو الكود..."
+                           @bind="_search" @bind:event="oninput"
+                           aria-label="بحث" />
+                    @if (!string.IsNullOrWhiteSpace(_search))
+                    {
+                        <button class="sup-search-clear"
+                                @onclick="() => _search = string.Empty">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    }
+                </div>
+
+                @* Type Filter *@
+                <div class="sup-type-filters" role="group" aria-label="فلتر النوع">
+                    <button class="sup-type-btn @(_typeFilter == "all" ? "type-active" : "")"
+                            @onclick='() => _typeFilter = "all"'
+                            aria-pressed="@(_typeFilter == "all")">
+                        الكل
+                        <span class="sup-filter-count">@_items.Count</span>
+                    </button>
+                    @foreach (var t in Types)
+                    {
+                        var typeKey = t.Key;
+                        var cnt = _items.Count(s => s.SupplierType == typeKey);
+                        if (cnt > 0)
+                        {
+                            <button class="sup-type-btn @(_typeFilter == typeKey ? "type-active" : "")"
+                                    @onclick="() => _typeFilter = typeKey"
+                                    aria-pressed="@(_typeFilter == typeKey)">
+                                @TypeIcon(typeKey) @t.Value
+                                <span class="sup-filter-count">@cnt</span>
+                            </button>
+                        }
+                    }
+                </div>
+
+                <div class="sup-results-badge">
+                    عرض <strong>@Filtered.Count()</strong> من <strong>@_items.Count</strong>
+                </div>
+
             </div>
+
+
+            @* ── Content ── *@
             @if (_loading)
             {
-                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+                <div class="sup-loading">
+                    <div class="sup-spinner" aria-label="جاري التحميل"></div>
+                    <span>جاري تحميل الموردين...</span>
+                </div>
+            }
+            else if (!Filtered.Any())
+            {
+                <div class="sup-empty">
+                    <div class="sup-empty-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="42" height="42"
+                             fill="none" stroke="currentColor" stroke-width="1.4">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                            <path d="M9 22V12h6v10"/>
+                        </svg>
+                    </div>
+                    <div class="sup-empty-title">
+                        @(string.IsNullOrWhiteSpace(_search) && _typeFilter == "all"
+                            ? "لا يوجد موردين"
+                            : "لا توجد نتائج")
+                    </div>
+                    <div class="sup-empty-sub">
+                        @(string.IsNullOrWhiteSpace(_search) && _typeFilter == "all"
+                            ? "ضيف أول مورد من زر «مورد جديد»"
+                            : "جرّب تغيير الفلتر أو كلمة البحث")
+                    </div>
+                    @if (CanCreate && string.IsNullOrWhiteSpace(_search) && _typeFilter == "all")
+                    {
+                        <button class="sup-add-btn" @onclick="GoNew">
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2.5"
+                                 aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                            مورد جديد
+                        </button>
+                    }
+                </div>
             }
             else
             {
-                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
-                    <thead><tr><th>الكود</th><th>الاسم</th><th>النوع</th><th>التليفون</th><th>الحالة</th>
-                        @if (CanEdit) { <th style="width:170px; text-align:left">إجراءات</th> }</tr></thead>
-                    <tbody>
-                        @foreach (var s in Filtered)
-                        {
+                <div class="sup-table-wrap">
+                    <table class="sup-table" aria-label="قائمة الموردين">
+                        <thead>
                             <tr>
-                                <td><span class="fc-role-chip">@s.SupplierCode</span></td>
-                                <td><div class="fc-cell-main">@s.NameAr</div></td>
-                                <td><span class="fc-role-chip">@TypeName(s.SupplierType)</span></td>
-                                <td class="fc-cell-sub">@(s.Phone ?? "—")</td>
-                                <td>@(s.IsActive ? "نشط" : "موقوف")</td>
+                                <th scope="col" class="th-start">المورد</th>
+                                <th scope="col">النوع</th>
+                                <th scope="col">التليفون</th>
+                                <th scope="col">الحالة</th>
                                 @if (CanEdit)
                                 {
-                                    <td><div class="fc-row-actions">
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="() => GoEdit(s)" />
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Refresh"
-                                                       Color="@(s.IsActive ? Color.Error : Color.Success)"
-                                                       title="@(s.IsActive ? "إيقاف" : "تفعيل")"
-                                                       OnClick="() => ToggleActive(s)" />
-                                        @if (_confirmId == s.SupplierId)
-                                        {
-                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" OnClick="() => Delete(s)">متأكد؟</MudButton>
-                                        }
-                                        else if (CanDelete)
-                                        {
-                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => _confirmId = s.SupplierId" />
-                                        }
-                                    </div></td>
+                                    <th scope="col" style="width:140px">إجراءات</th>
                                 }
                             </tr>
-                        }
-                        @if (!Filtered.Any())
-                        {
-                            <tr><td colspan="6"><div class="fc-empty"><div>لايوجد اى موردين — ضيف أول واحد</div></div></td></tr>
-                        }
-                    </tbody>
-                </table></div>
+                        </thead>
+                        <tbody>
+                            @foreach (var s in Filtered)
+                            {
+                                <tr class="@(!s.IsActive ? "row-inactive" : "")">
+
+                                    @* ── المورد ── *@
+                                    <td class="td-start">
+                                        <div class="sup-supplier-cell">
+                                            <div class="sup-avatar @AvatarClass(s.SupplierType)"
+                                                 aria-hidden="true">
+                                                @TypeIcon(s.SupplierType)
+                                            </div>
+                                            <div class="sup-supplier-info">
+                                                <div class="sup-supplier-name">@s.NameAr</div>
+                                                <span class="sup-code-chip">@s.SupplierCode</span>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    @* ── النوع ── *@
+                                    <td>
+                                        <span class="sup-type-chip @TypeChipClass(s.SupplierType)">
+                                            @TypeName(s.SupplierType)
+                                        </span>
+                                    </td>
+
+                                    @* ── التليفون ── *@
+                                    <td class="td-muted" dir="ltr">@(s.Phone ?? "—")</td>
+
+                                    @* ── الحالة ── *@
+                                    <td>
+                                        @if (s.IsActive)
+                                        {
+                                            <span class="sup-chip chip-active">
+                                                <span class="sup-chip-dot dot-green" aria-hidden="true"></span>
+                                                نشط
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="sup-chip chip-inactive">
+                                                <span class="sup-chip-dot dot-red" aria-hidden="true"></span>
+                                                موقوف
+                                            </span>
+                                        }
+                                    </td>
+
+                                    @* ── إجراءات ── *@
+                                    @if (CanEdit)
+                                    {
+                                        <td>
+                                            <div class="sup-actions">
+
+                                                <button class="sup-act-btn act-edit"
+                                                        @onclick="() => GoEdit(s)"
+                                                        title="تعديل"
+                                                        aria-label="تعديل @s.NameAr">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                    </svg>
+                                                </button>
+
+                                                <button class="sup-act-btn @(s.IsActive ? "act-stop" : "act-activate")"
+                                                        @onclick="() => ToggleActive(s)"
+                                                        title="@(s.IsActive ? "إيقاف" : "تفعيل")"
+                                                        aria-label="@(s.IsActive ? "إيقاف" : "تفعيل") @s.NameAr">
+                                                    @if (s.IsActive)
+                                                    {
+                                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <circle cx="12" cy="12" r="10"/>
+                                                            <path d="M10 15V9M14 15V9" stroke-linecap="round"/>
+                                                        </svg>
+                                                    }
+                                                    else
+                                                    {
+                                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <circle cx="12" cy="12" r="10"/>
+                                                            <path d="M10 8l6 4-6 4V8z" fill="currentColor" stroke="none"/>
+                                                        </svg>
+                                                    }
+                                                </button>
+
+                                                @if (CanDelete)
+                                                {
+                                                    @if (_confirmId == s.SupplierId)
+                                                    {
+                                                        <button class="sup-confirm-del"
+                                                                @onclick="() => Delete(s)">
+                                                            حذف؟
+                                                        </button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button class="sup-act-btn act-delete"
+                                                                @onclick="() => _confirmId = s.SupplierId"
+                                                                title="حذف"
+                                                                aria-label="حذف @s.NameAr">
+                                                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                            </svg>
+                                                        </button>
+                                                    }
+                                                }
+
+                                            </div>
+                                        </td>
+                                    }
+
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
-        </div></div>
+
+        </div>
+    }
+</div>
+
+
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-teal:      #0d9488;
+        --fc-teal-lt:   #e6faf8;
+        --fc-orange:    #e06520;
+        --fc-orange-lt: #fff3ec;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
     }
 
-</div>
+    /* ================================================================
+       BODY
+    ================================================================ */
+    .sup-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 200px);
+        padding: 16px 20px 32px;
+        max-width: 1200px; width: 100%;
+        margin: 0 auto;
+    }
+
+    /* States */
+    .sup-state-box {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .sup-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .sup-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+    .sup-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .sup-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    /* Card */
+    .sup-card {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden;
+    }
+
+    /* ================================================================
+       TOOLBAR
+    ================================================================ */
+    .sup-toolbar {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7; flex-wrap: wrap;
+    }
+
+    .sup-search-wrap {
+        position: relative; display: flex; align-items: center;
+        min-width: 200px; max-width: 320px;
+    }
+    .sup-search-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; }
+    .sup-search-input {
+        width: 100%; height: 38px; padding: 0 36px 0 12px;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .sup-search-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .sup-search-input::placeholder { color: #b0bcc8; }
+    .sup-search-clear {
+        position: absolute; left: 10px;
+        display: flex; align-items: center; justify-content: center;
+        width: 22px; height: 22px; border-radius: 50%;
+        border: none; background: #edf1f7; color: #8899ae; cursor: pointer;
+    }
+
+    /* Type Filter */
+    .sup-type-filters {
+        display: flex; gap: 4px; flex-wrap: wrap;
+        padding: 3px; border-radius: 9px; background: #f0f3f8;
+    }
+
+    .sup-type-btn {
+        display: flex; align-items: center; gap: 5px;
+        height: 32px; padding: 0 10px;
+        border: none; border-radius: 7px;
+        background: transparent; color: #6b7d95;
+        font-family: inherit; font-size: 11px; font-weight: 700;
+        cursor: pointer; white-space: nowrap; transition: all .15s ease;
+    }
+    .sup-type-btn:hover:not(.type-active) { background: rgba(255,255,255,.7); color: var(--fc-text); }
+    .type-active { background: var(--fc-card); color: var(--fc-text); box-shadow: 0 1px 4px rgba(15,41,82,.10); font-weight: 800; }
+
+    .sup-filter-count {
+        min-width: 16px; height: 16px; border-radius: 4px; padding: 0 3px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 9px; font-weight: 900; font-family: "Inter", Arial, sans-serif;
+        background: #e4eaf3; color: #8899ae;
+    }
+    .type-active .sup-filter-count { background: var(--fc-blue-lt); color: var(--fc-blue); }
+
+    .sup-results-badge {
+        display: flex; align-items: center; gap: 5px;
+        margin-right: auto; font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap;
+    }
+    .sup-results-badge strong { color: #5a6e88; }
+
+    /* ================================================================
+       LOADING / EMPTY
+    ================================================================ */
+    .sup-loading {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 200px; color: var(--fc-muted); font-size: 12px; font-weight: 600;
+    }
+    .sup-spinner {
+        width: 32px; height: 32px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: sup-spin .75s linear infinite;
+    }
+    @@keyframes sup-spin { to { transform: rotate(360deg); } }
+
+    .sup-empty {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 10px; min-height: 240px; padding: 40px; text-align: center;
+    }
+    .sup-empty-icon { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #f0f4fa; color: #b0c4d8; }
+    .sup-empty-title { font-size: 15px; font-weight: 800; color: var(--fc-text); }
+    .sup-empty-sub   { font-size: 12px; color: var(--fc-muted); }
+
+    .sup-add-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 16px; margin-top: 6px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; transition: all .15s ease;
+    }
+    .sup-add-btn:hover { background: var(--fc-blue); color: #fff; }
+
+    /* ================================================================
+       TABLE
+    ================================================================ */
+    .sup-table-wrap { overflow-x: auto; }
+    .sup-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+
+    .sup-table thead th {
+        padding: 10px 12px;
+        background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 10.5px; font-weight: 800;
+        text-align: center; border-bottom: 2px solid #e4eaf3;
+        white-space: nowrap; position: sticky; top: 0; z-index: 1;
+    }
+    .sup-table .th-start { text-align: right; }
+
+    .sup-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background .12s ease; }
+    .sup-table tbody tr:last-child { border-bottom: none; }
+    .sup-table tbody tr:hover { background: #fafcff; }
+    .sup-table tbody tr.row-inactive { opacity: .65; }
+
+    .sup-table tbody td { padding: 11px 12px; color: #526070; text-align: center; vertical-align: middle; }
+    .td-start { text-align: right !important; }
+    .td-muted  { color: #8899ae; font-size: 11px; }
+
+    /* Supplier Cell */
+    .sup-supplier-cell { display: flex; align-items: center; gap: 10px; }
+
+    .sup-avatar {
+        width: 38px; height: 38px; flex: 0 0 38px; border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px; border: 1px solid transparent;
+    }
+
+    /* Avatar colors by type */
+    .av-transport  { background: var(--fc-blue-lt);   border-color: #c0d4fb; }
+    .av-fuel       { background: var(--fc-amber-lt);  border-color: #f0d898; }
+    .av-workshop   { background: var(--fc-teal-lt);   border-color: #b0e0dc; }
+    .av-port       { background: var(--fc-purple-lt); border-color: #d0bfef; }
+    .av-parts      { background: var(--fc-orange-lt); border-color: #f0c8a8; }
+    .av-other      { background: #f0f3f8;             border-color: #dde5f0; }
+
+    .sup-supplier-name { font-size: 13px; font-weight: 800; color: #1c2c44; }
+
+    .sup-code-chip {
+        display: inline-flex; padding: 1px 7px; border-radius: 5px; margin-top: 3px;
+        background: #f0f4fa; border: 1px solid #e0e8f4;
+        font-size: 10px; font-weight: 800; color: #5a6e88;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    /* Type Chips */
+    .sup-type-chip {
+        display: inline-flex; padding: 3px 9px; border-radius: 7px;
+        font-size: 10.5px; font-weight: 800; white-space: nowrap;
+    }
+
+    .chip-transport { background: var(--fc-blue-lt);   color: var(--fc-blue);   border: 1px solid #c0d4fb; }
+    .chip-fuel      { background: var(--fc-amber-lt);  color: #9a6d08;          border: 1px solid #f0d898; }
+    .chip-workshop  { background: var(--fc-teal-lt);   color: var(--fc-teal);   border: 1px solid #b0e0dc; }
+    .chip-port      { background: var(--fc-purple-lt); color: var(--fc-purple); border: 1px solid #d0bfef; }
+    .chip-parts     { background: var(--fc-orange-lt); color: var(--fc-orange); border: 1px solid #f0c8a8; }
+    .chip-other     { background: #f0f3f8;             color: #6b7d95;          border: 1px solid #dde5f0; }
+
+    /* Status Chips */
+    .sup-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 7px; font-size: 10.5px; font-weight: 800; }
+    .sup-chip-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
+
+    .chip-active   { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .chip-inactive { background: #f0f3f8; color: #6b7d95; border: 1px solid #dde5f0; }
+
+    .dot-green { background: var(--fc-green); }
+    .dot-red   { background: var(--fc-red); }
+
+    /* Actions */
+    .sup-actions { display: flex; align-items: center; gap: 4px; justify-content: center; }
+
+    .sup-act-btn {
+        width: 30px; height: 30px; border-radius: 7px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; cursor: pointer;
+        transition: all .15s ease; background: transparent;
+    }
+
+    .act-edit     { color: var(--fc-blue); }
+    .act-stop     { color: var(--fc-red); }
+    .act-activate { color: var(--fc-green); }
+    .act-delete   { color: var(--fc-red); }
+
+    .act-edit:hover     { background: var(--fc-blue-lt);  border-color: #c0d4fb; }
+    .act-stop:hover     { background: var(--fc-red-lt);   border-color: #ffc8cf; }
+    .act-activate:hover { background: var(--fc-green-lt); border-color: #b0e0c5; }
+    .act-delete:hover   { background: var(--fc-red-lt);   border-color: #ffc8cf; }
+
+    .sup-confirm-del {
+        height: 26px; padding: 0 9px;
+        border: none; border-radius: 6px;
+        background: linear-gradient(135deg, #e03048, #c0182e);
+        color: #fff; font-family: inherit;
+        font-size: 9.5px; font-weight: 800; cursor: pointer;
+        animation: sup-pulse 1s ease infinite;
+    }
+    @@keyframes sup-pulse {
+        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.35); }
+        50%     { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
+    }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 900px) {
+        .sup-toolbar { flex-direction: column; align-items: stretch; }
+        .sup-search-wrap { max-width: 100%; }
+        .sup-results-badge { margin-right: 0; }
+        .sup-type-filters { justify-content: flex-start; }
+    }
+
+    @@media (max-width: 680px) {
+        .sup-body { padding: 10px 12px 24px; }
+        .sup-toolbar { padding: 10px 12px; }
+        .sup-avatar { display: none; }
+    }
+
+</style>
+
 
 @code {
     private AuthUser? _user;
-    private bool CanView => _user?.Can("SUPPLIER.VIEW") ?? false;
+    private bool CanView   => _user?.Can("SUPPLIER.VIEW")   ?? false;
     private bool CanCreate => _user?.Can("SUPPLIER.CREATE") ?? false;
-    private bool CanEdit => _user?.Can("SUPPLIER.EDIT") ?? false;
+    private bool CanEdit   => _user?.Can("SUPPLIER.EDIT")   ?? false;
     private bool CanDelete => _user?.Can("SUPPLIER.DELETE") ?? false;
 
     private static readonly Dictionary<string, string> Types = new()
     {
-        ["TransportCompany"] = "شركة نقل", ["FuelStation"] = "محطة وقود", ["Workshop"] = "ورشة",
-        ["PortServices"] = "خدمات ميناء", ["PartsSupplier"] = "مورد قطع غيار", ["Other"] = "أخرى"
+        ["TransportCompany"] = "شركة نقل",
+        ["FuelStation"]      = "محطة وقود",
+        ["Workshop"]         = "ورشة",
+        ["PortServices"]     = "خدمات ميناء",
+        ["PartsSupplier"]    = "مورد قطع غيار",
+        ["Other"]            = "أخرى"
     };
 
-    private List<Item> _items = new();
-    private bool _loading; private string _search = ""; private int? _confirmId;
+    private List<Item> _items      = new();
+    private bool       _loading;
+    private string     _search     = "";
+    private string     _typeFilter = "all";
+    private int?       _confirmId;
 
-    public class Item { public int SupplierId { get; set; } public string SupplierCode { get; set; } = "";
-        public string SupplierType { get; set; } = ""; public string NameAr { get; set; } = "";
-        public string? Phone { get; set; } public bool IsActive { get; set; } }
+    public class Item
+    {
+        public int    SupplierId   { get; set; }
+        public string SupplierCode { get; set; } = "";
+        public string SupplierType { get; set; } = "";
+        public string NameAr       { get; set; } = "";
+        public string? Phone       { get; set; }
+        public bool   IsActive     { get; set; }
+    }
 
-    private static string TypeName(string t) => Types.TryGetValue(t, out var v) ? v : t;
+    /* ── Helpers ── */
+    private static string TypeName(string t) =>
+        Types.TryGetValue(t, out var v) ? v : t;
 
-    private IEnumerable<Item> Filtered => string.IsNullOrWhiteSpace(_search) ? _items :
-        _items.Where(s => s.NameAr.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                          s.SupplierCode.Contains(_search, StringComparison.OrdinalIgnoreCase));
+    private static string TypeIcon(string t) => t switch
+    {
+        "TransportCompany" => "🚛",
+        "FuelStation"      => "⛽",
+        "Workshop"         => "🔧",
+        "PortServices"     => "⚓",
+        "PartsSupplier"    => "⚙️",
+        _                  => "🏢"
+    };
 
+    private static string TypeChipClass(string t) => t switch
+    {
+        "TransportCompany" => "sup-type-chip chip-transport",
+        "FuelStation"      => "sup-type-chip chip-fuel",
+        "Workshop"         => "sup-type-chip chip-workshop",
+        "PortServices"     => "sup-type-chip chip-port",
+        "PartsSupplier"    => "sup-type-chip chip-parts",
+        _                  => "sup-type-chip chip-other"
+    };
+
+    private static string AvatarClass(string t) => t switch
+    {
+        "TransportCompany" => "sup-avatar av-transport",
+        "FuelStation"      => "sup-avatar av-fuel",
+        "Workshop"         => "sup-avatar av-workshop",
+        "PortServices"     => "sup-avatar av-port",
+        "PartsSupplier"    => "sup-avatar av-parts",
+        _                  => "sup-avatar av-other"
+    };
+
+    private IEnumerable<Item> Filtered
+    {
+        get
+        {
+            var q = _items.AsEnumerable();
+            if (_typeFilter != "all")
+                q = q.Where(s => s.SupplierType == _typeFilter);
+            if (!string.IsNullOrWhiteSpace(_search))
+                q = q.Where(s =>
+                    s.NameAr.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                    s.SupplierCode.Contains(_search, StringComparison.OrdinalIgnoreCase));
+            return q;
+        }
+    }
+
+    /* ── Init ── */
     protected override async Task OnInitializedAsync()
-    { _user = await Auth.GetUserAsync(); if (CanView) await LoadAsync(); }
+    {
+        _user = await Auth.GetUserAsync();
+        if (CanView) await LoadAsync();
+    }
 
     private async Task Reload() { await LoadAsync(); }
 
-    /* 🔴 الفورم بقى شاشة مستقلة — `/suppliers/new` */
-    private void GoNew() => Nav.NavigateTo("/suppliers/new");
+    private void GoNew()        => Nav.NavigateTo("/suppliers/new");
     private void GoEdit(Item s) => Nav.NavigateTo($"/suppliers/new/{s.SupplierId}");
 
     private async Task LoadAsync()
     {
         _loading = true;
-        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/suppliers") ?? new(); }
+        try   { _items = await Http.GetFromJsonAsync<List<Item>>("api/suppliers") ?? new(); }
         catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
         finally { _loading = false; }
     }
-
-
 
     private async Task ToggleActive(Item s)
     {

@@ -8,6 +8,7 @@
 
 <PageTitle>التحصيل — فاست كوم</PageTitle>
 
+
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
@@ -17,444 +18,1500 @@
                 <p class="fc-hero-sub">دفعة واحدة ممكن تتوزّع على كذا فاتورة — والمديونية بتتحدّث أوتوماتيك</p>
             </div>
             <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
+                               OnClick="Reload" Style="color:#9FB4CC" />
                 @if (CanCreate)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="New">دفعة جديدة</MudButton>
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="New">دفعة جديدة</MudButton>
                 }
             </div>
         </div>
+
         @if (CanView)
         {
             <div class="fc-kpis fc-kpis-glass">
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" /></div>
-                    <div><div class="fc-kpi-num">@Money(Posted.Sum(p => p.Amount))</div><div class="fc-kpi-lb">إجمالي المحصّل</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Payments" /></div>
-                    <div><div class="fc-kpi-num">@Money(ThisMonth)</div><div class="fc-kpi-lb">تحصيل الشهر ده</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
-                    <div><div class="fc-kpi-num">@Money(Unallocated)</div><div class="fc-kpi-lb">مش متوزّع على فواتير</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Close" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(p => p.Status == "Cancelled")</div><div class="fc-kpi-lb">دفعات ملغية</div></div></div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" /></div>
+                    <div><div class="fc-kpi-num">@Money(Posted.Sum(p => p.Amount))</div><div class="fc-kpi-lb">إجمالي المحصّل</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Payments" /></div>
+                    <div><div class="fc-kpi-num">@Money(ThisMonth)</div><div class="fc-kpi-lb">تحصيل الشهر</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
+                    <div><div class="fc-kpi-num">@Money(Unallocated)</div><div class="fc-kpi-lb">غير موزّع</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Close" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(p => p.Status == "Cancelled")</div><div class="fc-kpi-lb">دفعات ملغية</div></div>
+                </div>
             </div>
         }
     </div>
 </div>
 
-<div class="fc-page">
+
+<div class="pay-body">
+
     @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك  صلاحية عرض المدفوعات.</MudAlert>
+        <div class="pay-state-box">
+            <div class="pay-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليس لديك صلاحية عرض المدفوعات</p>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
-            <div class="fc-toolbar">
-                <div class="fc-filters">
-                    @foreach (var t in Tabs)
+        <div class="pay-card">
+
+            @* ── Toolbar ── *@
+            <div class="pay-toolbar">
+
+                <div class="pay-search-wrap">
+                    <svg class="pay-search-icon" viewBox="0 0 24 24" width="16" height="16"
+                         fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                    </svg>
+                    <input class="pay-search-input"
+                           placeholder="ابحث برقم الدفعة أو العميل أو الشيك..."
+                           @bind="_search" @bind:event="oninput"
+                           aria-label="بحث" />
+                    @if (!string.IsNullOrWhiteSpace(_search))
                     {
-                        <button class='fc-filter @(_tab == t.Key ? "on" : "")' @onclick="() => SetTab(t.Key)">@t.Value</button>
+                        <button class="pay-search-clear" @onclick="() => _search = string.Empty">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
                     }
                 </div>
-                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
-                              Placeholder="ابحث برقم الدفعة أو العميل أو الشيك..." Variant="Variant.Outlined" Dense="true"
-                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                              Class="fc-search-box" Immediate="true" />
-                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+
+                <div class="pay-results-badge">
+                    عرض <strong>@Filtered.Count()</strong> من <strong>@_items.Count</strong>
+                </div>
+
             </div>
 
+
+            @* ── Status Tabs ── *@
+            <div class="pay-status-bar">
+                <div class="pay-status-tabs" role="group" aria-label="فلتر الحالة">
+                    @foreach (var t in _statusTabs)
+                    {
+                        var cnt = t.Key == "all"
+                            ? _items.Count
+                            : _items.Count(x => x.Status == t.Key);
+
+                        <button class="pay-status-tab @(_tab == t.Key ? "active" : "")"
+                                @onclick="() => SetTab(t.Key)"
+                                aria-pressed="@(_tab == t.Key)">
+                            <span class="pay-tab-dot @StatusDotColor(t.Key)" aria-hidden="true"></span>
+                            <span>@t.Value</span>
+                            <span class="pay-tab-count">@cnt</span>
+                        </button>
+                    }
+                </div>
+            </div>
+
+
+            @* ── Content ── *@
             @if (_loading)
             {
-                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+                <div class="pay-loading">
+                    <div class="pay-spinner" aria-label="جاري التحميل"></div>
+                    <span>جاري تحميل المدفوعات...</span>
+                </div>
+            }
+            else if (!Filtered.Any())
+            {
+                <div class="pay-empty">
+                    <div class="pay-empty-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="42" height="42"
+                             fill="none" stroke="currentColor" stroke-width="1.4">
+                            <rect x="2" y="7" width="20" height="14" rx="2"/>
+                            <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
+                            <circle cx="12" cy="14" r="2"/>
+                        </svg>
+                    </div>
+                    <div class="pay-empty-title">
+                        @(string.IsNullOrWhiteSpace(_search) ? "لا توجد دفعات" : "لا توجد نتائج")
+                    </div>
+                    <div class="pay-empty-sub">
+                        @(string.IsNullOrWhiteSpace(_search) ? "سجّل أول دفعة تحصيل" : "جرّب كلمة بحث مختلفة")
+                    </div>
+                    @if (CanCreate && string.IsNullOrWhiteSpace(_search))
+                    {
+                        <button class="pay-add-btn" @onclick="New">
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2.5"
+                                 aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                            دفعة جديدة
+                        </button>
+                    }
+                </div>
             }
             else
             {
-                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
-                    <thead><tr>
-                        <th>الرقم</th><th>التاريخ</th><th>العميل</th><th>الطريقة</th>
-                        <th>المبلغ</th><th>الموزّع</th><th>الفاضل</th><th>الحالة</th>
-                        <th style="width:180px; text-align:left">إجراءات</th>
-                    </tr></thead>
-                    <tbody>
-                        @foreach (var p in Filtered)
-                        {
+                <div class="pay-table-wrap">
+                    <table class="pay-table" aria-label="قائمة المدفوعات">
+                        <thead>
                             <tr>
-                                <td><button class="fc-role-chip" style="border:0; background:none; cursor:pointer; font:inherit"
-                                            @onclick="() => Open(p)">@p.PaymentNumber</button></td>
-                                <td class="fc-cell-sub">@p.PaymentDate.ToString("yyyy-MM-dd")
-                                    @if (p.ChequeNumber is not null) { <div>شيك @p.ChequeNumber</div> }</td>
-                                <td class="fc-cell-main">@p.CustomerName</td>
-                                <td class="fc-cell-sub">@p.MethodName</td>
-                                <td><b>@Money(p.Amount)</b></td>
-                                <td class="fc-cell-sub">@Money(p.Allocated)
-                                    @if (p.AllocationsCount > 0) { <div>@p.AllocationsCount فاتورة</div> }</td>
-                                <td><b>@Money(p.Unallocated)</b></td>
-                                <td><span class="fc-chip @StatusChip(p.Status)"><i></i>@StatusAr(p.Status)</span></td>
-                                <td><div class="fc-row-actions">
-                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Info"
-                                                   title="التفاصيل" OnClick="() => Open(p)" />
-                                    @if (p.Status == "Posted" && CanEdit)
-                                    {
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
-                                                       Color="Color.Primary" title="تعديل" OnClick="() => Edit(p)" />
-                                    }
-                                    @if (p.Status == "Posted" && CanVoid)
-                                    {
-                                        @if (_confirmId == p.PaymentId)
-                                        {
-                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
-                                                       OnClick="() => Void(p)">إلغاء؟</MudButton>
-                                        }
-                                        else
-                                        {
-                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Close"
-                                                           Color="Color.Error" title="إلغاء الدفعة"
-                                                           OnClick="() => _confirmId = p.PaymentId" />
-                                        }
-                                    }
-                                </div></td>
+                                <th scope="col" class="th-start">الدفعة</th>
+                                <th scope="col">التاريخ</th>
+                                <th scope="col">الطريقة</th>
+                                <th scope="col">المبالغ</th>
+                                <th scope="col">التوزيع</th>
+                                <th scope="col">الحالة</th>
+                                <th scope="col" style="width:140px">إجراءات</th>
                             </tr>
-                        }
-                        @if (!Filtered.Any())
-                        {
-                            <tr><td colspan="9"><div class="fc-empty"><div>مافيش دفعات في الفلتر ده</div></div></td></tr>
-                        }
-                    </tbody>
-                </table></div>
-            }
-        </div></div>
-    }
-
-    @* ═══════════ مودال: دفعة جديدة ═══════════ *@
-    @if (_modalOpen && CanCreate)
-    {
-        <div class="fc-modal-backdrop" @onclick="Close">
-            <div class="fc-modal" @onclick:stopPropagation="true">
-                <div class="fc-modal-head">
-                    <div><div class="fc-modal-title">دفعة جديدة</div>
-                        <div class="fc-modal-sub">الرقم بيتولد تلقائيًا (PAY-)</div></div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="Close" />
-                </div>
-                <div class="fc-modal-body">
-                    @if (_msg is not null)
-                    {
-                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
-                                  Class="mb-4">@_msg</MudAlert>
-                    }
-                    <div class="fc-form-grid">
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">العميل *</div>
-                            <select class="fc-sel fc-sel-lg" value="@_f.CustomerId" @onchange="OnCustomerChanged">
-                                <option value="0">— اختر عميل —</option>
-                                @foreach (var c in _customers) { <option value="@c.Id">@c.Label (@c.Code)</option> }
-                            </select>
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">تاريخ القبض</div>
-                            <input type="date" class="fc-sel fc-sel-lg" value="@_f.PaymentDate"
-                                   @onchange="e => _f.PaymentDate = e.Value?.ToString()" />
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">طريقة الدفع *</div>
-                            <select class="fc-sel fc-sel-lg" value="@_f.PaymentMethodId" @onchange="OnMethodChanged">
-                                <option value="0">— اختر —</option>
-                                @foreach (var m in _methods) { <option value="@m.Id">@m.Label</option> }
-                            </select>
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">المبلغ *</div>
-                            <input type="number" min="0.01" step="0.01" class="fc-sel fc-sel-lg" value="@_f.Amount"
-                                   @onchange="OnAmountChanged" />
-                        </div>
-                        @if (NeedCheque)
-                        {
-                            <div>
-                                <div class="fc-panel-sub" style="margin-bottom:6px">رقم الشيك *</div>
-                                <input class="fc-sel fc-sel-lg" value="@_f.ChequeNumber" maxlength="50"
-                                       @onchange="e => _f.ChequeNumber = e.Value?.ToString()" />
-                            </div>
-                            <div>
-                                <div class="fc-panel-sub" style="margin-bottom:6px">تاريخ الشيك</div>
-                                <input type="date" class="fc-sel fc-sel-lg" value="@_f.ChequeDate"
-                                       @onchange="e => _f.ChequeDate = e.Value?.ToString()" />
-                            </div>
-                        }
-                        else
-                        {
-                            <div>
-                                <div class="fc-panel-sub" style="margin-bottom:6px">الحساب البنكي / المرجع</div>
-                                <input class="fc-sel fc-sel-lg" value="@_f.BankAccount" maxlength="100"
-                                       @onchange="e => _f.BankAccount = e.Value?.ToString()" />
-                            </div>
-                        }
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">ملاحظات</div>
-                            <input class="fc-sel fc-sel-lg" value="@_f.Notes" maxlength="500"
-                                   @onchange="e => _f.Notes = e.Value?.ToString()" />
-                        </div>
-                    </div>
-
-                    @if (_f.CustomerId > 0)
-                    {
-                        <div class="fc-toolbar" style="margin-top:18px">
-                            <div class="fc-panel-sub">توزيع على الفواتير — المتبقي @Money(Left) @(Left < 0 ? "· ⚠ وزّعت أكتر من المبلغ" : "")</div>
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
-                                       StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="AutoAllocate">توزيع تلقائي</MudButton>
-                        </div>
-                        <div class="fc-table-wrap"><table class="fc-table">
-                            <thead><tr><th>الفاتورة</th><th>التاريخ</th><th>الإجمالي</th><th>المتبقي</th><th style="width:140px">الموزّع</th></tr></thead>
-                            <tbody>
-                                @foreach (var inv in _open)
-                                {
-                                    <tr>
-                                        <td class="fc-cell-main">@inv.InvoiceNumber</td>
-                                        <td class="fc-cell-sub">@inv.InvoiceDate.ToString("yyyy-MM-dd")</td>
-                                        <td class="fc-cell-sub">@Money(inv.GrandTotal)</td>
-                                        <td>@Money(inv.Due)</td>
-                                        <td><input type="number" min="0" step="0.01" class="fc-sel"
-                                                   value="@AllocOf(inv.InvoiceId)"
-                                                   @onchange="e => SetAlloc(inv.InvoiceId, ParseDec(e.Value))" /></td>
-                                    </tr>
-                                }
-                                @if (!_open.Any())
-                                {
-                                    <tr><td colspan="5"><div class="fc-lines-empty">لايوجد فواتير مفتوحة لهذا العميل </div></td></tr>
-                                }
-                            </tbody>
-                        </table></div>
-                    }
-                </div>
-                <div class="fc-modal-foot">
-                    <MudButton OnClick="Close">إلغاء</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
-                               StartIcon="@Icons.Material.Filled.Payments" OnClick="SaveAsync">تسجيل الدفعة</MudButton>
-                </div>
-            </div>
-        </div>
-    }
-
-    @* ═══════════ مودال: تعديل بيانات الدفعة ═══════════ *@
-    @if (_patchOpen && CanEdit && _patchTarget is not null)
-    {
-        <div class="fc-modal-backdrop" @onclick="ClosePatch">
-            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation="true">
-                <div class="fc-modal-head">
-                    <div><div class="fc-modal-title">تعديل @_patchTarget.PaymentNumber</div>
-                        <div class="fc-modal-sub">المبلغ والتوزيع مش بيتعدّلوا — الغِ الدفعة وسجّل جديدة</div></div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="ClosePatch" />
-                </div>
-                <div class="fc-modal-body">
-                    @if (_msg is not null)
-                    {
-                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
-                                  Class="mb-4">@_msg</MudAlert>
-                    }
-                    <div class="fc-form-grid">
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">رقم الشيك</div>
-                            <input class="fc-sel fc-sel-lg" value="@_patch.ChequeNumber" maxlength="50"
-                                   @onchange="e => _patch.ChequeNumber = e.Value?.ToString()" />
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">تاريخ الشيك</div>
-                            <input type="date" class="fc-sel fc-sel-lg" value="@_patch.ChequeDate"
-                                   @onchange="e => _patch.ChequeDate = e.Value?.ToString()" />
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">الحساب البنكي / المرجع</div>
-                            <input class="fc-sel fc-sel-lg" value="@_patch.BankAccount" maxlength="100"
-                                   @onchange="e => _patch.BankAccount = e.Value?.ToString()" />
-                        </div>
-                        <div>
-                            <div class="fc-panel-sub" style="margin-bottom:6px">ملاحظات</div>
-                            <input class="fc-sel fc-sel-lg" value="@_patch.Notes" maxlength="500"
-                                   @onchange="e => _patch.Notes = e.Value?.ToString()" />
-                        </div>
-                    </div>
-                </div>
-                <div class="fc-modal-foot">
-                    <MudButton OnClick="ClosePatch">إلغاء</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
-                               StartIcon="@Icons.Material.Filled.Edit" OnClick="SavePatch">حفظ</MudButton>
-                </div>
-            </div>
-        </div>
-    }
-
-    @* ═══════════ مودال: تفاصيل ═══════════ *@
-    @if (_detailOpen && _detail is not null)
-    {
-        <div class="fc-modal-backdrop" @onclick="CloseDetail">
-            <div class="fc-modal" @onclick:stopPropagation="true">
-                <div class="fc-modal-head">
-                    <div><div class="fc-modal-title">الدفعة @_detail.Payment.PaymentNumber</div>
-                        <div class="fc-modal-sub">
-                            @_detail.Payment.CustomerName · @_detail.Payment.PaymentDate · @_detail.Payment.MethodName
-                            · <span class="fc-chip @StatusChip(_detail.Payment.Status)"><i></i>@StatusAr(_detail.Payment.Status)</span>
-                        </div></div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseDetail" />
-                </div>
-                <div class="fc-modal-body">
-                    <div class="fc-lines">
-                        <div class="fc-lines-head"><span>المبلغ</span><span>الموزّع</span><span>الفاضل</span></div>
-                        <div class="fc-lines-row">
-                            <b>@Money(_detail.Payment.Amount)</b>
-                            <span>@Money(_detail.Payment.Allocated)</span>
-                            <span>@Money(_detail.Payment.Unallocated)</span>
-                        </div>
-                    </div>
-
-                    @if (_detail.Payment.ChequeNumber is not null)
-                    {
-                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">
-                            شيك @_detail.Payment.ChequeNumber @( _detail.Payment.ChequeDate is null ? "" : "· استحقاق " + _detail.Payment.ChequeDate)
-                        </MudAlert>
-                    }
-
-                    <div class="fc-panel-sub" style="margin:18px 0 6px">التوزيع على الفواتير (@_detail.Allocations.Count)</div>
-                    <div class="fc-table-wrap"><table class="fc-table">
-                        <thead><tr><th>الفاتورة</th><th>إجمالي الفاتورة</th><th>مدفوع منها</th><th>من الدفعة دي</th></tr></thead>
+                        </thead>
                         <tbody>
-                            @foreach (var a in _detail.Allocations)
+                            @foreach (var p in Filtered)
                             {
-                                <tr>
-                                    <td class="fc-cell-main">@a.InvoiceNumber</td>
-                                    <td class="fc-cell-sub">@Money(a.InvoiceTotal)</td>
-                                    <td class="fc-cell-sub">@Money(a.InvoicePaid)</td>
-                                    <td><b>@Money(a.AllocatedAmount)</b></td>
+                                <tr class="@(p.Status == "Cancelled" ? "row-cancelled" : "")">
+
+                                    @* ── الدفعة ── *@
+                                    <td class="td-start">
+                                        <div class="pay-pay-cell">
+                                            <div class="pay-avatar @AvatarClass(p.Status)"
+                                                 aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="16" height="16"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <rect x="2" y="7" width="20" height="14" rx="2"/>
+                                                    <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
+                                                    <circle cx="12" cy="14" r="2"/>
+                                                </svg>
+                                            </div>
+                                            <div class="pay-pay-info">
+                                                <button class="pay-code-btn"
+                                                        @onclick="() => Open(p)"
+                                                        aria-label="تفاصيل @p.PaymentNumber">
+                                                    @p.PaymentNumber
+                                                </button>
+                                                <div class="pay-customer-name">@p.CustomerName</div>
+                                                @if (p.ChequeNumber is not null)
+                                                {
+                                                    <div class="pay-cheque-tag">
+                                                        <svg viewBox="0 0 16 16" width="9" height="9"
+                                                             fill="none" stroke="currentColor" stroke-width="1.8"
+                                                             aria-hidden="true">
+                                                            <rect x="2" y="4" width="12" height="9" rx="1"/>
+                                                            <path d="M5 8h6M5 11h4" stroke-linecap="round"/>
+                                                        </svg>
+                                                        شيك @p.ChequeNumber
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    @* ── التاريخ ── *@
+                                    <td>
+                                        <div class="pay-date-cell">
+                                            <svg viewBox="0 0 16 16" width="10" height="10"
+                                                 fill="none" stroke="currentColor" stroke-width="1.7"
+                                                 aria-hidden="true">
+                                                <rect x="2" y="3" width="12" height="11" rx="2"/>
+                                                <path d="M5 1v3M11 1v3M2 7h12" stroke-linecap="round"/>
+                                            </svg>
+                                            @p.PaymentDate.ToString("yyyy-MM-dd")
+                                        </div>
+                                    </td>
+
+                                    @* ── الطريقة ── *@
+                                    <td>
+                                        <span class="pay-method-tag">@p.MethodName</span>
+                                    </td>
+
+                                    @* ── المبالغ ── *@
+                                    <td>
+                                        <div class="pay-amounts-cell">
+                                            <div class="pay-amount-main">@Money(p.Amount) <small>ج.م</small></div>
+                                        </div>
+                                    </td>
+
+                                    @* ── التوزيع ── *@
+                                    <td>
+                                        <div class="pay-alloc-cell">
+                                            @if (p.AllocationsCount > 0)
+                                            {
+                                                <div class="pay-alloc-bar-wrap">
+                                                    @{
+                                                        var allocPct = p.Amount > 0
+                                                            ? (double)(p.Allocated / p.Amount * 100)
+                                                            : 0;
+                                                    }
+                                                    <div class="pay-alloc-bar">
+                                                        <div class="pay-alloc-fill @(p.Unallocated == 0 ? "fill-full" : "fill-partial")"
+                                                             style="width:@Math.Min(allocPct, 100)%"></div>
+                                                    </div>
+                                                    <div class="pay-alloc-nums">
+                                                        <span class="alloc-inv-count">@p.AllocationsCount فاتورة</span>
+                                                        @if (p.Unallocated > 0)
+                                                        {
+                                                            <span class="alloc-remaining">@Money(p.Unallocated) فاضل</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="pay-unalloc-badge">غير موزّع</span>
+                                            }
+                                        </div>
+                                    </td>
+
+                                    @* ── الحالة ── *@
+                                    <td>
+                                        <span class="pay-chip @StatusChipClass(p.Status)">
+                                            <span class="pay-chip-dot @StatusDotClass(p.Status)"
+                                                  aria-hidden="true"></span>
+                                            @StatusAr(p.Status)
+                                        </span>
+                                    </td>
+
+                                    @* ── إجراءات ── *@
+                                    <td>
+                                        <div class="pay-actions">
+
+                                            <button class="pay-act-btn act-info"
+                                                    @onclick="() => Open(p)"
+                                                    title="التفاصيل"
+                                                    aria-label="تفاصيل @p.PaymentNumber">
+                                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <circle cx="12" cy="12" r="10"/>
+                                                    <path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                                                </svg>
+                                            </button>
+
+                                            @if (p.Status == "Posted" && CanEdit)
+                                            {
+                                                <button class="pay-act-btn act-edit"
+                                                        @onclick="() => Edit(p)"
+                                                        title="تعديل"
+                                                        aria-label="تعديل @p.PaymentNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @if (p.Status == "Posted" && CanVoid)
+                                            {
+                                                @if (_confirmId == p.PaymentId)
+                                                {
+                                                    <button class="pay-confirm-void"
+                                                            @onclick="() => Void(p)">
+                                                        إلغاء؟
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button class="pay-act-btn act-void"
+                                                            @onclick="() => _confirmId = p.PaymentId"
+                                                            title="إلغاء الدفعة"
+                                                            aria-label="إلغاء @p.PaymentNumber">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <circle cx="12" cy="12" r="10"/>
+                                                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+                                            }
+
+                                        </div>
+                                    </td>
+
                                 </tr>
                             }
-                            @if (!_detail.Allocations.Any())
-                            {
-                                <tr><td colspan="4"><div class="fc-lines-empty">الدفعة دي مش موزّعة على فواتير</div></td></tr>
-                            }
                         </tbody>
-                    </table></div>
+                    </table>
+                </div>
+            }
 
-                    @if (_detail.Payment.Notes is not null)
-                    {
-                        <div class="fc-panel-sub" style="margin:18px 0 6px">ملاحظات</div>
-                        <div class="fc-cell-main">@_detail.Payment.Notes</div>
-                    }
-                </div>
-                <div class="fc-modal-foot">
-                    <MudButton OnClick="CloseDetail">إغلاق</MudButton>
-                </div>
-            </div>
         </div>
     }
 </div>
 
+
+@* ═══════════════════════════════════════════
+   MODAL — دفعة جديدة
+═══════════════════════════════════════════ *@
+@if (_modalOpen && CanCreate)
+{
+    <div class="pay-modal-backdrop" @onclick="Close"
+         role="dialog" aria-modal="true" aria-label="تسجيل دفعة جديدة">
+        <div class="pay-modal pay-modal-xl" @onclick:stopPropagation="true">
+
+            <div class="pay-modal-head">
+                <div class="pay-modal-icon pay-icon-green" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="7" width="20" height="14" rx="2"/>
+                        <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
+                        <path d="M12 12v4M10 14h4" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div style="flex:1; min-width:0">
+                    <div class="pay-modal-title">دفعة جديدة 💰</div>
+                    <div class="pay-modal-sub">
+                        الرقم بيتولد تلقائياً (PAY-)
+                        @if (_f.Amount > 0)
+                        {
+                            <span> · المبلغ <strong>@Money(_f.Amount) ج.م</strong></span>
+                        }
+                        @if (Left < 0)
+                        {
+                            <span class="sub-warn"> · ⚠️ وزّعت أكتر من المبلغ</span>
+                        }
+                    </div>
+                </div>
+                <button class="pay-modal-close" @onclick="Close" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            @if (_msg is not null)
+            {
+                <div class="pay-modal-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                    <span>@_msg</span>
+                    <button @onclick="() => _msg = null">✕</button>
+                </div>
+            }
+
+            <div class="pay-modal-body">
+
+                @* ── بيانات الدفعة ── *@
+                <div class="pay-form-section">
+                    <div class="pay-form-section-title">
+                        <svg viewBox="0 0 24 24" width="14" height="14"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <rect x="2" y="7" width="20" height="14" rx="2"/>
+                            <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
+                        </svg>
+                        بيانات الدفعة
+                    </div>
+                    <div class="pay-modal-grid">
+
+                        <div class="pay-mfield">
+                            <label class="pay-mlabel">العميل <span class="pay-mrequired">*</span></label>
+                            <div class="pay-mselect-wrap">
+                                <svg class="pay-msel-icon" viewBox="0 0 24 24" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                    <circle cx="12" cy="7" r="4"/>
+                                </svg>
+                                <select class="pay-minput pay-msel"
+                                        value="@_f.CustomerId"
+                                        @onchange="OnCustomerChanged"
+                                        aria-required="true">
+                                    <option value="0">— اختر عميل —</option>
+                                    @foreach (var c in _customers)
+                                    {
+                                        <option value="@c.Id">@c.Label (@c.Code)</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="pay-mfield">
+                            <label class="pay-mlabel">تاريخ القبض</label>
+                            <div class="pay-mfield-group">
+                                <span class="pay-mprefix" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="13" height="13"
+                                         fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="5" width="18" height="16" rx="2"/>
+                                        <path d="M7 3V7M17 3V7M3 10H21" stroke-linecap="round"/>
+                                    </svg>
+                                </span>
+                                <input type="date" class="pay-minput with-prefix"
+                                       value="@_f.PaymentDate"
+                                       @onchange="e => _f.PaymentDate = e.Value?.ToString()" />
+                            </div>
+                        </div>
+
+                        <div class="pay-mfield">
+                            <label class="pay-mlabel">طريقة الدفع <span class="pay-mrequired">*</span></label>
+                            <div class="pay-mselect-wrap">
+                                <svg class="pay-msel-icon" viewBox="0 0 24 24" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <rect x="1" y="4" width="22" height="16" rx="2"/>
+                                    <path d="M1 10h22"/>
+                                </svg>
+                                <select class="pay-minput pay-msel"
+                                        value="@_f.PaymentMethodId"
+                                        @onchange="OnMethodChanged"
+                                        aria-required="true">
+                                    <option value="0">— اختر الطريقة —</option>
+                                    @foreach (var m in _methods)
+                                    {
+                                        <option value="@m.Id">@m.Label</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="pay-mfield">
+                            <label class="pay-mlabel">المبلغ <span class="pay-mrequired">*</span></label>
+                            <div class="pay-mfield-group">
+                                <span class="pay-mprefix" aria-hidden="true">ج.م</span>
+                                <input type="number" min="0.01" step="0.01"
+                                       class="pay-minput with-prefix"
+                                       value="@_f.Amount"
+                                       placeholder="0.00"
+                                       @onchange="OnAmountChanged" />
+                            </div>
+                        </div>
+
+                        @if (NeedCheque)
+                        {
+                            <div class="pay-mfield">
+                                <label class="pay-mlabel">رقم الشيك <span class="pay-mrequired">*</span></label>
+                                <div class="pay-mfield-group">
+                                    <span class="pay-mprefix" aria-hidden="true">
+                                        <svg viewBox="0 0 16 16" width="13" height="13"
+                                             fill="none" stroke="currentColor" stroke-width="1.7">
+                                            <rect x="2" y="4" width="12" height="9" rx="1"/>
+                                            <path d="M5 8h6M5 11h4" stroke-linecap="round"/>
+                                        </svg>
+                                    </span>
+                                    <input class="pay-minput with-prefix"
+                                           value="@_f.ChequeNumber"
+                                           maxlength="50"
+                                           placeholder="رقم الشيك"
+                                           dir="ltr"
+                                           @onchange="e => _f.ChequeNumber = e.Value?.ToString()" />
+                                </div>
+                            </div>
+                            <div class="pay-mfield">
+                                <label class="pay-mlabel">تاريخ الشيك</label>
+                                <div class="pay-mfield-group">
+                                    <span class="pay-mprefix" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="13" height="13"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="5" width="18" height="16" rx="2"/>
+                                            <path d="M7 3V7M17 3V7M3 10H21" stroke-linecap="round"/>
+                                        </svg>
+                                    </span>
+                                    <input type="date" class="pay-minput with-prefix"
+                                           value="@_f.ChequeDate"
+                                           @onchange="e => _f.ChequeDate = e.Value?.ToString()" />
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="pay-mfield">
+                                <label class="pay-mlabel">الحساب البنكي / المرجع</label>
+                                <input class="pay-minput"
+                                       value="@_f.BankAccount"
+                                       maxlength="100"
+                                       placeholder="رقم الحساب أو المرجع"
+                                       @onchange="e => _f.BankAccount = e.Value?.ToString()" />
+                            </div>
+                        }
+
+                        <div class="pay-mfield pay-mfield-full">
+                            <label class="pay-mlabel">ملاحظات</label>
+                            <input class="pay-minput"
+                                   value="@_f.Notes"
+                                   maxlength="500"
+                                   placeholder="أي ملاحظات..."
+                                   @onchange="e => _f.Notes = e.Value?.ToString()" />
+                        </div>
+
+                    </div>
+                </div>
+
+
+                @* ── توزيع على الفواتير ── *@
+                @if (_f.CustomerId > 0)
+                {
+                    <div class="pay-form-section">
+                        <div class="pay-alloc-header">
+                            <div class="pay-form-section-title">
+                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="2"
+                                     aria-hidden="true">
+                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                                </svg>
+                                توزيع على الفواتير
+                            </div>
+                            <div class="pay-alloc-summary">
+                                <span class="alloc-left @(Left < 0 ? "left-negative" : Left == 0 ? "left-zero" : "left-positive")">
+                                    @if (Left < 0)
+                                    {
+                                        <span>⚠️ وزّعت أكتر بـ @Money(-Left) ج.م</span>
+                                    }
+                                    else if (Left == 0)
+                                    {
+                                        <span>✅ موزّع بالكامل</span>
+                                    }
+                                    else
+                                    {
+                                        <span>المتبقي: @Money(Left) ج.م</span>
+                                    }
+                                </span>
+                                <button class="pay-auto-alloc-btn" @onclick="AutoAllocate">
+                                    <svg viewBox="0 0 24 24" width="13" height="13"
+                                         fill="none" stroke="currentColor" stroke-width="2"
+                                         aria-hidden="true">
+                                        <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                                        <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    توزيع تلقائي
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="pay-inv-table-wrap">
+                            <table class="pay-inv-table" aria-label="توزيع الدفعة على الفواتير">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="th-start">الفاتورة</th>
+                                        <th scope="col">التاريخ</th>
+                                        <th scope="col">الإجمالي</th>
+                                        <th scope="col">المتبقي</th>
+                                        <th scope="col" style="width:140px">الموزّع</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (!_open.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="5">
+                                                <div class="pay-inv-empty">لا توجد فواتير مفتوحة لهذا العميل</div>
+                                            </td>
+                                        </tr>
+                                    }
+                                    @foreach (var inv in _open)
+                                    {
+                                        var allocated = AllocOf(inv.InvoiceId);
+                                        <tr class="@(allocated > 0 ? "inv-row-allocated" : "")">
+                                            <td class="td-start">
+                                                <span class="pay-inv-num">@inv.InvoiceNumber</span>
+                                            </td>
+                                            <td class="td-muted">@inv.InvoiceDate.ToString("yyyy-MM-dd")</td>
+                                            <td class="td-num">@Money(inv.GrandTotal)</td>
+                                            <td>
+                                                <span class="pay-due-badge">@Money(inv.Due)</span>
+                                            </td>
+                                            <td>
+                                                <div class="pay-alloc-input-wrap">
+                                                    <input type="number" min="0" step="0.01"
+                                                           class="pay-minput @(allocated > 0 ? "input-allocated" : "")"
+                                                           value="@allocated"
+                                                           @onchange="e => SetAlloc(inv.InvoiceId, ParseDec(e.Value))" />
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+            </div>
+
+            <div class="pay-modal-foot">
+                <button class="pay-modal-cancel" @onclick="Close">إلغاء</button>
+                <button class="pay-modal-save pay-save-green"
+                        @onclick="SaveAsync"
+                        disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <span class="btn-spinner sm" aria-hidden="true"></span>
+                        <span>جاري الحفظ...</span>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="15" height="15"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <rect x="2" y="7" width="20" height="14" rx="2"/>
+                            <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
+                            <circle cx="12" cy="14" r="2"/>
+                        </svg>
+                        <span>تسجيل الدفعة</span>
+                    }
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+@* ═══════════════════════════════════════════
+   MODAL — تعديل الدفعة
+═══════════════════════════════════════════ *@
+@if (_patchOpen && CanEdit && _patchTarget is not null)
+{
+    <div class="pay-modal-backdrop" @onclick="ClosePatch"
+         role="dialog" aria-modal="true" aria-label="تعديل الدفعة">
+        <div class="pay-modal pay-modal-sm" @onclick:stopPropagation="true">
+
+            <div class="pay-modal-head">
+                <div class="pay-modal-icon pay-icon-blue" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="pay-modal-title">تعديل @_patchTarget.PaymentNumber</div>
+                    <div class="pay-modal-sub">المبلغ والتوزيع مش بيتعدّلوا — الغِ الدفعة وسجّل جديدة</div>
+                </div>
+                <button class="pay-modal-close" @onclick="ClosePatch" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            @if (_msg is not null)
+            {
+                <div class="pay-modal-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                    <span>@_msg</span>
+                    <button @onclick="() => _msg = null">✕</button>
+                </div>
+            }
+
+            <div class="pay-modal-body">
+                <div class="pay-modal-grid">
+
+                    <div class="pay-mfield">
+                        <label class="pay-mlabel">رقم الشيك</label>
+                        <div class="pay-mfield-group">
+                            <span class="pay-mprefix" aria-hidden="true">
+                                <svg viewBox="0 0 16 16" width="13" height="13"
+                                     fill="none" stroke="currentColor" stroke-width="1.7">
+                                    <rect x="2" y="4" width="12" height="9" rx="1"/>
+                                    <path d="M5 8h6M5 11h4" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            <input class="pay-minput with-prefix"
+                                   value="@_patch.ChequeNumber"
+                                   maxlength="50"
+                                   placeholder="رقم الشيك"
+                                   dir="ltr"
+                                   @onchange="e => _patch.ChequeNumber = e.Value?.ToString()" />
+                        </div>
+                    </div>
+
+                    <div class="pay-mfield">
+                        <label class="pay-mlabel">تاريخ الشيك</label>
+                        <div class="pay-mfield-group">
+                            <span class="pay-mprefix" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="13" height="13"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="5" width="18" height="16" rx="2"/>
+                                    <path d="M7 3V7M17 3V7M3 10H21" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            <input type="date" class="pay-minput with-prefix"
+                                   value="@_patch.ChequeDate"
+                                   @onchange="e => _patch.ChequeDate = e.Value?.ToString()" />
+                        </div>
+                    </div>
+
+                    <div class="pay-mfield">
+                        <label class="pay-mlabel">الحساب البنكي / المرجع</label>
+                        <input class="pay-minput"
+                               value="@_patch.BankAccount"
+                               maxlength="100"
+                               placeholder="رقم الحساب أو المرجع"
+                               @onchange="e => _patch.BankAccount = e.Value?.ToString()" />
+                    </div>
+
+                    <div class="pay-mfield">
+                        <label class="pay-mlabel">ملاحظات</label>
+                        <input class="pay-minput"
+                               value="@_patch.Notes"
+                               maxlength="500"
+                               placeholder="أي ملاحظات..."
+                               @onchange="e => _patch.Notes = e.Value?.ToString()" />
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="pay-modal-foot">
+                <button class="pay-modal-cancel" @onclick="ClosePatch">إلغاء</button>
+                <button class="pay-modal-save pay-save-blue"
+                        @onclick="SavePatch"
+                        disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <span class="btn-spinner sm" aria-hidden="true"></span>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="14" height="14"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                            <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    }
+                    حفظ التعديلات
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+@* ═══════════════════════════════════════════
+   MODAL — تفاصيل الدفعة
+═══════════════════════════════════════════ *@
+@if (_detailOpen && _detail is not null)
+{
+    <div class="pay-modal-backdrop" @onclick="CloseDetail"
+         role="dialog" aria-modal="true" aria-label="تفاصيل الدفعة">
+        <div class="pay-modal pay-modal-xl" @onclick:stopPropagation="true">
+
+            <div class="pay-modal-head pay-detail-header">
+                <div class="pay-modal-icon @DetailIconClass(_detail.Payment.Status)"
+                     aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="7" width="20" height="14" rx="2"/>
+                        <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
+                        <circle cx="12" cy="14" r="2"/>
+                    </svg>
+                </div>
+                <div style="flex:1; min-width:0">
+                    <div class="pay-modal-title" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+                        <span>@_detail.Payment.PaymentNumber</span>
+                        <span class="pay-chip @StatusChipClass(_detail.Payment.Status)">
+                            <span class="pay-chip-dot @StatusDotClass(_detail.Payment.Status)"
+                                  aria-hidden="true"></span>
+                            @StatusAr(_detail.Payment.Status)
+                        </span>
+                    </div>
+                    <div class="pay-detail-meta">
+                        <span class="detail-meta-tag">👤 @_detail.Payment.CustomerName</span>
+                        <span class="detail-meta-tag">💳 @_detail.Payment.MethodName</span>
+                        <span class="detail-meta-tag">📅 @_detail.Payment.PaymentDate</span>
+                    </div>
+                </div>
+                <button class="pay-modal-close" @onclick="CloseDetail" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="pay-modal-body pay-detail-body">
+
+                @* ── Summary Cards ── *@
+                <div class="pay-detail-summary">
+                    <div class="pay-detail-card">
+                        <div class="detail-card-ring ring-amount" aria-hidden="true">💰</div>
+                        <div>
+                            <div class="detail-card-label">المبلغ الكلي</div>
+                            <div class="detail-card-val amount-val">@Money(_detail.Payment.Amount)</div>
+                        </div>
+                    </div>
+                    <div class="pay-detail-card">
+                        <div class="detail-card-ring ring-alloc" aria-hidden="true">📑</div>
+                        <div>
+                            <div class="detail-card-label">الموزّع على فواتير</div>
+                            <div class="detail-card-val alloc-val">@Money(_detail.Payment.Allocated)</div>
+                        </div>
+                    </div>
+                    <div class="pay-detail-card @(_detail.Payment.Unallocated > 0 ? "card-unalloc" : "card-settled")">
+                        <div class="detail-card-ring @(_detail.Payment.Unallocated > 0 ? "ring-unalloc" : "ring-settled")"
+                             aria-hidden="true">
+                            @(_detail.Payment.Unallocated > 0 ? "⏳" : "✅")
+                        </div>
+                        <div>
+                            <div class="detail-card-label">الفاضل</div>
+                            <div class="detail-card-val @(_detail.Payment.Unallocated > 0 ? "unalloc-val" : "settled-val")">
+                                @Money(_detail.Payment.Unallocated)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* Progress Bar *@
+                @{
+                    var allocPct = _detail.Payment.Amount > 0
+                        ? (double)(_detail.Payment.Allocated / _detail.Payment.Amount * 100)
+                        : 0;
+                }
+                <div class="pay-detail-progress">
+                    <div class="pay-det-prog-bar">
+                        <div class="pay-det-prog-fill @(_detail.Payment.Unallocated == 0 ? "fill-full" : "fill-partial")"
+                             style="width:@Math.Min(allocPct, 100)%">
+                        </div>
+                    </div>
+                    <div class="pay-det-prog-labels">
+                        <span>موزّع @Money(_detail.Payment.Allocated) ج.م (@allocPct.ToString("0")%)</span>
+                        <span>فاضل @Money(_detail.Payment.Unallocated) ج.م</span>
+                    </div>
+                </div>
+
+                @* Cheque Notice *@
+                @if (_detail.Payment.ChequeNumber is not null)
+                {
+                    <div class="pay-cheque-notice" role="status">
+                        <svg viewBox="0 0 16 16" width="14" height="14"
+                             fill="none" stroke="currentColor" stroke-width="1.8"
+                             aria-hidden="true">
+                            <rect x="2" y="4" width="12" height="9" rx="1"/>
+                            <path d="M5 8h6M5 11h4" stroke-linecap="round"/>
+                        </svg>
+                        شيك رقم <strong>@_detail.Payment.ChequeNumber</strong>
+                        @if (_detail.Payment.ChequeDate is not null)
+                        {
+                            <span> · استحقاق <strong>@_detail.Payment.ChequeDate</strong></span>
+                        }
+                    </div>
+                }
+
+                @* ── التوزيع ── *@
+                <div class="pay-detail-section">
+                    <div class="pay-detail-section-head">
+                        <span class="pay-det-sec-title">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                            </svg>
+                            التوزيع على الفواتير
+                        </span>
+                        <span class="pay-det-sec-count">@_detail.Allocations.Count</span>
+                    </div>
+
+                    @if (!_detail.Allocations.Any())
+                    {
+                        <div class="pay-detail-empty">الدفعة دي مش موزّعة على فواتير لسه</div>
+                    }
+                    else
+                    {
+                        <div class="pay-alloc-detail-list">
+                            @foreach (var a in _detail.Allocations)
+                            {
+                                var coveredPct = a.InvoiceTotal > 0
+                                    ? (double)(a.InvoicePaid / a.InvoiceTotal * 100)
+                                    : 0;
+                                <div class="pay-alloc-detail-row">
+                                    <div class="pay-alloc-inv-num">@a.InvoiceNumber</div>
+                                    <div class="pay-alloc-inv-info">
+                                        <div class="pay-alloc-prog">
+                                            <div class="pay-alloc-prog-bar">
+                                                <div class="pay-alloc-prog-fill"
+                                                     style="width:@Math.Min(coveredPct, 100)%"></div>
+                                            </div>
+                                            <span class="pay-alloc-pct">@coveredPct.ToString("0")%</span>
+                                        </div>
+                                        <div class="pay-alloc-nums-row">
+                                            <span>إجمالي @Money(a.InvoiceTotal)</span>
+                                            <span>مدفوع @Money(a.InvoicePaid)</span>
+                                        </div>
+                                    </div>
+                                    <div class="pay-alloc-this-pay">
+                                        <span class="alloc-this-label">من الدفعة دي</span>
+                                        <strong>@Money(a.AllocatedAmount) ج.م</strong>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @* Notes *@
+                @if (_detail.Payment.Notes is not null)
+                {
+                    <div class="pay-detail-section">
+                        <div class="pay-detail-section-head">
+                            <span class="pay-det-sec-title">
+                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="2"
+                                     aria-hidden="true">
+                                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                                </svg>
+                                ملاحظات
+                            </span>
+                        </div>
+                        <div class="pay-detail-notes">@_detail.Payment.Notes</div>
+                    </div>
+                }
+
+            </div>
+
+            <div class="pay-modal-foot">
+                <button class="pay-modal-cancel" @onclick="CloseDetail">إغلاق</button>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-teal:      #0d9488;
+        --fc-teal-lt:   #e6faf8;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    .pay-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 200px);
+        padding: 16px 20px 32px;
+        max-width: 1350px; width: 100%;
+        margin: 0 auto;
+    }
+
+    /* States */
+    .pay-state-box {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .pay-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .pay-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+    .pay-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .pay-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    /* Card */
+    .pay-card {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden;
+    }
+
+    /* Toolbar */
+    .pay-toolbar {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7; flex-wrap: wrap;
+    }
+
+    .pay-search-wrap {
+        position: relative; display: flex; align-items: center;
+        flex: 1; min-width: 200px; max-width: 420px;
+    }
+    .pay-search-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; }
+    .pay-search-input {
+        width: 100%; height: 38px; padding: 0 36px 0 12px;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .pay-search-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .pay-search-input::placeholder { color: #b0bcc8; }
+    .pay-search-clear {
+        position: absolute; left: 10px;
+        display: flex; align-items: center; justify-content: center;
+        width: 22px; height: 22px; border-radius: 50%;
+        border: none; background: #edf1f7; color: #8899ae; cursor: pointer;
+    }
+
+    .pay-results-badge {
+        display: flex; align-items: center; gap: 5px;
+        margin-right: auto; font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap;
+    }
+    .pay-results-badge strong { color: #5a6e88; }
+
+    /* Status Tabs */
+    .pay-status-bar { padding: 10px 18px; background: #f9fafd; border-bottom: 1px solid #edf1f7; overflow-x: auto; }
+    .pay-status-tabs { display: flex; gap: 4px; padding: 3px; border-radius: 10px; background: #f0f3f8; width: fit-content; }
+    .pay-status-tab {
+        display: flex; align-items: center; gap: 5px;
+        height: 32px; padding: 0 10px;
+        border: none; border-radius: 7px;
+        background: transparent; color: #6b7d95;
+        font-family: inherit; font-size: 10.5px; font-weight: 700;
+        cursor: pointer; white-space: nowrap; transition: all .15s ease;
+    }
+    .pay-status-tab:hover:not(.active) { color: var(--fc-text); background: rgba(255,255,255,.6); }
+    .pay-status-tab.active { background: var(--fc-card); color: var(--fc-text); box-shadow: 0 1px 4px rgba(15,41,82,.10); font-weight: 800; }
+    .pay-tab-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px; }
+    .pay-tab-count {
+        min-width: 16px; height: 16px; border-radius: 4px; padding: 0 3px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 9px; font-weight: 900; font-family: "Inter", Arial, sans-serif;
+    }
+    .pay-status-tab.active .pay-tab-count { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .pay-status-tab:not(.active) .pay-tab-count { background: #e4eaf3; color: #8899ae; }
+
+    .tdot-all       { background: var(--fc-blue); }
+    .tdot-posted    { background: var(--fc-green); }
+    .tdot-cancelled { background: var(--fc-red); }
+    .tdot-returned  { background: var(--fc-amber); }
+
+    /* Loading / Empty */
+    .pay-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 200px; color: var(--fc-muted); font-size: 12px; font-weight: 600; }
+    .pay-spinner { width: 32px; height: 32px; border: 3px solid #dde5f0; border-top-color: var(--fc-blue); border-radius: 50%; animation: pay-spin .75s linear infinite; }
+    @@keyframes pay-spin { to { transform: rotate(360deg); } }
+
+    .pay-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 240px; padding: 40px; text-align: center; }
+    .pay-empty-icon { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #f0f4fa; color: #b0c4d8; }
+    .pay-empty-title { font-size: 15px; font-weight: 800; color: var(--fc-text); }
+    .pay-empty-sub   { font-size: 12px; color: var(--fc-muted); }
+    .pay-add-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 16px; margin-top: 6px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer; transition: all .15s ease;
+    }
+    .pay-add-btn:hover { background: var(--fc-blue); color: #fff; }
+
+    /* Table */
+    .pay-table-wrap { overflow-x: auto; }
+    .pay-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .pay-table thead th { padding: 10px 12px; background: linear-gradient(180deg, #f7f9fc, #f0f3f8); color: #4a5a74; font-size: 10.5px; font-weight: 800; text-align: center; border-bottom: 2px solid #e4eaf3; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+    .pay-table .th-start { text-align: right; }
+    .pay-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background .12s ease; }
+    .pay-table tbody tr:last-child { border-bottom: none; }
+    .pay-table tbody tr:hover { background: #fafcff; }
+    .pay-table tbody tr.row-cancelled { opacity: .55; }
+    .pay-table tbody td { padding: 11px 12px; color: #526070; text-align: center; vertical-align: middle; }
+    .td-start { text-align: right !important; }
+    .td-muted { color: #8899ae; font-size: 11px; }
+    .td-num { font-family: "Inter", Arial, sans-serif; font-size: 12px; font-weight: 600; }
+
+    /* Payment Cell */
+    .pay-pay-cell { display: flex; align-items: flex-start; gap: 10px; }
+    .pay-avatar { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.10); margin-top: 2px; }
+    .av-posted    { background: linear-gradient(135deg, #0d8a48, #16a35b); }
+    .av-cancelled { background: linear-gradient(135deg, #b02040, #e03048); }
+    .av-returned  { background: linear-gradient(135deg, #b87d08, #e09a10); }
+    .pay-pay-info { min-width: 0; }
+
+    .pay-code-btn { background: none; border: none; padding: 2px 8px; border-radius: 6px; cursor: pointer; background: #f0f4fa; border: 1px solid #e0e8f4; font-size: 10.5px; font-weight: 800; color: var(--fc-blue); font-family: "Inter", Arial, sans-serif; transition: all .12s ease; display: inline-flex; align-items: center; gap: 5px; }
+    .pay-code-btn:hover { background: var(--fc-blue); color: #fff; border-color: var(--fc-blue); }
+
+    .pay-customer-name { font-size: 12px; font-weight: 700; color: #344563; margin-top: 4px; }
+
+    .pay-cheque-tag { display: flex; align-items: center; gap: 3px; font-size: 9.5px; color: #8899ae; margin-top: 3px; }
+
+    .pay-date-cell { display: flex; align-items: center; gap: 4px; justify-content: center; color: #6b7d95; font-size: 11px; }
+
+    .pay-method-tag { display: inline-flex; padding: 3px 9px; border-radius: 6px; background: #f0f3f8; color: #6b7d95; font-size: 10.5px; font-weight: 700; border: 1px solid #dde5f0; }
+
+    .pay-amounts-cell { text-align: center; }
+    .pay-amount-main { font-family: "Inter", Arial, sans-serif; font-size: 13px; font-weight: 900; color: var(--fc-text); }
+    .pay-amount-main small { font-size: 9px; color: #9aaabb; margin-right: 2px; }
+
+    /* Alloc Cell */
+    .pay-alloc-cell { min-width: 100px; }
+    .pay-alloc-bar-wrap { display: flex; flex-direction: column; gap: 5px; }
+    .pay-alloc-bar { height: 5px; border-radius: 4px; background: #e4eaf3; overflow: hidden; width: 90px; }
+    .pay-alloc-fill { height: 100%; border-radius: inherit; transition: width .4s ease; }
+    .fill-full    { background: linear-gradient(90deg, #34d399, #10b981); }
+    .fill-partial { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+
+    .pay-alloc-nums { display: flex; flex-direction: column; gap: 1px; }
+    .alloc-inv-count  { font-size: 9.5px; color: #6b7d95; font-weight: 600; }
+    .alloc-remaining  { font-size: 9.5px; color: var(--fc-amber); font-weight: 700; }
+
+    .pay-unalloc-badge { display: inline-flex; padding: 2px 7px; border-radius: 5px; background: #fff8e6; color: #9a6d08; font-size: 9.5px; font-weight: 800; border: 1px solid #f0d898; }
+
+    /* Chips */
+    .pay-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 7px; font-size: 10.5px; font-weight: 800; white-space: nowrap; }
+    .pay-chip-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
+
+    .chip-posted    { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .chip-cancelled { background: var(--fc-red-lt);   color: var(--fc-red);   border: 1px solid #ffc8cf; }
+    .chip-returned  { background: var(--fc-amber-lt); color: #9a6d08;         border: 1px solid #f0d898; }
+
+    .sdot-posted    { background: var(--fc-green); }
+    .sdot-cancelled { background: var(--fc-red); }
+    .sdot-returned  { background: var(--fc-amber); }
+
+    /* Actions */
+    .pay-actions { display: flex; align-items: center; gap: 3px; justify-content: center; }
+    .pay-act-btn { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; border: 1px solid transparent; cursor: pointer; transition: all .15s ease; background: transparent; }
+    .act-info { color: var(--fc-blue); }
+    .act-edit { color: var(--fc-blue); }
+    .act-void { color: var(--fc-red); }
+    .act-info:hover { background: var(--fc-blue-lt); border-color: #c0d4fb; }
+    .act-edit:hover { background: var(--fc-blue-lt); border-color: #c0d4fb; }
+    .act-void:hover { background: var(--fc-red-lt);  border-color: #ffc8cf; }
+
+    .pay-confirm-void { height: 26px; padding: 0 9px; border: none; border-radius: 6px; background: linear-gradient(135deg, #e03048, #c0182e); color: #fff; font-family: inherit; font-size: 9.5px; font-weight: 800; cursor: pointer; animation: pay-pulse-del 1s ease infinite; white-space: nowrap; }
+    @@keyframes pay-pulse-del { 0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.35); } 50% { box-shadow: 0 0 0 5px rgba(224,48,72,0); } }
+
+    /* ================================================================
+       MODALS
+    ================================================================ */
+    .pay-modal-backdrop { position: fixed; inset: 0; z-index: 9999; background: rgba(10,20,40,.58); backdrop-filter: blur(5px); display: flex; align-items: center; justify-content: center; padding: 20px; animation: pay-fade-in .2s ease; }
+    @@keyframes pay-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+    .pay-modal { width: 100%; max-width: 600px; background: var(--fc-card); border: 1px solid rgba(0,0,0,.08); border-radius: 20px; box-shadow: 0 10px 40px rgba(10,20,50,.18), 0 30px 80px rgba(10,20,50,.22); overflow: hidden; animation: pay-modal-in .28s cubic-bezier(.34,1.3,.64,1); max-height: calc(100vh - 40px); display: flex; flex-direction: column; }
+    .pay-modal-sm { max-width: 480px; }
+    .pay-modal-xl { max-width: 820px; }
+
+    @@keyframes pay-modal-in { from { opacity: 0; transform: scale(.94) translateY(12px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+
+    /* STICKY Header */
+    .pay-modal-head { display: flex; align-items: center; gap: 14px; padding: 18px 22px; flex: 0 0 auto; background: linear-gradient(180deg, #fff 0%, #fafbfd 100%); border-bottom: 1px solid #edf1f7; box-shadow: 0 2px 8px rgba(15,41,82,.05); }
+    .pay-detail-header { box-shadow: 0 2px 10px rgba(15,41,82,.06); }
+
+    .pay-modal-icon { width: 48px; height: 48px; flex: 0 0 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; }
+    .pay-icon-green { background: linear-gradient(135deg, #e9f8f0, #d4f0e0); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .pay-icon-blue  { background: linear-gradient(135deg, #eaf1ff, #dde8ff); color: var(--fc-blue); border: 1px solid #bdd4fc; }
+    .pay-det-posted    { background: linear-gradient(135deg, #e9f8f0, #d4f0e0); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .pay-det-cancelled { background: linear-gradient(135deg, #fff0f2, #ffe8ec); color: var(--fc-red); border: 1px solid #ffc8cf; }
+    .pay-det-returned  { background: linear-gradient(135deg, #fff8e6, #ffefc0); color: #9a6d08; border: 1px solid #f0d898; }
+
+    .pay-modal-title { font-size: 15px; font-weight: 900; color: #1c2b43; }
+    .pay-modal-sub { font-size: 10.5px; color: var(--fc-muted); margin-top: 2px; }
+    .sub-warn { color: var(--fc-red) !important; font-weight: 800; }
+
+    .pay-detail-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+    .detail-meta-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,.7); border: 1px solid #e4eaf3; font-size: 10px; font-weight: 700; color: #5a6e88; }
+
+    .pay-modal-close { margin-right: auto; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border: 1px solid #e4eaf2; border-radius: 9px; background: none; color: #9aaabb; cursor: pointer; transition: all .15s ease; }
+    .pay-modal-close:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .pay-modal-banner { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 22px; font-size: 12px; font-weight: 600; flex: 0 0 auto; }
+    .pay-modal-banner button { background: none; border: none; cursor: pointer; opacity: .6; }
+    .banner-success { background: #e9f8f0; color: #0e7a43; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); }
+
+    /* SCROLLABLE Body */
+    .pay-modal-body { padding: 20px 22px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+    .pay-detail-body { padding: 20px 22px; overflow-y: auto; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 18px; }
+
+    /* STICKY Footer */
+    .pay-modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 22px; flex: 0 0 auto; background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%); border-top: 1px solid #edf1f7; }
+
+    .pay-modal-cancel { height: 40px; padding: 0 18px; border: 1px solid var(--fc-border); border-radius: 10px; background: var(--fc-card); color: var(--fc-muted); font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s ease; }
+    .pay-modal-cancel:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .pay-modal-save { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 20px; border: 0; border-radius: 10px; color: #fff; font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer; transition: all .15s ease; }
+    .pay-modal-save:hover:not(:disabled) { transform: translateY(-1px); }
+    .pay-modal-save:disabled { opacity: .6; cursor: not-allowed; }
+    .pay-save-green { background: linear-gradient(135deg, #16a35b, #0d8a48); box-shadow: 0 4px 14px rgba(22,163,91,.28); }
+    .pay-save-blue  { background: linear-gradient(135deg, #1e6ef5, #1558d6); box-shadow: 0 4px 14px rgba(30,110,245,.28); }
+
+    /* ── Modal Form ── */
+    .pay-form-section { margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid #edf1f7; }
+    .pay-form-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .pay-form-section-title { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 800; color: #344258; margin-bottom: 14px; }
+
+    .pay-modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .pay-mfield { display: flex; flex-direction: column; gap: 6px; }
+    .pay-mfield-full { grid-column: 1 / -1; }
+    .pay-mlabel { font-size: 11.5px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 3px; }
+    .pay-mrequired { color: var(--fc-red); font-size: 13px; }
+
+    .pay-minput { height: 42px; width: 100%; border: 1.5px solid #d8e2f0; border-radius: 9px; background: #fff; color: var(--fc-text); font-family: inherit; font-size: 13px; padding: 0 12px; outline: none; transition: border-color .15s ease, box-shadow .15s ease; }
+    .pay-minput:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .pay-minput::placeholder { color: #b0bcc8; }
+    .pay-minput.input-allocated { border-color: var(--fc-green); background: #f0fdf8; }
+
+    .pay-mselect-wrap { position: relative; }
+    .pay-msel-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: #9aaabb; pointer-events: none; z-index: 1; }
+    .pay-msel { padding-right: 36px; cursor: pointer; -webkit-appearance: none; appearance: none; }
+
+    .pay-mfield-group { position: relative; display: flex; align-items: center; }
+    .pay-mprefix { position: absolute; right: 12px; display: flex; align-items: center; color: #9aaabb; pointer-events: none; z-index: 1; font-size: 11px; font-weight: 700; }
+    .pay-minput.with-prefix { padding-right: 36px; }
+
+    /* Alloc Section */
+    .pay-alloc-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+    .pay-alloc-summary { display: flex; align-items: center; gap: 10px; }
+
+    .alloc-left { font-size: 11.5px; font-weight: 700; }
+    .left-positive { color: var(--fc-muted); }
+    .left-zero     { color: var(--fc-green); }
+    .left-negative { color: var(--fc-red); }
+
+    .pay-auto-alloc-btn { display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 12px; border: 1.5px solid var(--fc-blue); border-radius: 7px; background: var(--fc-blue-lt); color: var(--fc-blue); font-family: inherit; font-size: 11px; font-weight: 800; cursor: pointer; transition: all .12s ease; white-space: nowrap; }
+    .pay-auto-alloc-btn:hover { background: var(--fc-blue); color: #fff; }
+
+    .pay-inv-table-wrap { overflow-x: auto; }
+    .pay-inv-table { width: 100%; border-collapse: collapse; font-size: 12px; border: 1px solid #e4edf8; border-radius: 10px; overflow: hidden; }
+    .pay-inv-table thead th { padding: 9px 12px; background: linear-gradient(180deg, #f0f5fc, #eaf1f9); color: #4a5a74; font-size: 10px; font-weight: 800; text-align: center; border-bottom: 1px solid #dce8f5; }
+    .pay-inv-table .th-start { text-align: right; }
+    .pay-inv-table tbody tr { border-bottom: 1px solid #f0f5fb; transition: background .12s ease; }
+    .pay-inv-table tbody tr:last-child { border-bottom: none; }
+    .pay-inv-table tbody tr.inv-row-allocated { background: #f0fdf8; }
+    .pay-inv-table tbody td { padding: 9px 12px; text-align: center; vertical-align: middle; }
+
+    .pay-inv-num { font-size: 11px; font-weight: 800; color: var(--fc-blue); font-family: "Inter", Arial, sans-serif; }
+    .pay-due-badge { display: inline-flex; padding: 2px 7px; border-radius: 5px; background: var(--fc-red-lt); color: var(--fc-red); font-size: 10px; font-weight: 800; border: 1px solid #ffc8cf; font-family: "Inter", Arial, sans-serif; }
+    .pay-alloc-input-wrap .pay-minput { height: 36px; font-size: 12px; }
+    .pay-inv-empty { padding: 20px; text-align: center; color: #9aaabb; font-size: 12px; font-weight: 600; }
+
+    /* ── Detail Modal ── */
+    .pay-detail-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .pay-detail-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 12px; background: #f5f7fa; border: 1px solid #e4eaf3; transition: all .15s ease; }
+    .pay-detail-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(15,41,82,.06); }
+    .card-unalloc { background: var(--fc-amber-lt); border-color: #f0d898; }
+    .card-settled  { background: var(--fc-green-lt); border-color: #b0e0c5; }
+
+    .detail-card-ring { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+    .ring-amount { background: var(--fc-blue-lt); border: 1px solid #c0d4fb; }
+    .ring-alloc  { background: var(--fc-green-lt); border: 1px solid #b0e0c5; }
+    .ring-unalloc { background: var(--fc-amber-lt); border: 1px solid #f0d898; }
+    .ring-settled  { background: var(--fc-green-lt); border: 1px solid #b0e0c5; }
+
+    .detail-card-label { font-size: 9.5px; color: #8899ae; font-weight: 600; }
+    .detail-card-val { font-family: "Inter", Arial, sans-serif; font-size: 17px; font-weight: 900; color: var(--fc-text); margin-top: 3px; }
+    .amount-val  { color: var(--fc-text); }
+    .alloc-val   { color: var(--fc-green); }
+    .unalloc-val { color: #9a6d08; }
+    .settled-val { color: var(--fc-green); }
+
+    /* Progress */
+    .pay-detail-progress { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 10px; background: linear-gradient(135deg, #f5f8ff, #eef4ff); border: 1px solid #c8d8fb; }
+    .pay-det-prog-bar { height: 10px; border-radius: 6px; background: #e4eaf3; overflow: hidden; }
+    .pay-det-prog-fill { height: 100%; border-radius: inherit; transition: width .5s ease; }
+    .fill-full    { background: linear-gradient(90deg, #34d399, #10b981); }
+    .fill-partial { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+    .pay-det-prog-labels { display: flex; justify-content: space-between; font-size: 10.5px; color: #6b7d95; font-weight: 600; }
+
+    /* Cheque Notice */
+    .pay-cheque-notice { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 10px; background: var(--fc-blue-lt); border: 1px solid #bdd4fc; color: var(--fc-blue); font-size: 11.5px; font-weight: 600; }
+
+    /* Detail Sections */
+    .pay-detail-section { display: flex; flex-direction: column; gap: 12px; }
+    .pay-detail-section-head { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid #edf1f7; }
+    .pay-det-sec-title { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 800; color: #1c2b43; flex: 1; }
+    .pay-det-sec-count { min-width: 22px; height: 22px; border-radius: 6px; padding: 0 5px; display: flex; align-items: center; justify-content: center; background: #f0f3f8; color: #6b7d95; font-size: 10px; font-weight: 900; font-family: "Inter", Arial, sans-serif; }
+    .pay-detail-empty { padding: 20px; text-align: center; color: #9aaabb; font-size: 12px; font-weight: 600; border: 1px dashed #e4eaf3; border-radius: 10px; background: #f9fafc; }
+    .pay-detail-notes { font-size: 12.5px; color: var(--fc-text); line-height: 1.6; padding: 12px 14px; border-radius: 10px; background: #f5f7fa; border: 1px solid #e4eaf3; }
+
+    /* Alloc Detail List */
+    .pay-alloc-detail-list { display: flex; flex-direction: column; gap: 8px; }
+    .pay-alloc-detail-row { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 10px; background: #fafcff; border: 1px solid #e8edf5; transition: background .12s ease; }
+    .pay-alloc-detail-row:hover { background: #f5f8ff; }
+    .pay-alloc-inv-num { font-size: 11.5px; font-weight: 900; color: var(--fc-blue); font-family: "Inter", Arial, sans-serif; white-space: nowrap; }
+    .pay-alloc-inv-info { display: flex; flex-direction: column; gap: 5px; }
+    .pay-alloc-prog { display: flex; align-items: center; gap: 8px; }
+    .pay-alloc-prog-bar { flex: 1; height: 6px; border-radius: 4px; background: #e4eaf3; overflow: hidden; }
+    .pay-alloc-prog-fill { height: 100%; background: linear-gradient(90deg, #34d399, #10b981); border-radius: inherit; }
+    .pay-alloc-pct { font-size: 9.5px; font-weight: 700; color: var(--fc-green); min-width: 30px; }
+    .pay-alloc-nums-row { display: flex; gap: 10px; font-size: 9.5px; color: #8899ae; font-weight: 500; }
+    .pay-alloc-this-pay { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: 0 0 auto; }
+    .alloc-this-label { font-size: 8.5px; color: #9aaabb; font-weight: 600; }
+    .pay-alloc-this-pay strong { font-family: "Inter", Arial, sans-serif; font-size: 13px; font-weight: 900; color: var(--fc-text); }
+
+    .btn-spinner { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: pay-spin .7s linear infinite; }
+    .btn-spinner.sm { width: 13px; height: 13px; }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 1100px) {
+        .pay-customer-name { font-size: 11px; }
+    }
+
+    @@media (max-width: 900px) {
+        .pay-toolbar { flex-direction: column; align-items: stretch; }
+        .pay-search-wrap { max-width: 100%; }
+        .pay-results-badge { margin-right: 0; }
+        .pay-modal-grid { grid-template-columns: 1fr; }
+        .pay-detail-summary { grid-template-columns: 1fr; }
+    }
+
+    @@media (max-width: 680px) {
+        .pay-body { padding: 10px 12px 24px; }
+        .pay-toolbar { padding: 10px 12px; }
+        .pay-avatar { display: none; }
+        .pay-status-bar { padding: 8px 12px; }
+        .pay-alloc-detail-row { grid-template-columns: 1fr; }
+        .pay-detail-summary { grid-template-columns: 1fr 1fr; }
+    }
+
+    @@media (max-width: 480px) {
+        .pay-status-tab { padding: 0 7px; font-size: 9.5px; }
+        .pay-tab-dot { display: none; }
+        .pay-modal-backdrop { padding: 10px; }
+        .pay-modal { border-radius: 16px; }
+        .pay-detail-summary { grid-template-columns: 1fr; }
+    }
+
+</style>
+
+
 @code {
     private AuthUser? _user;
-    private bool CanView   => _user?.Can("PAYMENT.VIEW") ?? false;
+    private bool CanView   => _user?.Can("PAYMENT.VIEW")   ?? false;
     private bool CanCreate => _user?.Can("PAYMENT.CREATE") ?? false;
-    private bool CanEdit   => _user?.Can("PAYMENT.EDIT") ?? false;
-    private bool CanVoid   => _user?.Can("PAYMENT.VOID") ?? false;
+    private bool CanEdit   => _user?.Can("PAYMENT.EDIT")   ?? false;
+    private bool CanVoid   => _user?.Can("PAYMENT.VOID")   ?? false;
 
-    private static readonly Dictionary<string, string> Tabs = new()
+    private static readonly (string Key, string Value)[] _statusTabs =
     {
-        ["all"] = "الكل", ["Posted"] = "مسجّلة", ["Cancelled"] = "ملغية", ["Returned"] = "مرتجعة"
+        ("all",       "الكل"),
+        ("Posted",    "مسجّلة"),
+        ("Cancelled", "ملغية"),
+        ("Returned",  "مرتجعة")
     };
 
-    private List<Item> _items = new();
-    private List<Cust> _customers = new();
-    private List<Method> _methods = new();
-    private List<OpenInv> _open = new();
+    private List<Item>    _items     = new();
+    private List<Cust>    _customers = new();
+    private List<Method>  _methods   = new();
+    private List<OpenInv> _open      = new();
 
-    private bool _loading; private string _search = ""; private string _tab = "all";
-    private long? _confirmId;
-    private bool _saving; private string? _msg; private bool _ok;
+    private bool   _loading;
+    private string _search = "";
+    private string _tab    = "all";
+    private long?  _confirmId;
+    private bool   _saving;
+    private string? _msg;
+    private bool   _ok;
 
-    private bool _modalOpen; private Form _f = new(); private Dictionary<long, decimal> _alloc = new();
-    private bool _patchOpen; private Item? _patchTarget; private PatchForm _patch = new();
-    private bool _detailOpen; private Envelope? _detail;
+    private bool    _modalOpen;
+    private Form    _f = new();
+    private Dictionary<long, decimal> _alloc = new();
 
-    public class Cust { public int Id { get; set; } public string Label { get; set; } = "";
-        public string Code { get; set; } = ""; }
-    public class Method { public int Id { get; set; } public string Label { get; set; } = "";
-        public string Code { get; set; } = ""; public bool RequiresChequeNo { get; set; }
-        public bool IsCashBased { get; set; } }
-    public class OpenInv { public long InvoiceId { get; set; } public string InvoiceNumber { get; set; } = "";
-        public DateOnly InvoiceDate { get; set; } public decimal GrandTotal { get; set; }
-        public decimal PaidAmount { get; set; } public decimal Due { get; set; } }
+    private bool     _patchOpen;
+    private Item?    _patchTarget;
+    private PatchForm _patch = new();
+
+    private bool      _detailOpen;
+    private Envelope? _detail;
+
+    /* ── DTOs ── */
+    public class Cust   { public int Id { get; set; } public string Label { get; set; } = ""; public string Code { get; set; } = ""; }
+    public class Method { public int Id { get; set; } public string Label { get; set; } = ""; public string Code { get; set; } = ""; public bool RequiresChequeNo { get; set; } public bool IsCashBased { get; set; } }
+    public class OpenInv { public long InvoiceId { get; set; } public string InvoiceNumber { get; set; } = ""; public DateOnly InvoiceDate { get; set; } public decimal GrandTotal { get; set; } public decimal PaidAmount { get; set; } public decimal Due { get; set; } }
 
     public class Item
     {
-        public long PaymentId { get; set; }
-        public string PaymentNumber { get; set; } = "";
-        public DateOnly PaymentDate { get; set; }
-        public string CustomerName { get; set; } = "";
-        public string MethodName { get; set; } = "";
-        public decimal Amount { get; set; }
-        public decimal Allocated { get; set; }
-        public decimal Unallocated { get; set; }
-        public string Status { get; set; } = "";
-        public string? ChequeNumber { get; set; }
-        public int AllocationsCount { get; set; }
+        public long    PaymentId       { get; set; }
+        public string  PaymentNumber   { get; set; } = "";
+        public DateOnly PaymentDate    { get; set; }
+        public string  CustomerName    { get; set; } = "";
+        public string  MethodName      { get; set; } = "";
+        public decimal Amount          { get; set; }
+        public decimal Allocated       { get; set; }
+        public decimal Unallocated     { get; set; }
+        public string  Status          { get; set; } = "";
+        public string? ChequeNumber    { get; set; }
+        public int     AllocationsCount { get; set; }
     }
 
     public class Detail
     {
-        public long PaymentId { get; set; }
-        public string PaymentNumber { get; set; } = "";
-        public string? PaymentDate { get; set; }
-        public int CustomerId { get; set; }
-        public string CustomerName { get; set; } = "";
-        public int PaymentMethodId { get; set; }
-        public string MethodName { get; set; } = "";
-        public decimal Amount { get; set; }
-        public string? ChequeNumber { get; set; }
-        public string? ChequeDate { get; set; }
-        public string? BankAccount { get; set; }
-        public string? Notes { get; set; }
-        public string Status { get; set; } = "";
-        public decimal Allocated { get; set; }
-        public decimal Unallocated { get; set; }
+        public long    PaymentId       { get; set; }
+        public string  PaymentNumber   { get; set; } = "";
+        public string? PaymentDate     { get; set; }
+        public int     CustomerId      { get; set; }
+        public string  CustomerName    { get; set; } = "";
+        public int     PaymentMethodId { get; set; }
+        public string  MethodName      { get; set; } = "";
+        public decimal Amount          { get; set; }
+        public string? ChequeNumber    { get; set; }
+        public string? ChequeDate      { get; set; }
+        public string? BankAccount     { get; set; }
+        public string? Notes           { get; set; }
+        public string  Status          { get; set; } = "";
+        public decimal Allocated       { get; set; }
+        public decimal Unallocated     { get; set; }
     }
 
-    public class AllocOut { public long PaymentAllocationId { get; set; } public long InvoiceId { get; set; }
-        public string InvoiceNumber { get; set; } = ""; public decimal AllocatedAmount { get; set; }
-        public decimal InvoiceTotal { get; set; } public decimal InvoicePaid { get; set; } }
+    public class AllocOut
+    {
+        public long    PaymentAllocationId { get; set; }
+        public long    InvoiceId           { get; set; }
+        public string  InvoiceNumber       { get; set; } = "";
+        public decimal AllocatedAmount     { get; set; }
+        public decimal InvoiceTotal        { get; set; }
+        public decimal InvoicePaid         { get; set; }
+    }
 
     public class Envelope
     {
-        public Detail Payment { get; set; } = new();
+        public Detail        Payment     { get; set; } = new();
         public List<AllocOut> Allocations { get; set; } = new();
     }
 
     public class Form
     {
-        public int CustomerId { get; set; }
-        public string? PaymentDate { get; set; }
-        public int PaymentMethodId { get; set; }
-        public decimal Amount { get; set; }
-        public string? ChequeNumber { get; set; }
-        public string? ChequeDate { get; set; }
-        public string? BankAccount { get; set; }
-        public string? Notes { get; set; }
+        public int     CustomerId      { get; set; }
+        public string? PaymentDate     { get; set; }
+        public int     PaymentMethodId { get; set; }
+        public decimal Amount          { get; set; }
+        public string? ChequeNumber    { get; set; }
+        public string? ChequeDate      { get; set; }
+        public string? BankAccount     { get; set; }
+        public string? Notes           { get; set; }
     }
 
     public class PatchForm
     {
         public string? ChequeNumber { get; set; }
-        public string? ChequeDate { get; set; }
-        public string? BankAccount { get; set; }
-        public string? Notes { get; set; }
+        public string? ChequeDate   { get; set; }
+        public string? BankAccount  { get; set; }
+        public string? Notes        { get; set; }
     }
 
+    /* ── Computed ── */
     private bool NeedCheque => _methods.FirstOrDefault(m => m.Id == _f.PaymentMethodId)?.RequiresChequeNo == true;
 
     private IEnumerable<Item> Posted => _items.Where(p => p.Status == "Posted");
-
     private decimal Unallocated => Posted.Sum(p => p.Unallocated);
-
-    private decimal ThisMonth => Posted
+    private decimal ThisMonth   => Posted
         .Where(p => p.PaymentDate.Year == DateTime.Now.Year && p.PaymentDate.Month == DateTime.Now.Month)
         .Sum(p => p.Amount);
 
     private decimal AllocTotal => _alloc.Values.Sum();
-    private decimal Left => _f.Amount - AllocTotal;
+    private decimal Left       => _f.Amount - AllocTotal;
 
     private decimal AllocOf(long invoiceId) =>
         _alloc.TryGetValue(invoiceId, out var v) ? v : 0m;
@@ -465,7 +1522,6 @@
         else _alloc[invoiceId] = v;
     }
 
-    /// <summary>يوزّع بالأقدم أولًا — لحد ما المبلغ يخلص.</summary>
     private void AutoAllocate()
     {
         _alloc = new Dictionary<long, decimal>();
@@ -480,18 +1536,57 @@
         }
     }
 
+    /* ── Helpers ── */
     private static string StatusAr(string s) => s switch
     {
-        "Posted" => "مسجّلة", "Cancelled" => "ملغية", "Returned" => "مرتجعة", _ => s
+        "Posted"    => "مسجّلة",
+        "Cancelled" => "ملغية",
+        "Returned"  => "مرتجعة",
+        _           => s
     };
 
-    private static string StatusChip(string s) => s switch
+    private static string StatusChipClass(string s) => s switch
     {
-        "Posted" => "fc-chip-ok", "Cancelled" => "fc-chip-bad", "Returned" => "fc-chip-warn", _ => "fc-chip-gray"
+        "Posted"    => "pay-chip chip-posted",
+        "Cancelled" => "pay-chip chip-cancelled",
+        "Returned"  => "pay-chip chip-returned",
+        _           => "pay-chip chip-posted"
+    };
+
+    private static string StatusDotClass(string s) => s switch
+    {
+        "Posted"    => "pay-chip-dot sdot-posted",
+        "Cancelled" => "pay-chip-dot sdot-cancelled",
+        "Returned"  => "pay-chip-dot sdot-returned",
+        _           => "pay-chip-dot sdot-posted"
+    };
+
+    private static string StatusDotColor(string s) => s switch
+    {
+        "all"       => "tdot-all",
+        "Posted"    => "tdot-posted",
+        "Cancelled" => "tdot-cancelled",
+        "Returned"  => "tdot-returned",
+        _           => "tdot-all"
+    };
+
+    private static string AvatarClass(string s) => s switch
+    {
+        "Posted"    => "av-posted",
+        "Cancelled" => "av-cancelled",
+        "Returned"  => "av-returned",
+        _           => "av-posted"
+    };
+
+    private static string DetailIconClass(string s) => s switch
+    {
+        "Posted"    => "pay-modal-icon pay-det-posted",
+        "Cancelled" => "pay-modal-icon pay-det-cancelled",
+        "Returned"  => "pay-modal-icon pay-det-returned",
+        _           => "pay-modal-icon pay-det-posted"
     };
 
     private static string Money(decimal v) => v.ToString("N2");
-
     private static decimal ParseDec(object? v) => decimal.TryParse(v?.ToString(), out var n) ? n : 0m;
     private static int ParseInt(object? v) => int.TryParse(v?.ToString(), out var n) ? n : 0;
 
@@ -502,6 +1597,7 @@
          p.CustomerName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
          (p.ChequeNumber ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase)));
 
+    /* ── Init ── */
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
@@ -524,13 +1620,12 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/payments?take=300") ?? new(); }
+        try   { _items = await Http.GetFromJsonAsync<List<Item>>("api/payments?take=300") ?? new(); }
         catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
         finally { _loading = false; }
     }
 
-    // ── دفعة جديدة ──
-
+    /* ── دفعة جديدة ── */
     private void New()
     {
         _f = new Form { PaymentDate = DateTime.Now.ToString("yyyy-MM-dd") };
@@ -538,7 +1633,7 @@
         _msg = null; _modalOpen = true;
     }
 
-    private void Close() { _modalOpen = false; }
+    private void Close() { _modalOpen = false; _msg = null; }
 
     private async Task OnCustomerChanged(ChangeEventArgs e)
     {
@@ -564,10 +1659,10 @@
 
     private async Task SaveAsync()
     {
-        if (_f.CustomerId <= 0)       { _ok = false; _msg = "اختار العميل"; return; }
-        if (_f.PaymentMethodId <= 0)  { _ok = false; _msg = "اختار طريقة الدفع"; return; }
-        if (_f.Amount <= 0)           { _ok = false; _msg = "اكتب مبلغ"; return; }
-        if (Left < 0)                 { _ok = false; _msg = $"الموزّع أكتر من المبلغ بـ {(-Left):N2}"; return; }
+        if (_f.CustomerId <= 0)      { _ok = false; _msg = "اختار العميل"; return; }
+        if (_f.PaymentMethodId <= 0) { _ok = false; _msg = "اختار طريقة الدفع"; return; }
+        if (_f.Amount <= 0)          { _ok = false; _msg = "اكتب مبلغ"; return; }
+        if (Left < 0)                { _ok = false; _msg = $"الموزّع أكتر من المبلغ بـ {(-Left):N2}"; return; }
 
         _saving = true; _msg = null;
         try
@@ -591,8 +1686,7 @@
         finally { _saving = false; }
     }
 
-    // ── تعديل ──
-
+    /* ── تعديل ── */
     private async Task Edit(Item p)
     {
         try
@@ -612,7 +1706,7 @@
         catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
     }
 
-    private void ClosePatch() { _patchOpen = false; _patchTarget = null; }
+    private void ClosePatch() { _patchOpen = false; _patchTarget = null; _msg = null; }
 
     private async Task SavePatch()
     {
@@ -634,8 +1728,7 @@
         finally { _saving = false; }
     }
 
-    // ── تفاصيل / إلغاء ──
-
+    /* ── تفاصيل / إلغاء ── */
     private async Task Open(Item p)
     {
         try

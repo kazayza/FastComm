@@ -1,3 +1,4 @@
+using ClosedXML.Excel;
 using System.Data;
 using System.Data.Common;
 using System.Security.Claims;
@@ -242,5 +243,236 @@ public class CustomersController : ControllerBase
 
         await cmd.ExecuteNonQueryAsync(ct);
         return (string)pOut.Value!;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  📥 استيراد من Excel (🆕 2026-09-14)
+    // ══════════════════════════════════════════════════════════════════
+
+    /// <summary>صف في ملف الاستيراد.</summary>
+    public record ImportRow(string? CustomerCode, string? CustomerType, string? NameAr,
+        string? NameEn, string? TaxNumber, string? NationalId, string? CommercialRegister,
+        string? Phone, string? Email, string? AddressAr, string? CityAr,
+        decimal CreditLimit, bool PortalEnabled);
+
+    /// <summary>نتيجة الاستيراد.</summary>
+    public record ImportResult(int Success, int Failed, List<string> Errors);
+
+    /// <summary>
+    /// 📥 <c>GET api/customers/import-template</c> — تحميل ملف Excel مرجعي.
+    /// </summary>
+    [HttpGet("import-template")]
+    [Authorize(Policy = "PERM:CUSTOMER.VIEW")]
+    public IActionResult ImportTemplate()
+    {
+        using var wb = new XLWorkbook();
+        var ws = wb.AddWorksheet("العملاء");
+        ws.RightToLeft = true;
+
+        /* العناوين */
+        var cols = new[]
+        {
+            "الكود (اختياري)", "النوع (Company/Individual)", "الاسم (عربي) *",
+            "الاسم (إنجليزي)", "الرقم الضريبي", "الرقم القومي", "السجل التجاري",
+            "التليفون", "البريد الإلكتروني", "العنوان", "المدينة",
+            "حد الائتمان", "البوابة مفعّلة (TRUE/FALSE)"
+        };
+
+        for (var c = 0; c < cols.Length; c++)
+        {
+            var cell = ws.Cell(1, c + 1);
+            cell.Value = cols[c];
+            cell.Style.Font.SetBold();
+            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#16233A");
+            cell.Style.Font.FontColor = XLColor.FromHtml("#FFFFFF");
+            cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        }
+
+        /* صف مثال */
+        ws.Cell(2, 1).Value = "CUST-001";
+        ws.Cell(2, 2).Value = "Company";
+        ws.Cell(2, 3).Value = "شركة النور";
+        ws.Cell(2, 4).Value = "Al-Nour Company";
+        ws.Cell(2, 5).Value = "123456789012345";
+        ws.Cell(2, 6).Value = "";
+        ws.Cell(2, 7).Value = "";
+        ws.Cell(2, 8).Value = "02-12345678";
+        ws.Cell(2, 9).Value = "info@alnour.com";
+        ws.Cell(2, 10).Value = "القاهرة";
+        ws.Cell(2, 11).Value = "القاهرة";
+        ws.Cell(2, 12).Value = 50000;
+        ws.Cell(2, 13).Value = "FALSE";
+
+        /* تنسيق */
+        for (var c = 1; c <= cols.Length; c++)
+            ws.Column(c).Width = Math.Max(15, cols[c - 1].Length + 5);
+
+        ws.SheetView.FreezeRows(1);
+
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        var bytes = ms.ToArray();
+        return File(bytes,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "customers-template.xlsx");
+    }
+
+    /// <summary>
+    /// 📤 <c>POST api/customers/import</c> — استيراد عملاء من ملف Excel.
+    /// </summary>
+    [HttpPost("import")]
+    [Authorize(Policy = "PERM:CUSTOMER.CREATE")]
+    public async Task<IActionResult> Import(IFormFile? file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { message = "مافيش ملف" });
+
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (ext is not (".xlsx" or ".xls"))
+            return BadRequest(new { message = "الملف لازم يكون Excel (.xlsx)" });
+
+        if (file.Length > 10 * 1024 * 1024)
+            return BadRequest(new { message = "الملف أكبر من 10 ميجا" });
+
+        var rows = new List<ImportRow>();
+        var errors = new List<string>();
+        var success = 0;
+
+        try
+        {
+            using var stream = file.OpenReadStream();
+            using var wb = new XLWorkbook(stream);
+            var ws = wb.Worksheet(1);
+
+            /* نبدأ من الصف التاني (الأول عناوين) */
+            var lastRow = ws.LastRowUsed()?.RowNumber() ?? 1;
+            for (var r = 2; r <= lastRow; r++)
+            {
+                var code = ws.Cell(r, 1).GetString().Trim();
+                var type = ws.Cell(r, 2).GetString().Trim();
+                var nameAr = ws.Cell(r, 3).GetString().Trim();
+                var nameEn = ws.Cell(r, 4).GetString().Trim();
+                var taxNumber = ws.Cell(r, 5).GetString().Trim();
+                var nationalId = ws.Cell(r, 6).GetString().Trim();
+                var commercialRegister = ws.Cell(r, 7).GetString().Trim();
+                var phone = ws.Cell(r, 8).GetString().Trim();
+                var email = ws.Cell(r, 9).GetString().Trim();
+                var addressAr = ws.Cell(r, 10).GetString().Trim();
+                var cityAr = ws.Cell(r, 11).GetString().Trim();
+                var creditLimit = ws.Cell(r, 12).GetDouble();
+                var portalEnabled = ws.Cell(r, 13).GetString().Trim().Equals("TRUE", StringComparison.OrdinalIgnoreCase);
+
+                /* تخطي الصفوف الفاضية */
+                if (string.IsNullOrWhiteSpace(nameAr)) continue;
+
+                var row = new ImportRow(
+                    string.IsNullOrWhiteSpace(code) ? null : code,
+                    string.IsNullOrWhiteSpace(type) ? null : type,
+                    nameAr, nameEn, taxNumber, nationalId, commercialRegister,
+                    phone, email, addressAr, cityAr,
+                    (decimal)creditLimit, portalEnabled);
+
+                rows.Add(row);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "فشل قراءة ملف الاستيراد");
+            return BadRequest(new { message = "فشل قراءة الملف: " + ex.Message });
+        }
+
+        if (rows.Count == 0)
+            return BadRequest(new { message = "مافيش بيانات في الملف" });
+
+        /* معالجة كل صف */
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var row = rows[i];
+            var rowNum = i + 2; /* +2 لأن الصف الأول عناوين */
+
+            try
+            {
+                /* التحقق */
+                var err = ValidateImport(row);
+                if (err is not null)
+                {
+                    errors.Add($"الصف {rowNum}: {err}");
+                    continue;
+                }
+
+                /* الكود — لو مش موجود، نولده */
+                var code = row.CustomerCode;
+                if (string.IsNullOrWhiteSpace(code))
+                {
+                    code = await GetNextCodeAsync(ct);
+                }
+                else
+                {
+                    /* التأكد إن الكود مش موجود */
+                    var exists = await _db.Customers.AnyAsync(c => c.CustomerCode == code && !c.IsDeleted, ct);
+                    if (exists)
+                    {
+                        errors.Add($"الصف {rowNum}: الكود {code} موجود بالفعل");
+                        continue;
+                    }
+                }
+
+                /* إنشاء العميل */
+                var c = new Customer
+                {
+                    CustomerCode = code,
+                    CustomerType = row.CustomerType!,
+                    NameAr = row.NameAr!.Trim(),
+                    NameEn = Blank(row.NameEn),
+                    TaxNumber = Blank(row.TaxNumber),
+                    NationalId = Blank(row.NationalId),
+                    CommercialRegister = Blank(row.CommercialRegister),
+                    Phone = Blank(row.Phone),
+                    Email = Blank(row.Email),
+                    AddressAr = Blank(row.AddressAr),
+                    CityAr = Blank(row.CityAr),
+                    CreditLimit = row.CreditLimit,
+                    PortalEnabled = row.PortalEnabled,
+                    IsActive = true,
+                    CreatedBy = CurrentUserId()
+                };
+
+                _db.Customers.Add(c);
+                await _db.SaveChangesAsync(ct);
+                success++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "فشل استيراد الصف {Row}", rowNum);
+                errors.Add($"الصف {rowNum}: {ex.Message}");
+            }
+        }
+
+        var result = new ImportResult(success, errors.Count, errors);
+        var msg = $"✅ تم استيراد {success} عملاء بنجاح";
+        if (errors.Count > 0)
+            msg += $" · ❌ فشل {errors.Count} صفوف";
+
+        return Ok(new { message = msg, result });
+    }
+
+    private static string? ValidateImport(ImportRow row)
+    {
+        if (string.IsNullOrWhiteSpace(row.NameAr))
+            return "الاسم بالعربي مطلوب";
+
+        if (row.CustomerType is not ("Company" or "Individual"))
+            return "نوع العميل لازم Company أو Individual";
+
+        if (row.CustomerType == "Company" && string.IsNullOrWhiteSpace(row.TaxNumber))
+            return "الشركة لازم يكون لها رقم ضريبي";
+
+        if (row.CustomerType == "Individual" && string.IsNullOrWhiteSpace(row.NationalId))
+            return "الفرد لازم يكون له رقم قومي";
+
+        if (row.CreditLimit < 0)
+            return "حد الائتمان مينفعش يكون بالسالب";
+
+        return null;
     }
 }

@@ -1,3 +1,4 @@
+﻿using System.Collections.Concurrent;
 using FastCom.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,6 +14,10 @@ namespace FastCom.Server.Controllers;
 /// الـ View لسه ماتحدّثتش عند العميل. الـ View هتُستخدم في صفحة التقارير.</para>
 ///
 /// <para>مافيش كتابة هنا خالص — قراءة بس.</para>
+///
+/// <para>🚀 V4: إضافة Trends (مقارنة شهرية) · توزيع حالات العمليات · حالة الأسطول ·
+/// آخر الأنشطة (من AuditLogs) · أعمار الديون — + Cache خفيف (45 ثانية)
+/// عشان القاعدة البعيدة ماتتضربش مع كل فتح للصفحة.</para>
 /// </summary>
 [ApiController]
 [Route("api/dashboard")]
@@ -22,6 +27,23 @@ public class DashboardController : ControllerBase
     private readonly FastComDbContext _db;
 
     public DashboardController(FastComDbContext db) => _db = db;
+
+    // ── 🚀 Cache خفيف في الذاكرة — بيمنع تكرار نفس الاستعلامات خلال ثواني قليلة ──
+    private static readonly ConcurrentDictionary<string, (DateTime At, object Payload)> Cache = new();
+    private const int CacheSeconds = 45;
+
+    private static bool TryHit(string key, out object payload)
+    {
+        payload = null!;
+        if (Cache.TryGetValue(key, out var hit) && (DateTime.UtcNow - hit.At).TotalSeconds < CacheSeconds)
+        {
+            payload = hit.Payload;
+            return true;
+        }
+        return false;
+    }
+
+    private static void Put(string key, object payload) => Cache[key] = (DateTime.UtcNow, payload);
 
     /// <summary>الحالات اللي بتعتبر «العملية لسه شغالة».</summary>
     private static readonly string[] OpenOpStatuses =
@@ -36,12 +58,17 @@ public class DashboardController : ControllerBase
     /// <summary>الحالات اللي بتعتبر «العهدة لسه مفتوحة».</summary>
     private static readonly string[] OpenCustodyStatuses = { "Open", "PartiallySettled", "Submitted" };
 
+    /// <summary>حركات مش مهمة لسجل «آخر الأنشطة» على الرئيسية.</summary>
+    private static readonly string[] SilentActions = { "Login", "Logout", "LoginFailed" };
+
     // ══════════════════════════════════════════════════════════════════
 
     /// <summary>كل أرقام الصفحة الرئيسية في طلب واحد.</summary>
     [HttpGet("summary")]
     public async Task<IActionResult> Summary(CancellationToken ct)
     {
+        if (TryHit("summary", out var hitS)) return Ok(hitS);
+
         var today    = DateOnly.FromDateTime(DateTime.Today);
         var monthStart = new DateOnly(today.Year, today.Month, 1);
 
@@ -81,7 +108,7 @@ public class DashboardController : ControllerBase
         var custodyOutstanding = await _db.DriverCustodies
             .Where(c => !c.IsDeleted && OpenCustodyStatuses.Contains(c.Status))
             .SumAsync(c => (decimal?)(c.AmountIssued - c.AmountSpent - c.AmountReturned
-                                      + c.AdditionalDue), ct) ?? 0m;
+                  + c.AdditionalDue), ct) ?? 0m;
 
         // ── الفواتير والتحصيل ──
         var invoicesIssued = await _db.Invoices.CountAsync(
@@ -113,12 +140,14 @@ public class DashboardController : ControllerBase
         var activeVehicles = await _db.Vehicles.CountAsync(v => !v.IsDeleted && v.Status == "Available", ct);
         var vehiclesInTrip = await _db.Vehicles.CountAsync(v => !v.IsDeleted && v.Status == "InTrip", ct);
 
-        return Ok(new SummaryOut(
+        var payloadS = new SummaryOut(
             openOps, delayedOps, closedThisMonth,
             openTrips, tripsToday, delayedTrips,
             openCustodies, custodyOutstanding,
             invoicesIssued, revenueThisMonth, collectedThisMonth, receivables, overdueCount,
-            cashBalance, activeDrivers, activeVehicles, vehiclesInTrip));
+            cashBalance, activeDrivers, activeVehicles, vehiclesInTrip);
+        Put("summary", payloadS);
+        return Ok(payloadS);
     }
 
     /// <summary>التنبيهات — عمليات متأخرة · فواتير مستحقة · عهد · رخص بتخلص.</summary>
@@ -217,6 +246,8 @@ public class DashboardController : ControllerBase
     [HttpGet("monthly")]
     public async Task<IActionResult> Monthly(CancellationToken ct)
     {
+        if (TryHit("monthly", out var hitM)) return Ok(hitM);
+
         var today = DateOnly.FromDateTime(DateTime.Today);
         var start = new DateOnly(today.Year, today.Month, 1).AddMonths(-5);
         var startDt = start.ToDateTime(TimeOnly.MinValue);
@@ -262,6 +293,7 @@ public class DashboardController : ControllerBase
                                 .Sum(n => n.GrandTotal)
             };
         }
+        Put("monthly", rows);
         return Ok(rows);
     }
 
@@ -297,6 +329,189 @@ public class DashboardController : ControllerBase
     }
 
     // ══════════════════════════════════════════════════════════════════
+    //  🚀 V4 — Endpoints جديدة
+    // ══════════════════════════════════════════════════════════════════
+
+    /// <summary>مقارنة الشهر الحالي بالشهر الماضي — مفوتر · محصّل · مصروفات · عمليات مغلقة.</summary>
+    [HttpGet("trends")]
+    public async Task<IActionResult> Trends(CancellationToken ct)
+    {
+        if (TryHit("trends", out var hitT)) return Ok(hitT);
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var cur   = new DateOnly(today.Year, today.Month, 1);
+        var prev  = cur.AddMonths(-1);
+        var next  = cur.AddMonths(1);
+        var curStartDt  = cur.ToDateTime(TimeOnly.MinValue);
+        var prevStartDt = prev.ToDateTime(TimeOnly.MinValue);
+        var nextStartDt = next.ToDateTime(TimeOnly.MinValue);
+
+        // مفوتر — الفواتير (InvoiceDate نوعها DateOnly)
+        var invs = await _db.Invoices.AsNoTracking()
+            .Where(i => !i.IsDeleted && i.Status != "Draft" && i.Status != "Cancelled"
+                        && i.InvoiceDate >= prev)
+            .Select(i => new { i.InvoiceDate, i.GrandTotal })
+            .ToListAsync(ct);
+        var invCur  = invs.Where(i => i.InvoiceDate >= cur).Sum(i => i.GrandTotal);
+        var invPrev = invs.Where(i => i.InvoiceDate < cur).Sum(i => i.GrandTotal);
+
+        // محصّل — المدفوعات (PaymentDate نوعها DateOnly)
+        var pays = await _db.Payments.AsNoTracking()
+            .Where(p => !p.IsDeleted && p.Status == "Posted" && p.PaymentDate >= prev)
+            .Select(p => new { p.PaymentDate, p.Amount })
+            .ToListAsync(ct);
+        var colCur  = pays.Where(p => p.PaymentDate >= cur).Sum(p => p.Amount);
+        var colPrev = pays.Where(p => p.PaymentDate < cur).Sum(p => p.Amount);
+
+        // مصروفات (ExpenseDate نوعها DateTime — زي الـ Monthly)
+        var exps = await _db.Expenses.AsNoTracking()
+            .Where(e => !e.IsDeleted && e.Status == "Posted" && e.ExpenseDate >= prevStartDt)
+            .Select(e => new { e.ExpenseDate, e.Amount })
+            .ToListAsync(ct);
+        var expCur  = exps.Where(e => e.ExpenseDate >= curStartDt).Sum(e => e.Amount);
+        var expPrev = exps.Where(e => e.ExpenseDate < curStartDt).Sum(e => e.Amount);
+
+        // عمليات مغلقة فعليًا (ActualDeliveryAt نوعها DateTime?)
+        var closedCur = await _db.Operations.CountAsync(
+            o => !o.IsDeleted && o.Status == "Closed"
+                 && o.ActualDeliveryAt != null
+                 && o.ActualDeliveryAt >= curStartDt && o.ActualDeliveryAt < nextStartDt, ct);
+        var closedPrev = await _db.Operations.CountAsync(
+            o => !o.IsDeleted && o.Status == "Closed"
+                 && o.ActualDeliveryAt != null
+                 && o.ActualDeliveryAt >= prevStartDt && o.ActualDeliveryAt < curStartDt, ct);
+
+        var payloadT = new TrendsOut(
+            new TrendPoint(invCur, invPrev, PctChg(invCur, invPrev)),
+            new TrendPoint(colCur, colPrev, PctChg(colCur, colPrev)),
+            new TrendPoint(expCur, expPrev, PctChg(expCur, expPrev)),
+            new TrendPoint(closedCur, closedPrev, PctChg(closedCur, closedPrev)));
+        Put("trends", payloadT);
+        return Ok(payloadT);
+    }
+
+    /// <summary>توزيع حالات العمليات — للـ Donut. (تجميع في الذاكرة — نفس نهج top-customers)</summary>
+    [HttpGet("operation-status-breakdown")]
+    public async Task<IActionResult> OperationStatusBreakdown(CancellationToken ct)
+    {
+        if (TryHit("ops-breakdown", out var hitB)) return Ok(hitB);
+        var raw = await _db.Operations.AsNoTracking()
+            .Where(o => !o.IsDeleted)
+            .Select(o => o.Status)
+            .ToListAsync(ct);
+        var payloadB = raw.GroupBy(s => s)
+            .Select(g => new StatusCount(g.Key, g.Count()))
+            .OrderByDescending(x => x.Count)
+            .ToList();
+        Put("ops-breakdown", payloadB);
+        return Ok(payloadB);
+    }
+
+    /// <summary>حالة الأسطول — للـ Gauge. (تجميع في الذاكرة)</summary>
+    [HttpGet("fleet-status")]
+    public async Task<IActionResult> FleetStatus(CancellationToken ct)
+    {
+        if (TryHit("fleet", out var hitF)) return Ok(hitF);
+        var raw = await _db.Vehicles.AsNoTracking()
+            .Where(v => !v.IsDeleted)
+            .Select(v => v.Status)
+            .ToListAsync(ct);
+        var payloadF = raw.GroupBy(s => s)
+            .Select(g => new StatusCount(g.Key, g.Count()))
+            .OrderByDescending(x => x.Count)
+            .ToList();
+        Put("fleet", payloadF);
+        return Ok(payloadF);
+    }
+
+    /// <summary>آخر الأنشطة — من AuditLogs (من غير Login/Logout) + اسم المستخدم + وقت محلي.</summary>
+    [HttpGet("recent-activity")]
+    public async Task<IActionResult> RecentActivity([FromQuery] int take = 10, CancellationToken ct = default)
+    {
+        if (take is < 1 or > 30) take = 10;
+        if (TryHit("activity", out var hitA)) return Ok(hitA);
+
+        var logs = await _db.AuditLogs.AsNoTracking()
+            .Where(l => !SilentActions.Contains(l.Action))
+            .OrderByDescending(l => l.AuditLogId)
+            .Take(take)
+            .Select(l => new { l.UserId, l.Action, l.EntityType, l.EntityId, l.Description, l.CreatedAt })
+            .ToListAsync(ct);
+
+        // 🔴🔴 قاموس أسماء المستخدمين — نفس أسلوب AuditController:
+        //    الـ join المباشر على AspNetUsers طلّع «النظام» لكل الصفوف على
+        //    الداتابيز الحقيقية (اختبرناه)، والقاموس مضمون وأخفّ على الاستعلام.
+        var ids = logs.Where(l => l.UserId is not null)
+                      .Select(l => l.UserId!.Value)
+                      .Distinct()
+                      .ToList();
+
+        var nameById = new Dictionary<int, string>();
+        if (ids.Count > 0)
+        {
+            var us = await _db.Users.AsNoTracking()
+                .Where(u => ids.Contains(u.Id))
+                .Select(u => new { u.Id, u.FullName, u.UserName })
+                .ToListAsync(ct);
+
+            /* 🔴 CS8620: UserName نوعه string? في IdentityUser */
+            foreach (var u in us)
+                nameById[u.Id] = string.IsNullOrWhiteSpace(u.FullName)
+                    ? (u.UserName ?? "")
+                    : u.FullName;
+        }
+
+        // 🔴 CreatedAt متخزنة UTC (DEFAULT SYSUTCDATETIME) — بنحوّلها لتوقيت مصر للعرض
+        var payloadA = logs.Select(a => new ActivityItem(
+                a.Action,
+                a.EntityType,
+                a.EntityId ?? "",
+                a.Description ?? "",
+                a.UserId is not null
+                    && nameById.TryGetValue(a.UserId.Value, out var un)
+                    && !string.IsNullOrWhiteSpace(un)
+                        ? un
+                        : "النظام",
+                TimeZoneInfo.ConvertTimeFromUtc(
+                    DateTime.SpecifyKind(a.CreatedAt, DateTimeKind.Utc), Tz)
+                    .ToString("yyyy-MM-dd HH:mm")))
+            .ToList();
+        Put("activity", payloadA);
+        return Ok(payloadA);
+    }
+
+    /// <summary>أعمار الديون — من تاريخ الاستحقاق (أو تاريخ الفاتورة لو مفيش استحقاق).</summary>
+    [HttpGet("receivables-aging")]
+    public async Task<IActionResult> ReceivablesAging(CancellationToken ct)
+    {
+        if (TryHit("aging", out var hitG)) return Ok(hitG);
+        var today = DateOnly.FromDateTime(DateTime.Today);
+
+        var raw = await _db.Invoices.AsNoTracking()
+            .Where(i => !i.IsDeleted && i.Status != "Draft" && i.Status != "Cancelled"
+                        && i.GrandTotal - i.PaidAmount > 0)
+            .Select(i => new { i.DueDate, i.InvoiceDate, Due = i.GrandTotal - i.PaidAmount })
+            .ToListAsync(ct);
+
+        var current = 0m; var d30 = 0m; var d60 = 0m; var d90 = 0m; var d90p = 0m;
+        foreach (var i in raw)
+        {
+            var refDate = i.DueDate ?? i.InvoiceDate;   // مفيش استحقاق؟ بترجع لتاريخ الفاتورة
+            var days = today.DayNumber - refDate.DayNumber;
+            if (days <= 0)       current += i.Due;
+            else if (days <= 30) d30  += i.Due;
+            else if (days <= 60) d60  += i.Due;
+            else if (days <= 90) d90  += i.Due;
+            else                 d90p += i.Due;
+        }
+
+        var payloadG = new AgingOut(current, d30, d60, d90, d90p,
+                                    current + d30 + d60 + d90 + d90p);
+        Put("aging", payloadG);
+        return Ok(payloadG);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
 
     /// <summary>
     /// رصيد الخزينة الإجمالي.
@@ -309,6 +524,18 @@ public class DashboardController : ControllerBase
             .SumAsync(b => (decimal?)b.CurrentBalance, ct) ?? 0m;
 
     private static int DaysBetween(DateOnly from, DateOnly to) => to.DayNumber - from.DayNumber;
+
+    /// <summary>نسبة التغيير % — لو القديم صفر والجديد فيه حاجة = 100%، لو الاتنين صفر = null.</summary>
+    private static decimal? PctChg(decimal cur, decimal prev)
+        => prev <= 0 ? (cur > 0 ? 100m : null) : Math.Round((cur - prev) / prev * 100m, 1);
+
+    /// <summary>توقيت مصر — CreatedAt متخزنة UTC والعرض محلي.</summary>
+    private static readonly TimeZoneInfo Tz = GetTz();
+    private static TimeZoneInfo GetTz()
+    {
+        try { return TimeZoneInfo.FindSystemTimeZoneById("Egypt Standard Time"); }
+        catch { return TimeZoneInfo.Utc; }
+    }
 
     // ══════════════════════════════════════════════════════════════════
     //  DTOs
@@ -331,4 +558,20 @@ public class DashboardController : ControllerBase
 
     public record TopCustomer(int CustomerId, string CustomerName,
                               decimal Invoiced, decimal Paid, int Invoices);
+
+    // ── 🚀 V4 ──
+
+    public record TrendPoint(decimal Current, decimal Previous, decimal? ChangePct);
+
+    public record TrendsOut(TrendPoint Invoiced, TrendPoint Collected,
+                            TrendPoint Expenses, TrendPoint ClosedOps);
+
+    public record StatusCount(string Status, int Count);
+
+    public record ActivityItem(string Action, string EntityType, string EntityId,
+                               string Description, string UserName, string At);
+
+    public record AgingOut(decimal Current, decimal D30, decimal D60, decimal D90,
+                           decimal D90Plus, decimal Total);
 }
+

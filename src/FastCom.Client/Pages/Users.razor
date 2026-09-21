@@ -8,7 +8,7 @@
 
 <PageTitle>المستخدمين — فاست كوم</PageTitle>
 
-@* ═══════════════ الهيرو هيدر ═══════════════ *@
+
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
@@ -18,7 +18,7 @@
                 <p class="fc-hero-sub">إنشاء الحسابات وتعيين الأدوار وكلمات المرور واستثناءات الصلاحيات</p>
             </div>
             <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Inherit"
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh"
                                title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
                 @if (CanManage)
                 {
@@ -53,415 +53,1504 @@
     </div>
 </div>
 
-<div class="fc-page">
+
+<div class="usr-body">
+
     @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">
-            ليس لديك صلاحية عرض المستخدمين.
-        </MudAlert>
+        <div class="usr-state-box">
+            <div class="usr-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليس لديك صلاحية عرض المستخدمين</p>
+        </div>
     }
     else
     {
-        <div class="fc-overlap">
-            <div class="fc-card">
+        <div class="usr-card">
 
-                <div class="fc-toolbar">
-                    <MudTextField T="string" Value="_search" ValueChanged="OnSearch"
-                                  Placeholder="ابحث بالاسم أو اسم المستخدم..."
-                                  Variant="Variant.Outlined" Dense="true"
-                                  Adornment="Adornment.Start"
-                                  AdornmentIcon="@Icons.Material.Filled.Search"
-                                  Class="fc-search-box" Immediate="true" />
+            @* ── Toolbar ── *@
+            <div class="usr-toolbar">
 
-                    <div class="fc-filters">
-                        <button class='fc-filter @(_filter == "all" ? "on" : "")' @onclick='() => _filter = "all"'>الكل</button>
-                        <button class='fc-filter @(_filter == "on" ? "on" : "")' @onclick='() => _filter = "on"'>نشط</button>
-                        <button class='fc-filter @(_filter == "off" ? "on" : "")' @onclick='() => _filter = "off"'>موقوف</button>
-                    </div>
-
-                    <span class="fc-count">عرض @Filtered.Count() من @_users.Count</span>
+                <div class="usr-search-wrap">
+                    <svg class="usr-search-icon" viewBox="0 0 24 24" width="16" height="16"
+                         fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                    </svg>
+                    <input class="usr-search-input"
+                           placeholder="ابحث بالاسم أو اسم المستخدم..."
+                           @bind="_search" @bind:event="oninput"
+                           aria-label="بحث" />
+                    @if (!string.IsNullOrWhiteSpace(_search))
+                    {
+                        <button class="usr-search-clear"
+                                @onclick="() => _search = string.Empty">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    }
                 </div>
 
-                @if (_loading)
-                {
-                    <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
-                }
-                else if (_loadError is not null)
-                {
-                    <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="ma-4">@_loadError</MudAlert>
-                }
-                else
-                {
-                    <div class="fc-table-wrap">
-                        <table class="fc-table fc-table-pro">
-                            <thead>
-                                <tr>
-                                    <th style="width:52px"></th>
-                                    <th>المستخدم</th>
-                                    <th>الأدوار</th>
-                                    <th>الحالة</th>
-                                    <th>آخر دخول</th>
-                                    @if (CanManage)
-                                    {
-                                        <th style="width:190px; text-align:left">إجراءات</th>
-                                    }
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var u in Filtered)
+                <div class="usr-filter-group" role="group" aria-label="فلتر الحالة">
+                    <button class="usr-filter-btn @(_filter == "all" ? "filter-active" : "")"
+                            @onclick='() => _filter = "all"'
+                            aria-pressed="@(_filter == "all")">
+                        الكل
+                        <span class="usr-filter-count">@_users.Count</span>
+                    </button>
+                    <button class="usr-filter-btn @(_filter == "on" ? "filter-active" : "")"
+                            @onclick='() => _filter = "on"'
+                            aria-pressed="@(_filter == "on")">
+                        <span class="usr-dot dot-green" aria-hidden="true"></span>
+                        نشط
+                        <span class="usr-filter-count">@_users.Count(u => u.IsActive)</span>
+                    </button>
+                    <button class="usr-filter-btn @(_filter == "off" ? "filter-active" : "")"
+                            @onclick='() => _filter = "off"'
+                            aria-pressed="@(_filter == "off")">
+                        <span class="usr-dot dot-red" aria-hidden="true"></span>
+                        موقوف
+                        <span class="usr-filter-count">@_users.Count(u => !u.IsActive)</span>
+                    </button>
+                </div>
+
+                <div class="usr-results-badge">
+                    عرض <strong>@Filtered.Count()</strong> من <strong>@_users.Count</strong>
+                </div>
+
+            </div>
+
+
+            @* ── Content ── *@
+            @if (_loading)
+            {
+                <div class="usr-loading">
+                    <div class="usr-spinner" aria-label="جاري التحميل"></div>
+                    <span>جاري تحميل المستخدمين...</span>
+                </div>
+            }
+            else if (_loadError is not null)
+            {
+                <div class="usr-error-box" role="alert">
+                    <svg viewBox="0 0 24 24" width="20" height="20"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         aria-hidden="true">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                    </svg>
+                    <div>
+                        <strong>فشل تحميل البيانات</strong>
+                        <p>@_loadError</p>
+                    </div>
+                </div>
+            }
+            else if (!Filtered.Any())
+            {
+                <div class="usr-empty">
+                    <div class="usr-empty-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="42" height="42"
+                             fill="none" stroke="currentColor" stroke-width="1.4">
+                            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+                        </svg>
+                    </div>
+                    <div class="usr-empty-title">لا توجد نتائج</div>
+                    <div class="usr-empty-sub">جرّب كلمة بحث مختلفة أو غيّر الفلتر</div>
+                </div>
+            }
+            else
+            {
+                <div class="usr-table-wrap">
+                    <table class="usr-table" aria-label="قائمة المستخدمين">
+                        <thead>
+                            <tr>
+                                <th scope="col" class="th-start">المستخدم</th>
+                                <th scope="col">الأدوار</th>
+                                <th scope="col">الحالة</th>
+                                <th scope="col">آخر دخول</th>
+                                @if (CanManage)
                                 {
-                                    <tr>
-                                        <td><span class="fc-avatar fc-av-@(u.Id % 5)">@Initials(u)</span></td>
-                                        <td>
-                                            <div class="fc-cell-main">@u.FullName</div>
-                                            <div class="fc-cell-sub">@u.UserName · @(u.Email ?? "بدون بريد")</div>
-                                        </td>
-                                        <td>
-                                            @if (string.IsNullOrEmpty(u.Roles))
+                                    <th scope="col" style="width:200px">إجراءات</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var u in Filtered)
+                            {
+                                <tr class="@(!u.IsActive ? "row-inactive" : "")">
+
+                                    @* ── المستخدم ── *@
+                                    <td class="td-start">
+                                        <div class="usr-user-cell">
+                                            <div class="usr-avatar usr-av-@(u.Id % 6)"
+                                                 aria-hidden="true">
+                                                @Initials(u)
+                                            </div>
+                                            <div class="usr-user-info">
+                                                <div class="usr-full-name">@u.FullName</div>
+                                                <div class="usr-user-meta">
+                                                    <span class="usr-username-tag">@u.UserName</span>
+                                                    @if (!string.IsNullOrWhiteSpace(u.Email))
+                                                    {
+                                                        <span class="usr-email">@u.Email</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    @* ── الأدوار ── *@
+                                    <td>
+                                        <div class="usr-roles-cell">
+                                            @if (string.IsNullOrWhiteSpace(u.Roles))
                                             {
-                                                <span class="fc-role-chip fc-role-none">بدون دور</span>
+                                                <span class="usr-no-role">بدون دور</span>
                                             }
                                             else
                                             {
                                                 @foreach (var r in u.Roles.Split(" · "))
                                                 {
-                                                    <span class="fc-role-chip">@r</span>
+                                                    <span class="usr-role-chip">@r</span>
                                                 }
                                             }
-                                        </td>
-                                        <td>
-                                            @if (u.IsActive && u.UserStatus == "Active")
-                                            {
-                                                <span class="fc-chip fc-chip-ok"><i></i>نشط</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="fc-chip fc-chip-bad"><i></i>موقوف</span>
-                                            }
-                                        </td>
-                                        <td class="fc-cell-sub">@(u.LastLoginAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "لم يدخل بعد")</td>
-                                        @if (CanManage)
+                                        </div>
+                                    </td>
+
+                                    @* ── الحالة ── *@
+                                    <td>
+                                        @if (u.IsActive && u.UserStatus == "Active")
                                         {
-                                            <td>
-                                                <div class="fc-row-actions">
-                                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
-                                                                   Color="Color.Primary" title="تعديل"
-                                                                   OnClick="() => Edit(u)" />
-                                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Key"
-                                                                   Color="Color.Warning" title="كلمة المرور"
-                                                                   OnClick="() => OpenPwd(u)" />
-                                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Lock"
-                                                                   Color="Color.Info" title="استثناءات الصلاحيات"
-                                                                   OnClick="() => OpenOverrides(u)" />
-                                                    @if (u.IsActive)
-                                                    {
-                                                        @if (_confirmId == u.Id)
-                                                        {
-                                                            <MudButton Size="Size.Small" Variant="Variant.Filled"
-                                                                       Color="Color.Error" OnClick="() => Disable(u)">
-                                                                متأكد؟
-                                                            </MudButton>
-                                                        }
-                                                        else
-                                                        {
-                                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
-                                                                           Color="Color.Error" title="تعطيل"
-                                                                           OnClick="() => _confirmId = u.Id" />
-                                                        }
-                                                    }
-                                                </div>
-                                            </td>
+                                            <span class="usr-chip chip-active">
+                                                <span class="usr-chip-dot dot-green" aria-hidden="true"></span>
+                                                نشط
+                                            </span>
                                         }
-                                    </tr>
-                                }
-                                @if (!Filtered.Any())
-                                {
-                                    <tr>
-                                        <td colspan="6">
-                                            <div class="fc-empty">
-                                                <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" />
-                                                <div>مافيش نتائج مطابقة</div>
+                                        else
+                                        {
+                                            <span class="usr-chip chip-inactive">
+                                                <span class="usr-chip-dot dot-red" aria-hidden="true"></span>
+                                                موقوف
+                                            </span>
+                                        }
+                                    </td>
+
+                                    @* ── آخر دخول ── *@
+                                    <td>
+                                        @if (u.LastLoginAt.HasValue)
+                                        {
+                                            <div class="usr-last-login">
+                                                <svg viewBox="0 0 16 16" width="11" height="11"
+                                                     fill="none" stroke="currentColor" stroke-width="1.7"
+                                                     aria-hidden="true">
+                                                    <circle cx="8" cy="8" r="6"/>
+                                                    <path d="M8 5v3l2 2" stroke-linecap="round"/>
+                                                </svg>
+                                                @u.LastLoginAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="td-muted">لم يدخل بعد</span>
+                                        }
+                                    </td>
+
+                                    @* ── إجراءات ── *@
+                                    @if (CanManage)
+                                    {
+                                        <td>
+                                            <div class="usr-actions">
+
+                                                <button class="usr-act-btn act-edit"
+                                                        @onclick="() => Edit(u)"
+                                                        title="تعديل"
+                                                        aria-label="تعديل @u.FullName">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                    </svg>
+                                                </button>
+
+                                                <button class="usr-act-btn act-pwd"
+                                                        @onclick="() => OpenPwd(u)"
+                                                        title="كلمة المرور"
+                                                        aria-label="تغيير كلمة مرور @u.FullName">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <rect x="3" y="11" width="18" height="11" rx="2"/>
+                                                        <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                                                        <circle cx="12" cy="16" r="1.5" fill="currentColor"/>
+                                                    </svg>
+                                                </button>
+
+                                                <button class="usr-act-btn act-perm"
+                                                        @onclick="() => OpenOverrides(u)"
+                                                        title="استثناءات الصلاحيات"
+                                                        aria-label="صلاحيات @u.FullName">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                                    </svg>
+                                                </button>
+
+                                                @if (u.IsActive)
+                                                {
+                                                    @if (_confirmId == u.Id)
+                                                    {
+                                                        <button class="usr-confirm-disable"
+                                                                @onclick="() => Disable(u)">
+                                                            تعطيل؟
+                                                        </button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button class="usr-act-btn act-disable"
+                                                                @onclick="() => _confirmId = u.Id"
+                                                                title="تعطيل"
+                                                                aria-label="تعطيل @u.FullName">
+                                                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                                <circle cx="12" cy="12" r="10"/>
+                                                                <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                                                            </svg>
+                                                        </button>
+                                                    }
+                                                }
+
                                             </div>
                                         </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-            </div>
-        </div>
-    }
-
-    @* ═══════════════ مودال إنشاء / تعديل ═══════════════ *@
-    @if (_panelOpen && CanManage)
-    {
-        <div class="fc-modal-backdrop" @onclick="ClosePanel">
-            <div class="fc-modal" @onclick:stopPropagation>
-                <div class="fc-modal-head">
-                    <div>
-                        <div class="fc-modal-title">@(_editingId is null ? "مستخدم جديد" : "تعديل مستخدم")</div>
-                        <div class="fc-modal-sub">@(_editingId is null ? "هيتعمل بكلمة المرور اللي هتكتبها دلوقتي" : _form.FullName)</div>
-                    </div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="ClosePanel" />
-                </div>
-
-                <div class="fc-modal-body">
-                    @if (_saveMsg is not null)
-                    {
-                        <MudAlert Severity="@(_saveOk ? Severity.Success : Severity.Error)"
-                                  Variant="Variant.Outlined" Class="mb-4">@_saveMsg</MudAlert>
-                    }
-
-                    <div class="fc-form-grid">
-                        <MudTextField T="string" @bind-Value="_form.UserName" Label="اسم المستخدم"
-                                      Variant="Variant.Outlined" Disabled="_editingId is not null"
-                                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.PersonOutline" />
-                        <MudTextField T="string" @bind-Value="_form.FullName" Label="الاسم الكامل"
-                                      Variant="Variant.Outlined" />
-                        <MudTextField T="string" @bind-Value="_form.Email" Label="البريد الإلكتروني (اختياري)"
-                                      Variant="Variant.Outlined" InputType="InputType.Email" />
-                        @if (_editingId is null)
-                        {
-                            <MudTextField T="string" @bind-Value="_form.Password" Label="كلمة المرور (8+ حروف)"
-                                          Variant="Variant.Outlined" InputType="InputType.Password"
-                                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Key" />
-                        }
-                        else
-                        {
-                            <div class="fc-active-toggle">
-                                <MudCheckBox T="bool" @bind-Value="_form.IsActive" Label="الحساب مفعّل"
-                                             Color="Color.Success" />
-                                <div class="fc-cell-sub">لو اتقفل، المستخدم مش هيقدر يدخل لحد ما يتفعّل</div>
-                            </div>
-                        }
-                    </div>
-
-                    <div class="fc-roles-block">
-                        <div class="fc-panel-sub">الأدوار — اختار دور أو أكتر</div>
-                        @if (!_roles.Any())
-                        {
-                            <div class="fc-cell-sub">مافيش أدوار في النظام</div>
-                        }
-                        <div class="fc-role-grid">
-                            @foreach (var r in _roles.Where(r => r.IsActive || _form.RoleIds.Contains(r.Id)))
-                            {
-                                <label class='fc-role-tile @(_form.RoleIds.Contains(r.Id) ? "sel" : "")'>
-                                    <MudCheckBox T="bool"
-                                                 Value="_form.RoleIds.Contains(r.Id)"
-                                                 ValueChanged="@(v => ToggleRole(r.Id, v))"
-                                                 Color="Color.Primary" Dense="true" />
-                                    <span class="fc-role-tile-txt">
-                                        <b>@r.NameAr</b>
-                                        <small>@r.RoleCode · @r.UserCount مستخدم</small>
-                                    </span>
-                                </label>
-                            }
-                        </div>
-                    </div>
-                </div>
-
-                <div class="fc-modal-foot">
-                    <MudButton Variant="Variant.Outlined" OnClick="ClosePanel">إلغاء</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                               Disabled="_saving" OnClick="SaveAsync">
-                        @if (_saving)
-                        {
-                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
-                        }
-                        حفظ
-                    </MudButton>
-                </div>
-            </div>
-        </div>
-    }
-
-    @* ═══════════════ مودال كلمة المرور ═══════════════ *@
-    @if (_pwdFor is not null && CanManage)
-    {
-        <div class="fc-modal-backdrop" @onclick="() => _pwdFor = null">
-            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation>
-                <div class="fc-modal-head">
-                    <div>
-                        <div class="fc-modal-title">كلمة مرور جديدة</div>
-                        <div class="fc-modal-sub">للمستخدم: @_pwdFor.FullName</div>
-                    </div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _pwdFor = null" />
-                </div>
-
-                <div class="fc-modal-body">
-                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
-                        التعيين بيفتح الحساب المقفول ويصفّر عدّاد المحاولات.
-                    </MudAlert>
-                    <MudTextField T="string" @bind-Value="_newPwd" Label="كلمة المرور الجديدة (8+)"
-                                  Variant="Variant.Outlined" InputType="InputType.Password" Class="mb-3" />
-                    <MudTextField T="string" @bind-Value="_newPwd2" Label="تأكيد كلمة المرور"
-                                  Variant="Variant.Outlined" InputType="InputType.Password" />
-                </div>
-
-                <div class="fc-modal-foot">
-                    <MudButton Variant="Variant.Outlined" OnClick="() => _pwdFor = null">إلغاء</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Warning"
-                               Disabled="_savingPwd" OnClick="SavePwdAsync">تعيين</MudButton>
-                </div>
-            </div>
-        </div>
-    }
-
-    @* ═══════════════ مودال استثناءات الصلاحيات ═══════════════ *@
-    @if (_ovFor is not null && CanManage)
-    {
-        <div class="fc-modal-backdrop" @onclick="CloseOverrides">
-            <div class="fc-modal" @onclick:stopPropagation>
-                <div class="fc-modal-head">
-                    <div>
-                        <div class="fc-modal-title">استثناءات الصلاحيات</div>
-                        <div class="fc-modal-sub">للمستخدم: @_ovFor.FullName — منح أو منع صلاحية بره دوره</div>
-                    </div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseOverrides" />
-                </div>
-
-                <div class="fc-modal-body">
-                    @if (_ovLoading)
-                    {
-                        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
-                    }
-                    else
-                    {
-                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
-                            «افتراضي» = حسب أدواره. أي استثناء بيتفعّل خلال دقيقة من الحفظ.
-                        </MudAlert>
-
-                        @foreach (var mod in _ovCatalog)
-                        {
-                            <details class="fc-matrix-mod" open="@(_ovCatalog.Count <= 3)">
-                                <summary class="fc-matrix-mod-head">@mod.ModuleCode <small>@mod.Items.Count صلاحية</small></summary>
-                                <div class="fc-matrix-mod-body" style="display:block">
-                                    @foreach (var p in mod.Items)
-                                    {
-                                        <div class="fc-ov-row">
-                                            <span class="fc-ov-name">@p.NameAr <small>(@p.PermissionCode)</small></span>
-                                            <select class="fc-sel" value="@OvState(p.PermissionId)"
-                                                    @onchange="e => SetOv(p.PermissionId, (string?)e.Value)">
-                                                <option value="default">افتراضي</option>
-                                                <option value="grant">منح إضافي</option>
-                                                <option value="deny">منع صريح</option>
-                                            </select>
-                                        </div>
                                     }
-                                </div>
-                            </details>
-                        }
-                    }
-                </div>
 
-                <div class="fc-modal-foot">
-                    <span class="fc-count">@_ovState.Count(k => k.Value != "default") استثناء</span>
-                    <MudButton Variant="Variant.Outlined" OnClick="CloseOverrides">إلغاء</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                               Disabled="_ovSaving" OnClick="SaveOverridesAsync">حفظ الاستثناءات</MudButton>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
                 </div>
-            </div>
+            }
+
         </div>
     }
 </div>
 
+
+@* ═══════════════════════════════════════════
+   MODAL — إنشاء / تعديل مستخدم
+═══════════════════════════════════════════ *@
+@if (_panelOpen && CanManage)
+{
+    <div class="usr-modal-backdrop" @onclick="ClosePanel"
+         role="dialog" aria-modal="true"
+         aria-label="@(_editingId is null ? "مستخدم جديد" : "تعديل مستخدم")">
+        <div class="usr-modal" @onclick:stopPropagation="true">
+
+            <div class="usr-modal-head">
+                <div class="usr-modal-icon @(_editingId is null ? "icon-green" : "icon-blue")"
+                     aria-hidden="true">
+                    @if (_editingId is null)
+                    {
+                        <svg viewBox="0 0 24 24" width="22" height="22"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                            <circle cx="12" cy="7" r="4"/>
+                            <path d="M17 3l2 2-2 2M19 5h-4" stroke-linecap="round"/>
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="22" height="22"
+                             fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                    }
+                </div>
+                <div style="flex:1; min-width:0">
+                    <div class="usr-modal-title">
+                        @(_editingId is null ? "مستخدم جديد" : "تعديل مستخدم")
+                    </div>
+                    <div class="usr-modal-sub">
+                        @(_editingId is null
+                            ? "هيتعمل بكلمة المرور اللي هتكتبها دلوقتي"
+                            : _form.FullName)
+                    </div>
+                </div>
+                <button class="usr-modal-close" @onclick="ClosePanel" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            @if (_saveMsg is not null)
+            {
+                <div class="usr-modal-banner @(_saveOk ? "banner-success" : "banner-error")" role="alert">
+                    <span>@_saveMsg</span>
+                    <button @onclick="() => _saveMsg = null">✕</button>
+                </div>
+            }
+
+            <div class="usr-modal-body">
+
+                @* ── البيانات الأساسية ── *@
+                <div class="usr-form-section">
+                    <div class="usr-form-section-title">
+                        <svg viewBox="0 0 24 24" width="14" height="14"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                            <circle cx="12" cy="7" r="4"/>
+                        </svg>
+                        البيانات الأساسية
+                    </div>
+                    <div class="usr-modal-grid">
+
+                        <div class="usr-mfield">
+                            <label class="usr-mlabel">
+                                اسم المستخدم
+                                @if (_editingId is null)
+                                {
+                                    <span class="usr-mrequired">*</span>
+                                }
+                            </label>
+                            <div class="usr-minput-group">
+                                <span class="usr-mprefix" aria-hidden="true">@@</span>
+                                <input class="usr-minput with-prefix"
+                                       @bind="_form.UserName"
+                                       maxlength="50"
+                                       placeholder="username"
+                                       disabled="@(_editingId is not null)"
+                                       dir="ltr"
+                                       aria-required="@(_editingId is null)" />
+                            </div>
+                        </div>
+
+                        <div class="usr-mfield">
+                            <label class="usr-mlabel">
+                                الاسم الكامل
+                                <span class="usr-mrequired">*</span>
+                            </label>
+                            <input class="usr-minput"
+                                   @bind="_form.FullName"
+                                   maxlength="100"
+                                   placeholder="الاسم الكامل للمستخدم"
+                                   aria-required="true" />
+                        </div>
+
+                        <div class="usr-mfield">
+                            <label class="usr-mlabel">البريد الإلكتروني</label>
+                            <div class="usr-minput-group">
+                                <span class="usr-mprefix" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="13" height="13"
+                                         fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                                        <path d="M22 6l-10 7L2 6"/>
+                                    </svg>
+                                </span>
+                                <input class="usr-minput with-prefix"
+                                       @bind="_form.Email"
+                                       maxlength="150"
+                                       placeholder="user@example.com"
+                                       type="email"
+                                       dir="ltr" />
+                            </div>
+                        </div>
+
+                        @if (_editingId is null)
+                        {
+                            <div class="usr-mfield">
+                                <label class="usr-mlabel">
+                                    كلمة المرور
+                                    <span class="usr-mrequired">*</span>
+                                </label>
+                                <div class="usr-minput-group">
+                                    <span class="usr-mprefix" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="13" height="13"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="11" width="18" height="11" rx="2"/>
+                                            <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                                        </svg>
+                                    </span>
+                                    <input class="usr-minput with-prefix"
+                                           @bind="_form.Password"
+                                           type="password"
+                                           placeholder="8 حروف على الأقل"
+                                           aria-required="true" />
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="usr-mfield">
+                                <label class="usr-mlabel">حالة الحساب</label>
+                                <div class="usr-status-toggle" role="group" aria-label="حالة الحساب">
+                                    <button type="button"
+                                            class="usr-status-btn @(_form.IsActive ? "status-active" : "")"
+                                            @onclick="() => _form.IsActive = true"
+                                            aria-pressed="@_form.IsActive">
+                                        ✅ مفعّل
+                                    </button>
+                                    <button type="button"
+                                            class="usr-status-btn @(!_form.IsActive ? "status-inactive" : "")"
+                                            @onclick="() => _form.IsActive = false"
+                                            aria-pressed="@(!_form.IsActive)">
+                                        🚫 موقوف
+                                    </button>
+                                </div>
+                                <div class="usr-mhint">
+                                    <svg viewBox="0 0 16 16" width="10" height="10"
+                                         fill="none" stroke="currentColor" stroke-width="1.8"
+                                         aria-hidden="true">
+                                        <circle cx="8" cy="8" r="6"/>
+                                        <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                    </svg>
+                                    الموقوف مش هيقدر يدخل لحد ما يتفعّل
+                                </div>
+                            </div>
+                        }
+
+                    </div>
+                </div>
+
+
+                @* ── الأدوار ── *@
+                <div class="usr-form-section">
+                    <div class="usr-form-section-title">
+                        <svg viewBox="0 0 24 24" width="14" height="14"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+                        </svg>
+                        الأدوار — اختار دور أو أكتر
+                    </div>
+
+                    @if (!_roles.Any())
+                    {
+                        <div class="usr-roles-empty">مافيش أدوار في النظام</div>
+                    }
+                    else
+                    {
+                        <div class="usr-role-grid" role="group" aria-label="قائمة الأدوار">
+                            @foreach (var r in _roles.Where(r => r.IsActive || _form.RoleIds.Contains(r.Id)))
+                            {
+                                var isSelected = _form.RoleIds.Contains(r.Id);
+                                <label class="usr-role-tile @(isSelected ? "role-selected" : "")">
+                                    <input type="checkbox"
+                                           checked="@isSelected"
+                                           @onchange="e => ToggleRole(r.Id, (bool)e.Value!)"
+                                           class="usr-role-checkbox" />
+                                    <div class="usr-role-check @(isSelected ? "check-on" : "")"
+                                         aria-hidden="true">
+                                        @if (isSelected)
+                                        {
+                                            <svg viewBox="0 0 24 24" width="12" height="12"
+                                                 fill="none" stroke="currentColor" stroke-width="2.5">
+                                                <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        }
+                                    </div>
+                                    <div class="usr-role-tile-info">
+                                        <span class="usr-role-tile-name">@r.NameAr</span>
+                                        <span class="usr-role-tile-meta">@r.RoleCode · @r.UserCount مستخدم</span>
+                                    </div>
+                                </label>
+                            }
+                        </div>
+                    }
+                </div>
+
+            </div>
+
+            <div class="usr-modal-foot">
+                <button class="usr-modal-cancel" @onclick="ClosePanel">إلغاء</button>
+                <button class="usr-modal-save save-blue"
+                        @onclick="SaveAsync"
+                        disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <span class="btn-spinner sm" aria-hidden="true"></span>
+                        <span>جاري الحفظ...</span>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="15" height="15"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                            <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>حفظ</span>
+                    }
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+@* ═══════════════════════════════════════════
+   MODAL — كلمة المرور
+═══════════════════════════════════════════ *@
+@if (_pwdFor is not null && CanManage)
+{
+    <div class="usr-modal-backdrop" @onclick="() => _pwdFor = null"
+         role="dialog" aria-modal="true" aria-label="تغيير كلمة المرور">
+        <div class="usr-modal usr-modal-sm" @onclick:stopPropagation="true">
+
+            <div class="usr-modal-head">
+                <div class="usr-modal-icon icon-amber" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2"/>
+                        <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                        <circle cx="12" cy="16" r="1.5" fill="currentColor" stroke="none"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="usr-modal-title">كلمة مرور جديدة 🔑</div>
+                    <div class="usr-modal-sub">@_pwdFor.FullName — التعيين بيفتح الحساب المقفول</div>
+                </div>
+                <button class="usr-modal-close" @onclick="() => _pwdFor = null" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="usr-modal-body">
+
+                <div class="usr-pwd-info" role="status">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         aria-hidden="true">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                    </svg>
+                    <span>التعيين بيصفّر عدّاد المحاولات ويفتح الحساب المقفول تلقائياً</span>
+                </div>
+
+                <div class="usr-mfield" style="margin-top:14px">
+                    <label class="usr-mlabel">
+                        كلمة المرور الجديدة
+                        <span class="usr-mrequired">*</span>
+                    </label>
+                    <div class="usr-minput-group">
+                        <span class="usr-mprefix" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="13" height="13"
+                                 fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2"/>
+                                <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                            </svg>
+                        </span>
+                        <input class="usr-minput with-prefix"
+                               @bind="_newPwd"
+                               type="password"
+                               placeholder="8 حروف على الأقل"
+                               aria-required="true" />
+                    </div>
+                </div>
+
+                <div class="usr-mfield" style="margin-top:12px">
+                    <label class="usr-mlabel">
+                        تأكيد كلمة المرور
+                        <span class="usr-mrequired">*</span>
+                    </label>
+                    <div class="usr-minput-group">
+                        <span class="usr-mprefix" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="13" height="13"
+                                 fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                                <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </span>
+                        <input class="usr-minput with-prefix @(_newPwd2.Length > 0 && _newPwd != _newPwd2 ? "input-mismatch" : "")"
+                               @bind="_newPwd2"
+                               type="password"
+                               placeholder="أعد كتابة كلمة المرور" />
+                    </div>
+                    @if (_newPwd2.Length > 0 && _newPwd != _newPwd2)
+                    {
+                        <div class="usr-err-msg" role="alert">كلمة المرور مش متطابقة</div>
+                    }
+                </div>
+
+            </div>
+
+            <div class="usr-modal-foot">
+                <button class="usr-modal-cancel" @onclick="() => _pwdFor = null">إلغاء</button>
+                <button class="usr-modal-save save-amber"
+                        @onclick="SavePwdAsync"
+                        disabled="@_savingPwd">
+                    @if (_savingPwd)
+                    {
+                        <span class="btn-spinner sm" aria-hidden="true"></span>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="15" height="15"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <rect x="3" y="11" width="18" height="11" rx="2"/>
+                            <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                        </svg>
+                    }
+                    تعيين كلمة المرور
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+@* ═══════════════════════════════════════════
+   MODAL — استثناءات الصلاحيات
+═══════════════════════════════════════════ *@
+@if (_ovFor is not null && CanManage)
+{
+    <div class="usr-modal-backdrop" @onclick="CloseOverrides"
+         role="dialog" aria-modal="true" aria-label="استثناءات الصلاحيات">
+        <div class="usr-modal usr-modal-xl" @onclick:stopPropagation="true">
+
+            <div class="usr-modal-head">
+                <div class="usr-modal-icon icon-purple" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                </div>
+                <div style="flex:1; min-width:0">
+                    <div class="usr-modal-title">استثناءات الصلاحيات</div>
+                    <div class="usr-modal-sub">
+                        @_ovFor.FullName — منح أو منع صلاحية بره دوره
+                        @if (_ovState.Count(k => k.Value != "default") > 0)
+                        {
+                            <span class="ov-count-badge">
+                                @_ovState.Count(k => k.Value != "default") استثناء
+                            </span>
+                        }
+                    </div>
+                </div>
+                <button class="usr-modal-close" @onclick="CloseOverrides" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="usr-modal-body usr-ov-body">
+
+                @if (_ovLoading)
+                {
+                    <div class="usr-loading">
+                        <div class="usr-spinner" aria-label="جاري التحميل"></div>
+                        <span>جاري تحميل الصلاحيات...</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="usr-ov-info" role="status">
+                        <svg viewBox="0 0 24 24" width="16" height="16"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                        </svg>
+                        <span>
+                            «افتراضي» = حسب أدواره · أي استثناء بيتفعّل خلال دقيقة من الحفظ
+                        </span>
+                    </div>
+
+                    @foreach (var mod in _ovCatalog)
+                    {
+                        <details class="usr-ov-module" open="@(_ovCatalog.Count <= 3)">
+
+                            <summary class="usr-ov-mod-head" aria-label="@mod.ModuleCode">
+                                <div class="usr-ov-mod-title-wrap">
+                                    <div class="usr-ov-chevron" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </div>
+                                    <span class="usr-ov-mod-name">@mod.ModuleCode</span>
+                                    <span class="usr-ov-mod-count">@mod.Items.Count صلاحية</span>
+                                    @{
+                                        var modOverrides = mod.Items.Count(i => _ovState.ContainsKey(i.PermissionId));
+                                    }
+                                    @if (modOverrides > 0)
+                                    {
+                                        <span class="usr-ov-mod-active-count">@modOverrides استثناء</span>
+                                    }
+                                </div>
+                            </summary>
+
+                            <div class="usr-ov-perms-list">
+                                @foreach (var p in mod.Items)
+{
+    var state  = OvState(p.PermissionId);
+    var rowCls = state != "default" ? "ov-active" : string.Empty;
+    var pid    = p.PermissionId;
+    var isDef  = state == "default";
+    var isGrant = state == "grant";
+    var isDeny  = state == "deny";
+    var defCls   = isDef   ? "ov-opt-default-active" : string.Empty;
+    var grantCls = isGrant ? "ov-opt-grant-active"   : string.Empty;
+    var denyCls  = isDeny  ? "ov-opt-deny-active"    : string.Empty;
+
+    <div class="usr-ov-perm-row @rowCls">
+
+        <div class="usr-ov-perm-info">
+            <div class="usr-ov-perm-name">@p.NameAr</div>
+            <div class="usr-ov-perm-code" dir="ltr">@p.PermissionCode</div>
+        </div>
+
+        <div class="usr-ov-perm-select">
+
+            <button type="button"
+                    class="usr-ov-opt @defCls"
+                    @onclick='() => SetOv(pid, "default")'
+                    aria-pressed="@isDef">
+                افتراضي
+            </button>
+
+            <button type="button"
+                    class="usr-ov-opt @grantCls"
+                    @onclick='() => SetOv(pid, "grant")'
+                    aria-pressed="@isGrant">
+                ✅ منح
+            </button>
+
+            <button type="button"
+                    class="usr-ov-opt @denyCls"
+                    @onclick='() => SetOv(pid, "deny")'
+                    aria-pressed="@isDeny">
+                🚫 منع
+            </button>
+
+        </div>
+
+    </div>
+}
+                            </div>
+
+                        </details>
+                    }
+                }
+
+            </div>
+
+            <div class="usr-modal-foot">
+                <div class="ov-footer-count">
+                    @_ovState.Count(k => k.Value != "default") استثناء مفعّل
+                </div>
+                <button class="usr-modal-cancel" @onclick="CloseOverrides">إلغاء</button>
+                <button class="usr-modal-save save-purple"
+                        @onclick="SaveOverridesAsync"
+                        disabled="@_ovSaving">
+                    @if (_ovSaving)
+                    {
+                        <span class="btn-spinner sm" aria-hidden="true"></span>
+                        <span>جاري الحفظ...</span>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="15" height="15"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                        <span>حفظ الاستثناءات</span>
+                    }
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    .usr-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 200px);
+        padding: 16px 20px 32px;
+        max-width: 1200px; width: 100%;
+        margin: 0 auto;
+    }
+
+    /* States */
+    .usr-state-box {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .usr-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .usr-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+    .usr-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .usr-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    /* Card */
+    .usr-card {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden;
+    }
+
+    /* ================================================================
+       TOOLBAR
+    ================================================================ */
+    .usr-toolbar {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7; flex-wrap: wrap;
+    }
+
+    .usr-search-wrap {
+        position: relative; display: flex; align-items: center;
+        flex: 1; min-width: 200px; max-width: 380px;
+    }
+    .usr-search-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; }
+    .usr-search-input {
+        width: 100%; height: 38px; padding: 0 36px 0 12px;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .usr-search-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .usr-search-input::placeholder { color: #b0bcc8; }
+    .usr-search-clear {
+        position: absolute; left: 10px;
+        display: flex; align-items: center; justify-content: center;
+        width: 22px; height: 22px; border-radius: 50%;
+        border: none; background: #edf1f7; color: #8899ae; cursor: pointer;
+    }
+
+    .usr-filter-group {
+        display: flex; gap: 4px; padding: 3px;
+        border-radius: 9px; background: #f0f3f8;
+    }
+
+    .usr-filter-btn {
+        display: flex; align-items: center; gap: 5px;
+        height: 32px; padding: 0 10px;
+        border: none; border-radius: 7px;
+        background: transparent; color: #6b7d95;
+        font-family: inherit; font-size: 11px; font-weight: 700;
+        cursor: pointer; white-space: nowrap; transition: all .15s ease;
+    }
+    .usr-filter-btn:hover:not(.filter-active) { background: rgba(255,255,255,.7); color: var(--fc-text); }
+    .filter-active { background: var(--fc-card); color: var(--fc-text); box-shadow: 0 1px 4px rgba(15,41,82,.10); font-weight: 800; }
+
+    .usr-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px; }
+    .dot-green { background: var(--fc-green); }
+    .dot-red   { background: var(--fc-red); }
+
+    .usr-filter-count {
+        min-width: 16px; height: 16px; border-radius: 4px; padding: 0 3px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 9px; font-weight: 900; font-family: "Inter", Arial, sans-serif;
+        background: #e4eaf3; color: #8899ae;
+    }
+    .filter-active .usr-filter-count { background: var(--fc-blue-lt); color: var(--fc-blue); }
+
+    .usr-results-badge {
+        display: flex; align-items: center; gap: 5px;
+        margin-right: auto; font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap;
+    }
+    .usr-results-badge strong { color: #5a6e88; }
+
+    /* ================================================================
+       STATES
+    ================================================================ */
+    .usr-loading {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 200px; color: var(--fc-muted); font-size: 12px; font-weight: 600;
+    }
+    .usr-spinner {
+        width: 32px; height: 32px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: usr-spin .75s linear infinite;
+    }
+    @@keyframes usr-spin { to { transform: rotate(360deg); } }
+
+    .usr-error-box {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 14px 18px; margin: 14px 18px; border-radius: 10px;
+        background: var(--fc-red-lt); border: 1px solid #ffc8cf;
+        color: var(--fc-red); font-size: 12px; font-weight: 600;
+    }
+    .usr-error-box strong { display: block; font-size: 13px; font-weight: 800; color: #b02040; margin-bottom: 2px; }
+    .usr-error-box p { margin: 0; color: var(--fc-red); }
+
+    .usr-empty {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 10px; min-height: 200px; padding: 40px; text-align: center;
+    }
+    .usr-empty-icon { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #f0f4fa; color: #b0c4d8; }
+    .usr-empty-title { font-size: 15px; font-weight: 800; color: var(--fc-text); }
+    .usr-empty-sub   { font-size: 12px; color: var(--fc-muted); }
+
+    /* ================================================================
+       TABLE
+    ================================================================ */
+    .usr-table-wrap { overflow-x: auto; }
+    .usr-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+
+    .usr-table thead th {
+        padding: 10px 12px;
+        background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 10.5px; font-weight: 800;
+        text-align: center; border-bottom: 2px solid #e4eaf3;
+        white-space: nowrap; position: sticky; top: 0; z-index: 1;
+    }
+    .usr-table .th-start { text-align: right; }
+
+    .usr-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background .12s ease; }
+    .usr-table tbody tr:last-child { border-bottom: none; }
+    .usr-table tbody tr:hover { background: #fafcff; }
+    .usr-table tbody tr.row-inactive { opacity: .65; }
+
+    .usr-table tbody td { padding: 12px 12px; color: #526070; text-align: center; vertical-align: middle; }
+    .td-start  { text-align: right !important; }
+    .td-muted  { color: #8899ae; font-size: 11px; }
+
+    /* User Cell */
+    .usr-user-cell { display: flex; align-items: center; gap: 11px; }
+
+    .usr-avatar {
+        width: 40px; height: 40px; flex: 0 0 40px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 14px; font-weight: 900; color: #fff; letter-spacing: .5px;
+        box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    }
+
+    .usr-av-0 { background: linear-gradient(135deg, #1558d6, #1e6ef5); }
+    .usr-av-1 { background: linear-gradient(135deg, #6035a0, #7c4dbd); }
+    .usr-av-2 { background: linear-gradient(135deg, #0d8a48, #16a35b); }
+    .usr-av-3 { background: linear-gradient(135deg, #b87d08, #e09a10); }
+    .usr-av-4 { background: linear-gradient(135deg, #b02040, #e03048); }
+    .usr-av-5 { background: linear-gradient(135deg, #0a7a6e, #0d9488); }
+
+    .usr-user-info { min-width: 0; }
+    .usr-full-name { font-size: 13px; font-weight: 800; color: #1c2c44; }
+    .usr-user-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; flex-wrap: wrap; }
+
+    .usr-username-tag {
+        display: inline-flex; padding: 1px 7px; border-radius: 5px;
+        background: #f0f4fa; border: 1px solid #e0e8f4;
+        font-size: 10px; font-weight: 800; color: #5a6e88;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .usr-email { font-size: 10px; color: #9aaabb; }
+
+    /* Roles */
+    .usr-roles-cell { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+
+    .usr-role-chip {
+        display: inline-flex; padding: 3px 9px; border-radius: 7px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        border: 1px solid #c0d4fb; font-size: 10px; font-weight: 800;
+    }
+
+    .usr-no-role {
+        display: inline-flex; padding: 3px 9px; border-radius: 7px;
+        background: #f0f3f8; color: #8899ae; border: 1px solid #dde5f0;
+        font-size: 10px; font-weight: 700; font-style: italic;
+    }
+
+    /* Status Chips */
+    .usr-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 7px; font-size: 10.5px; font-weight: 800; }
+    .usr-chip-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
+
+    .chip-active   { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .chip-inactive { background: var(--fc-red-lt);   color: var(--fc-red);   border: 1px solid #ffc8cf; }
+
+    /* Last Login */
+    .usr-last-login { display: flex; align-items: center; gap: 4px; color: #6b7d95; font-size: 11px; justify-content: center; }
+
+    /* Actions */
+    .usr-actions { display: flex; align-items: center; gap: 3px; justify-content: center; flex-wrap: wrap; }
+
+    .usr-act-btn {
+        width: 30px; height: 30px; border-radius: 7px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; cursor: pointer;
+        transition: all .15s ease; background: transparent;
+    }
+
+    .act-edit    { color: var(--fc-blue); }
+    .act-pwd     { color: var(--fc-amber); }
+    .act-perm    { color: var(--fc-purple); }
+    .act-disable { color: var(--fc-red); }
+
+    .act-edit:hover    { background: var(--fc-blue-lt);   border-color: #c0d4fb; }
+    .act-pwd:hover     { background: var(--fc-amber-lt);  border-color: #f0d898; }
+    .act-perm:hover    { background: var(--fc-purple-lt); border-color: #d0bfef; }
+    .act-disable:hover { background: var(--fc-red-lt);    border-color: #ffc8cf; }
+
+    .usr-confirm-disable {
+        height: 26px; padding: 0 9px;
+        border: none; border-radius: 6px;
+        background: linear-gradient(135deg, #e03048, #c0182e);
+        color: #fff; font-family: inherit;
+        font-size: 9.5px; font-weight: 800; cursor: pointer;
+        animation: usr-pulse 1s ease infinite;
+    }
+    @@keyframes usr-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.35); } 50% { box-shadow: 0 0 0 5px rgba(224,48,72,0); } }
+
+    /* ================================================================
+       MODALS
+    ================================================================ */
+    .usr-modal-backdrop {
+        position: fixed; inset: 0; z-index: 9999;
+        background: rgba(10,20,40,.58); backdrop-filter: blur(5px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px; animation: usr-fade-in .2s ease;
+    }
+    @@keyframes usr-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+    .usr-modal {
+        width: 100%; max-width: 580px;
+        background: var(--fc-card); border: 1px solid rgba(0,0,0,.08);
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(10,20,50,.18), 0 30px 80px rgba(10,20,50,.22);
+        overflow: hidden;
+        animation: usr-modal-in .28s cubic-bezier(.34,1.3,.64,1);
+        max-height: calc(100vh - 40px);
+        display: flex; flex-direction: column;
+    }
+    .usr-modal-sm { max-width: 460px; }
+    .usr-modal-xl { max-width: 760px; }
+
+    @@keyframes usr-modal-in {
+        from { opacity: 0; transform: scale(.94) translateY(12px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    /* STICKY Header */
+    .usr-modal-head {
+        display: flex; align-items: center; gap: 14px;
+        padding: 18px 22px; flex: 0 0 auto;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+        box-shadow: 0 2px 8px rgba(15,41,82,.05);
+    }
+
+    .usr-modal-icon {
+        width: 48px; height: 48px; flex: 0 0 48px; border-radius: 14px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .icon-green  { background: linear-gradient(135deg, #e9f8f0, #d4f0e0); color: var(--fc-green);  border: 1px solid #b0e0c5; }
+    .icon-blue   { background: linear-gradient(135deg, #eaf1ff, #dde8ff); color: var(--fc-blue);   border: 1px solid #bdd4fc; }
+    .icon-amber  { background: linear-gradient(135deg, #fff8e6, #ffefc0); color: #9a6d08;           border: 1px solid #f0d898; }
+    .icon-purple { background: linear-gradient(135deg, #f3eeff, #e8dfff); color: var(--fc-purple); border: 1px solid #d0bfef; }
+
+    .usr-modal-title { font-size: 15px; font-weight: 900; color: #1c2b43; }
+    .usr-modal-sub   { font-size: 10.5px; color: var(--fc-muted); margin-top: 2px; }
+
+    .usr-modal-close {
+        margin-right: auto; width: 34px; height: 34px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid #e4eaf2; border-radius: 9px;
+        background: none; color: #9aaabb; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .usr-modal-close:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .usr-modal-banner {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px; padding: 10px 22px; font-size: 12px; font-weight: 600; flex: 0 0 auto;
+    }
+    .usr-modal-banner button { background: none; border: none; cursor: pointer; opacity: .6; }
+    .banner-success { background: #e9f8f0; color: #0e7a43; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); }
+
+    /* SCROLLABLE Body */
+    .usr-modal-body {
+        padding: 20px 22px; overflow-y: auto; flex: 1 1 auto; min-height: 0;
+        display: flex; flex-direction: column; gap: 18px;
+    }
+
+    /* STICKY Footer */
+    .usr-modal-foot {
+        display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+        padding: 14px 22px; flex: 0 0 auto;
+        background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%);
+        border-top: 1px solid #edf1f7;
+    }
+
+    .usr-modal-cancel {
+        height: 40px; padding: 0 18px;
+        border: 1px solid var(--fc-border); border-radius: 10px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .usr-modal-cancel:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .usr-modal-save {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 40px; padding: 0 20px;
+        border: 0; border-radius: 10px;
+        color: #fff; font-family: inherit;
+        font-size: 12px; font-weight: 800; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .usr-modal-save:hover:not(:disabled) { transform: translateY(-1px); }
+    .usr-modal-save:disabled { opacity: .6; cursor: not-allowed; }
+
+    .save-blue   { background: linear-gradient(135deg, #1e6ef5, #1558d6); box-shadow: 0 4px 14px rgba(30,110,245,.28); }
+    .save-amber  { background: linear-gradient(135deg, #e09a10, #c07d08); box-shadow: 0 4px 14px rgba(224,154,16,.28); }
+    .save-purple { background: linear-gradient(135deg, #7c4dbd, #6035a0); box-shadow: 0 4px 14px rgba(124,77,189,.25); }
+
+    /* ================================================================
+       MODAL FORM FIELDS
+    ================================================================ */
+    .usr-form-section {
+        display: flex; flex-direction: column; gap: 14px;
+        padding-bottom: 18px; border-bottom: 1px solid #edf1f7;
+    }
+    .usr-form-section:last-child { border-bottom: none; padding-bottom: 0; }
+
+    .usr-form-section-title {
+        display: flex; align-items: center; gap: 7px;
+        font-size: 12.5px; font-weight: 800; color: #344258;
+    }
+
+    .usr-modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+    .usr-mfield { display: flex; flex-direction: column; gap: 6px; }
+
+    .usr-mlabel { font-size: 11.5px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 3px; }
+    .usr-mrequired { color: var(--fc-red); font-size: 13px; }
+
+    .usr-minput {
+        height: 42px; width: 100%;
+        border: 1.5px solid #d8e2f0; border-radius: 9px;
+        background: #fff; color: var(--fc-text);
+        font-family: inherit; font-size: 13px; padding: 0 12px;
+        outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .usr-minput:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .usr-minput:disabled { opacity: .65; background: #f3f5f8; cursor: not-allowed; }
+    .usr-minput::placeholder { color: #b0bcc8; }
+    .usr-minput.input-mismatch { border-color: var(--fc-red); }
+
+    .usr-minput-group { position: relative; display: flex; align-items: center; }
+    .usr-mprefix {
+        position: absolute; right: 12px;
+        display: flex; align-items: center;
+        color: #9aaabb; pointer-events: none; z-index: 1;
+        font-size: 11px; font-weight: 700;
+    }
+    .usr-minput.with-prefix { padding-right: 36px; }
+
+    .usr-mhint { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--fc-muted); font-weight: 500; }
+    .usr-err-msg { font-size: 10.5px; color: var(--fc-red); font-weight: 700; }
+
+    /* Status Toggle */
+    .usr-status-toggle { display: flex; gap: 8px; }
+
+    .usr-status-btn {
+        flex: 1; height: 40px; border: 2px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .18s ease;
+    }
+    .usr-status-btn:hover:not(.status-active):not(.status-inactive) { border-color: #b0c4e0; color: var(--fc-text); }
+
+    .status-active   { border-color: var(--fc-green); background: var(--fc-green-lt); color: var(--fc-green); font-weight: 800; box-shadow: 0 0 0 3px rgba(22,163,91,.10); }
+    .status-inactive { border-color: var(--fc-red);   background: var(--fc-red-lt);   color: var(--fc-red);   font-weight: 800; box-shadow: 0 0 0 3px rgba(224,48,72,.08); }
+
+    /* ================================================================
+       ROLE TILES
+    ================================================================ */
+    .usr-roles-empty { font-size: 12px; color: var(--fc-muted); font-style: italic; }
+
+    .usr-role-grid {
+        display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+    }
+
+    .usr-role-tile {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 12px; border-radius: 10px;
+        border: 1.5px solid #e4edf8; background: #fafcff;
+        cursor: pointer; transition: all .15s ease;
+    }
+    .usr-role-tile:hover { border-color: #c8d8f0; }
+    .usr-role-checkbox { display: none; }
+
+    .usr-role-check {
+        width: 20px; height: 20px; border-radius: 6px; flex: 0 0 20px;
+        border: 2px solid #d8e2f0; background: #fff;
+        display: flex; align-items: center; justify-content: center;
+        transition: all .15s ease;
+    }
+    .check-on { background: var(--fc-blue); border-color: var(--fc-blue); color: #fff; }
+
+    .usr-role-tile-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .usr-role-tile-name { font-size: 12.5px; font-weight: 800; color: #1c2b43; }
+    .usr-role-tile-meta { font-size: 10px; color: #9aaabb; font-weight: 500; font-family: "Inter", Arial, sans-serif; }
+
+    .role-selected {
+        border-color: var(--fc-blue) !important;
+        background: var(--fc-blue-lt) !important;
+        box-shadow: 0 0 0 3px rgba(30,110,245,.08);
+    }
+    .role-selected .usr-role-tile-name { color: var(--fc-blue); }
+
+    /* ================================================================
+       PASSWORD MODAL
+    ================================================================ */
+    .usr-pwd-info {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 14px; border-radius: 10px;
+        background: var(--fc-blue-lt); border: 1px solid #bdd4fc;
+        color: var(--fc-blue); font-size: 11.5px; font-weight: 600;
+    }
+
+    /* ================================================================
+       OVERRIDES MODAL
+    ================================================================ */
+    .usr-ov-body { gap: 12px !important; }
+
+    .ov-count-badge {
+        display: inline-flex; padding: 2px 9px; border-radius: 7px;
+        background: var(--fc-purple-lt); color: var(--fc-purple);
+        font-size: 9.5px; font-weight: 800; border: 1px solid #d0bfef;
+        margin-right: 6px;
+    }
+
+    .usr-ov-info {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px; border-radius: 9px;
+        background: var(--fc-amber-lt); border: 1px solid #f0d898;
+        color: #9a6d08; font-size: 11.5px; font-weight: 600;
+    }
+
+    .usr-ov-module {
+        border: 1px solid #e4edf8; border-radius: 12px;
+        background: linear-gradient(180deg, #fafcff, #f5f8fb);
+        overflow: hidden;
+    }
+
+    .usr-ov-mod-head {
+        display: flex; align-items: center;
+        padding: 12px 14px;
+        background: linear-gradient(180deg, #f0f5fc, #eaf1f9);
+        border-bottom: 1px solid #dce8f5;
+        cursor: pointer; list-style: none;
+    }
+    .usr-ov-mod-head::-webkit-details-marker { display: none; }
+    .usr-ov-mod-head::marker { display: none; }
+
+    .usr-ov-mod-title-wrap { display: flex; align-items: center; gap: 8px; width: 100%; }
+
+    .usr-ov-chevron { color: #9aaabb; display: flex; align-items: center; transition: transform .2s ease; }
+    details[open] .usr-ov-chevron { transform: rotate(180deg); }
+
+    .usr-ov-mod-name { font-size: 12.5px; font-weight: 800; color: var(--fc-text); font-family: "Inter", Arial, sans-serif; }
+
+    .usr-ov-mod-count { font-size: 9.5px; color: #8899ae; font-weight: 600; }
+
+    .usr-ov-mod-active-count {
+        display: inline-flex; padding: 1px 7px; border-radius: 5px;
+        background: var(--fc-purple-lt); color: var(--fc-purple);
+        font-size: 9px; font-weight: 800; border: 1px solid #d0bfef;
+        margin-right: auto;
+    }
+
+    .usr-ov-perms-list { display: flex; flex-direction: column; gap: 0; }
+
+    .usr-ov-perm-row {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; padding: 10px 14px;
+        border-bottom: 1px solid #f0f5fb; transition: background .12s ease;
+    }
+    .usr-ov-perm-row:last-child { border-bottom: none; }
+    .usr-ov-perm-row:hover { background: #f8faff; }
+    .usr-ov-perm-row.ov-active { background: #f5f0ff; }
+
+    .usr-ov-perm-info { flex: 1; min-width: 0; }
+    .usr-ov-perm-name { font-size: 12px; font-weight: 700; color: #1c2b43; }
+    .usr-ov-perm-code { font-size: 9.5px; color: #9aaabb; font-family: "Inter", Arial, sans-serif; margin-top: 2px; }
+
+    .usr-ov-perm-select { display: flex; gap: 4px; flex-shrink: 0; }
+
+    .usr-ov-opt {
+        height: 28px; padding: 0 10px;
+        border: 1px solid #e4eaf3; border-radius: 6px;
+        background: #fafcff; color: #6b7d95;
+        font-family: inherit; font-size: 10px; font-weight: 700;
+        cursor: pointer; white-space: nowrap; transition: all .12s ease;
+    }
+    .usr-ov-opt:hover { border-color: #b0c4e0; color: var(--fc-text); }
+
+    .ov-opt-default-active { background: #f0f3f8; border-color: #c0ccd8; color: #5a6e88; font-weight: 800; }
+    .ov-opt-grant-active  { background: var(--fc-green-lt); border-color: #b0e0c5; color: var(--fc-green); font-weight: 800; }
+    .ov-opt-deny-active   { background: var(--fc-red-lt);   border-color: #ffc8cf; color: var(--fc-red);   font-weight: 800; }
+
+    .ov-footer-count {
+        margin-right: auto; font-size: 11px; color: var(--fc-muted); font-weight: 600;
+    }
+
+    /* Spinner */
+    .btn-spinner { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: usr-spin .7s linear infinite; }
+    .btn-spinner.sm { width: 13px; height: 13px; }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 900px) {
+        .usr-toolbar { flex-direction: column; align-items: stretch; }
+        .usr-search-wrap { max-width: 100%; }
+        .usr-results-badge { margin-right: 0; }
+        .usr-modal-grid { grid-template-columns: 1fr; }
+        .usr-role-grid { grid-template-columns: 1fr; }
+    }
+
+    @@media (max-width: 680px) {
+        .usr-body { padding: 10px 12px 24px; }
+        .usr-toolbar { padding: 10px 12px; }
+        .usr-avatar { display: none; }
+        .usr-status-toggle { flex-direction: column; }
+        .usr-modal-backdrop { padding: 10px; }
+        .usr-modal { border-radius: 16px; }
+        .usr-filter-group { flex-wrap: wrap; }
+    }
+
+    @@media (max-width: 480px) {
+        .usr-modal { border-radius: 14px; }
+        .usr-ov-perm-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+    }
+
+</style>
+
+
 @code {
-    // ═══════════════════════ الصلاحيات ═══════════════════════
     private AuthUser? _user;
-    private bool CanView   => _user?.Can("USER.VIEW") ?? false;
+    private bool CanView   => _user?.Can("USER.VIEW")   ?? false;
     private bool CanManage => _user?.Can("USER.MANAGE") ?? false;
 
-    // ═══════════════════════ البيانات ═══════════════════════
     private List<UserItem> _users = new();
     private List<RoleItem> _roles = new();
-    private bool _loading;
+    private bool   _loading;
     private string? _loadError;
     private string _search = "";
     private string _filter = "all";
-    private int? _confirmId;
+    private int?   _confirmId;
 
-    private bool _panelOpen;
-    private int? _editingId;
+    private bool    _panelOpen;
+    private int?    _editingId;
     private UserForm _form = new();
-    private bool _saving;
+    private bool    _saving;
     private string? _saveMsg;
-    private bool _saveOk;
+    private bool    _saveOk;
 
     private UserItem? _pwdFor;
-    private string _newPwd = "";
-    private string _newPwd2 = "";
-    private bool _savingPwd;
+    private string   _newPwd  = "";
+    private string   _newPwd2 = "";
+    private bool     _savingPwd;
 
-    // استثناءات الصلاحيات
-    private UserItem? _ovFor;
-    private bool _ovLoading;
-    private bool _ovSaving;
+    private UserItem?        _ovFor;
+    private bool             _ovLoading;
+    private bool             _ovSaving;
     private List<PermModule> _ovCatalog = new();
     private Dictionary<int, string> _ovState = new();
 
+    /* ── DTOs ── */
     public class UserItem
     {
-        public int Id { get; set; }
-        public string UserName { get; set; } = "";
-        public string FullName { get; set; } = "";
-        public string? Email { get; set; }
-        public bool IsActive { get; set; }
-        public string UserStatus { get; set; } = "";
+        public int       Id          { get; set; }
+        public string    UserName    { get; set; } = "";
+        public string    FullName    { get; set; } = "";
+        public string?   Email       { get; set; }
+        public bool      IsActive    { get; set; }
+        public string    UserStatus  { get; set; } = "";
         public DateTime? LastLoginAt { get; set; }
-        public string Roles { get; set; } = "";
+        public string    Roles       { get; set; } = "";
     }
 
     public class RoleItem
     {
-        public int Id { get; set; }
-        public string RoleCode { get; set; } = "";
-        public string NameAr { get; set; } = "";
-        public bool IsSystem { get; set; }
-        public bool IsActive { get; set; }
-        public int UserCount { get; set; }
+        public int    Id        { get; set; }
+        public string RoleCode  { get; set; } = "";
+        public string NameAr    { get; set; } = "";
+        public bool   IsSystem  { get; set; }
+        public bool   IsActive  { get; set; }
+        public int    UserCount { get; set; }
     }
 
     public class UserForm
     {
-        public string UserName { get; set; } = "";
-        public string Password { get; set; } = "";
-        public string FullName { get; set; } = "";
-        public string? Email { get; set; }
-        public bool IsActive { get; set; } = true;
+        public string  UserName { get; set; } = "";
+        public string  Password { get; set; } = "";
+        public string  FullName { get; set; } = "";
+        public string? Email    { get; set; }
+        public bool    IsActive { get; set; } = true;
         public List<int> RoleIds { get; set; } = new();
     }
 
     public class UserDetail
     {
-        public int Id { get; set; }
-        public string UserName { get; set; } = "";
-        public string FullName { get; set; } = "";
-        public string? Email { get; set; }
-        public bool IsActive { get; set; }
-        public List<int> RoleIds { get; set; } = new();
+        public int       Id       { get; set; }
+        public string    UserName { get; set; } = "";
+        public string    FullName { get; set; } = "";
+        public string?   Email    { get; set; }
+        public bool      IsActive { get; set; }
+        public List<int> RoleIds  { get; set; } = new();
     }
 
-    public class PermItem
-    {
-        public int PermissionId { get; set; }
-        public string PermissionCode { get; set; } = "";
-        public string NameAr { get; set; } = "";
-    }
+    public class PermItem   { public int PermissionId { get; set; } public string PermissionCode { get; set; } = ""; public string NameAr { get; set; } = ""; }
+    public class PermModule { public string ModuleCode { get; set; } = ""; public List<PermItem> Items { get; set; } = new(); }
+    public class OvDto      { public int PermissionId { get; set; } public int IsGranted { get; set; } public string? Notes { get; set; } }
 
-    public class PermModule
-    {
-        public string ModuleCode { get; set; } = "";
-        public List<PermItem> Items { get; set; } = new();
-    }
-
-    public class OvDto
-    {
-        public int PermissionId { get; set; }
-        public int IsGranted { get; set; }
-        public string? Notes { get; set; }
-    }
-
+    /* ── Filtered ── */
     private IEnumerable<UserItem> Filtered
     {
         get
@@ -485,10 +1574,11 @@
     {
         var parts = (u.FullName ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 0) return "?";
-        if (parts.Length == 1) return parts[0][0].ToString();
-        return $"{parts[0][0]}{parts[1][0]}";
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpper();
+        return $"{parts[0][0]}{parts[1][0]}".ToUpper();
     }
 
+    /* ── Init ── */
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
@@ -497,66 +1587,37 @@
 
     private async Task Reload() { await LoadAsync(); Snackbar.Add("تم تحديث القائمة", Severity.Success); }
 
-    private void OnSearch(string v) { _search = v; }
-
     private async Task LoadAsync()
     {
-        _loading = true;
-        _loadError = null;
+        _loading = true; _loadError = null;
         try
         {
             _users = await Http.GetFromJsonAsync<List<UserItem>>("api/users") ?? new();
             _roles = await Http.GetFromJsonAsync<List<RoleItem>>("api/roles") ?? new();
         }
-        catch (Exception ex)
-        {
-            _loadError = "فشل تحميل البيانات: " + ex.Message;
-        }
-        finally
-        {
-            _loading = false;
-        }
+        catch (Exception ex) { _loadError = "فشل تحميل البيانات: " + ex.Message; }
+        finally { _loading = false; }
     }
 
-    // ═══════════════════════ لوحة التعديل ═══════════════════════
-
+    /* ── Panel ── */
     private void NewUser()
     {
-        _editingId = null;
-        _form = new UserForm();
-        _saveMsg = null;
-        _panelOpen = true;
-        _pwdFor = null;
-        _ovFor = null;
-        _confirmId = null;
+        _editingId = null; _form = new UserForm(); _saveMsg = null;
+        _panelOpen = true; _pwdFor = null; _ovFor = null; _confirmId = null;
     }
 
     private async Task Edit(UserItem u)
     {
-        _saveMsg = null;
-        _pwdFor = null;
-        _ovFor = null;
-        _confirmId = null;
+        _saveMsg = null; _pwdFor = null; _ovFor = null; _confirmId = null;
         try
         {
             var d = await Http.GetFromJsonAsync<UserDetail>($"api/users/{u.Id}");
             if (d is null) { Snackbar.Add("فشل تحميل المستخدم", Severity.Error); return; }
-
             _editingId = d.Id;
-            _form = new UserForm
-            {
-                UserName = d.UserName,
-                FullName = d.FullName,
-                Email    = d.Email,
-                IsActive = d.IsActive,
-                RoleIds  = d.RoleIds
-            };
+            _form = new UserForm { UserName = d.UserName, FullName = d.FullName, Email = d.Email, IsActive = d.IsActive, RoleIds = d.RoleIds };
             _panelOpen = true;
         }
-        catch (Exception ex)
-        {
-            Snackbar.Add("فشل تحميل المستخدم: " + ex.Message, Severity.Error);
-        }
+        catch (Exception ex) { Snackbar.Add("فشل تحميل المستخدم: " + ex.Message, Severity.Error); }
     }
 
     private void ToggleRole(int id, bool v)
@@ -570,7 +1631,6 @@
     private async Task SaveAsync()
     {
         _saveMsg = null;
-
         if (string.IsNullOrWhiteSpace(_form.FullName))
         { _saveOk = false; _saveMsg = "الاسم الكامل مطلوب"; return; }
 
@@ -585,51 +1645,30 @@
 
                 res = await Http.PostAsJsonAsync("api/users", new
                 {
-                    userName = _form.UserName.Trim(),
-                    password = _form.Password,
-                    fullName = _form.FullName.Trim(),
-                    email    = _form.Email,
-                    branchId = (int?)null,
-                    roleIds  = _form.RoleIds
+                    userName = _form.UserName.Trim(), password = _form.Password,
+                    fullName = _form.FullName.Trim(), email = _form.Email,
+                    branchId = (int?)null, roleIds = _form.RoleIds
                 });
             }
             else
             {
                 res = await Http.PutAsJsonAsync($"api/users/{_editingId}", new
                 {
-                    fullName   = _form.FullName.Trim(),
-                    email      = _form.Email,
-                    branchId   = (int?)null,
-                    isActive   = _form.IsActive,
+                    fullName = _form.FullName.Trim(), email = _form.Email,
+                    branchId = (int?)null, isActive = _form.IsActive,
                     userStatus = _form.IsActive ? "Active" : "Inactive",
-                    roleIds    = _form.RoleIds
+                    roleIds = _form.RoleIds
                 });
             }
 
-            var msg = await MsgOf(res);
-            _saveOk = res.IsSuccessStatusCode;
-            _saveMsg = msg;
-
-            if (res.IsSuccessStatusCode)
-            {
-                Snackbar.Add(msg, Severity.Success);
-                ClosePanel();
-                await LoadAsync();
-            }
+            var msg = await MsgOf(res); _saveOk = res.IsSuccessStatusCode; _saveMsg = msg;
+            if (res.IsSuccessStatusCode) { Snackbar.Add(msg, Severity.Success); ClosePanel(); await LoadAsync(); }
         }
-        catch (Exception ex)
-        {
-            _saveOk = false;
-            _saveMsg = "مش قادر أوصل للسيرفر: " + ex.Message;
-        }
-        finally
-        {
-            _saving = false;
-        }
+        catch (Exception ex) { _saveOk = false; _saveMsg = "مش قادر أوصل للسيرفر: " + ex.Message; }
+        finally { _saving = false; }
     }
 
-    // ═══════════════════════ تعطيل ═══════════════════════
-
+    /* ── Disable ── */
     private async Task Disable(UserItem u)
     {
         try
@@ -640,76 +1679,43 @@
             _confirmId = null;
             if (res.IsSuccessStatusCode) await LoadAsync();
         }
-        catch (Exception ex)
-        {
-            Snackbar.Add("فشل التعطيل: " + ex.Message, Severity.Error);
-        }
+        catch (Exception ex) { Snackbar.Add("فشل التعطيل: " + ex.Message, Severity.Error); }
     }
 
-    // ═══════════════════════ كلمة المرور ═══════════════════════
-
-    private void OpenPwd(UserItem u)
-    {
-        _pwdFor = u;
-        _newPwd = _newPwd2 = "";
-        _panelOpen = false;
-        _ovFor = null;
-        _confirmId = null;
-    }
+    /* ── Password ── */
+    private void OpenPwd(UserItem u) { _pwdFor = u; _newPwd = _newPwd2 = ""; _panelOpen = false; _ovFor = null; _confirmId = null; }
 
     private async Task SavePwdAsync()
     {
         if (_pwdFor is null) return;
-
-        if (_newPwd.Length < 8)
-        { Snackbar.Add("كلمة المرور لازم تكون 8 حروف على الأقل", Severity.Error); return; }
-        if (_newPwd != _newPwd2)
-        { Snackbar.Add("التأكيد مش مطابق", Severity.Error); return; }
+        if (_newPwd.Length < 8)  { Snackbar.Add("كلمة المرور لازم تكون 8 حروف على الأقل", Severity.Error); return; }
+        if (_newPwd != _newPwd2) { Snackbar.Add("التأكيد مش مطابق", Severity.Error); return; }
 
         _savingPwd = true;
         try
         {
-            var res = await Http.PostAsJsonAsync($"api/users/{_pwdFor.Id}/reset-password",
-                new { newPassword = _newPwd });
+            var res = await Http.PostAsJsonAsync($"api/users/{_pwdFor.Id}/reset-password", new { newPassword = _newPwd });
             var msg = await MsgOf(res);
             Snackbar.Add(msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
             if (res.IsSuccessStatusCode) _pwdFor = null;
         }
-        catch (Exception ex)
-        {
-            Snackbar.Add("فشل التعيين: " + ex.Message, Severity.Error);
-        }
-        finally
-        {
-            _savingPwd = false;
-        }
+        catch (Exception ex) { Snackbar.Add("فشل التعيين: " + ex.Message, Severity.Error); }
+        finally { _savingPwd = false; }
     }
 
-    // ═══════════════════════ الاستثناءات ═══════════════════════
-
+    /* ── Overrides ── */
     private async Task OpenOverrides(UserItem u)
     {
-        _ovFor = u;
-        _panelOpen = false;
-        _pwdFor = null;
-        _confirmId = null;
-        _ovLoading = true;
-        _ovState = new();
+        _ovFor = u; _panelOpen = false; _pwdFor = null; _confirmId = null;
+        _ovLoading = true; _ovState = new();
         try
         {
             _ovCatalog = await Http.GetFromJsonAsync<List<PermModule>>("api/permissions") ?? new();
             var current = await Http.GetFromJsonAsync<List<OvDto>>($"api/users/{u.Id}/permissions") ?? new();
-            foreach (var o in current)
-                _ovState[o.PermissionId] = o.IsGranted != 0 ? "grant" : "deny";
+            foreach (var o in current) _ovState[o.PermissionId] = o.IsGranted != 0 ? "grant" : "deny";
         }
-        catch (Exception ex)
-        {
-            Snackbar.Add("فشل تحميل الصلاحيات: " + ex.Message, Severity.Error);
-        }
-        finally
-        {
-            _ovLoading = false;
-        }
+        catch (Exception ex) { Snackbar.Add("فشل تحميل الصلاحيات: " + ex.Message, Severity.Error); }
+        finally { _ovLoading = false; }
     }
 
     private string OvState(int pid) => _ovState.TryGetValue(pid, out var s) ? s : "default";
@@ -738,18 +1744,11 @@
             Snackbar.Add(msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
             if (res.IsSuccessStatusCode) _ovFor = null;
         }
-        catch (Exception ex)
-        {
-            Snackbar.Add("فشل الحفظ: " + ex.Message, Severity.Error);
-        }
-        finally
-        {
-            _ovSaving = false;
-        }
+        catch (Exception ex) { Snackbar.Add("فشل الحفظ: " + ex.Message, Severity.Error); }
+        finally { _ovSaving = false; }
     }
 
-    // ═══════════════════════ helpers ═══════════════════════
-
+    /* ── Helpers ── */
     private static async Task<string> MsgOf(HttpResponseMessage res)
     {
         try
@@ -760,9 +1759,6 @@
             if (doc.TryGetProperty("message", out var m)) return m.GetString() ?? body;
             return body;
         }
-        catch
-        {
-            return res.IsSuccessStatusCode ? "تم" : $"خطأ HTTP {(int)res.StatusCode}";
-        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ HTTP {(int)res.StatusCode}"; }
     }
 }

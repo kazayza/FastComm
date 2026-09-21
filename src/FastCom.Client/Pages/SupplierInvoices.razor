@@ -9,6 +9,7 @@
 
 <PageTitle>فواتير الموردين — فاست كوم</PageTitle>
 
+
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
@@ -18,172 +19,1083 @@
                 <p class="fc-hero-sub">اللي علينا للموردين — مسودة، اعتماد، دفع، أعمار ديون</p>
             </div>
             <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
+                               OnClick="Reload" Style="color:#9FB4CC" />
                 @if (CanCreate)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="New">فاتورة مورد جديدة</MudButton>
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="New">فاتورة مورد جديدة</MudButton>
                 }
             </div>
         </div>
+
         @if (CanView)
         {
             <div class="fc-kpis fc-kpis-glass">
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.ReceiptLong" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">عدد الفواتير</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" /></div>
-                    <div><div class="fc-kpi-num">@Money(OpenTotal)</div><div class="fc-kpi-lb">المتبقي للموردين</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
-                    <div><div class="fc-kpi-num">@OverdueCount</div><div class="fc-kpi-lb">فاتورة متأخرة</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Payments" /></div>
-                    <div><div class="fc-kpi-num">@Money(PaidTotal)</div><div class="fc-kpi-lb">مدفوع</div></div></div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.ReceiptLong" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">عدد الفواتير</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" /></div>
+                    <div><div class="fc-kpi-num">@Money(OpenTotal)</div><div class="fc-kpi-lb">المتبقي للموردين</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
+                    <div><div class="fc-kpi-num">@OverdueCount</div><div class="fc-kpi-lb">فاتورة متأخرة</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Payments" /></div>
+                    <div><div class="fc-kpi-num">@Money(PaidTotal)</div><div class="fc-kpi-lb">مدفوع</div></div>
+                </div>
             </div>
         }
     </div>
 </div>
 
-<div class="fc-page">
+
+<div class="si-body">
+
     @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض فواتير الموردين.</MudAlert>
+        <div class="si-state-box">
+            <div class="si-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليس لديك صلاحية عرض فواتير الموردين</p>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
-            <div class="fc-toolbar">
-                <div class="fc-filters">
-                    @foreach (var t in Tabs)
+        <div class="si-card">
+
+            @* ── Toolbar ── *@
+            <div class="si-toolbar">
+
+                <div class="si-search-wrap">
+                    <svg class="si-search-icon" viewBox="0 0 24 24" width="16" height="16"
+                         fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                    </svg>
+                    <input class="si-search-input"
+                           placeholder="ابحث بالرقم أو المورد..."
+                           @bind="_search" @bind:event="oninput"
+                           aria-label="بحث" />
+                    @if (!string.IsNullOrWhiteSpace(_search))
                     {
-                        <button class='fc-filter @(_tab == t.Key ? "on" : "")' @onclick="() => SetTab(t.Key)">@t.Value</button>
+                        <button class="si-search-clear" @onclick="() => _search = string.Empty">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
                     }
                 </div>
-                <select class="fc-sel" style="max-width:220px" @bind="_supFilter">
-                    <option value="">كل الموردين</option>
-                    @foreach (var s in _suppliers)
-                    {
-                        <option value="@s.Id">@s.Label</option>
-                    }
-                </select>
-                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
-                              Placeholder="ابحث بالرقم أو المورد..." Variant="Variant.Outlined" Dense="true"
-                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                              Class="fc-search-box" Immediate="true" />
-                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+
+                @* Supplier Filter *@
+                <div class="si-sup-filter-wrap">
+                    <svg class="si-sup-icon" viewBox="0 0 24 24" width="13" height="13"
+                         fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                        <path d="M9 22V12h6v10"/>
+                    </svg>
+                    <select class="si-sup-select" @bind="_supFilter">
+                        <option value="">كل الموردين</option>
+                        @foreach (var s in _suppliers)
+                        {
+                            <option value="@s.Id">@s.Label</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="si-results-badge">
+                    عرض <strong>@Filtered.Count()</strong> من <strong>@_items.Count</strong>
+                </div>
+
             </div>
 
-            @if (_loading)
+
+            @* ── Status Tabs ── *@
+            <div class="si-status-bar">
+                <div class="si-status-tabs" role="group" aria-label="فلتر الحالة">
+                    @foreach (var t in _statusTabs)
+                    {
+                        var cnt = t.Key == "all"
+                            ? _items.Count
+                            : _items.Count(x => x.Status == t.Key);
+
+                        <button class="si-status-tab @(_tab == t.Key ? "active" : "")"
+                                @onclick="() => SetTab(t.Key)"
+                                aria-pressed="@(_tab == t.Key)">
+                            <span class="si-tab-dot @StatusDotColor(t.Key)" aria-hidden="true"></span>
+                            <span>@t.Value</span>
+                            <span class="si-tab-count">@cnt</span>
+                        </button>
+                    }
+                </div>
+
+                @* Overdue Warning Strip *@
+                @if (OverdueCount > 0)
+                {
+                    <div class="si-overdue-strip" role="status">
+                        <svg viewBox="0 0 24 24" width="14" height="14"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                            <path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
+                        </svg>
+                        <span><strong>@OverdueCount</strong> فاتورة عدى ميعاد سدادها</span>
+                    </div>
+                }
+            </div>
+
+
+            @* ── Banner ── *@
+            @if (_msg is not null)
             {
-                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
-            }
-            else if (_msg is not null)
-            {
-                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
+                <div class="si-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                    <span>@_msg</span>
+                    <button class="banner-close" @onclick="() => _msg = null">✕</button>
+                </div>
             }
 
-            @if (!_loading && Filtered.Count() == 0)
+
+            @* ── Content ── *@
+            @if (_loading)
             {
-                <div class="fc-empty">مافيش فواتير مطابقة — اعمل فاتورة مورد جديدة</div>
+                <div class="si-loading">
+                    <div class="si-spinner" aria-label="جاري التحميل"></div>
+                    <span>جاري تحميل الفواتير...</span>
+                </div>
             }
-            else if (!_loading)
+            else if (!Filtered.Any())
             {
-                <div class="fc-table-wrap"><table class="fc-table fc-table-pro2">
-                    <thead><tr>
-                        <th>رقم الفاتورة</th><th>المورد</th><th>التاريخ</th><th>الاستحقاق</th>
-                        <th>الإجمالي</th><th>مدفوع</th><th>المتبقي</th>
-                        <th>الحالة</th><th>الدفع</th><th style="width:120px"></th>
-                    </tr></thead>
-                    <tbody>
-                        @foreach (var i in Filtered)
-                        {
+                <div class="si-empty">
+                    <div class="si-empty-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="42" height="42"
+                             fill="none" stroke="currentColor" stroke-width="1.4">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="si-empty-title">
+                        @(string.IsNullOrWhiteSpace(_search) && _tab == "all"
+                            ? "لا توجد فواتير موردين"
+                            : "لا توجد نتائج")
+                    </div>
+                    <div class="si-empty-sub">
+                        @(string.IsNullOrWhiteSpace(_search) && _tab == "all"
+                            ? "سجّل أول فاتورة مورد"
+                            : "جرّب فلتر مختلف")
+                    </div>
+                    @if (CanCreate && string.IsNullOrWhiteSpace(_search) && _tab == "all")
+                    {
+                        <button class="si-add-btn" @onclick="New">
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2.5"
+                                 aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                            فاتورة مورد جديدة
+                        </button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="si-table-wrap">
+                    <table class="si-table" aria-label="قائمة فواتير الموردين">
+                        <thead>
                             <tr>
-                                <td><span class="fc-chip fc-chip-blue">@i.SupplierInvoiceNumber</span></td>
-                                <td class="fc-cell-main">@i.SupplierName</td>
-                                <td class="fc-cell-sub">@i.InvoiceDate</td>
-                                <td class="@DueCls(i)">@i.DueDate ?? "—"</td>
-                                <td>@Money(i.GrandTotal)</td>
-                                <td>@Money(i.PaidAmount)</td>
-                                <td class="is-neg"><b>@Money(i.Balance)</b></td>
-                                <td><span class="fc-chip @StatusChip(i.Status)">@StatusAr(i.Status)</span></td>
-                                <td><span class="fc-chip @PayChip(i.PaymentStatus)">@PayAr(i.PaymentStatus)</span></td>
-                                <td>
-                                    @if (CanEdit && i.Status == "Draft")
-                                    {
-                                        <MudIconButton Size="Size.Small" title="تعديل"
-                                                       Icon="@Icons.Material.Filled.Edit" Color="Color.Primary"
-                                                       OnClick="() => Edit(i)" />
-                                        <MudIconButton Size="Size.Small" title="اعتماد"
-                                                       Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"
-                                                       OnClick="() => Approve(i)" />
-                                    }
-                                    @if (CanEdit && i.Status != "Cancelled" && i.Status != "Paid" && i.PaidAmount <= 0)
-                                    {
-                                        <MudIconButton Size="Size.Small" title="إلغاء"
-                                                       Icon="@Icons.Material.Filled.Close"
-                                                       OnClick="() => AskCancel(i)" />
-                                    }
-                                </td>
+                                <th scope="col" class="th-start">الفاتورة</th>
+                                <th scope="col">التاريخ</th>
+                                <th scope="col">الاستحقاق</th>
+                                <th scope="col">المبالغ</th>
+                                <th scope="col">التحصيل</th>
+                                <th scope="col">الحالة</th>
+                                <th scope="col">الدفع</th>
+                                @if (CanEdit)
+                                {
+                                    <th scope="col" style="width:120px">إجراءات</th>
+                                }
                             </tr>
-                        }
-                    </tbody>
-                </table></div>
+                        </thead>
+                        <tbody>
+                            @foreach (var i in Filtered)
+                            {
+                                var isOverdue = i.Balance > 0 && IsOverdue(i.DueDate);
+                                var paidPct   = i.GrandTotal > 0
+                                    ? (double)(i.PaidAmount / i.GrandTotal * 100)
+                                    : 0;
+
+                                <tr class="@(i.Status == "Cancelled" ? "row-cancelled" : "")
+                                           @(isOverdue ? "row-overdue" : "")">
+
+                                    @* ── الفاتورة ── *@
+                                    <td class="td-start">
+                                        <div class="si-inv-cell">
+                                            <div class="si-avatar @AvatarClass(i.Status)"
+                                                 aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                                                </svg>
+                                            </div>
+                                            <div class="si-inv-info">
+                                                <div class="si-inv-num">
+                                                    <span class="si-code-chip">@i.SupplierInvoiceNumber</span>
+                                                    @if (isOverdue)
+                                                    {
+                                                        <span class="si-overdue-badge" title="متأخرة">⚠️</span>
+                                                    }
+                                                </div>
+                                                <div class="si-supplier-name">@i.SupplierName</div>
+                                                @if (!string.IsNullOrWhiteSpace(i.SupplierRefNumber))
+                                                {
+                                                    <div class="si-ref-tag">مرجع @i.SupplierRefNumber</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    @* ── التاريخ ── *@
+                                    <td class="td-muted">
+                                        <div class="si-date-cell">
+                                            <svg viewBox="0 0 16 16" width="10" height="10"
+                                                 fill="none" stroke="currentColor" stroke-width="1.7"
+                                                 aria-hidden="true">
+                                                <rect x="2" y="3" width="12" height="11" rx="2"/>
+                                                <path d="M5 1v3M11 1v3M2 7h12" stroke-linecap="round"/>
+                                            </svg>
+                                            @i.InvoiceDate
+                                        </div>
+                                    </td>
+
+                                    @* ── الاستحقاق ── *@
+                                    <td>
+                                        @if (i.DueDate is not null)
+                                        {
+                                            <div class="si-date-cell @(isOverdue ? "due-late" : "")">
+                                                <svg viewBox="0 0 16 16" width="10" height="10"
+                                                     fill="none" stroke="currentColor" stroke-width="1.7"
+                                                     aria-hidden="true">
+                                                    <circle cx="8" cy="8" r="6"/>
+                                                    <path d="M8 5v3l2 2" stroke-linecap="round"/>
+                                                </svg>
+                                                @i.DueDate
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="td-muted">—</span>
+                                        }
+                                    </td>
+
+                                    @* ── المبالغ ── *@
+                                    <td>
+                                        <div class="si-amounts-cell">
+                                            <div class="si-grand-total">@Money(i.GrandTotal)</div>
+                                            @if (i.TaxTotal > 0)
+                                            {
+                                                <div class="si-tax-sub">+ ضريبة @Money(i.TaxTotal)</div>
+                                            }
+                                        </div>
+                                    </td>
+
+                                    @* ── التحصيل ── *@
+                                    <td>
+                                        <div class="si-collection-cell">
+                                            <div class="si-col-bar">
+                                                <div class="si-col-fill @(i.PaymentStatus == "Paid" ? "fill-paid" : i.PaymentStatus == "PartiallyPaid" ? "fill-partial" : "fill-unpaid")"
+                                                     style="width:@Math.Min(paidPct, 100)%"></div>
+                                            </div>
+                                            <div class="si-col-nums">
+                                                <span class="si-paid-amt">@Money(i.PaidAmount)</span>
+                                                @if (i.Balance > 0)
+                                                {
+                                                    <span class="si-balance-badge">@Money(i.Balance) متبقي</span>
+                                                }
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    @* ── الحالة ── *@
+                                    <td>
+                                        <span class="si-chip @StatusChipClass(i.Status)">
+                                            <span class="si-chip-dot @StatusDotClass(i.Status)"
+                                                  aria-hidden="true"></span>
+                                            @StatusAr(i.Status)
+                                        </span>
+                                    </td>
+
+                                    @* ── الدفع ── *@
+                                    <td>
+                                        <span class="si-chip @PayChipClass(i.PaymentStatus)">
+                                            <span class="si-chip-dot @PayDotClass(i.PaymentStatus)"
+                                                  aria-hidden="true"></span>
+                                            @PayAr(i.PaymentStatus)
+                                        </span>
+                                    </td>
+
+                                    @* ── إجراءات ── *@
+                                    @if (CanEdit)
+                                    {
+                                        <td>
+                                            <div class="si-actions">
+
+                                                @if (i.Status == "Draft")
+                                                {
+                                                    <button class="si-act-btn act-edit"
+                                                            @onclick="() => Edit(i)"
+                                                            title="تعديل"
+                                                            aria-label="تعديل @i.SupplierInvoiceNumber">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                        </svg>
+                                                    </button>
+
+                                                    <button class="si-act-btn act-approve"
+                                                            @onclick="() => Approve(i)"
+                                                            title="اعتماد"
+                                                            aria-label="اعتماد @i.SupplierInvoiceNumber"
+                                                            disabled="@_busy">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M9 12l2 2 4-4"/>
+                                                            <circle cx="12" cy="12" r="10"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+
+                                                @if (i.Status != "Cancelled" && i.Status != "Paid" && i.PaidAmount <= 0)
+                                                {
+                                                    <button class="si-act-btn act-cancel"
+                                                            @onclick="() => AskCancel(i)"
+                                                            title="إلغاء"
+                                                            aria-label="إلغاء @i.SupplierInvoiceNumber">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <circle cx="12" cy="12" r="10"/>
+                                                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+
+                                            </div>
+                                        </td>
+                                    }
+
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
-        </div></div>
+
+        </div>
     }
 </div>
 
-@* ══════════ Modal: تأكيد الإلغاء ══════════ *@
+
+@* ═══════════════════════════════════════════
+   MODAL — تأكيد الإلغاء
+═══════════════════════════════════════════ *@
 @if (_cancelTarget is not null)
 {
-    <div class="fc-modal-backdrop" @onclick="() => _cancelTarget = null">
-        <div class="fc-modal fc-modal-sm" @onclick:stopPropagation="true">
-            <div class="fc-modal-head">
-                <div>
-                    <div class="fc-modal-title">إلغاء فاتورة مورد</div>
-                    <div class="fc-modal-sub">@_cancelTarget.SupplierInvoiceNumber</div>
+    <div class="si-modal-backdrop" @onclick="() => _cancelTarget = null"
+         role="dialog" aria-modal="true" aria-label="تأكيد إلغاء الفاتورة">
+        <div class="si-modal" @onclick:stopPropagation="true">
+
+            <div class="si-modal-head">
+                <div class="si-modal-icon cancel-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                    </svg>
                 </div>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _cancelTarget = null" />
+                <div>
+                    <div class="si-modal-title">إلغاء فاتورة مورد</div>
+                    <div class="si-modal-sub">@_cancelTarget.SupplierInvoiceNumber · @_cancelTarget.SupplierName</div>
+                </div>
+                <button class="si-modal-close" @onclick="() => _cancelTarget = null" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
             </div>
-            <div class="fc-modal-body">
-                <div class="fc-alert fc-alert-warn">
-                    <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
-                    <div class="fc-alert-body">
-                        <div class="fc-alert-title">اتأكد من الإلغاء</div>
-                        <div>الفاتورة هتخرج من حساب المتبقي على المورد. الإجراء مايتراجعش.</div>
+
+            <div class="si-modal-body">
+
+                @* Invoice Summary *@
+                <div class="si-cancel-summary">
+                    <div class="si-cs-item">
+                        <div class="si-cs-label">الإجمالي</div>
+                        <div class="si-cs-val">@Money(_cancelTarget.GrandTotal) ج.م</div>
+                    </div>
+                    <div class="si-cs-sep" aria-hidden="true"></div>
+                    <div class="si-cs-item">
+                        <div class="si-cs-label">المتبقي</div>
+                        <div class="si-cs-val balance-val">@Money(_cancelTarget.Balance) ج.م</div>
+                    </div>
+                    <div class="si-cs-sep" aria-hidden="true"></div>
+                    <div class="si-cs-item">
+                        <div class="si-cs-label">الحالة</div>
+                        <div class="si-cs-val">@StatusAr(_cancelTarget.Status)</div>
                     </div>
                 </div>
+
+                <div class="si-cancel-warn" role="alert">
+                    <svg viewBox="0 0 24 24" width="20" height="20"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         aria-hidden="true">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                        <path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
+                    </svg>
+                    <div>
+                        <strong>اتأكد من الإلغاء ⚠️</strong>
+                        <p>الفاتورة هتخرج من حساب المتبقي على المورد — الإجراء مايتراجعش</p>
+                    </div>
+                </div>
+
             </div>
-            <div class="fc-modal-foot">
-                <MudButton Variant="Variant.Outlined" OnClick="() => _cancelTarget = null">رجوع</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="_busy"
-                           OnClick="DoCancel">تأكيد الإلغاء</MudButton>
+
+            <div class="si-modal-foot">
+                <button class="si-modal-cancel-btn" @onclick="() => _cancelTarget = null">رجوع</button>
+                <button class="si-modal-confirm-btn"
+                        @onclick="DoCancel"
+                        disabled="@_busy">
+                    @if (_busy)
+                    {
+                        <span class="btn-spinner sm" aria-hidden="true"></span>
+                        <span>جاري الإلغاء...</span>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="15" height="15"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                        </svg>
+                        <span>تأكيد الإلغاء</span>
+                    }
+                </button>
             </div>
+
         </div>
     </div>
 }
 
+
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-teal:      #0d9488;
+        --fc-teal-lt:   #e6faf8;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    .si-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 200px);
+        padding: 16px 20px 32px;
+        max-width: 1400px; width: 100%;
+        margin: 0 auto;
+    }
+
+    /* State */
+    .si-state-box {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .si-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .si-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+    .si-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .si-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    /* Card */
+    .si-card {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden;
+    }
+
+    /* ================================================================
+       TOOLBAR
+    ================================================================ */
+    .si-toolbar {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7; flex-wrap: wrap;
+    }
+
+    .si-search-wrap {
+        position: relative; display: flex; align-items: center;
+        flex: 1; min-width: 200px; max-width: 380px;
+    }
+    .si-search-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; }
+    .si-search-input {
+        width: 100%; height: 38px; padding: 0 36px 0 12px;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .si-search-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .si-search-input::placeholder { color: #b0bcc8; }
+    .si-search-clear {
+        position: absolute; left: 10px;
+        display: flex; align-items: center; justify-content: center;
+        width: 22px; height: 22px; border-radius: 50%;
+        border: none; background: #edf1f7; color: #8899ae; cursor: pointer;
+    }
+
+    .si-sup-filter-wrap {
+        position: relative; display: flex; align-items: center;
+        min-width: 160px; max-width: 220px;
+    }
+    .si-sup-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; z-index: 1; }
+    .si-sup-select {
+        width: 100%; height: 38px; padding: 0 32px 0 10px;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; outline: none; cursor: pointer;
+        -webkit-appearance: none; appearance: none;
+        transition: border-color .15s ease;
+    }
+    .si-sup-select:focus { border-color: var(--fc-blue); }
+
+    .si-results-badge {
+        display: flex; align-items: center; gap: 5px;
+        margin-right: auto; font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap;
+    }
+    .si-results-badge strong { color: #5a6e88; }
+
+    /* ================================================================
+       STATUS BAR
+    ================================================================ */
+    .si-status-bar {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; padding: 10px 18px;
+        background: #f9fafd; border-bottom: 1px solid #edf1f7;
+        overflow-x: auto; flex-wrap: wrap;
+    }
+
+    .si-status-tabs { display: flex; gap: 4px; padding: 3px; border-radius: 10px; background: #f0f3f8; }
+
+    .si-status-tab {
+        display: flex; align-items: center; gap: 5px;
+        height: 32px; padding: 0 10px;
+        border: none; border-radius: 7px;
+        background: transparent; color: #6b7d95;
+        font-family: inherit; font-size: 10.5px; font-weight: 700;
+        cursor: pointer; white-space: nowrap; transition: all .15s ease;
+    }
+    .si-status-tab:hover:not(.active) { color: var(--fc-text); background: rgba(255,255,255,.6); }
+    .si-status-tab.active { background: var(--fc-card); color: var(--fc-text); box-shadow: 0 1px 4px rgba(15,41,82,.10); font-weight: 800; }
+
+    .si-tab-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px; }
+
+    .si-tab-count {
+        min-width: 16px; height: 16px; border-radius: 4px; padding: 0 3px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 9px; font-weight: 900; font-family: "Inter", Arial, sans-serif;
+    }
+    .si-status-tab.active .si-tab-count { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .si-status-tab:not(.active) .si-tab-count { background: #e4eaf3; color: #8899ae; }
+
+    /* Dots */
+    .sdot-all       { background: var(--fc-blue); }
+    .sdot-draft     { background: #9aaabb; }
+    .sdot-approved  { background: var(--fc-blue); }
+    .sdot-partial   { background: var(--fc-amber); }
+    .sdot-paid      { background: var(--fc-green); }
+    .sdot-cancelled { background: var(--fc-red); }
+
+    /* Overdue Strip */
+    .si-overdue-strip {
+        display: flex; align-items: center; gap: 6px;
+        padding: 4px 10px; border-radius: 7px;
+        background: var(--fc-red-lt); border: 1px solid #ffc8cf;
+        color: var(--fc-red); font-size: 11px; font-weight: 700;
+        flex-shrink: 0;
+    }
+
+    /* Banner */
+    .si-banner {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px; padding: 10px 18px; font-size: 12px; font-weight: 600;
+    }
+    .banner-close { background: none; border: none; cursor: pointer; opacity: .6; }
+    .banner-success { background: #e9f8f0; color: #0e7a43; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); }
+
+    /* ================================================================
+       LOADING / EMPTY
+    ================================================================ */
+    .si-loading {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 200px; color: var(--fc-muted); font-size: 12px; font-weight: 600;
+    }
+    .si-spinner {
+        width: 32px; height: 32px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: si-spin .75s linear infinite;
+    }
+    @@keyframes si-spin { to { transform: rotate(360deg); } }
+
+    .si-empty {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 10px; min-height: 240px; padding: 40px; text-align: center;
+    }
+    .si-empty-icon { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #f0f4fa; color: #b0c4d8; }
+    .si-empty-title { font-size: 15px; font-weight: 800; color: var(--fc-text); }
+    .si-empty-sub   { font-size: 12px; color: var(--fc-muted); }
+
+    .si-add-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 16px; margin-top: 6px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; transition: all .15s ease;
+    }
+    .si-add-btn:hover { background: var(--fc-blue); color: #fff; }
+
+    /* ================================================================
+       TABLE
+    ================================================================ */
+    .si-table-wrap { overflow-x: auto; }
+    .si-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+
+    .si-table thead th {
+        padding: 10px 12px;
+        background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 10.5px; font-weight: 800;
+        text-align: center; border-bottom: 2px solid #e4eaf3;
+        white-space: nowrap; position: sticky; top: 0; z-index: 1;
+    }
+    .si-table .th-start { text-align: right; }
+
+    .si-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background .12s ease; }
+    .si-table tbody tr:last-child { border-bottom: none; }
+    .si-table tbody tr:hover { background: #fafcff; }
+    .si-table tbody tr.row-cancelled { opacity: .55; }
+    .si-table tbody tr.row-overdue { background: #fffbf5; }
+
+    .si-table tbody td { padding: 11px 12px; color: #526070; text-align: center; vertical-align: middle; }
+    .td-start { text-align: right !important; }
+    .td-muted  { color: #8899ae; font-size: 11px; }
+
+    /* Invoice Cell */
+    .si-inv-cell { display: flex; align-items: flex-start; gap: 10px; }
+
+    .si-avatar {
+        width: 36px; height: 36px; flex: 0 0 36px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.10); margin-top: 2px;
+    }
+
+    .av-draft     { background: linear-gradient(135deg, #7a8a9a, #5c6e80); }
+    .av-approved  { background: linear-gradient(135deg, #1558d6, #1e6ef5); }
+    .av-partial   { background: linear-gradient(135deg, #b87d08, #e09a10); }
+    .av-paid      { background: linear-gradient(135deg, #0d8a48, #16a35b); }
+    .av-cancelled { background: linear-gradient(135deg, #b02040, #e03048); }
+
+    .si-inv-info { min-width: 0; }
+
+    .si-inv-num { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+    .si-code-chip {
+        display: inline-flex; padding: 2px 8px; border-radius: 6px;
+        background: #f0f4fa; border: 1px solid #e0e8f4;
+        font-size: 10.5px; font-weight: 800; color: var(--fc-blue);
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .si-overdue-badge { font-size: 13px; flex: 0 0 auto; }
+
+    .si-supplier-name { font-size: 12px; font-weight: 700; color: #344563; margin-top: 3px; }
+
+    .si-ref-tag { font-size: 9.5px; color: #9aaabb; margin-top: 2px; }
+
+    /* Date */
+    .si-date-cell { display: flex; align-items: center; gap: 4px; justify-content: center; font-size: 11px; color: #6b7d95; }
+    .si-date-cell.due-late { color: var(--fc-red); font-weight: 700; }
+
+    /* Amounts */
+    .si-amounts-cell { text-align: center; }
+    .si-grand-total { font-family: "Inter", Arial, sans-serif; font-size: 13px; font-weight: 900; color: var(--fc-text); }
+    .si-tax-sub { font-size: 9.5px; color: #9aaabb; margin-top: 2px; }
+
+    /* Collection */
+    .si-collection-cell { display: flex; flex-direction: column; gap: 5px; align-items: center; }
+    .si-col-bar { width: 80px; height: 5px; border-radius: 4px; background: #e4eaf3; overflow: hidden; }
+    .si-col-fill { height: 100%; border-radius: inherit; transition: width .4s ease; }
+    .fill-paid    { background: linear-gradient(90deg, #34d399, #10b981); }
+    .fill-partial { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+    .fill-unpaid  { background: #e4eaf3; width: 0% !important; }
+
+    .si-col-nums { display: flex; align-items: center; gap: 6px; }
+    .si-paid-amt { font-size: 10px; color: #8899ae; font-weight: 600; font-family: "Inter", Arial, sans-serif; }
+
+    .si-balance-badge {
+        display: inline-flex; padding: 2px 7px; border-radius: 6px;
+        background: var(--fc-red-lt); color: var(--fc-red);
+        font-size: 9.5px; font-weight: 800; border: 1px solid #ffc8cf;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    /* Chips */
+    .si-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 7px; font-size: 10.5px; font-weight: 800; white-space: nowrap; }
+    .si-chip-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
+
+    /* Status */
+    .chip-s-draft    { background: #f0f3f8; color: #6b7d95; border: 1px solid #dde5f0; }
+    .chip-s-approved { background: var(--fc-blue-lt);  color: var(--fc-blue);  border: 1px solid #c0d4fb; }
+    .chip-s-partial  { background: var(--fc-amber-lt); color: #9a6d08;         border: 1px solid #f0d898; }
+    .chip-s-paid     { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .chip-s-cancelled { background: var(--fc-red-lt);  color: var(--fc-red);   border: 1px solid #ffc8cf; }
+
+    .sdotc-draft    { background: #9aaabb; }
+    .sdotc-approved { background: var(--fc-blue); }
+    .sdotc-partial  { background: var(--fc-amber); }
+    .sdotc-paid     { background: var(--fc-green); }
+    .sdotc-cancelled { background: var(--fc-red); }
+
+    /* Payment */
+    .chip-p-unpaid  { background: var(--fc-amber-lt); color: #9a6d08;          border: 1px solid #f0d898; }
+    .chip-p-partial { background: var(--fc-blue-lt);  color: var(--fc-blue);   border: 1px solid #c0d4fb; }
+    .chip-p-paid    { background: var(--fc-green-lt); color: var(--fc-green);  border: 1px solid #b0e0c5; }
+
+    .pdotc-unpaid  { background: var(--fc-amber); }
+    .pdotc-partial { background: var(--fc-blue); }
+    .pdotc-paid    { background: var(--fc-green); }
+
+    /* Actions */
+    .si-actions { display: flex; align-items: center; gap: 3px; justify-content: center; }
+
+    .si-act-btn {
+        width: 28px; height: 28px; border-radius: 7px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; cursor: pointer;
+        transition: all .15s ease; background: transparent;
+    }
+    .si-act-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .act-edit    { color: var(--fc-blue); }
+    .act-approve { color: var(--fc-green); }
+    .act-cancel  { color: var(--fc-red); }
+
+    .act-edit:hover    { background: var(--fc-blue-lt);  border-color: #c0d4fb; }
+    .act-approve:hover { background: var(--fc-green-lt); border-color: #b0e0c5; }
+    .act-cancel:hover  { background: var(--fc-red-lt);   border-color: #ffc8cf; }
+
+    /* ================================================================
+       MODAL
+    ================================================================ */
+    .si-modal-backdrop {
+        position: fixed; inset: 0; z-index: 9999;
+        background: rgba(10,20,40,.58); backdrop-filter: blur(5px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px; animation: si-fade-in .2s ease;
+    }
+    @@keyframes si-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+    .si-modal {
+        width: 100%; max-width: 460px;
+        background: var(--fc-card); border: 1px solid rgba(0,0,0,.08);
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(10,20,50,.18), 0 30px 80px rgba(10,20,50,.22);
+        overflow: hidden;
+        animation: si-modal-in .28s cubic-bezier(.34,1.3,.64,1);
+    }
+    @@keyframes si-modal-in {
+        from { opacity: 0; transform: scale(.94) translateY(12px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .si-modal-head {
+        display: flex; align-items: center; gap: 14px;
+        padding: 18px 22px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .si-modal-icon {
+        width: 48px; height: 48px; flex: 0 0 48px; border-radius: 14px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .cancel-icon { background: linear-gradient(135deg, #fff0f2, #ffe8ec); color: var(--fc-red); border: 1px solid #ffc8cf; }
+
+    .si-modal-title { font-size: 15px; font-weight: 900; color: #1c2b43; }
+    .si-modal-sub   { font-size: 10.5px; color: var(--fc-muted); margin-top: 2px; }
+
+    .si-modal-close {
+        margin-right: auto; width: 34px; height: 34px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid #e4eaf2; border-radius: 9px;
+        background: none; color: #9aaabb; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .si-modal-close:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .si-modal-body { padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; }
+
+    /* Cancel Summary */
+    .si-cancel-summary {
+        display: flex; align-items: stretch;
+        background: #f5f7fa; border: 1px solid #e4eaf3;
+        border-radius: 12px; overflow: hidden;
+    }
+
+    .si-cs-item {
+        flex: 1; display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 4px; padding: 14px 10px; text-align: center;
+    }
+    .si-cs-sep { width: 1px; background: #e4eaf3; align-self: stretch; }
+    .si-cs-label { font-size: 9px; color: #9aaabb; font-weight: 600; }
+    .si-cs-val { font-family: "Inter", Arial, sans-serif; font-size: 14px; font-weight: 900; color: var(--fc-text); }
+    .balance-val { color: var(--fc-red); }
+
+    /* Cancel Warning */
+    .si-cancel-warn {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 14px 16px; border-radius: 12px;
+        background: var(--fc-amber-lt); border: 1px solid #f0d898;
+    }
+    .si-cancel-warn svg { flex: 0 0 auto; color: #d97706; margin-top: 2px; }
+    .si-cancel-warn strong { display: block; font-size: 13px; font-weight: 800; color: #92400e; }
+    .si-cancel-warn p { margin: 3px 0 0; font-size: 11.5px; color: #b45309; }
+
+    .si-modal-foot {
+        display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+        padding: 14px 22px;
+        background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%);
+        border-top: 1px solid #edf1f7;
+    }
+
+    .si-modal-cancel-btn {
+        height: 40px; padding: 0 18px;
+        border: 1px solid var(--fc-border); border-radius: 10px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .si-modal-cancel-btn:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .si-modal-confirm-btn {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 40px; padding: 0 20px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #e03048, #c0182e);
+        color: #fff; font-family: inherit;
+        font-size: 12px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(224,48,72,.28);
+        transition: all .15s ease;
+    }
+    .si-modal-confirm-btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .si-modal-confirm-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    .btn-spinner { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: si-spin .7s linear infinite; }
+    .btn-spinner.sm { width: 13px; height: 13px; }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 1100px) {
+        .si-supplier-name { font-size: 11px; }
+    }
+
+    @@media (max-width: 900px) {
+        .si-toolbar { flex-direction: column; align-items: stretch; }
+        .si-search-wrap { max-width: 100%; }
+        .si-sup-filter-wrap { max-width: 100%; }
+        .si-results-badge { margin-right: 0; }
+        .si-status-bar { flex-direction: column; align-items: flex-start; }
+    }
+
+    @@media (max-width: 680px) {
+        .si-body { padding: 10px 12px 24px; }
+        .si-toolbar { padding: 10px 12px; }
+        .si-avatar { display: none; }
+        .si-modal-backdrop { padding: 10px; }
+        .si-modal { border-radius: 16px; }
+    }
+
+    @@media (max-width: 480px) {
+        .si-status-tabs { flex-wrap: wrap; }
+        .si-status-tab { padding: 0 7px; font-size: 9.5px; }
+        .si-tab-dot { display: none; }
+    }
+
+</style>
+
+
 @code {
     private AuthUser? _user;
-    private bool CanView   => (_user?.Can("SUPPLIER.VIEW") ?? false);
-    private bool CanCreate => (_user?.Can("SUPPLIER.CREATE") ?? false);
-    private bool CanEdit   => (_user?.Can("SUPPLIER.EDIT") ?? false);
+    private bool CanView   => _user?.Can("SUPPLIER.VIEW")   ?? false;
+    private bool CanCreate => _user?.Can("SUPPLIER.CREATE") ?? false;
+    private bool CanEdit   => _user?.Can("SUPPLIER.EDIT")   ?? false;
 
-    private static readonly Dictionary<string, string> Tabs = new()
+    private static readonly (string Key, string Value)[] _statusTabs =
     {
-        ["all"]           = "الكل",
-        ["Draft"]         = "مسودة",
-        ["Approved"]      = "معتمدة",
-        ["PartiallyPaid"] = "مدفوعة جزئيًا",
-        ["Paid"]          = "مدفوعة",
-        ["Cancelled"]     = "ملغاة"
+        ("all",          "الكل"),
+        ("Draft",        "مسودة"),
+        ("Approved",     "معتمدة"),
+        ("PartiallyPaid","مدفوعة جزئياً"),
+        ("Paid",         "مدفوعة"),
+        ("Cancelled",    "ملغاة")
     };
 
-    private List<Item> _items = new();
+    private List<Item> _items     = new();
     private List<Opt>  _suppliers = new();
-    private bool _loading, _busy;
-    private string _search = "", _tab = "all", _supFilter = "";
-    private string? _msg; private bool _ok = true;
-    private Item? _cancelTarget;
+    private bool   _loading, _busy;
+    private string _search    = "";
+    private string _tab       = "all";
+    private string _supFilter = "";
+    private string? _msg;
+    private bool   _ok = true;
+    private Item?  _cancelTarget;
 
+    /* ── Computed ── */
+    private decimal OpenTotal => _items
+        .Where(i => i.Status != "Cancelled" && i.Status != "Draft")
+        .Sum(i => i.Balance);
+
+    private decimal PaidTotal => _items.Where(i => i.Status != "Cancelled").Sum(i => i.PaidAmount);
+
+    private int OverdueCount => _items.Count(i =>
+        i.Status != "Cancelled" && i.Status != "Paid" && i.Status != "Draft"
+        && IsOverdue(i.DueDate));
+
+    private static string Today => DateTime.Today.ToString("yyyy-MM-dd");
+
+    private static bool IsOverdue(string? due) =>
+        !string.IsNullOrEmpty(due) && string.CompareOrdinal(due, Today) < 0;
+
+    private IEnumerable<Item> Filtered => _items.Where(i =>
+        (_tab == "all" || i.Status == _tab) &&
+        (string.IsNullOrEmpty(_supFilter) || i.SupplierId.ToString() == _supFilter) &&
+        (string.IsNullOrWhiteSpace(_search) ||
+         i.SupplierInvoiceNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         i.SupplierName.Contains(_search, StringComparison.OrdinalIgnoreCase)));
+
+    /* ── Helpers ── */
+    private static string Money(decimal v) => v.ToString("N2");
+
+    private static string StatusAr(string s) => s switch
+    {
+        "Draft"        => "مسودة",
+        "Approved"     => "معتمدة",
+        "PartiallyPaid"=> "جزئي",
+        "Paid"         => "مدفوعة",
+        "Cancelled"    => "ملغاة",
+        _              => s
+    };
+
+    private static string PayAr(string s) => s switch
+    {
+        "Unpaid"        => "غير مدفوعة",
+        "PartiallyPaid" => "جزئي",
+        "Paid"          => "مدفوعة",
+        _               => s
+    };
+
+    private static string StatusChipClass(string s) => s switch
+    {
+        "Draft"         => "si-chip chip-s-draft",
+        "Approved"      => "si-chip chip-s-approved",
+        "PartiallyPaid" => "si-chip chip-s-partial",
+        "Paid"          => "si-chip chip-s-paid",
+        "Cancelled"     => "si-chip chip-s-cancelled",
+        _               => "si-chip chip-s-draft"
+    };
+
+    private static string StatusDotClass(string s) => s switch
+    {
+        "Draft"         => "si-chip-dot sdotc-draft",
+        "Approved"      => "si-chip-dot sdotc-approved",
+        "PartiallyPaid" => "si-chip-dot sdotc-partial",
+        "Paid"          => "si-chip-dot sdotc-paid",
+        "Cancelled"     => "si-chip-dot sdotc-cancelled",
+        _               => "si-chip-dot sdotc-draft"
+    };
+
+    private static string PayChipClass(string s) => s switch
+    {
+        "Unpaid"        => "si-chip chip-p-unpaid",
+        "PartiallyPaid" => "si-chip chip-p-partial",
+        "Paid"          => "si-chip chip-p-paid",
+        _               => "si-chip chip-p-unpaid"
+    };
+
+    private static string PayDotClass(string s) => s switch
+    {
+        "Unpaid"        => "si-chip-dot pdotc-unpaid",
+        "PartiallyPaid" => "si-chip-dot pdotc-partial",
+        "Paid"          => "si-chip-dot pdotc-paid",
+        _               => "si-chip-dot pdotc-unpaid"
+    };
+
+    private static string AvatarClass(string s) => s switch
+    {
+        "Draft"         => "si-avatar av-draft",
+        "Approved"      => "si-avatar av-approved",
+        "PartiallyPaid" => "si-avatar av-partial",
+        "Paid"          => "si-avatar av-paid",
+        "Cancelled"     => "si-avatar av-cancelled",
+        _               => "si-avatar av-draft"
+    };
+
+    private static string StatusDotColor(string s) => s switch
+    {
+        "all"          => "sdot-all",
+        "Draft"        => "sdot-draft",
+        "Approved"     => "sdot-approved",
+        "PartiallyPaid"=> "sdot-partial",
+        "Paid"         => "sdot-paid",
+        "Cancelled"    => "sdot-cancelled",
+        _              => "sdot-all"
+    };
+
+    /* ── Init ── */
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
@@ -197,10 +1109,7 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        try
-        {
-            _items = await Http.GetFromJsonAsync<List<Item>>("api/supplier-invoices") ?? new();
-        }
+        try   { _items = await Http.GetFromJsonAsync<List<Item>>("api/supplier-invoices") ?? new(); }
         catch (Exception ex) { _ok = false; _msg = "فشل التحميل: " + ex.Message; }
         finally { _loading = false; }
     }
@@ -208,77 +1117,13 @@
     private async Task<List<Opt>> SafeOpts(string url)
     {
         try { return await Http.GetFromJsonAsync<List<Opt>>(url) ?? new(); }
-        catch (Exception ex)
-        {
-            _ok = false;
-            _msg = $"تعذّر تحميل قائمة الموردين: {ex.Message}";
-            return new();
-        }
+        catch (Exception ex) { _ok = false; _msg = $"تعذّر تحميل قائمة الموردين: {ex.Message}"; return new(); }
     }
 
     private void SetTab(string k) { _tab = k; }
 
-    private IEnumerable<Item> Filtered => _items.Where(i =>
-        (_tab == "all" || i.Status == _tab)
-        && (string.IsNullOrEmpty(_supFilter) || i.SupplierId.ToString() == _supFilter)
-        && (string.IsNullOrWhiteSpace(_search)
-            || i.SupplierInvoiceNumber.Contains(_search, StringComparison.OrdinalIgnoreCase)
-            || i.SupplierName.Contains(_search, StringComparison.OrdinalIgnoreCase)));
-
-    /* ── KPIs ── */
-    private decimal OpenTotal => _items
-        .Where(i => i.Status != "Cancelled" && i.Status != "Draft")
-        .Sum(i => i.Balance);
-
-    private decimal PaidTotal => _items.Where(i => i.Status != "Cancelled").Sum(i => i.PaidAmount);
-
-    private int OverdueCount => _items.Count(i =>
-        i.Status != "Cancelled" && i.Status != "Paid" && i.Status != "Draft"
-        && IsOverdue(i.DueDate));
-
-    private static string Today => DateTime.Today.ToString("yyyy-MM-dd");
-
-    /* 🔴 `DueDate` هنا `string?` (ISO yyyy-MM-dd) — الـ `<` على strings = CS0019.
-     *    ترتيب ISO الأبجدي = ترتيبه الزمني بالظبط، فالـ CompareOrdinal صح. */
-    private static bool IsOverdue(string? due) =>
-        !string.IsNullOrEmpty(due) && string.CompareOrdinal(due, Today) < 0;
-
-    /* ── تنسيق ── */
-    private static string Money(decimal v) => v.ToString("N2");
-
-    private static string StatusAr(string s) => s switch
-    {
-        "Draft" => "مسودة", "Approved" => "معتمدة", "PartiallyPaid" => "جزئي",
-        "Paid" => "مدفوعة", "Cancelled" => "ملغاة", _ => s
-    };
-
-    private static string PayAr(string s) => s switch
-    {
-        "Unpaid" => "غير مدفوعة", "PartiallyPaid" => "جزئي", "Paid" => "مدفوعة", _ => s
-    };
-
-    /* 🔴 helpers — أي `"` أو `<` جوه attribute = RZ1010 */
-    private static string StatusChip(string s) => s switch
-    {
-        "Draft" => "fc-chip-gray", "Approved" => "fc-chip-blue",
-        "PartiallyPaid" => "fc-chip-gold", "Paid" => "fc-chip-ok",
-        "Cancelled" => "fc-chip-warn", _ => "fc-chip-gray"
-    };
-
-    private static string PayChip(string s) => s switch
-    {
-        "Unpaid" => "fc-chip-warn", "PartiallyPaid" => "fc-chip-gold",
-        "Paid" => "fc-chip-ok", _ => "fc-chip-gray"
-    };
-
-    private static string DueCls(Item i)
-    {
-        if (i.DueDate is null) return "fc-cell-sub";
-        return i.Balance > 0 && IsOverdue(i.DueDate) ? "is-neg" : "fc-cell-sub";
-    }
-
-    /* ── أفعال ── */
-    private void New()  => Nav.NavigateTo("/supplier-invoices/new");
+    /* ── Actions ── */
+    private void New()        => Nav.NavigateTo("/supplier-invoices/new");
     private void Edit(Item i) => Nav.NavigateTo($"/supplier-invoices/new/{i.SupplierInvoiceId}");
 
     private async Task Approve(Item i)
@@ -324,7 +1169,7 @@
         return fallback;
     }
 
-    /* ── DTOs — مطابقة للكنترولر ── */
+    /* ── DTOs ── */
     public class Item
     {
         public long    SupplierInvoiceId     { get; set; }
@@ -339,15 +1184,11 @@
         public decimal GrandTotal            { get; set; }
         public decimal PaidAmount            { get; set; }
         public decimal Balance               { get; set; }
-        public string  Status                { get; set; } = "";
-        public string  PaymentStatus         { get; set; } = "";
-        public string? Notes                 { get; set; }
-        public int     LineCount             { get; set; }
+        public string  Status               { get; set; } = "";
+        public string  PaymentStatus        { get; set; } = "";
+        public string? Notes                { get; set; }
+        public int     LineCount            { get; set; }
     }
 
-    public class Opt
-    {
-        public int    Id    { get; set; }
-        public string Label { get; set; } = "";
-    }
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
 }

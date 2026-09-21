@@ -1,0 +1,72 @@
+﻿@namespace FastCom.Client.Shared.Components.Dashboard
+
+@* 🚀 آخر الأنشطة — من AuditLogs + اسم المستخدم + وقت نسبي *@
+@if (Items is null || Items.Count == 0)
+{
+    <div class="v3-empty"><span>🕒</span><span>مافيش نشاطات لسه</span></div>
+}
+else
+{
+    <div class="v3-act-list">
+        @foreach (var a in Items)
+        {
+            <div class="v3-act-item">
+                <div class="v3-act-ic @a.Action" aria-hidden="true">@ActionIcon(a.Action)</div>
+                <div class="v3-act-main">
+                    <div class="v3-act-title">@ActionLabel(a.Action) · @EntityLabel(a.EntityType)</div>
+                    @if (!string.IsNullOrWhiteSpace(a.Description))
+                    {
+                        <div class="v3-act-desc">@a.Description</div>
+                    }
+                    <div class="v3-act-meta">@a.UserName — @Relative(a.At)</div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public List<ActivityItem> Items { get; set; } = new();
+
+    private static string ActionLabel(string a) => a switch
+    {
+        "Create" => "إنشاء", "Update" => "تعديل", "Delete" => "حذف", "Restore" => "استعادة",
+        "Approve" => "اعتماد", "Reject" => "رفض", "Cancel" => "إلغاء", "Close" => "إغلاق",
+        "Reopen" => "إعادة فتح", "Issue" => "إصدار", "Send" => "إرسال", "Settle" => "تسوية",
+        "PermissionChange" => "تغيير صلاحيات", "Export" => "تصدير", "Print" => "طباعة",
+        "Download" => "تنزيل", "Upload" => "رفع", _ => a
+    };
+
+    private static string ActionIcon(string a) => a switch
+    {
+        "Create" => "＋", "Update" => "✎", "Delete" => "✕", "Close" => "✔",
+        "Issue" => "🧾", "Settle" => "💰", "Send" => "📤", "Upload" => "📎",
+        "Download" => "📥", "Print" => "🖨", "Approve" => "👍", "Reject" => "👎",
+        _ => "•"
+    };
+
+    private static string EntityLabel(string e) => e switch
+    {
+        "Invoice" => "فاتورة", "Operation" => "عملية", "Payment" => "تحصيل",
+        "DriverCustody" => "عهدة", "Expense" => "مصروف", "Customer" => "عميل",
+        "Supplier" => "مورد", "Driver" => "سائق", "Vehicle" => "سيارة",
+        "Trailer" => "مقطورة", "Trip" => "رحلة", "Booking" => "حجز",
+        "ApplicationUser" => "مستخدم", "ApplicationRole" => "دور",
+        "SupplierInvoice" => "فاتورة مورد",
+        "Container" => "حاوية", "BookingContainer" => "حاوية حجز",
+        "User" => "مستخدم", "Role" => "دور", "CompanyProfile" => "بيانات الشركة",
+        "Document" => "مستند", "Notification" => "إشعار", "Employee" => "موظف",
+        "PriceList" => "قائمة أسعار", "CashBox" => "خزينة", _ => e
+    };
+
+    private static string Relative(string at)
+    {
+        if (!DateTime.TryParse(at, out var d)) return at;
+        var span = DateTime.Now - d;
+        if (span.TotalMinutes < 1)  return "الآن";
+        if (span.TotalMinutes < 60) return "منذ " + (int)span.TotalMinutes + " د";
+        if (span.TotalHours < 24)   return "منذ " + (int)span.TotalHours + " س";
+        if (span.TotalDays < 30)    return "منذ " + (int)span.TotalDays + " يوم";
+        return d.ToString("yyyy-MM-dd");
+    }
+}

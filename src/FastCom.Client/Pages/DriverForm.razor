@@ -10,173 +10,937 @@
 
 <PageTitle>@(_id is null ? "سائق جديد" : "تعديل سائق") — فاست كوم</PageTitle>
 
+
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
+
             <div>
                 <div class="fc-crumb">الأسطول · السائقون</div>
-                <h1 class="fc-hero-title">@(_id is null ? "سائق جديد" : $"تعديل {DriverCode}")</h1>
-                <p class="fc-hero-sub">سجّل السائق ورخصته — والكود بيتولد تلقائيًا (DRV-)</p>
+                <h1 class="fc-hero-title">
+                    @if (_id is null)
+                    {
+                        <span>سائق جديد</span>
+                        <span class="drv-hero-badge badge-new">جديد</span>
+                    }
+                    else
+                    {
+                        <span>@DriverCode</span>
+                        <span class="drv-hero-badge badge-edit">تعديل</span>
+                    }
+                </h1>
+                <p class="fc-hero-sub">سجّل السائق ورخصته — والكود بيتولد تلقائياً (DRV-)</p>
             </div>
+
             <div class="fc-head-actions">
-                <MudButton Variant="Variant.Outlined" OnClick="GoBack" Style="color:#9FB4CC">رجوع</MudButton>
+                <button class="drv-back-btn" @onclick="GoBack">
+                    <svg viewBox="0 0 24 24" width="16" height="16"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         aria-hidden="true">
+                        <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    السائقين
+                </button>
                 @if (CanSave)
                 {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving"
-                               StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="SaveAsync">حفظ</MudButton>
+                    <button class="drv-save-btn" @onclick="SaveAsync" disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="btn-spinner" aria-hidden="true"></span>
+                            <span>جاري الحفظ...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>حفظ السائق</span>
+                        }
+                    </button>
                 }
             </div>
+
         </div>
     </div>
 </div>
 
-<div class="fc-page">
+
+<div class="drv-body">
+
     @if (!CanSave)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">
-            @(_id is null ? "ليس لديك صلاحية إضافة سائق." : "ليس لديك صلاحية تعديل سائق.")
-        </MudAlert>
+        <div class="drv-state-box">
+            <div class="drv-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>@(_id is null ? "ليس لديك صلاحية إضافة سائق" : "ليس لديك صلاحية تعديل سائق")</p>
+            <button class="drv-state-back" @onclick="GoBack">العودة للقائمة</button>
+        </div>
     }
     else if (_loading)
     {
-        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+        <div class="drv-loading-wrap">
+            <div class="drv-spinner" aria-label="جاري التحميل"></div>
+            <div class="drv-loading-text">جاري تحميل بيانات السائق...</div>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
+        @if (_msg is not null)
+        {
+            <div class="drv-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                <div aria-hidden="true">
+                    @if (_ok)
+                    {
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                            <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                        </svg>
+                    }
+                </div>
+                <span>@_msg</span>
+                <button class="banner-close" @onclick="() => _msg = null">✕</button>
+            </div>
+        }
 
-            @if (_msg is not null)
+        @if (ExpiringSoon)
+        {
+            <div class="drv-lic-warn" role="alert">
+                <div class="lic-warn-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                        <path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="lic-warn-text">
+                    <strong>الرخصة هتخلص قريباً ⚠️</strong>
+                    <span>فاضل <strong>@DaysLeft يوم</strong> على انتهاء الرخصة — جدّدها قبل ما السائق يقف</span>
+                </div>
+            </div>
+        }
+
+        <div class="drv-tabs-wrap">
+
+            <MudTabs Elevation="0"
+                     Rounded="false"
+                     ApplyEffectsToContainer="true"
+                     PanelClass="drv-tab-panel"
+                     @bind-ActivePanelIndex="_activeTab"
+                     Class="drv-mud-tabs">
+
+
+                @* ── TAB 1: الانتماء والبيانات ── *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="dtab-label">
+                            <div class="dtab-icon dtab-blue" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                    <circle cx="12" cy="7" r="4"/>
+                                </svg>
+                            </div>
+                            <span>البيانات الأساسية</span>
+                            @if (HasTabError(1))
+                            {
+                                <span class="dtab-err-dot" aria-label="يوجد خطأ"></span>
+                            }
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="drv-tab-section">
+
+                            @* ── نوع السائق ── *@
+                            <div class="drv-section-card">
+                                <div class="drv-section-head">
+                                    <div class="drv-section-icon icon-blue" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                                            <circle cx="9" cy="7" r="4"/>
+                                            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="drv-section-title">الانتماء</div>
+                                        <div class="drv-section-sub">داخلي (موظف) أو خارجي (مورد)</div>
+                                    </div>
+                                </div>
+
+                                @* Type Toggle *@
+                                <div class="drv-type-toggle" role="group" aria-label="نوع السائق">
+                                    <button type="button"
+                                            class="drv-type-btn @(_f.DriverType == "Internal" ? "type-active-blue" : "")"
+                                            @onclick='() => OnTypeChangedClick("Internal")'
+                                            aria-pressed="@(_f.DriverType == "Internal")">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                            <circle cx="12" cy="7" r="4"/>
+                                        </svg>
+                                        داخلي (موظف)
+                                    </button>
+                                    <button type="button"
+                                            class="drv-type-btn @(_f.DriverType == "External" ? "type-active-purple" : "")"
+                                            @onclick='() => OnTypeChangedClick("External")'
+                                            aria-pressed="@(_f.DriverType == "External")">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                                            <circle cx="9" cy="7" r="4"/>
+                                            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+                                        </svg>
+                                        خارجي (مورد)
+                                    </button>
+                                </div>
+
+                                @* الربط *@
+                                <div class="drv-form-grid" style="margin-top:16px">
+                                    @if (IsInternal)
+                                    {
+                                        <div class="drv-field">
+                                            <label class="drv-label">
+                                                الموظف
+                                                <span class="drv-required">*</span>
+                                            </label>
+                                            <div class="drv-select-wrap">
+                                                <svg class="drv-sel-icon" viewBox="0 0 24 24" width="14" height="14"
+                                                     fill="none" stroke="currentColor" stroke-width="2"
+                                                     aria-hidden="true">
+                                                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                                    <circle cx="12" cy="7" r="4"/>
+                                                </svg>
+                                                <select class="drv-input drv-select" @bind="_f.EmployeeId">
+                                                    <option value="">— اختار الموظف —</option>
+                                                    @foreach (var e in _employees)
+                                                    {
+                                                        <option value="@e.Id">@e.Label</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="drv-hint">
+                                                <svg viewBox="0 0 16 16" width="10" height="10"
+                                                     fill="none" stroke="currentColor" stroke-width="1.8"
+                                                     aria-hidden="true">
+                                                    <circle cx="8" cy="8" r="6"/>
+                                                    <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                                </svg>
+                                                الاسم بيتعبّى من ملف الموظف — بس تقدر تعدّله
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="drv-field">
+                                            <label class="drv-label">
+                                                المورد
+                                                <span class="drv-required">*</span>
+                                            </label>
+                                            <div class="drv-select-wrap">
+                                                <svg class="drv-sel-icon" viewBox="0 0 24 24" width="14" height="14"
+                                                     fill="none" stroke="currentColor" stroke-width="2"
+                                                     aria-hidden="true">
+                                                    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                                    <path d="M9 22V12h6v10"/>
+                                                </svg>
+                                                <select class="drv-input drv-select" @bind="_f.SupplierId">
+                                                    <option value="">— اختار المورد —</option>
+                                                    @foreach (var s in _suppliers)
+                                                    {
+                                                        <option value="@s.Id">@s.Label</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+
+
+                            @* ── البيانات الشخصية ── *@
+                            <div class="drv-section-card">
+                                <div class="drv-section-head">
+                                    <div class="drv-section-icon icon-green" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                            <circle cx="12" cy="7" r="4"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="drv-section-title">البيانات الشخصية</div>
+                                        <div class="drv-section-sub">اسم السائق والتواصل</div>
+                                    </div>
+                                </div>
+
+                                <div class="drv-form-grid">
+
+                                    <div class="drv-field">
+                                        <label class="drv-label">
+                                            الاسم الكامل
+                                            <span class="drv-required">*</span>
+                                        </label>
+                                        <input class="drv-input @(string.IsNullOrWhiteSpace(_f.FullName) && _triedSave ? "input-error" : "")"
+                                               @bind="_f.FullName"
+                                               maxlength="150"
+                                               placeholder="الاسم الكامل للسائق"
+                                               aria-required="true" />
+                                        @if (string.IsNullOrWhiteSpace(_f.FullName) && _triedSave)
+                                        {
+                                            <div class="drv-err-msg" role="alert">الاسم الكامل مطلوب</div>
+                                        }
+                                    </div>
+
+                                    <div class="drv-field">
+                                        <label class="drv-label">الموبايل</label>
+                                        <div class="drv-input-group">
+                                            <span class="drv-prefix" aria-hidden="true">📱</span>
+                                            <input class="drv-input with-prefix"
+                                                   @bind="_f.Mobile"
+                                                   maxlength="20"
+                                                   placeholder="01X-XXXXXXXX"
+                                                   type="tel"
+                                                   dir="ltr" />
+                                        </div>
+                                    </div>
+
+                                    <div class="drv-field">
+                                        <label class="drv-label">الرقم القومي</label>
+                                        <div class="drv-input-group">
+                                            <span class="drv-prefix" aria-hidden="true">
+                                                <svg viewBox="0 0 16 16" width="13" height="13"
+                                                     fill="none" stroke="currentColor" stroke-width="1.7">
+                                                    <rect x="2" y="4" width="12" height="9" rx="1"/>
+                                                    <circle cx="6" cy="8" r="1.5"/>
+                                                    <path d="M9 7h3M9 9.5h2" stroke-linecap="round"/>
+                                                </svg>
+                                            </span>
+                                            <input class="drv-input with-prefix"
+                                                   @bind="_f.NationalId"
+                                                   maxlength="14"
+                                                   placeholder="14 رقم"
+                                                   dir="ltr" />
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+
+
+                            @* ── الحالة ── *@
+                            <div class="drv-section-card">
+                                <div class="drv-section-head">
+                                    <div class="drv-section-icon icon-amber" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                                            <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="drv-section-title">الحالة الوظيفية</div>
+                                        <div class="drv-section-sub">نشط / غير نشط / موقوف</div>
+                                    </div>
+                                </div>
+
+                                <div class="drv-status-toggle" role="group" aria-label="حالة السائق">
+                                    @foreach (var (val, lbl, cls) in new[]
+                                    {
+                                        ("Active",    "✅ نشط",     "status-green"),
+                                        ("Inactive",  "⏸️ غير نشط", "status-gray"),
+                                        ("Suspended", "🚫 موقوف",   "status-red")
+                                    })
+                                    {
+                                        var v = val;
+                                        <button type="button"
+                                                class="drv-status-btn @(_f.Status == v ? cls + " status-active" : "")"
+                                                @onclick="() => _f.Status = v"
+                                                aria-pressed="@(_f.Status == v)">
+                                            @lbl
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+                @* ── TAB 2: الرخصة ── *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="dtab-label">
+                            <div class="dtab-icon dtab-amber" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="5" width="20" height="14" rx="2"/>
+                                    <path d="M2 10h20"/>
+                                    <circle cx="7" cy="15" r="1.5" fill="currentColor"/>
+                                </svg>
+                            </div>
+                            <span>رخصة القيادة</span>
+                            @if (ExpiringSoon)
+                            {
+                                <span class="dtab-warn-dot" aria-label="الرخصة قريبة الانتهاء">⚠️</span>
+                            }
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="drv-tab-section">
+
+                            <div class="drv-section-card">
+                                <div class="drv-section-head">
+                                    <div class="drv-section-icon icon-amber" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="2" y="5" width="20" height="14" rx="2"/>
+                                            <path d="M2 10h20"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="drv-section-title">رخصة القيادة</div>
+                                        <div class="drv-section-sub">النظام ينبّه قبل الانتهاء بـ 30 يوم</div>
+                                    </div>
+                                </div>
+
+                                <div class="drv-form-grid">
+
+                                    <div class="drv-field">
+                                        <label class="drv-label">رقم الرخصة</label>
+                                        <div class="drv-input-group">
+                                            <span class="drv-prefix" aria-hidden="true">
+                                                <svg viewBox="0 0 16 16" width="13" height="13"
+                                                     fill="none" stroke="currentColor" stroke-width="1.7">
+                                                    <rect x="2" y="2" width="12" height="12" rx="2"/>
+                                                    <path d="M5 8h6M5 5h6M5 11h4" stroke-linecap="round"/>
+                                                </svg>
+                                            </span>
+                                            <input class="drv-input with-prefix"
+                                                   @bind="_f.LicenseNumber"
+                                                   maxlength="50"
+                                                   placeholder="رقم الرخصة"
+                                                   dir="ltr" />
+                                        </div>
+                                    </div>
+
+                                    <div class="drv-field">
+                                        <label class="drv-label">درجة الرخصة</label>
+                                        <input class="drv-input"
+                                               @bind="_f.LicenseType"
+                                               maxlength="20"
+                                               placeholder="أولى · ثانية · ثالثة..." />
+                                    </div>
+
+                                    <div class="drv-field">
+                                        <label class="drv-label">تاريخ انتهاء الرخصة</label>
+                                        <div class="drv-input-group">
+                                            <span class="drv-prefix" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <rect x="3" y="5" width="18" height="16" rx="2"/>
+                                                    <path d="M7 3V7M17 3V7M3 10H21" stroke-linecap="round"/>
+                                                </svg>
+                                            </span>
+                                            <input type="date"
+                                                   class="drv-input with-prefix @(ExpiringSoon ? "input-warn" : "")"
+                                                   value="@_f.LicenseExpiryDate"
+                                                   @onchange="OnExpiryChanged" />
+                                        </div>
+                                        <div class="drv-hint">
+                                            <svg viewBox="0 0 16 16" width="10" height="10"
+                                                 fill="none" stroke="currentColor" stroke-width="1.8"
+                                                 aria-hidden="true">
+                                                <circle cx="8" cy="8" r="6"/>
+                                                <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                            </svg>
+                                            النظام ينبّه قبل الانتهاء بـ 30 يوم
+                                        </div>
+                                    </div>
+
+                                </div>
+
+                                @* License Status Visual *@
+                                @if (!string.IsNullOrWhiteSpace(_f.LicenseExpiryDate))
+{
+    var licStatus = GetLicStatusStr(_f.LicenseExpiryDate);
+    <div class="drv-lic-status @licStatus.cls">
+                                        <div class="lic-status-icon" aria-hidden="true">@licStatus.icon</div>
+                                        <div class="lic-status-text">
+                                            <strong>@licStatus.title</strong>
+                                            <span>@licStatus.detail</span>
+                                        </div>
+                                    </div>
+                                }
+
+                            </div>
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+                @* ── TAB 3: الملاحظات ── *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="dtab-label">
+                            <div class="dtab-icon dtab-purple" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                                </svg>
+                            </div>
+                            <span>الملاحظات</span>
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="drv-tab-section">
+                            <div class="drv-section-card">
+                                <div class="drv-section-head">
+                                    <div class="drv-section-icon icon-purple" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="drv-section-title">ملاحظات</div>
+                                        <div class="drv-section-sub">أي تفاصيل إضافية عن السائق</div>
+                                    </div>
+                                </div>
+                                <div class="drv-field">
+                                    <textarea class="drv-input drv-textarea"
+                                              rows="5"
+                                              maxlength="500"
+                                              placeholder="أي ملاحظات خاصة بالسائق..."
+                                              @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+            </MudTabs>
+        </div>
+
+
+        @* Bottom Actions *@
+        <div class="drv-bottom-actions">
+            <button class="drv-bottom-back" @onclick="GoBack">
+                <svg viewBox="0 0 24 24" width="15" height="15"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     aria-hidden="true">
+                    <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                رجوع للقائمة
+            </button>
+            @if (CanSave)
             {
-                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
-            }
-
-            @* ══════════ 1. الانتماء — بيتبدّل حسب النوع ══════════ *@
-            <div class="fc-panel-sub" style="margin-bottom:14px">الانتماء</div>
-            <div class="fc-form-grid">
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">نوع السائق *</div>
-                    <select class="fc-sel fc-sel-lg" value="@_f.DriverType" @onchange="OnTypeChanged">
-                        <option value="Internal">داخلي (موظف)</option>
-                        <option value="External">خارجي (مورد)</option>
-                    </select>
-                </div>
-                @if (IsInternal)
-                {
-                    <div>
-                        <div class="fc-panel-sub" style="margin-bottom:6px">الموظف *</div>
-                        <select class="fc-sel fc-sel-lg" @bind="_f.EmployeeId">
-                            <option value="">— اختار —</option>
-                            @foreach (var e in _employees) { <option value="@e.Id">@e.Label</option> }
-                        </select>
-                        <div class="fc-field-hint">الاسم بيتعبّى من ملف الموظف — بس تقدر تعدّله هنا</div>
-                    </div>
-                }
-                else
-                {
-                    <div>
-                        <div class="fc-panel-sub" style="margin-bottom:6px">المورد *</div>
-                        <select class="fc-sel fc-sel-lg" @bind="_f.SupplierId">
-                            <option value="">— اختار —</option>
-                            @foreach (var s in _suppliers) { <option value="@s.Id">@s.Label</option> }
-                        </select>
-                    </div>
-                }
-            </div>
-
-            @* ══════════ 2. البيانات الشخصية ══════════ *@
-            <div class="fc-panel-sub" style="margin:26px 0 14px">البيانات الشخصية</div>
-            <div class="fc-form-grid">
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">الاسم الكامل *</div>
-                    <input class="fc-sel fc-sel-lg" @bind="_f.FullName" maxlength="150" />
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">الرقم القومي</div>
-                    <input class="fc-sel fc-sel-lg" @bind="_f.NationalId" maxlength="14" dir="ltr"
-                           style="text-align:right" />
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">الموبايل</div>
-                    <input class="fc-sel fc-sel-lg" @bind="_f.Mobile" maxlength="20" dir="ltr"
-                           style="text-align:right" />
-                </div>
-            </div>
-
-            @* ══════════ 3. الرخصة ══════════ *@
-            <div class="fc-panel-sub" style="margin:26px 0 14px">رخصة القيادة</div>
-            <div class="fc-form-grid">
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">رقم الرخصة</div>
-                    <input class="fc-sel fc-sel-lg" @bind="_f.LicenseNumber" maxlength="50" dir="ltr"
-                           style="text-align:right" />
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">درجة الرخصة</div>
-                    <input class="fc-sel fc-sel-lg" @bind="_f.LicenseType" maxlength="20" />
-                    <div class="fc-field-hint">أولى · ثانية · ثالثة…</div>
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">تاريخ انتهاء الرخصة</div>
-                    @* 🔴 `@bind` على `type="date"` محتاج DateOnly? — وده string. فـ `@onchange`. *@
-                    <input type="date" class="fc-sel fc-sel-lg" value="@_f.LicenseExpiryDate"
-                           @onchange="OnExpiryChanged" />
-                    <div class="fc-field-hint">النظام بينبّه قبل الانتهاء بـ 30 يوم</div>
-                </div>
-            </div>
-
-            @if (ExpiringSoon)
-            {
-                <div class="fc-alert fc-alert-warn" style="margin-top:18px">
-                    <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
-                    <div class="fc-alert-body">
-                        <div class="fc-alert-title">الرخصة هتخلص قريبًا</div>
-                        <div>فاضل @DaysLeft يوم على انتهاء الرخصة — جدّدها قبل ما السائق يقف.</div>
-                    </div>
+                <div class="drv-bottom-right">
+                    @if (_activeTab < 2)
+                    {
+                        <button class="drv-next-btn" @onclick="() => _activeTab++">
+                            التالي
+                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    }
+                    <button class="drv-bottom-save" @onclick="SaveAsync" disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="btn-spinner sm" aria-hidden="true"></span>
+                            <span>جاري الحفظ...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>حفظ السائق</span>
+                        }
+                    </button>
                 </div>
             }
+        </div>
 
-            @* ══════════ 4. الحالة ══════════ *@
-            <div class="fc-panel-sub" style="margin:26px 0 14px">الحالة</div>
-            <div class="fc-form-grid">
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">الحالة</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.Status">
-                        <option value="Active">نشط</option>
-                        <option value="Inactive">غير نشط</option>
-                        <option value="Suspended">موقوف</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="fc-panel-sub" style="margin:26px 0 8px">ملاحظات</div>
-            <textarea class="fc-sel" rows="3" maxlength="500"
-                      @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
-
-            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:26px">
-                <MudButton Variant="Variant.Outlined" OnClick="GoBack">رجوع</MudButton>
-                @if (CanSave)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
-                               OnClick="SaveAsync">حفظ</MudButton>
-                }
-            </div>
-
-        </div></div>
     }
 </div>
 
+
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* Hero Badges */
+    .drv-hero-badge {
+        display: inline-flex; align-items: center;
+        padding: 3px 10px; border-radius: 20px;
+        font-size: 11px; font-weight: 800;
+    }
+    .badge-new  { background: rgba(34,197,94,.2);  color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+    .badge-edit { background: rgba(234,179,8,.2);   color: #fde68a; border: 1px solid rgba(234,179,8,.3); }
+
+    /* Hero Buttons */
+    .drv-back-btn {
+        display: inline-flex; align-items: center; gap: 5px;
+        height: 36px; padding: 0 13px;
+        border: 1px solid rgba(255,255,255,.2); border-radius: 9px;
+        background: rgba(255,255,255,.08); color: rgba(255,255,255,.75);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: background .15s ease;
+    }
+    .drv-back-btn:hover { background: rgba(255,255,255,.14); }
+    .drv-back-btn svg { transform: rotate(180deg); }
+
+    .drv-save-btn {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 38px; padding: 0 18px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: #fff; font-family: inherit;
+        font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(22,163,74,.35);
+        transition: all .15s ease;
+    }
+    .drv-save-btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .drv-save-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* Body */
+    .drv-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 180px);
+        padding: 16px 20px 32px;
+        max-width: 900px; width: 100%;
+        margin: 0 auto;
+        display: flex; flex-direction: column; gap: 14px;
+    }
+
+    /* States */
+    .drv-state-box {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 280px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .drv-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .drv-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+    .drv-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .drv-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+    .drv-state-back {
+        margin-top: 8px; padding: 9px 20px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-text);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: background .15s ease;
+    }
+    .drv-state-back:hover { background: #f0f4fa; }
+
+    /* Loading */
+    .drv-loading-wrap {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 14px; min-height: 260px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .drv-spinner {
+        width: 36px; height: 36px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: drv-spin .75s linear infinite;
+    }
+    @@keyframes drv-spin { to { transform: rotate(360deg); } }
+    .drv-loading-text { font-size: 13px; font-weight: 600; color: var(--fc-muted); }
+
+    /* Banners */
+    .drv-banner {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 16px; border-radius: 10px;
+        font-size: 13px; font-weight: 600;
+        animation: drv-banner-in .25s ease;
+    }
+    @@keyframes drv-banner-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    .banner-success { background: #e9f8f0; color: #0e7a43; border: 1px solid #b5e8d0; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8d0; }
+    .banner-close {
+        margin-right: auto; background: none; border: none;
+        color: inherit; opacity: .6; cursor: pointer; font-size: 13px;
+    }
+
+    /* License Warning */
+    .drv-lic-warn {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 14px 18px; border-radius: 12px;
+        background: linear-gradient(135deg, #fffbeb, #fff8e0);
+        border: 1px solid #fde68a;
+    }
+    .lic-warn-icon { flex: 0 0 auto; color: #d97706; }
+    .lic-warn-text { display: flex; flex-direction: column; gap: 2px; }
+    .lic-warn-text strong { font-size: 13px; font-weight: 800; color: #92400e; }
+    .lic-warn-text span   { font-size: 11.5px; color: #b45309; }
+
+    /* Tabs */
+    .drv-tabs-wrap {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden; flex: 1;
+    }
+
+    .drv-mud-tabs .mud-tabs-toolbar {
+        background: linear-gradient(180deg, #f9fafd 0%, #f3f6fb 100%);
+        border-bottom: 2px solid #e8edf5; padding: 0 16px; min-height: 54px;
+    }
+    .drv-mud-tabs .mud-tab { font-family: "Cairo","Tajawal","Inter",Arial,sans-serif; font-size: 12px; font-weight: 700; color: var(--fc-muted); padding: 0 6px; min-width: unset; transition: color .15s ease; }
+    .drv-mud-tabs .mud-tab.mud-tab-active { color: var(--fc-blue) !important; font-weight: 800; }
+    .drv-mud-tabs .mud-tab-slider { background: var(--fc-blue) !important; height: 3px; border-radius: 3px 3px 0 0; }
+    .drv-mud-tabs .mud-tab:hover:not(.mud-tab-active) { color: var(--fc-text); background: rgba(0,0,0,.03); border-radius: 8px; }
+    .drv-tab-panel { padding: 0; }
+
+    .dtab-label { display: flex; align-items: center; gap: 7px; padding: 0 4px; white-space: nowrap; }
+    .dtab-icon  { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 7px; }
+    .dtab-blue   { background: var(--fc-blue-lt);   color: var(--fc-blue); }
+    .dtab-amber  { background: var(--fc-amber-lt);  color: var(--fc-amber); }
+    .dtab-purple { background: var(--fc-purple-lt); color: var(--fc-purple); }
+
+    .dtab-err-dot  { width: 7px; height: 7px; border-radius: 50%; background: var(--fc-red); flex: 0 0 7px; animation: drv-pulse 1.5s ease infinite; }
+    .dtab-warn-dot { font-size: 13px; }
+    @@keyframes drv-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.4); } 50% { box-shadow: 0 0 0 5px rgba(224,48,72,0); } }
+
+    /* Tab Section */
+    .drv-tab-section { padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 16px; }
+
+    /* Section Cards */
+    .drv-section-card {
+        border: 1px solid #e4edf8; border-radius: 14px;
+        background: linear-gradient(180deg, #fafcff, #f5f8fb);
+        padding: 18px 20px;
+        transition: border-color .15s ease;
+    }
+    .drv-section-card:hover { border-color: #c8d8f0; }
+
+    .drv-section-head {
+        display: flex; align-items: flex-start; gap: 12px;
+        margin-bottom: 18px; padding-bottom: 14px;
+        border-bottom: 1px solid #e4edf8;
+    }
+
+    .drv-section-icon { width: 42px; height: 42px; flex: 0 0 42px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+    .icon-blue   { background: var(--fc-blue-lt);   color: var(--fc-blue);   border: 1px solid #bdd4fc; }
+    .icon-green  { background: var(--fc-green-lt);  color: var(--fc-green);  border: 1px solid #b0e0c5; }
+    .icon-amber  { background: var(--fc-amber-lt);  color: var(--fc-amber);  border: 1px solid #f0d070; }
+    .icon-purple { background: var(--fc-purple-lt); color: var(--fc-purple); border: 1px solid #d0bfef; }
+
+    .drv-section-title { font-size: 14.5px; font-weight: 800; color: #1c2b43; line-height: 1.2; }
+    .drv-section-sub   { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
+
+    /* Form */
+    .drv-form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .drv-field { display: flex; flex-direction: column; gap: 6px; }
+
+    .drv-label { font-size: 12px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 4px; }
+    .drv-required { color: var(--fc-red); font-size: 13px; }
+
+    .drv-input {
+        height: 42px; width: 100%;
+        border: 1.5px solid #d8e2f0; border-radius: 9px;
+        background: #fff; color: var(--fc-text);
+        font-family: inherit; font-size: 13px; padding: 0 12px;
+        outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .drv-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .drv-input.input-error { border-color: var(--fc-red); box-shadow: 0 0 0 3px rgba(224,48,72,.08); }
+    .drv-input.input-warn  { border-color: var(--fc-amber); }
+    .drv-input::placeholder { color: #b0bcc8; }
+
+    .drv-textarea { height: auto; padding: 10px 12px; resize: vertical; min-height: 100px; }
+
+    .drv-input-group { position: relative; display: flex; align-items: center; }
+    .drv-prefix {
+        position: absolute; right: 12px;
+        display: flex; align-items: center;
+        color: #9aaabb; pointer-events: none; z-index: 1;
+        font-size: 11px; font-weight: 700;
+    }
+    .drv-input.with-prefix { padding-right: 36px; }
+
+    .drv-select-wrap { position: relative; }
+    .drv-sel-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: #9aaabb; pointer-events: none; z-index: 1; }
+    .drv-select { padding-right: 36px; cursor: pointer; -webkit-appearance: none; appearance: none; }
+
+    .drv-hint { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--fc-muted); font-weight: 500; }
+    .drv-err-msg { font-size: 10.5px; color: var(--fc-red); font-weight: 700; }
+
+    /* Type Toggle */
+    .drv-type-toggle { display: flex; gap: 10px; }
+    .drv-type-btn {
+        flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
+        height: 50px; border: 2px solid #d8e2f0; border-radius: 11px;
+        background: #fafcff; color: var(--fc-muted);
+        font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+        transition: all .18s ease;
+    }
+    .drv-type-btn:hover:not(.type-active-blue):not(.type-active-purple) { border-color: #b0c4e0; color: var(--fc-text); }
+    .type-active-blue   { border-color: var(--fc-blue);   background: var(--fc-blue-lt);   color: var(--fc-blue);   box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .type-active-purple { border-color: var(--fc-purple); background: var(--fc-purple-lt); color: var(--fc-purple); box-shadow: 0 0 0 3px rgba(124,77,189,.10); }
+
+    /* Status Toggle */
+    .drv-status-toggle { display: flex; gap: 8px; }
+    .drv-status-btn {
+        flex: 1; height: 42px; border: 2px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .18s ease;
+    }
+    .drv-status-btn:hover:not(.status-active) { border-color: #b0c4e0; }
+    .status-green.status-active { border-color: var(--fc-green); background: var(--fc-green-lt); color: var(--fc-green); font-weight: 800; }
+    .status-gray.status-active  { border-color: #9aaabb; background: #f0f3f8; color: #5a6e88; font-weight: 800; }
+    .status-red.status-active   { border-color: var(--fc-red); background: var(--fc-red-lt); color: var(--fc-red); font-weight: 800; }
+
+    /* License Status */
+    .drv-lic-status {
+        display: flex; align-items: center; gap: 12px;
+        padding: 12px 14px; border-radius: 10px; margin-top: 14px;
+        transition: all .2s ease;
+    }
+    .drv-lic-status.lic-ok       { background: var(--fc-green-lt); border: 1px solid #b0e0c5; }
+    .drv-lic-status.lic-soon     { background: var(--fc-amber-lt); border: 1px solid #f0d898; }
+    .drv-lic-status.lic-expired  { background: var(--fc-red-lt);   border: 1px solid #ffc8cf; }
+
+    .lic-status-icon { font-size: 24px; flex: 0 0 auto; }
+    .lic-status-text { display: flex; flex-direction: column; gap: 2px; }
+    .lic-status-text strong { font-size: 13px; font-weight: 800; }
+    .lic-ok .lic-status-text strong      { color: var(--fc-green); }
+    .lic-soon .lic-status-text strong    { color: #9a6d08; }
+    .lic-expired .lic-status-text strong { color: var(--fc-red); }
+    .lic-status-text span { font-size: 11px; color: var(--fc-muted); }
+
+    /* Bottom Actions */
+    .drv-bottom-actions {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; padding: 14px 20px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); box-shadow: 0 2px 8px rgba(15,41,82,.04);
+    }
+    .drv-bottom-back {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 16px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .drv-bottom-back:hover { background: #f0f4fa; color: var(--fc-text); }
+    .drv-bottom-back svg { transform: rotate(180deg); }
+
+    .drv-bottom-right { display: flex; align-items: center; gap: 10px; }
+
+    .drv-next-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 14px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .drv-next-btn:hover { background: var(--fc-blue); color: #fff; }
+    .drv-next-btn svg { transform: rotate(180deg); }
+
+    .drv-bottom-save {
+        display: inline-flex; align-items: center; gap: 8px;
+        height: 40px; padding: 0 22px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #1e6ef5, #1558d6);
+        color: #fff; font-family: inherit;
+        font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(30,110,245,.28);
+        transition: all .15s ease;
+    }
+    .drv-bottom-save:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(30,110,245,.36); }
+    .drv-bottom-save:disabled { opacity: .6; cursor: not-allowed; }
+
+    .btn-spinner { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: drv-spin .7s linear infinite; }
+    .btn-spinner.sm { width: 13px; height: 13px; }
+
+    @@media (max-width: 900px) {
+        .drv-form-grid { grid-template-columns: 1fr; }
+        .drv-tab-section { padding: 16px 14px 20px; }
+    }
+
+    @@media (max-width: 680px) {
+        .drv-body { padding: 10px 12px 24px; }
+        .drv-type-toggle { flex-direction: column; }
+        .drv-status-toggle { flex-direction: column; }
+        .drv-bottom-actions { flex-direction: column; }
+        .drv-bottom-back, .drv-bottom-save { width: 100%; justify-content: center; }
+        .drv-bottom-right { width: 100%; flex-direction: column; }
+        .drv-next-btn { width: 100%; justify-content: center; }
+    }
+
+</style>
+
+
 @code {
     [Parameter] public int? Id { get; set; }
-    private int? _id;
-    private string DriverCode = "";
+    private int?   _id;
+    private string DriverCode  = "";
+    private int    _activeTab;
+    private bool   _triedSave;
 
     private AuthUser? _user;
     private bool CanCreate => _user?.Can("DRIVER.CREATE") ?? false;
-    private bool CanEdit   => _user?.Can("DRIVER.EDIT") ?? false;
+    private bool CanEdit   => _user?.Can("DRIVER.EDIT")   ?? false;
     private bool CanSave   => _id is null ? CanCreate : CanEdit;
 
-    private bool _loading; private bool _saving;
-    private string? _msg; private bool _ok = true;
+    private bool    _loading; private bool _saving;
+    private string? _msg;     private bool _ok = true;
 
     private List<Opt> _employees = new();
     private List<Opt> _suppliers = new();
@@ -194,48 +958,69 @@
             ? d.DayNumber - DateOnly.FromDateTime(DateTime.Today).DayNumber
             : 0;
 
+    /* Tab Validation */
+    private bool HasTabError(int tab) => _triedSave && tab switch
+    {
+        1 => string.IsNullOrWhiteSpace(_f.FullName) ||
+             (IsInternal && _f.EmployeeId is null) ||
+             (!IsInternal && _f.SupplierId is null),
+        _ => false
+    };
+
+    /* License Status */
+    private static (string cls, string icon, string title, string detail) GetLicStatusStr(string? dateStr)
+    {
+        if (!DateOnly.TryParse(dateStr, out var d))
+            return ("", "", "", "");
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        if (d < today)
+            return ("lic-expired", "🚫", "الرخصة منتهية!", "لازم تجدد الرخصة فوراً");
+        var days = d.DayNumber - today.DayNumber;
+        if (days <= 30)
+            return ("lic-soon", "⚠️", $"الرخصة هتخلص بعد {days} يوم", "اجدد قريباً");
+        return ("lic-ok", "✅", $"الرخصة سارية", $"تنتهي في {d:yyyy-MM-dd}");
+    }
+
+    /* DTOs */
     public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
 
-    /// <summary>مطابق لـ <c>DriversController.Upsert</c> — 11 حقل.</summary>
     public class Form
     {
-        public string DriverType { get; set; } = "Internal";
-        public int? EmployeeId { get; set; }
-        public int? SupplierId { get; set; }
-        public string FullName { get; set; } = "";
-        public string? NationalId { get; set; }
-        public string? Mobile { get; set; }
-        public string? LicenseNumber { get; set; }
-        public string? LicenseType { get; set; }
+        public string  DriverType        { get; set; } = "Internal";
+        public int?    EmployeeId        { get; set; }
+        public int?    SupplierId        { get; set; }
+        public string  FullName          { get; set; } = "";
+        public string? NationalId        { get; set; }
+        public string? Mobile            { get; set; }
+        public string? LicenseNumber     { get; set; }
+        public string? LicenseType       { get; set; }
         public string? LicenseExpiryDate { get; set; }
-        public string Status { get; set; } = "Active";
-        public string? Notes { get; set; }
+        public string  Status            { get; set; } = "Active";
+        public string? Notes             { get; set; }
     }
 
-    /// <summary>مطابق لـ <c>DriversController.Detail</c> — 13 حقل.</summary>
     public class Detail
     {
-        public int DriverId { get; set; }
-        public string DriverCode { get; set; } = "";
-        public string DriverType { get; set; } = "";
-        public int? EmployeeId { get; set; }
-        public int? SupplierId { get; set; }
-        public string FullName { get; set; } = "";
-        public string? NationalId { get; set; }
-        public string? Mobile { get; set; }
-        public string? LicenseNumber { get; set; }
-        public string? LicenseType { get; set; }
+        public int     DriverId          { get; set; }
+        public string  DriverCode        { get; set; } = "";
+        public string  DriverType        { get; set; } = "";
+        public int?    EmployeeId        { get; set; }
+        public int?    SupplierId        { get; set; }
+        public string  FullName          { get; set; } = "";
+        public string? NationalId        { get; set; }
+        public string? Mobile            { get; set; }
+        public string? LicenseNumber     { get; set; }
+        public string? LicenseType       { get; set; }
         public DateOnly? LicenseExpiryDate { get; set; }
-        public string Status { get; set; } = "";
-        public string? Notes { get; set; }
+        public string  Status            { get; set; } = "";
+        public string? Notes             { get; set; }
     }
 
-    // ═══════════════ Init ═══════════════
-
+    /* Init */
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
-        _id = Id;
+        _id   = Id;
         if (!CanSave) return;
 
         _loading = true;
@@ -271,12 +1056,10 @@
         };
     }
 
-    // ═══════════════ Handlers ═══════════════
-
-    /* 🔴 لما النوع يتبدّل نشيل الربط التاني — وإلا هنبعت employeeId و supplierId مع بعض. */
-    private void OnTypeChanged(ChangeEventArgs e)
+    /* Handlers */
+    private void OnTypeChangedClick(string type)
     {
-        _f.DriverType = e.Value?.ToString() ?? "Internal";
+        _f.DriverType = type;
         if (IsInternal) _f.SupplierId = null;
         else            _f.EmployeeId = null;
     }
@@ -284,20 +1067,24 @@
     private void OnExpiryChanged(ChangeEventArgs e) =>
         _f.LicenseExpiryDate = e.Value?.ToString();
 
-    // ═══════════════ Save ═══════════════
-
+    /* Save */
     private async Task SaveAsync()
     {
         if (_saving) return;
-        _saving = true; _msg = null;
+        _triedSave = true;
+        _saving    = true;
+        _msg       = null;
+
         try
         {
             if (string.IsNullOrWhiteSpace(_f.FullName))
-            { _msg = "الاسم الكامل مطلوب"; _ok = false; return; }
+            { _msg = "الاسم الكامل مطلوب"; _ok = false; _activeTab = 0; return; }
+
             if (IsInternal && _f.EmployeeId is null)
-            { _msg = "اختار الموظف — السائق الداخلي لازم مربوط بموظف"; _ok = false; return; }
+            { _msg = "اختار الموظف — السائق الداخلي لازم مربوط بموظف"; _ok = false; _activeTab = 0; return; }
+
             if (!IsInternal && _f.SupplierId is null)
-            { _msg = "اختار المورد — السائق الخارجي لازم مربوط بمورد"; _ok = false; return; }
+            { _msg = "اختار المورد — السائق الخارجي لازم مربوط بمورد"; _ok = false; _activeTab = 0; return; }
 
             var payload = new
             {
@@ -325,8 +1112,6 @@
         catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
         finally { _saving = false; }
     }
-
-    // ═══════════════ Helpers ═══════════════
 
     private void GoBack() => Nav.NavigateTo("/drivers");
 

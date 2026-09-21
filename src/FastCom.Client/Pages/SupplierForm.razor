@@ -10,180 +10,873 @@
 
 <PageTitle>@(_id is null ? "مورد جديد" : "تعديل مورد") — فاست كوم</PageTitle>
 
+
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
+
             <div>
                 <div class="fc-crumb">البيانات الأساسية · الموردون</div>
-                <h1 class="fc-hero-title">@(_id is null ? "مورد جديد" : $"تعديل {SupplierCode}")</h1>
-                <p class="fc-hero-sub">سجّل بيانات المورد — والكود بيتولد تلقائيًا (SUP-)</p>
+                <h1 class="fc-hero-title">
+                    @if (_id is null)
+                    {
+                        <span>مورد جديد</span>
+                        <span class="spf-hero-badge badge-new">جديد</span>
+                    }
+                    else
+                    {
+                        <span>@SupplierCode</span>
+                        <span class="spf-hero-badge badge-edit">تعديل</span>
+                    }
+                </h1>
+                <p class="fc-hero-sub">سجّل بيانات المورد — والكود بيتولد تلقائياً (SUP-)</p>
             </div>
+
             <div class="fc-head-actions">
-                <MudButton Variant="Variant.Outlined" OnClick="GoBack" Style="color:#9FB4CC">رجوع</MudButton>
+                <button class="spf-back-btn" @onclick="GoBack">
+                    <svg viewBox="0 0 24 24" width="16" height="16"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         aria-hidden="true">
+                        <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    الموردين
+                </button>
                 @if (CanSave)
                 {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving"
-                               StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="SaveAsync">حفظ</MudButton>
+                    <button class="spf-save-btn" @onclick="SaveAsync" disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="btn-spinner" aria-hidden="true"></span>
+                            <span>جاري الحفظ...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                <path d="M17 21v-8H7v8M7 3v5h8"
+                                      stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>حفظ المورد</span>
+                        }
+                    </button>
                 }
             </div>
+
         </div>
     </div>
 </div>
 
-<div class="fc-page">
+
+<div class="spf-body">
+
     @if (!CanSave)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">
-            @(_id is null ? "ليس لديك صلاحية إضافة مورد." : "ليس لديك صلاحية تعديل مورد.")
-        </MudAlert>
+        <div class="spf-state-box">
+            <div class="spf-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>@(_id is null ? "ليس لديك صلاحية إضافة مورد" : "ليس لديك صلاحية تعديل مورد")</p>
+            <button class="spf-state-back" @onclick="GoBack">العودة للقائمة</button>
+        </div>
     }
     else if (_loading)
     {
-        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+        <div class="spf-loading-wrap">
+            <div class="spf-spinner" aria-label="جاري التحميل"></div>
+            <div class="spf-loading-text">جاري تحميل بيانات المورد...</div>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
-
-            @if (_msg is not null)
-            {
-                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
-            }
-
-            @* ══════════ 1. التعريف ══════════ *@
-            <div class="fc-panel-sub" style="margin-bottom:14px">التعريف</div>
-            <div class="fc-form-grid">
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">نوع المورد *</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.SupplierType">
-                        @foreach (var t in Types) { <option value="@t.Key">@t.Value</option> }
-                    </select>
+        @if (_msg is not null)
+        {
+            <div class="spf-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                <div aria-hidden="true">
+                    @if (_ok)
+                    {
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                            <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                        </svg>
+                    }
                 </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">الاسم بالعربي *</div>
-                    @* 🔴 `@bind` بدل `@onchange` — أي `"` جوه attribute = RZ1010 *@
-                    <input class="fc-sel fc-sel-lg" @bind="_f.NameAr" maxlength="150" />
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">الاسم بالإنجليزي</div>
-                    <input class="fc-sel fc-sel-lg" value="@_f.NameEn" maxlength="150"
-                           @onchange="e => _f.NameEn = e.Value?.ToString()" />
-                </div>
+                <span>@_msg</span>
+                <button class="banner-close" @onclick="() => _msg = null">✕</button>
             </div>
+        }
 
-            @* ══════════ 2. بيانات ضريبية وقانونية ══════════ *@
-            <div class="fc-panel-sub" style="margin:26px 0 14px">بيانات ضريبية</div>
-            <div class="fc-form-grid">
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">الرقم الضريبي</div>
-                    <input class="fc-sel fc-sel-lg" value="@_f.TaxNumber" maxlength="50"
-                           @onchange="e => _f.TaxNumber = e.Value?.ToString()" />
-                    <div class="fc-field-hint">مطلوب للفواتير الضريبية وإقرارات الخصم</div>
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">شرط السداد</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.PaymentTermId">
-                        <option value="">— كاش / حسب الاتفاق —</option>
-                        @foreach (var p in _terms) { <option value="@p.Id">@p.Label</option> }
-                    </select>
-                    <div class="fc-field-hint">بيحدد ميعاد استحقاق فاتورة المورد</div>
-                </div>
+        @* ── نوع المورد — Type Selector ── *@
+        <div class="spf-type-selector-card">
+            <div class="spf-type-selector-title">
+                <svg viewBox="0 0 24 24" width="15" height="15"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     aria-hidden="true">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round"/>
+                </svg>
+                نوع المورد
+                <span class="spf-required">*</span>
             </div>
-
-            @* ══════════ 3. التواصل ══════════ *@
-            <div class="fc-panel-sub" style="margin:26px 0 14px">التواصل</div>
-            <div class="fc-form-grid">
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">التليفون</div>
-                    <input class="fc-sel fc-sel-lg" value="@_f.Phone" maxlength="30" dir="ltr"
-                           style="text-align:right" @onchange="e => _f.Phone = e.Value?.ToString()" />
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">البريد الإلكتروني</div>
-                    <input type="email" class="fc-sel fc-sel-lg" value="@_f.Email" maxlength="150" dir="ltr"
-                           style="text-align:right" @onchange="e => _f.Email = e.Value?.ToString()" />
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">العنوان</div>
-                    <input class="fc-sel fc-sel-lg" value="@_f.Address" maxlength="300"
-                           @onchange="e => _f.Address = e.Value?.ToString()" />
-                </div>
-            </div>
-
-            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:26px">
-                <MudButton Variant="Variant.Outlined" OnClick="GoBack">رجوع</MudButton>
-                @if (CanSave)
+            <div class="spf-type-grid" role="group" aria-label="اختر نوع المورد">
+                @foreach (var t in Types)
                 {
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
-                               OnClick="SaveAsync">حفظ</MudButton>
+                    var tKey = t.Key;
+                    var isSelected = _f.SupplierType == tKey;
+                    <button type="button"
+                            class="spf-type-tile @(isSelected ? "type-selected" : "")"
+                            @onclick="() => _f.SupplierType = tKey"
+                            aria-pressed="@isSelected">
+                        <span class="spf-type-emoji">@TypeIcon(tKey)</span>
+                        <span class="spf-type-name">@t.Value</span>
+                        @if (isSelected)
+                        {
+                            <span class="spf-type-check" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="12" height="12"
+                                     fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                        }
+                    </button>
                 }
             </div>
+        </div>
 
-        </div></div>
+
+        <div class="spf-tabs-wrap">
+
+            <MudTabs Elevation="0"
+                     Rounded="false"
+                     ApplyEffectsToContainer="true"
+                     PanelClass="spf-tab-panel"
+                     @bind-ActivePanelIndex="_activeTab"
+                     Class="spf-mud-tabs">
+
+
+                @* ══════════════════════════════════════
+                   TAB 1 — التعريف والبيانات الأساسية
+                ══════════════════════════════════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="stab-label">
+                            <div class="stab-icon stab-blue" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                    <path d="M9 22V12h6v10"/>
+                                </svg>
+                            </div>
+                            <span>بيانات المورد</span>
+                            @if (HasTabError(1))
+                            {
+                                <span class="stab-err-dot" aria-label="يوجد خطأ"></span>
+                            }
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="spf-tab-section">
+
+                            @* ── الأسماء ── *@
+                            <div class="spf-section-card">
+                                <div class="spf-section-head">
+                                    <div class="spf-section-icon icon-blue" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                            <path d="M9 22V12h6v10"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="spf-section-title">التعريف</div>
+                                        <div class="spf-section-sub">اسم المورد بالعربي والإنجليزي</div>
+                                    </div>
+                                </div>
+
+                                <div class="spf-form-grid">
+
+                                    <div class="spf-field">
+                                        <label class="spf-label">
+                                            الاسم بالعربي
+                                            <span class="spf-required">*</span>
+                                        </label>
+                                        <input class="spf-input @(string.IsNullOrWhiteSpace(_f.NameAr) && _triedSave ? "input-error" : "")"
+                                               @bind="_f.NameAr"
+                                               maxlength="150"
+                                               placeholder="الاسم الكامل للمورد"
+                                               aria-required="true" />
+                                        @if (string.IsNullOrWhiteSpace(_f.NameAr) && _triedSave)
+                                        {
+                                            <div class="spf-err-msg" role="alert">الاسم بالعربي مطلوب</div>
+                                        }
+                                    </div>
+
+                                    <div class="spf-field">
+                                        <label class="spf-label">الاسم بالإنجليزي</label>
+                                        <input class="spf-input"
+                                               value="@_f.NameEn"
+                                               maxlength="150"
+                                               placeholder="Supplier name in English"
+                                               dir="ltr"
+                                               @onchange="e => _f.NameEn = e.Value?.ToString()" />
+                                    </div>
+
+                                </div>
+                            </div>
+
+
+                            @* ── التواصل ── *@
+                            <div class="spf-section-card">
+                                <div class="spf-section-head">
+                                    <div class="spf-section-icon icon-green" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-4.99-5 19.79 19.79 0 01-3.07-8.67A2 2 0 014 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="spf-section-title">التواصل</div>
+                                        <div class="spf-section-sub">التليفون والبريد والعنوان</div>
+                                    </div>
+                                </div>
+
+                                <div class="spf-form-grid">
+
+                                    <div class="spf-field">
+                                        <label class="spf-label">التليفون</label>
+                                        <div class="spf-input-group">
+                                            <span class="spf-prefix" aria-hidden="true">📞</span>
+                                            <input class="spf-input with-prefix"
+                                                   value="@_f.Phone"
+                                                   maxlength="30"
+                                                   placeholder="02-XXXXXXXX"
+                                                   type="tel"
+                                                   dir="ltr"
+                                                   @onchange="e => _f.Phone = e.Value?.ToString()" />
+                                        </div>
+                                    </div>
+
+                                    <div class="spf-field">
+                                        <label class="spf-label">البريد الإلكتروني</label>
+                                        <div class="spf-input-group">
+                                            <span class="spf-prefix" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="13" height="13"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                                                    <path d="M22 6l-10 7L2 6"/>
+                                                </svg>
+                                            </span>
+                                            <input class="spf-input with-prefix"
+                                                   value="@_f.Email"
+                                                   maxlength="150"
+                                                   placeholder="supplier@company.com"
+                                                   type="email"
+                                                   dir="ltr"
+                                                   @onchange="e => _f.Email = e.Value?.ToString()" />
+                                        </div>
+                                    </div>
+
+                                    <div class="spf-field spf-field-full">
+                                        <label class="spf-label">العنوان</label>
+                                        <div class="spf-input-group">
+                                            <span class="spf-prefix" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="13" height="13"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                                                    <circle cx="12" cy="10" r="3"/>
+                                                </svg>
+                                            </span>
+                                            <input class="spf-input with-prefix"
+                                                   value="@_f.Address"
+                                                   maxlength="300"
+                                                   placeholder="العنوان الكامل"
+                                                   @onchange="e => _f.Address = e.Value?.ToString()" />
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+                @* ══════════════════════════════════════
+                   TAB 2 — البيانات الضريبية والمالية
+                ══════════════════════════════════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="stab-label">
+                            <div class="stab-icon stab-amber" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <span>ضريبي ومالي</span>
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="spf-tab-section">
+
+                            <div class="spf-section-card">
+                                <div class="spf-section-head">
+                                    <div class="spf-section-icon icon-amber" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="spf-section-title">البيانات الضريبية والمالية</div>
+                                        <div class="spf-section-sub">مطلوبة للفواتير الضريبية وإقرارات الخصم</div>
+                                    </div>
+                                </div>
+
+                                <div class="spf-form-grid">
+
+                                    <div class="spf-field">
+                                        <label class="spf-label">الرقم الضريبي</label>
+                                        <div class="spf-input-group">
+                                            <span class="spf-prefix" aria-hidden="true">
+                                                <svg viewBox="0 0 16 16" width="13" height="13"
+                                                     fill="none" stroke="currentColor" stroke-width="1.7">
+                                                    <rect x="2" y="2" width="12" height="12" rx="2"/>
+                                                    <path d="M5 8h6M5 5h6M5 11h4" stroke-linecap="round"/>
+                                                </svg>
+                                            </span>
+                                            <input class="spf-input with-prefix"
+                                                   value="@_f.TaxNumber"
+                                                   maxlength="50"
+                                                   placeholder="000-000-000"
+                                                   dir="ltr"
+                                                   @onchange="e => _f.TaxNumber = e.Value?.ToString()" />
+                                        </div>
+                                        <div class="spf-hint">
+                                            <svg viewBox="0 0 16 16" width="10" height="10"
+                                                 fill="none" stroke="currentColor" stroke-width="1.8"
+                                                 aria-hidden="true">
+                                                <circle cx="8" cy="8" r="6"/>
+                                                <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                            </svg>
+                                            مطلوب للفواتير الضريبية وإقرارات الخصم
+                                        </div>
+                                    </div>
+
+                                    <div class="spf-field">
+                                        <label class="spf-label">شرط السداد</label>
+                                        <div class="spf-select-wrap">
+                                            <svg class="spf-sel-icon" viewBox="0 0 24 24" width="14" height="14"
+                                                 fill="none" stroke="currentColor" stroke-width="2"
+                                                 aria-hidden="true">
+                                                <rect x="1" y="4" width="22" height="16" rx="2"/>
+                                                <path d="M1 10h22"/>
+                                            </svg>
+                                            <select class="spf-input spf-select" @bind="_f.PaymentTermId">
+                                                <option value="">— كاش / حسب الاتفاق —</option>
+                                                @foreach (var p in _terms)
+                                                {
+                                                    <option value="@p.Id">@p.Label</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="spf-hint">
+                                            <svg viewBox="0 0 16 16" width="10" height="10"
+                                                 fill="none" stroke="currentColor" stroke-width="1.8"
+                                                 aria-hidden="true">
+                                                <circle cx="8" cy="8" r="6"/>
+                                                <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                            </svg>
+                                            بيحدد ميعاد استحقاق فاتورة المورد
+                                        </div>
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+            </MudTabs>
+        </div>
+
+
+        @* Bottom Actions *@
+        <div class="spf-bottom-actions">
+            <button class="spf-bottom-back" @onclick="GoBack">
+                <svg viewBox="0 0 24 24" width="15" height="15"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     aria-hidden="true">
+                    <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                رجوع للقائمة
+            </button>
+
+            @if (CanSave)
+            {
+                <div class="spf-bottom-right">
+                    @if (_activeTab < 1)
+                    {
+                        <button class="spf-next-btn" @onclick="() => _activeTab++">
+                            التالي
+                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    }
+                    <button class="spf-bottom-save" @onclick="SaveAsync" disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="btn-spinner sm" aria-hidden="true"></span>
+                            <span>جاري الحفظ...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                <path d="M17 21v-8H7v8M7 3v5h8"
+                                      stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>حفظ المورد</span>
+                        }
+                    </button>
+                </div>
+            }
+        </div>
+
     }
 </div>
 
+
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* Hero */
+    .spf-hero-badge {
+        display: inline-flex; align-items: center;
+        padding: 3px 10px; border-radius: 20px;
+        font-size: 11px; font-weight: 800;
+    }
+    .badge-new  { background: rgba(34,197,94,.2);  color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+    .badge-edit { background: rgba(234,179,8,.2);   color: #fde68a; border: 1px solid rgba(234,179,8,.3); }
+
+    .spf-back-btn {
+        display: inline-flex; align-items: center; gap: 5px;
+        height: 36px; padding: 0 13px;
+        border: 1px solid rgba(255,255,255,.2); border-radius: 9px;
+        background: rgba(255,255,255,.08); color: rgba(255,255,255,.75);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: background .15s ease;
+    }
+    .spf-back-btn:hover { background: rgba(255,255,255,.14); }
+    .spf-back-btn svg { transform: rotate(180deg); }
+
+    .spf-save-btn {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 38px; padding: 0 18px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: #fff; font-family: inherit;
+        font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(22,163,74,.35);
+        transition: all .15s ease;
+    }
+    .spf-save-btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .spf-save-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* Body */
+    .spf-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 180px);
+        padding: 16px 20px 32px;
+        max-width: 900px; width: 100%;
+        margin: 0 auto;
+        display: flex; flex-direction: column; gap: 14px;
+    }
+
+    /* States */
+    .spf-state-box {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 280px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .spf-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .spf-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+    .spf-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .spf-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+    .spf-state-back { margin-top: 8px; padding: 9px 20px; border: 1px solid var(--fc-border); border-radius: 9px; background: var(--fc-card); color: var(--fc-text); font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+
+    /* Loading */
+    .spf-loading-wrap {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 14px; min-height: 260px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .spf-spinner {
+        width: 36px; height: 36px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: spf-spin .75s linear infinite;
+    }
+    @@keyframes spf-spin { to { transform: rotate(360deg); } }
+    .spf-loading-text { font-size: 13px; font-weight: 600; color: var(--fc-muted); }
+
+    /* Banner */
+    .spf-banner {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 16px; border-radius: 10px;
+        font-size: 13px; font-weight: 600;
+        animation: spf-banner-in .25s ease;
+    }
+    @@keyframes spf-banner-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    .banner-success { background: #e9f8f0; color: #0e7a43; border: 1px solid #b5e8d0; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8d0; }
+    .banner-close { margin-right: auto; background: none; border: none; color: inherit; opacity: .6; cursor: pointer; font-size: 13px; }
+
+    /* ================================================================
+       TYPE SELECTOR CARD
+    ================================================================ */
+    .spf-type-selector-card {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 6px 18px rgba(15,41,82,.05);
+        padding: 18px 20px;
+        display: flex; flex-direction: column; gap: 14px;
+    }
+
+    .spf-type-selector-title {
+        display: flex; align-items: center; gap: 7px;
+        font-size: 13px; font-weight: 800; color: #344258;
+    }
+
+    .spf-required { color: var(--fc-red); font-size: 13px; }
+
+    .spf-type-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+    }
+
+    .spf-type-tile {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 14px; border-radius: 11px;
+        border: 2px solid #e4edf8; background: #fafcff;
+        cursor: pointer; position: relative;
+        font-family: inherit; text-align: right;
+        transition: all .18s ease;
+    }
+    .spf-type-tile:hover:not(.type-selected) {
+        border-color: #b0c4e0; background: #f5f8ff;
+        transform: translateY(-1px);
+    }
+
+    .type-selected {
+        border-color: var(--fc-blue) !important;
+        background: var(--fc-blue-lt) !important;
+        box-shadow: 0 0 0 3px rgba(30,110,245,.10);
+    }
+
+    .spf-type-emoji { font-size: 22px; flex: 0 0 auto; }
+
+    .spf-type-name {
+        font-size: 12px; font-weight: 800; color: #1c2b43; flex: 1;
+    }
+    .type-selected .spf-type-name { color: var(--fc-blue); }
+
+    .spf-type-check {
+        position: absolute; top: 8px; left: 8px;
+        width: 20px; height: 20px; border-radius: 50%;
+        background: var(--fc-blue); color: #fff;
+        display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ================================================================
+       TABS
+    ================================================================ */
+    .spf-tabs-wrap {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden; flex: 1;
+    }
+
+    .spf-mud-tabs .mud-tabs-toolbar {
+        background: linear-gradient(180deg, #f9fafd 0%, #f3f6fb 100%);
+        border-bottom: 2px solid #e8edf5; padding: 0 16px; min-height: 54px;
+    }
+    .spf-mud-tabs .mud-tab { font-family: "Cairo","Tajawal","Inter",Arial,sans-serif; font-size: 12px; font-weight: 700; color: var(--fc-muted); padding: 0 6px; min-width: unset; transition: color .15s ease; }
+    .spf-mud-tabs .mud-tab.mud-tab-active { color: var(--fc-blue) !important; font-weight: 800; }
+    .spf-mud-tabs .mud-tab-slider { background: var(--fc-blue) !important; height: 3px; border-radius: 3px 3px 0 0; }
+    .spf-mud-tabs .mud-tab:hover:not(.mud-tab-active) { color: var(--fc-text); background: rgba(0,0,0,.03); border-radius: 8px; }
+    .spf-tab-panel { padding: 0; }
+
+    /* Tab Labels */
+    .stab-label { display: flex; align-items: center; gap: 7px; padding: 0 4px; white-space: nowrap; }
+    .stab-icon  { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 7px; }
+    .stab-blue  { background: var(--fc-blue-lt);  color: var(--fc-blue); }
+    .stab-amber { background: var(--fc-amber-lt); color: var(--fc-amber); }
+    .stab-err-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--fc-red); flex: 0 0 7px; animation: spf-pulse 1.5s ease infinite; }
+    @@keyframes spf-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.4); } 50% { box-shadow: 0 0 0 5px rgba(224,48,72,0); } }
+
+    /* Tab Section */
+    .spf-tab-section { padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 16px; }
+
+    /* Section Cards */
+    .spf-section-card {
+        border: 1px solid #e4edf8; border-radius: 14px;
+        background: linear-gradient(180deg, #fafcff, #f5f8fb);
+        padding: 18px 20px;
+        transition: border-color .15s ease;
+    }
+    .spf-section-card:hover { border-color: #c8d8f0; }
+
+    .spf-section-head {
+        display: flex; align-items: flex-start; gap: 12px;
+        margin-bottom: 18px; padding-bottom: 14px;
+        border-bottom: 1px solid #e4edf8;
+    }
+
+    .spf-section-icon { width: 42px; height: 42px; flex: 0 0 42px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+    .icon-blue   { background: var(--fc-blue-lt);  color: var(--fc-blue);  border: 1px solid #bdd4fc; }
+    .icon-green  { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .icon-amber  { background: var(--fc-amber-lt); color: var(--fc-amber); border: 1px solid #f0d070; }
+
+    .spf-section-title { font-size: 14.5px; font-weight: 800; color: #1c2b43; line-height: 1.2; }
+    .spf-section-sub   { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
+
+    /* Form */
+    .spf-form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .spf-field { display: flex; flex-direction: column; gap: 6px; }
+    .spf-field-full { grid-column: 1 / -1; }
+
+    .spf-label { font-size: 12px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 4px; }
+
+    .spf-input {
+        height: 42px; width: 100%;
+        border: 1.5px solid #d8e2f0; border-radius: 9px;
+        background: #fff; color: var(--fc-text);
+        font-family: inherit; font-size: 13px; padding: 0 12px;
+        outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .spf-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .spf-input.input-error { border-color: var(--fc-red); box-shadow: 0 0 0 3px rgba(224,48,72,.08); }
+    .spf-input::placeholder { color: #b0bcc8; }
+
+    .spf-input-group { position: relative; display: flex; align-items: center; }
+    .spf-prefix {
+        position: absolute; right: 12px;
+        display: flex; align-items: center;
+        color: #9aaabb; pointer-events: none; z-index: 1;
+        font-size: 11px; font-weight: 700;
+    }
+    .spf-input.with-prefix { padding-right: 36px; }
+
+    .spf-select-wrap { position: relative; }
+    .spf-sel-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: #9aaabb; pointer-events: none; z-index: 1; }
+    .spf-select { padding-right: 36px; cursor: pointer; -webkit-appearance: none; appearance: none; }
+
+    .spf-hint { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--fc-muted); font-weight: 500; }
+    .spf-err-msg { font-size: 10.5px; color: var(--fc-red); font-weight: 700; }
+
+    /* Bottom Actions */
+    .spf-bottom-actions {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; padding: 14px 20px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); box-shadow: 0 2px 8px rgba(15,41,82,.04);
+    }
+
+    .spf-bottom-back {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 16px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .spf-bottom-back:hover { background: #f0f4fa; color: var(--fc-text); }
+    .spf-bottom-back svg { transform: rotate(180deg); }
+
+    .spf-bottom-right { display: flex; align-items: center; gap: 10px; }
+
+    .spf-next-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 14px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .spf-next-btn:hover { background: var(--fc-blue); color: #fff; }
+    .spf-next-btn svg { transform: rotate(180deg); }
+
+    .spf-bottom-save {
+        display: inline-flex; align-items: center; gap: 8px;
+        height: 40px; padding: 0 22px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #1e6ef5, #1558d6);
+        color: #fff; font-family: inherit;
+        font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(30,110,245,.28);
+        transition: all .15s ease;
+    }
+    .spf-bottom-save:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(30,110,245,.36); }
+    .spf-bottom-save:disabled { opacity: .6; cursor: not-allowed; }
+
+    .btn-spinner { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spf-spin .7s linear infinite; }
+    .btn-spinner.sm { width: 13px; height: 13px; }
+
+    @@media (max-width: 900px) {
+        .spf-form-grid { grid-template-columns: 1fr; }
+        .spf-type-grid { grid-template-columns: repeat(2, 1fr); }
+        .spf-tab-section { padding: 16px 14px 20px; }
+    }
+
+    @@media (max-width: 680px) {
+        .spf-body { padding: 10px 12px 24px; }
+        .spf-type-grid { grid-template-columns: 1fr 1fr; }
+        .spf-bottom-actions { flex-direction: column; }
+        .spf-bottom-back, .spf-bottom-save { width: 100%; justify-content: center; }
+        .spf-bottom-right { width: 100%; flex-direction: column; }
+        .spf-next-btn { width: 100%; justify-content: center; }
+    }
+
+    @@media (max-width: 480px) {
+        .spf-type-grid { grid-template-columns: 1fr; }
+    }
+
+</style>
+
+
 @code {
     [Parameter] public int? Id { get; set; }
-    private int? _id;
+    private int?   _id;
     private string SupplierCode = "";
+    private int    _activeTab;
+    private bool   _triedSave;
 
     private AuthUser? _user;
     private bool CanCreate => _user?.Can("SUPPLIER.CREATE") ?? false;
-    private bool CanEdit   => _user?.Can("SUPPLIER.EDIT") ?? false;
+    private bool CanEdit   => _user?.Can("SUPPLIER.EDIT")   ?? false;
     private bool CanSave   => _id is null ? CanCreate : CanEdit;
 
-    private bool _loading; private bool _saving;
-    private string? _msg; private bool _ok = true;
+    private bool    _loading; private bool _saving;
+    private string? _msg;     private bool _ok = true;
 
     private List<Opt> _terms = new();
     private Form _f = new();
 
-    /* 🔴 نفس القاموس الموجود في `Suppliers.razor` — لازم يفضل متطابق
-       وإلا القائمة هتعرض نوع والمورد محفوظ بنوع تاني. */
     private static readonly Dictionary<string, string> Types = new()
     {
-        ["TransportCompany"] = "شركة نقل", ["FuelStation"] = "محطة وقود", ["Workshop"] = "ورشة",
-        ["PortServices"] = "خدمات ميناء", ["PartsSupplier"] = "مورد قطع غيار", ["Other"] = "أخرى"
+        ["TransportCompany"] = "شركة نقل",
+        ["FuelStation"]      = "محطة وقود",
+        ["Workshop"]         = "ورشة",
+        ["PortServices"]     = "خدمات ميناء",
+        ["PartsSupplier"]    = "مورد قطع غيار",
+        ["Other"]            = "أخرى"
     };
 
+    /* ── Validation ── */
+    private bool HasTabError(int tab) => _triedSave && tab switch
+    {
+        1 => string.IsNullOrWhiteSpace(_f.NameAr),
+        _ => false
+    };
+
+    /* ── Type Helpers ── */
+    private static string TypeIcon(string t) => t switch
+    {
+        "TransportCompany" => "🚛",
+        "FuelStation"      => "⛽",
+        "Workshop"         => "🔧",
+        "PortServices"     => "⚓",
+        "PartsSupplier"    => "⚙️",
+        _                  => "🏢"
+    };
+
+    /* ── DTOs ── */
     public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
 
-    /// <summary>مطابق لـ <c>SuppliersController.Upsert</c> — 8 حقول.</summary>
     public class Form
     {
-        public string SupplierType { get; set; } = "TransportCompany";
-        public string NameAr { get; set; } = "";
-        public string? NameEn { get; set; }
-        public string? TaxNumber { get; set; }
-        public string? Phone { get; set; }
-        public string? Email { get; set; }
-        public string? Address { get; set; }
-        public int? PaymentTermId { get; set; }
+        public string  SupplierType  { get; set; } = "TransportCompany";
+        public string  NameAr        { get; set; } = "";
+        public string? NameEn        { get; set; }
+        public string? TaxNumber     { get; set; }
+        public string? Phone         { get; set; }
+        public string? Email         { get; set; }
+        public string? Address       { get; set; }
+        public int?    PaymentTermId { get; set; }
     }
 
-    /// <summary>مطابق لـ <c>SuppliersController.Detail</c> — 11 حقل.</summary>
     public class Detail
     {
-        public int SupplierId { get; set; }
-        public string SupplierCode { get; set; } = "";
-        public string SupplierType { get; set; } = "";
-        public string NameAr { get; set; } = "";
-        public string? NameEn { get; set; }
-        public string? TaxNumber { get; set; }
-        public string? Phone { get; set; }
-        public string? Email { get; set; }
-        public string? Address { get; set; }
-        public int? PaymentTermId { get; set; }
-        public bool IsActive { get; set; }
+        public int     SupplierId    { get; set; }
+        public string  SupplierCode  { get; set; } = "";
+        public string  SupplierType  { get; set; } = "";
+        public string  NameAr        { get; set; } = "";
+        public string? NameEn        { get; set; }
+        public string? TaxNumber     { get; set; }
+        public string? Phone         { get; set; }
+        public string? Email         { get; set; }
+        public string? Address       { get; set; }
+        public int?    PaymentTermId { get; set; }
+        public bool    IsActive      { get; set; }
     }
 
-    // ═══════════════ Init ═══════════════
-
+    /* ── Init ── */
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
-        _id = Id;
+        _id   = Id;
         if (!CanSave) return;
 
         _loading = true;
@@ -215,16 +908,18 @@
         };
     }
 
-    // ═══════════════ Save ═══════════════
-
+    /* ── Save ── */
     private async Task SaveAsync()
     {
         if (_saving) return;
-        _saving = true; _msg = null;
+        _triedSave = true;
+        _saving    = true;
+        _msg       = null;
+
         try
         {
             if (string.IsNullOrWhiteSpace(_f.NameAr))
-            { _msg = "الاسم بالعربي مطلوب"; _ok = false; return; }
+            { _msg = "الاسم بالعربي مطلوب"; _ok = false; _activeTab = 0; return; }
 
             var res = _id is null
                 ? await Http.PostAsJsonAsync("api/suppliers", _f)
@@ -237,8 +932,6 @@
         catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
         finally { _saving = false; }
     }
-
-    // ═══════════════ Helpers ═══════════════
 
     private void GoBack() => Nav.NavigateTo("/suppliers");
 

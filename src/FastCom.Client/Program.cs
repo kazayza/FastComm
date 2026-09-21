@@ -1,10 +1,11 @@
-using FastCom.Client;
+﻿using FastCom.Client;
 using FastCom.Client.Auth;
 using FastCom.Client.Services;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using MudBlazor.Services;
+using ApexCharts;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
@@ -50,6 +51,8 @@ builder.Services.AddAuthorizationCore();
    3) MudBlazor
    ========================================================== */
 builder.Services.AddMudServices();
+// 📊 ApexCharts — رسوم لوحة المؤشرات
+builder.Services.AddApexCharts();
 
 /* ==========================================================
    4) خدمات FastCom
@@ -58,3 +61,6 @@ builder.Services.AddScoped<CompanyService>();
 builder.Services.AddScoped<HealthService>();
 
 await builder.Build().RunAsync();
+
+
+

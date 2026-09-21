@@ -60,14 +60,27 @@ public class AuthMessageHandler : DelegatingHandler
         if (path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase)
             && !path.StartsWith("/api/health", StringComparison.OrdinalIgnoreCase))
         {
-            var raw = await response.Content.ReadAsStringAsync(cancellationToken);
-            if (!string.IsNullOrWhiteSpace(raw) && raw.TrimStart().StartsWith("<"))
+            /* 🔴 لو الـ response مش JSON (زي ملفات Excel)، ما نقرأهاش */
+            var ct = response.Content.Headers.ContentType?.MediaType ?? "";
+            var isJson = ct.Contains("json", StringComparison.OrdinalIgnoreCase)
+                      || ct.Contains("text", StringComparison.OrdinalIgnoreCase)
+                      || string.IsNullOrEmpty(ct);
+
+            if (isJson)
             {
-                throw new HttpRequestException(
-                    $"الإندبوينت `{path}` مش موجود على السيرفر — " +
-                    "السيرفر رجّع صفحة HTML مش بيانات. " +
-                    "اتأكد إن ملف الكنترولر متنسوخ في `FastCom.Server` " +
-                    "وإنك عملت **rebuild للسيرفر** (مش Client بس).");
+                var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+                if (!string.IsNullOrWhiteSpace(raw) && raw.TrimStart().StartsWith("<"))
+                {
+                    throw new HttpRequestException(
+                        $"الإندبوينت `{path}` مش موجود على السيرفر — " +
+                        "السيرفر رجّع صفحة HTML مش بيانات. " +
+                        "اتأكد إن ملف الكنترولر متنسوخ في `FastCom.Server` " +
+                        "وإنك عملت **rebuild للسيرفر** (مش Client بس).");
+                }
+
+                /* نرجّع الـ content تاني */
+                response.Content = new StringContent(raw, System.Text.Encoding.UTF8,
+                    response.Content.Headers.ContentType?.MediaType ?? "application/json");
             }
         }
 

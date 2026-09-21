@@ -9,6 +9,7 @@
 
 <PageTitle>الموظفين — فاست كوم</PageTitle>
 
+
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
@@ -18,137 +19,818 @@
                 <p class="fc-hero-sub">سجل العاملين بالشركة — الأساس لعهدة الموظفين وربط السائقين الداخليين</p>
             </div>
             <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
+                               OnClick="Reload" Style="color:#9FB4CC" />
                 @if (CanCreate)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="GoNew">موظف جديد</MudButton>
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="GoNew">موظف جديد</MudButton>
                 }
             </div>
         </div>
+
         @if (CanView)
         {
             <div class="fc-kpis fc-kpis-glass">
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.PeopleAlt" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي الموظفين</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(e => e.EmploymentStatus == "Active")</div><div class="fc-kpi-lb">نشط</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.Event" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(e => e.EmploymentStatus == "OnLeave")</div><div class="fc-kpi-lb">في إجازة</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(e => e.EmploymentStatus == "Suspended")</div><div class="fc-kpi-lb">موقوف</div></div></div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.PeopleAlt" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي الموظفين</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(e => e.EmploymentStatus == "Active")</div><div class="fc-kpi-lb">نشط</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.Event" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(e => e.EmploymentStatus == "OnLeave")</div><div class="fc-kpi-lb">في إجازة</div></div>
+                </div>
+                <div class="fc-kpi">
+                    <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(e => e.EmploymentStatus == "Suspended")</div><div class="fc-kpi-lb">موقوف</div></div>
+                </div>
             </div>
         }
     </div>
 </div>
 
-<div class="fc-page">
+
+<div class="em-body">
+
     @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض الموظفين.</MudAlert>
+        <div class="em-state-box">
+            <div class="em-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليس لديك صلاحية عرض الموظفين</p>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
-            <div class="fc-toolbar">
-                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
-                              Placeholder="ابحث بالاسم أو الكود أو الموبايل..." Variant="Variant.Outlined" Dense="true"
-                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                              Class="fc-search-box" Immediate="true" />
-                <select class="fc-sel" style="max-width:150px" @bind="_fStatus">
-                    <option value="all">كل الحالات</option>
-                    <option value="Active">نشط</option>
-                    <option value="OnLeave">في إجازة</option>
-                    <option value="Suspended">موقوف</option>
-                    <option value="Terminated">منتهي الخدمة</option>
-                </select>
-                <select class="fc-sel" style="max-width:170px" @bind="_fDept">
-                    <option value="0">كل الأقسام</option>
-                    @foreach (var d in _depts) { <option value="@d.Id">@d.Label</option> }
-                </select>
-                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+        <div class="em-card">
+
+            @* ── Toolbar ── *@
+            <div class="em-toolbar">
+
+                <div class="em-search-wrap">
+                    <svg class="em-search-icon" viewBox="0 0 24 24" width="16" height="16"
+                         fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                    </svg>
+                    <input class="em-search-input"
+                           placeholder="ابحث بالاسم أو الكود أو الموبايل..."
+                           @bind="_search" @bind:event="oninput"
+                           aria-label="بحث" />
+                    @if (!string.IsNullOrWhiteSpace(_search))
+                    {
+                        <button class="em-search-clear" @onclick="() => _search = string.Empty">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    }
+                </div>
+
+                @* Department Filter *@
+                <div class="em-dept-filter-wrap">
+                    <svg class="em-dept-icon" viewBox="0 0 24 24" width="13" height="13"
+                         fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                        <path d="M9 22V12h6v10"/>
+                    </svg>
+                    <select class="em-dept-select" @bind="_fDept" @bind:after="LoadAsync">
+                        <option value="0">كل الأقسام</option>
+                        @foreach (var d in _depts)
+                        {
+                            <option value="@d.Id">@d.Label</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="em-results-badge">
+                    عرض <strong>@Filtered.Count()</strong> من <strong>@_items.Count</strong>
+                </div>
+
             </div>
 
+
+            @* ── Status Tabs ── *@
+            <div class="em-status-bar">
+                <div class="em-status-tabs" role="group" aria-label="فلتر الحالة">
+                    @foreach (var t in _statusTabs)
+                    {
+                        var cnt = t.Key == "all"
+                            ? _items.Count
+                            : _items.Count(x => x.EmploymentStatus == t.Key);
+
+                        <button class="em-status-tab @(_fStatus == t.Key ? "active" : "")"
+                                @onclick="() => { _fStatus = t.Key; }"
+                                aria-pressed="@(_fStatus == t.Key)">
+                            <span class="em-tab-dot @StatusDotColor(t.Key)" aria-hidden="true"></span>
+                            <span>@t.Value</span>
+                            <span class="em-tab-count">@cnt</span>
+                        </button>
+                    }
+                </div>
+            </div>
+
+
+            @* ── Content ── *@
             @if (_loading)
             {
-                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+                <div class="em-loading">
+                    <div class="em-spinner" aria-label="جاري التحميل"></div>
+                    <span>جاري تحميل الموظفين...</span>
+                </div>
+            }
+            else if (!Filtered.Any())
+            {
+                <div class="em-empty">
+                    <div class="em-empty-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="42" height="42"
+                             fill="none" stroke="currentColor" stroke-width="1.4">
+                            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+                        </svg>
+                    </div>
+                    <div class="em-empty-title">
+                        @(string.IsNullOrWhiteSpace(_search) && _fStatus == "all" && _fDept == 0
+                            ? "لا يوجد موظفين لسه"
+                            : "لا توجد نتائج")
+                    </div>
+                    <div class="em-empty-sub">
+                        @(string.IsNullOrWhiteSpace(_search) && _fStatus == "all" && _fDept == 0
+                            ? "ضيف أول موظف عشان تقدر تفتح عهدة أو تربط سائق داخلي"
+                            : "جرّب تغير الفلتر أو كلمة البحث")
+                    </div>
+                    @if (CanCreate && string.IsNullOrWhiteSpace(_search) && _fStatus == "all" && _fDept == 0)
+                    {
+                        <button class="em-add-btn" @onclick="GoNew">
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2.5"
+                                 aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                            موظف جديد
+                        </button>
+                    }
+                </div>
             }
             else
             {
-                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
-                    <thead><tr>
-                        <th>الكود</th><th>الاسم</th><th>القسم</th><th>المسمى الوظيفي</th>
-                        <th>الموبايل</th><th>تاريخ التعيين</th><th>الحالة</th>
-                        @if (CanEdit || CanDelete) { <th style="width:170px; text-align:left">إجراءات</th> }
-                    </tr></thead>
-                    <tbody>
-                        @if (Filtered.Count() == 0)
-                        {
-                            <tr><td colspan="@ColCount"><div class="fc-empty">
-                                <div>مافيش موظفين في الفلتر ده</div>
-                                <div class="fc-cell-sub">ضيف أول موظف عشان تقدر تفتح عهدة لموظف أو تربط سائق داخلي</div>
-                            </div></td></tr>
-                        }
-                        @foreach (var e in Filtered)
-                        {
+                <div class="em-table-wrap">
+                    <table class="em-table" aria-label="قائمة الموظفين">
+                        <thead>
                             <tr>
-                                <td><span class="fc-role-chip">@e.EmployeeCode</span></td>
-                                <td><div class="fc-cell-main">@e.FullNameAr</div></td>
-                                <td class="fc-cell-sub">@(e.DepartmentName ?? "—")</td>
-                                <td class="fc-cell-sub">@(e.JobTitleName ?? "—")</td>
-                                <td class="fc-cell-sub">@(e.Mobile ?? "—")</td>
-                                <td class="fc-cell-sub">@(e.HireDate?.ToString("yyyy-MM-dd") ?? "—")</td>
-                                <td><span class="@StatusCls(e.EmploymentStatus)"><i></i>@StatusName(e.EmploymentStatus)</span></td>
+                                <th scope="col" class="th-start">الموظف</th>
+                                <th scope="col">القسم</th>
+                                <th scope="col">المسمى الوظيفي</th>
+                                <th scope="col">الموبايل</th>
+                                <th scope="col">تاريخ التعيين</th>
+                                <th scope="col">الحالة</th>
                                 @if (CanEdit || CanDelete)
                                 {
-                                    <td style="text-align:left">
-                                        @if (CanEdit)
-                                        {
-                                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
-                                                           title="تعديل" OnClick="() => GoEdit(e)" />
-                                        }
-                                        @if (CanDelete && e.EmploymentStatus != "Terminated")
-                                        {
-                                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small"
-                                                           title="إنهاء خدمة" Color="Color.Error" OnClick="() => _confirmId = e.EmployeeId" />
-                                        }
-                                    </td>
+                                    <th scope="col" style="width:110px">إجراءات</th>
                                 }
                             </tr>
-                        }
-                    </tbody>
-                </table></div>
-            }
-        </div></div>
-    }
+                        </thead>
+                        <tbody>
+                            @foreach (var e in Filtered)
+                            {
+                                <tr class="@(e.EmploymentStatus == "Terminated" ? "row-terminated" : "")">
 
-    @* ═══════════ تأكيد إنهاء الخدمة ═══════════ *@
-    @if (_confirmId is not null)
-    {
-        var target = _items.FirstOrDefault(x => x.EmployeeId == _confirmId);
-        <div class="fc-modal-backdrop" @onclick="() => _confirmId = null">
-            <div class="fc-modal fc-modal-sm" @onclick:stopPropagation>
-                <div class="fc-modal-head">
-                    <div><div class="fc-modal-title">إنهاء خدمة</div>
-                        <div class="fc-modal-sub">الموظف مش بيتحذف — حالته بس بتتحول لـ«منتهي الخدمة»</div></div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _confirmId = null" />
+                                    @* ── الموظف ── *@
+                                    <td class="td-start">
+                                        <div class="em-emp-cell">
+                                            <div class="em-avatar @AvatarClass(e.EmploymentStatus)"
+                                                 aria-hidden="true">
+                                                @(e.FullNameAr.Length > 0 ? e.FullNameAr[0].ToString() : "؟")
+                                            </div>
+                                            <div class="em-emp-info">
+                                                <div class="em-emp-name">@e.FullNameAr</div>
+                                                <span class="em-code-chip">@e.EmployeeCode</span>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    @* ── القسم ── *@
+                                    <td>
+                                        @if (e.DepartmentName is not null)
+                                        {
+                                            <span class="em-dept-tag">@e.DepartmentName</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="td-muted">—</span>
+                                        }
+                                    </td>
+
+                                    @* ── المسمى ── *@
+                                    <td class="td-muted">@(e.JobTitleName ?? "—")</td>
+
+                                    @* ── الموبايل ── *@
+                                    <td class="td-muted" dir="ltr">@(e.Mobile ?? "—")</td>
+
+                                    @* ── تاريخ التعيين ── *@
+                                    <td>
+                                        @if (e.HireDate.HasValue)
+                                        {
+                                            <div class="em-date-cell">
+                                                <svg viewBox="0 0 16 16" width="10" height="10"
+                                                     fill="none" stroke="currentColor" stroke-width="1.7"
+                                                     aria-hidden="true">
+                                                    <rect x="2" y="3" width="12" height="11" rx="2"/>
+                                                    <path d="M5 1v3M11 1v3M2 7h12" stroke-linecap="round"/>
+                                                </svg>
+                                                @e.HireDate.Value.ToString("yyyy-MM-dd")
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="td-muted">—</span>
+                                        }
+                                    </td>
+
+                                    @* ── الحالة ── *@
+                                    <td>
+                                        <span class="em-chip @StatusChipClass(e.EmploymentStatus)">
+                                            <span class="em-chip-dot @StatusDotClass(e.EmploymentStatus)"
+                                                  aria-hidden="true"></span>
+                                            @StatusName(e.EmploymentStatus)
+                                        </span>
+                                    </td>
+
+                                    @* ── إجراءات ── *@
+                                    @if (CanEdit || CanDelete)
+                                    {
+                                        <td>
+                                            <div class="em-actions">
+                                                @if (CanEdit)
+                                                {
+                                                    <button class="em-act-btn act-edit"
+                                                            @onclick="() => GoEdit(e)"
+                                                            title="تعديل"
+                                                            aria-label="تعديل @e.FullNameAr">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+                                                @if (CanDelete && e.EmploymentStatus != "Terminated")
+                                                {
+                                                    <button class="em-act-btn act-terminate"
+                                                            @onclick="() => _confirmId = e.EmployeeId"
+                                                            title="إنهاء خدمة"
+                                                            aria-label="إنهاء خدمة @e.FullNameAr">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <circle cx="12" cy="12" r="10"/>
+                                                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </td>
+                                    }
+
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
                 </div>
-                <div class="fc-modal-body">
-                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
-                        @(target is null ? "—" : $"هتنهي خدمة «{target.FullNameAr}» ({target.EmployeeCode}). تكمل؟")
-                    </MudAlert>
-                </div>
-                <div class="fc-modal-foot">
-                    <MudButton Variant="Variant.Outlined" OnClick="() => _confirmId = null">إلغاء</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Error"
-                               OnClick="() => DeleteAsync(_confirmId!.Value)">تأكيد</MudButton>
-                </div>
-            </div>
+            }
+
         </div>
     }
-
-    @* ═══════════ مودال: إضافة / تعديل ═══════════ *@
 </div>
+
+
+@* ═══════════════════════════════════════════
+   MODAL — تأكيد إنهاء الخدمة
+═══════════════════════════════════════════ *@
+@if (_confirmId is not null)
+{
+    var target = _items.FirstOrDefault(x => x.EmployeeId == _confirmId);
+
+    <div class="em-modal-backdrop" @onclick="() => _confirmId = null"
+         role="dialog" aria-modal="true" aria-label="تأكيد إنهاء الخدمة">
+        <div class="em-modal" @onclick:stopPropagation="true">
+
+            <div class="em-modal-head">
+                <div class="em-modal-icon terminate-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M22 7l-5 5M17 7l5 5"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="em-modal-title">إنهاء خدمة موظف</div>
+                    <div class="em-modal-sub">الموظف مش بيتحذف — الحالة بس بتتحول لـ «منتهي الخدمة»</div>
+                </div>
+                <button class="em-modal-close" @onclick="() => _confirmId = null" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="em-modal-body">
+
+                @* Employee Card *@
+                @if (target is not null)
+                {
+                    <div class="em-confirm-card">
+                        <div class="em-confirm-avatar @AvatarClass(target.EmploymentStatus)"
+                             aria-hidden="true">
+                            @(target.FullNameAr.Length > 0 ? target.FullNameAr[0].ToString() : "؟")
+                        </div>
+                        <div class="em-confirm-info">
+                            <div class="em-confirm-name">@target.FullNameAr</div>
+                            <div class="em-confirm-meta">
+                                <span class="em-code-chip">@target.EmployeeCode</span>
+                                @if (target.DepartmentName is not null)
+                                {
+                                    <span class="em-dept-tag">@target.DepartmentName</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <div class="em-terminate-warning" role="alert">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         aria-hidden="true">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                        <path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
+                    </svg>
+                    <div>
+                        <strong>مش هيتحذف</strong>
+                        <p>حالة الموظف هتتحول لـ «منتهي الخدمة» فقط — البيانات والتاريخ بيتحفظوا</p>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="em-modal-foot">
+                <button class="em-modal-cancel" @onclick="() => _confirmId = null">إلغاء</button>
+                <button class="em-modal-terminate" @onclick="() => DeleteAsync(_confirmId!.Value)">
+                    <svg viewBox="0 0 24 24" width="15" height="15"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         aria-hidden="true">
+                        <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M22 7l-5 5M17 7l5 5"/>
+                    </svg>
+                    تأكيد إنهاء الخدمة
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-teal:      #0d9488;
+        --fc-teal-lt:   #e6faf8;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    .em-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 200px);
+        padding: 16px 20px 32px;
+        max-width: 1350px; width: 100%;
+        margin: 0 auto;
+    }
+
+    /* ================================================================
+       STATES
+    ================================================================ */
+    .em-state-box {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .em-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .em-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+    .em-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .em-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    /* ================================================================
+       CARD
+    ================================================================ */
+    .em-card {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden;
+    }
+
+    /* ================================================================
+       TOOLBAR
+    ================================================================ */
+    .em-toolbar {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7; flex-wrap: wrap;
+    }
+
+    .em-search-wrap {
+        position: relative; display: flex; align-items: center;
+        flex: 1; min-width: 200px; max-width: 380px;
+    }
+    .em-search-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; }
+
+    .em-search-input {
+        width: 100%; height: 38px; padding: 0 36px 0 12px;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .em-search-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .em-search-input::placeholder { color: #b0bcc8; }
+
+    .em-search-clear {
+        position: absolute; left: 10px;
+        display: flex; align-items: center; justify-content: center;
+        width: 22px; height: 22px; border-radius: 50%;
+        border: none; background: #edf1f7; color: #8899ae; cursor: pointer;
+        transition: all .12s ease;
+    }
+    .em-search-clear:hover { background: #dde5f0; }
+
+    .em-dept-filter-wrap {
+        position: relative; display: flex; align-items: center;
+        min-width: 150px; max-width: 200px;
+    }
+    .em-dept-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; z-index: 1; }
+    .em-dept-select {
+        width: 100%; height: 38px; padding: 0 32px 0 10px;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; outline: none; cursor: pointer;
+        -webkit-appearance: none; appearance: none;
+        transition: border-color .15s ease;
+    }
+    .em-dept-select:focus { border-color: var(--fc-blue); }
+
+    .em-results-badge {
+        display: flex; align-items: center; gap: 5px;
+        margin-right: auto; font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap;
+    }
+    .em-results-badge strong { color: #5a6e88; }
+
+    /* ================================================================
+       STATUS TABS
+    ================================================================ */
+    .em-status-bar {
+        padding: 10px 18px; background: #f9fafd;
+        border-bottom: 1px solid #edf1f7; overflow-x: auto;
+    }
+
+    .em-status-tabs {
+        display: flex; gap: 4px; padding: 3px;
+        border-radius: 10px; background: #f0f3f8; width: fit-content;
+    }
+
+    .em-status-tab {
+        display: flex; align-items: center; gap: 5px;
+        height: 32px; padding: 0 10px;
+        border: none; border-radius: 7px;
+        background: transparent; color: #6b7d95;
+        font-family: inherit; font-size: 10.5px; font-weight: 700;
+        cursor: pointer; white-space: nowrap; transition: all .15s ease;
+    }
+    .em-status-tab:hover:not(.active) { color: var(--fc-text); background: rgba(255,255,255,.6); }
+    .em-status-tab.active {
+        background: var(--fc-card); color: var(--fc-text);
+        box-shadow: 0 1px 4px rgba(15,41,82,.10); font-weight: 800;
+    }
+
+    .em-tab-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px; }
+
+    .em-tab-count {
+        min-width: 16px; height: 16px; border-radius: 4px; padding: 0 3px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 9px; font-weight: 900; font-family: "Inter", Arial, sans-serif;
+    }
+    .em-status-tab.active .em-tab-count { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .em-status-tab:not(.active) .em-tab-count { background: #e4eaf3; color: #8899ae; }
+
+    /* Dots */
+    .tdot-all        { background: var(--fc-blue); }
+    .tdot-active     { background: var(--fc-green); }
+    .tdot-onleave    { background: var(--fc-amber); }
+    .tdot-suspended  { background: var(--fc-red); }
+    .tdot-terminated { background: #9aaabb; }
+
+    /* ================================================================
+       LOADING / EMPTY
+    ================================================================ */
+    .em-loading {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 200px; color: var(--fc-muted); font-size: 12px; font-weight: 600;
+    }
+    .em-spinner {
+        width: 32px; height: 32px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: em-spin .75s linear infinite;
+    }
+    @@keyframes em-spin { to { transform: rotate(360deg); } }
+
+    .em-empty {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 10px; min-height: 240px; padding: 40px; text-align: center;
+    }
+    .em-empty-icon {
+        width: 72px; height: 72px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: #f0f4fa; color: #b0c4d8;
+    }
+    .em-empty-title { font-size: 15px; font-weight: 800; color: var(--fc-text); }
+    .em-empty-sub   { font-size: 12px; color: var(--fc-muted); max-width: 300px; text-align: center; }
+
+    .em-add-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 16px; margin-top: 6px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; transition: all .15s ease;
+    }
+    .em-add-btn:hover { background: var(--fc-blue); color: #fff; }
+
+    /* ================================================================
+       TABLE
+    ================================================================ */
+    .em-table-wrap { overflow-x: auto; }
+
+    .em-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+
+    .em-table thead th {
+        padding: 10px 12px;
+        background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 10.5px; font-weight: 800;
+        text-align: center; border-bottom: 2px solid #e4eaf3;
+        white-space: nowrap; position: sticky; top: 0; z-index: 1;
+    }
+    .em-table .th-start { text-align: right; }
+
+    .em-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background .12s ease; }
+    .em-table tbody tr:last-child { border-bottom: none; }
+    .em-table tbody tr:hover { background: #fafcff; }
+    .em-table tbody tr.row-terminated { opacity: .6; background: #f9fafb; }
+
+    .em-table tbody td { padding: 11px 12px; color: #526070; text-align: center; vertical-align: middle; }
+    .td-start { text-align: right !important; }
+    .td-muted  { color: #8899ae; font-size: 11px; }
+
+    /* ── Employee Cell ── */
+    .em-emp-cell { display: flex; align-items: center; gap: 10px; }
+
+    .em-avatar {
+        width: 38px; height: 38px; flex: 0 0 38px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 15px; font-weight: 800; color: #fff;
+        box-shadow: 0 2px 8px rgba(0,0,0,.10);
+    }
+
+    .av-active     { background: linear-gradient(135deg, #0d8a48, #16a35b); }
+    .av-onleave    { background: linear-gradient(135deg, #b87d08, #e09a10); }
+    .av-suspended  { background: linear-gradient(135deg, #b02040, #e03048); }
+    .av-terminated { background: linear-gradient(135deg, #7a8a9a, #5c6e80); }
+
+    .em-emp-name { font-size: 13px; font-weight: 800; color: #1c2c44; }
+
+    .em-code-chip {
+        display: inline-flex; padding: 1px 7px; border-radius: 5px;
+        background: #f0f4fa; border: 1px solid #e0e8f4;
+        font-size: 10px; font-weight: 800; color: #5a6e88;
+        font-family: "Inter", Arial, sans-serif; margin-top: 3px;
+    }
+
+    .em-dept-tag {
+        display: inline-flex; padding: 3px 9px; border-radius: 6px;
+        background: var(--fc-blue-lt); border: 1px solid #c0d4fb;
+        color: var(--fc-blue); font-size: 10.5px; font-weight: 700;
+    }
+
+    .em-date-cell {
+        display: flex; align-items: center; gap: 4px;
+        justify-content: center; color: #6b7d95; font-size: 11px;
+    }
+
+    /* Chips */
+    .em-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 3px 9px; border-radius: 7px;
+        font-size: 10.5px; font-weight: 800; white-space: nowrap;
+    }
+    .em-chip-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
+
+    .chip-active     { background: var(--fc-green-lt);  color: var(--fc-green);  border: 1px solid #b0e0c5; }
+    .chip-onleave    { background: var(--fc-amber-lt);  color: #9a6d08;          border: 1px solid #f0d898; }
+    .chip-suspended  { background: var(--fc-red-lt);    color: var(--fc-red);    border: 1px solid #ffc8cf; }
+    .chip-terminated { background: #f0f3f8;             color: #6b7d95;          border: 1px solid #dde5f0; }
+
+    .sdot-active     { background: var(--fc-green); }
+    .sdot-onleave    { background: var(--fc-amber); }
+    .sdot-suspended  { background: var(--fc-red); }
+    .sdot-terminated { background: #9aaabb; }
+
+    /* Actions */
+    .em-actions { display: flex; align-items: center; gap: 4px; justify-content: center; }
+
+    .em-act-btn {
+        width: 30px; height: 30px; border-radius: 7px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; cursor: pointer;
+        transition: all .15s ease; background: transparent;
+    }
+    .act-edit      { color: var(--fc-blue); }
+    .act-terminate { color: var(--fc-red); }
+    .act-edit:hover      { background: var(--fc-blue-lt); border-color: #c0d4fb; }
+    .act-terminate:hover { background: var(--fc-red-lt);  border-color: #ffc8cf; }
+
+    /* ================================================================
+       MODAL
+    ================================================================ */
+    .em-modal-backdrop {
+        position: fixed; inset: 0; z-index: 9999;
+        background: rgba(10,20,40,.58); backdrop-filter: blur(5px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px; animation: em-fade-in .2s ease;
+    }
+    @@keyframes em-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+    .em-modal {
+        width: 100%; max-width: 460px;
+        background: var(--fc-card); border: 1px solid rgba(0,0,0,.08);
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(10,20,50,.18), 0 30px 80px rgba(10,20,50,.22);
+        overflow: hidden;
+        animation: em-modal-in .28s cubic-bezier(.34,1.3,.64,1);
+    }
+    @@keyframes em-modal-in {
+        from { opacity: 0; transform: scale(.94) translateY(12px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .em-modal-head {
+        display: flex; align-items: center; gap: 12px;
+        padding: 18px 22px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .em-modal-icon {
+        width: 46px; height: 46px; flex: 0 0 46px; border-radius: 13px;
+        display: flex; align-items: center; justify-content: center;
+    }
+
+    .terminate-icon { background: var(--fc-red-lt); color: var(--fc-red); border: 1px solid #ffc8cf; }
+
+    .em-modal-title { font-size: 15px; font-weight: 900; color: #1c2b43; }
+    .em-modal-sub   { font-size: 10.5px; color: var(--fc-muted); margin-top: 2px; }
+
+    .em-modal-close {
+        margin-right: auto; width: 32px; height: 32px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid #e4eaf2; border-radius: 8px;
+        background: none; color: #9aaabb; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .em-modal-close:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .em-modal-body { padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; }
+
+    /* Employee Confirm Card */
+    .em-confirm-card {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 16px; border-radius: 12px;
+        background: #f5f7fa; border: 1px solid #e4eaf3;
+    }
+
+    .em-confirm-avatar {
+        width: 46px; height: 46px; flex: 0 0 46px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px; font-weight: 900; color: #fff;
+        box-shadow: 0 3px 10px rgba(0,0,0,.12);
+    }
+
+    .em-confirm-info { min-width: 0; }
+    .em-confirm-name { font-size: 14px; font-weight: 900; color: #1c2c44; }
+    .em-confirm-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+
+    /* Terminate Warning */
+    .em-terminate-warning {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 14px 16px; border-radius: 12px;
+        background: var(--fc-amber-lt); border: 1px solid #f0d898;
+    }
+    .em-terminate-warning svg { flex: 0 0 auto; color: #d97706; }
+    .em-terminate-warning strong { display: block; font-size: 13px; font-weight: 800; color: #92400e; }
+    .em-terminate-warning p { margin: 3px 0 0; font-size: 11.5px; color: #b45309; }
+
+    .em-modal-foot {
+        display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+        padding: 14px 22px;
+        background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%);
+        border-top: 1px solid #edf1f7;
+    }
+
+    .em-modal-cancel {
+        height: 38px; padding: 0 16px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .em-modal-cancel:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .em-modal-terminate {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 38px; padding: 0 18px;
+        border: 0; border-radius: 9px;
+        background: linear-gradient(135deg, #e03048, #c0182e);
+        color: #fff; font-family: inherit;
+        font-size: 12px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 3px 10px rgba(224,48,72,.25);
+        transition: all .15s ease;
+    }
+    .em-modal-terminate:hover { transform: translateY(-1px); }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 1100px) {
+        .em-emp-name { font-size: 12px; }
+    }
+
+    @@media (max-width: 900px) {
+        .em-toolbar { flex-direction: column; align-items: stretch; }
+        .em-search-wrap { max-width: 100%; }
+        .em-dept-filter-wrap { max-width: 100%; }
+        .em-results-badge { margin-right: 0; }
+        .em-status-tabs { flex-wrap: wrap; }
+    }
+
+    @@media (max-width: 680px) {
+        .em-body { padding: 10px 12px 24px; }
+        .em-toolbar { padding: 10px 12px; }
+        .em-avatar { display: none; }
+        .em-status-bar { padding: 8px 12px; }
+        .em-modal-backdrop { padding: 10px; }
+        .em-modal { border-radius: 16px; }
+    }
+
+    @@media (max-width: 480px) {
+        .em-status-tab { padding: 0 7px; font-size: 9.5px; }
+        .em-tab-dot { display: none; }
+    }
+
+</style>
+
 
 @code {
     private AuthUser? _user;
@@ -157,22 +839,26 @@
     private bool CanEdit   => _user?.Can("EMPLOYEE.EDIT")   ?? false;
     private bool CanDelete => _user?.Can("EMPLOYEE.DELETE") ?? false;
 
-    private List<Item> _items = new();
-    private List<Opt> _depts = new();
-    private List<Opt> _titles = new();
+    private List<Item> _items  = new();
+    private List<Opt>  _depts  = new();
+    private List<Opt>  _titles = new();
 
-    private bool _loading;
-    private string _search = "";
+    private bool   _loading;
+    private string _search  = "";
     private string _fStatus = "all";
-    private int _fDept;
+    private int    _fDept;
+    private int?   _confirmId;
 
-    private int? _confirmId;
+    private static readonly (string Key, string Value)[] _statusTabs =
+    {
+        ("all",        "الكل"),
+        ("Active",     "نشط"),
+        ("OnLeave",    "في إجازة"),
+        ("Suspended",  "موقوف"),
+        ("Terminated", "منتهي الخدمة")
+    };
 
-    /// <summary>عدد أعمدة الجدول — عمود الإجراءات بيظهر حسب الصلاحية.</summary>
-    private int ColCount => (CanEdit || CanDelete) ? 8 : 7;
-
-    // ═══════════════ Helpers ═══════════════
-
+    /* ── Helpers ── */
     private static string StatusName(string s) => s switch
     {
         "Active"     => "نشط",
@@ -182,38 +868,72 @@
         _            => s
     };
 
-    private static string StatusCls(string s) => s switch
+    private static string StatusChipClass(string s) => s switch
     {
-        "Active"     => "fc-chip fc-chip-ok",
-        "OnLeave"    => "fc-chip fc-chip-gold",
-        "Suspended"  => "fc-chip fc-chip-bad",
-        "Terminated" => "fc-chip fc-chip-gray",
-        _            => "fc-chip fc-chip-gray"
+        "Active"     => "em-chip chip-active",
+        "OnLeave"    => "em-chip chip-onleave",
+        "Suspended"  => "em-chip chip-suspended",
+        "Terminated" => "em-chip chip-terminated",
+        _            => "em-chip chip-terminated"
+    };
+
+    private static string StatusDotClass(string s) => s switch
+    {
+        "Active"     => "em-chip-dot sdot-active",
+        "OnLeave"    => "em-chip-dot sdot-onleave",
+        "Suspended"  => "em-chip-dot sdot-suspended",
+        "Terminated" => "em-chip-dot sdot-terminated",
+        _            => "em-chip-dot sdot-terminated"
+    };
+
+    private static string StatusDotColor(string s) => s switch
+    {
+        "all"        => "tdot-all",
+        "Active"     => "tdot-active",
+        "OnLeave"    => "tdot-onleave",
+        "Suspended"  => "tdot-suspended",
+        "Terminated" => "tdot-terminated",
+        _            => "tdot-all"
+    };
+
+    private static string AvatarClass(string s) => s switch
+    {
+        "Active"     => "av-active",
+        "OnLeave"    => "av-onleave",
+        "Suspended"  => "av-suspended",
+        "Terminated" => "av-terminated",
+        _            => "av-terminated"
     };
 
     private IEnumerable<Item> Filtered
     {
         get
         {
-            IEnumerable<Item> q = _items;
-            if (!string.IsNullOrWhiteSpace(_search))
-            {
-                var s = _search.Trim();
-                q = q.Where(e => e.FullNameAr.Contains(s, StringComparison.OrdinalIgnoreCase)
-                              || e.EmployeeCode.Contains(s, StringComparison.OrdinalIgnoreCase)
-                              || (e.Mobile != null && e.Mobile.Contains(s, StringComparison.OrdinalIgnoreCase)));
-            }
+            var q = _items.AsEnumerable();
+
+            if (_fStatus != "all")
+                q = q.Where(e => e.EmploymentStatus == _fStatus);
+
             if (_fDept > 0)
             {
                 var name = _depts.FirstOrDefault(d => d.Id == _fDept)?.Label;
                 if (name is not null) q = q.Where(e => e.DepartmentName == name);
             }
+
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                var s = _search.Trim();
+                q = q.Where(e =>
+                    e.FullNameAr.Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                    e.EmployeeCode.Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                    (e.Mobile != null && e.Mobile.Contains(s, StringComparison.OrdinalIgnoreCase)));
+            }
+
             return q;
         }
     }
 
-    // ═══════════════ Lifecycle ═══════════════
-
+    /* ── Lifecycle ── */
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
@@ -228,12 +948,14 @@
         try
         {
             var url = "api/employees?take=500";
-            if (!string.IsNullOrWhiteSpace(_fStatus) && _fStatus != "all") url += $"&status={_fStatus}";
-            if (_fDept > 0) url += $"&departmentId={_fDept}";
+            if (!string.IsNullOrWhiteSpace(_fStatus) && _fStatus != "all")
+                url += $"&status={_fStatus}";
+            if (_fDept > 0)
+                url += $"&departmentId={_fDept}";
 
             _items = await Http.GetFromJsonAsync<List<Item>>(url) ?? new();
 
-            if (_depts.Count == 0)  _depts  = await SafeOpts("api/options/departments");
+            if (_depts.Count  == 0) _depts  = await SafeOpts("api/options/departments");
             if (_titles.Count == 0) _titles = await SafeOpts("api/options/job-titles");
         }
         catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
@@ -246,9 +968,7 @@
         catch { return new(); }
     }
 
-    // ═══════════════ CRUD ═══════════════
-
-
+    /* ── CRUD ── */
     private async Task DeleteAsync(int id)
     {
         try
@@ -272,25 +992,21 @@
         catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
     }
 
-    /* 🔴 الفورم بقى شاشة مستقلة — `/employees/new` */
-    private void GoNew() => Nav.NavigateTo("/employees/new");
+    private void GoNew()        => Nav.NavigateTo("/employees/new");
     private void GoEdit(Item e) => Nav.NavigateTo($"/employees/new/{e.EmployeeId}");
 
-    // ═══════════════ DTOs — مطابقة للسيرفر بالظبط ═══════════════
-
+    /* ── DTOs ── */
     public record Opt(int Id, string Label);
 
-    /// <summary>مطابق لـ <c>EmployeesController.ListItem</c> (8 حقول).</summary>
     public class Item
     {
-        public int EmployeeId { get; set; }
-        public string EmployeeCode { get; set; } = "";
-        public string FullNameAr { get; set; } = "";
-        public string? DepartmentName { get; set; }
-        public string? JobTitleName { get; set; }
-        public string? Mobile { get; set; }
-        public DateOnly? HireDate { get; set; }
-        public string EmploymentStatus { get; set; } = "";
+        public int     EmployeeId        { get; set; }
+        public string  EmployeeCode      { get; set; } = "";
+        public string  FullNameAr        { get; set; } = "";
+        public string? DepartmentName    { get; set; }
+        public string? JobTitleName      { get; set; }
+        public string? Mobile            { get; set; }
+        public DateOnly? HireDate        { get; set; }
+        public string  EmploymentStatus  { get; set; } = "";
     }
-
 }
