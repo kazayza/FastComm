@@ -24,31 +24,41 @@
             <div class="fc-head-actions">
                 <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
                                OnClick="Reload" Style="color:#9FB4CC" />
-                @if (CanCreate)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add"
-                               OnClick="OpenIssue">صرف عهدة</MudButton>
-                }
             </div>
         </div>
+
+        @* FAB *@
+        @if (CanCreate)
+        {
+            <div class="fc-fab-container">
+                <button class="fc-fab-main" @onclick="OpenIssue" title="صرف عهدة">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                </button>
+            </div>
+        }
 
         @if (CanView)
         {
             <div class="fc-kpis fc-kpis-glass">
-                <div class="fc-kpi">
+                <div class="fc-kpi fc-kpi-click @(_tab == "open" ? "fc-kpi-active" : "")" role="button" tabindex="0"
+                     @onclick='() => SetTab("open")'>
                     <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
                     <div><div class="fc-kpi-num">@_items.Count(c => c.Status != "Closed")</div><div class="fc-kpi-lb">عهد مفتوحة</div></div>
                 </div>
-                <div class="fc-kpi">
+                <div class="fc-kpi fc-kpi-click @(_tab == "all" ? "fc-kpi-active" : "")" role="button" tabindex="0"
+                     @onclick='() => SetTab("all")'>
                     <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" /></div>
                     <div><div class="fc-kpi-num">@Money(OpenRemaining)</div><div class="fc-kpi-lb">باقي معاهم</div></div>
                 </div>
-                <div class="fc-kpi">
+                <div class="fc-kpi fc-kpi-click @(_tab == "all" ? "fc-kpi-active" : "")" role="button" tabindex="0"
+                     @onclick='() => SetTab("all")'>
                     <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.Payments" /></div>
                     <div><div class="fc-kpi-num">@Money(ThisMonth)</div><div class="fc-kpi-lb">اتصرف الشهر ده</div></div>
                 </div>
-                <div class="fc-kpi">
+                <div class="fc-kpi fc-kpi-click @(_tab == "Submitted" ? "fc-kpi-active" : "")" role="button" tabindex="0"
+                     @onclick='() => SetTab("Submitted")'>
                     <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
                     <div><div class="fc-kpi-num">@_items.Count(c => c.Status == "Submitted")</div><div class="fc-kpi-lb">مستنية اعتماد</div></div>
                 </div>
@@ -2584,8 +2594,8 @@
         public DateTime CustodyDate    { get; set; }
         public string  OwnerType       { get; set; } = "";
         public string  OwnerName       { get; set; } = "";
-        public long    TripId          { get; set; }
-        public string  TripNumber      { get; set; } = "";
+        public long?   TripId          { get; set; }
+        public string? TripNumber      { get; set; }
         public string? DriverName      { get; set; }
         public decimal AmountIssued    { get; set; }
         public decimal AmountSpent     { get; set; }
@@ -2594,6 +2604,10 @@
         public decimal Remaining       { get; set; }
         public string  Status          { get; set; } = "";
         public int     TxCount         { get; set; }
+        public bool    IsPrimary       { get; set; } = true;
+        public long?   ParentCustodyId { get; set; }
+        public string? ParentCustodyNumber { get; set; }
+        public int     SubCount        { get; set; }
     }
 
     public class CustodyDetail
@@ -2604,8 +2618,11 @@
         public string  OwnerType      { get; set; } = "";
         public int     OwnerId        { get; set; }
         public string  OwnerName      { get; set; } = "";
-        public long    TripId         { get; set; }
-        public string  TripNumber     { get; set; } = "";
+        public long?   TripId         { get; set; }
+        public string? TripNumber     { get; set; }
+        public bool    IsPrimary      { get; set; } = true;
+        public long?   ParentCustodyId { get; set; }
+        public string? ParentCustodyNumber { get; set; }
         public string? DriverName     { get; set; }
         public decimal AmountIssued   { get; set; }
         public decimal AmountSpent    { get; set; }
@@ -2663,6 +2680,8 @@
         public decimal AmountIssued { get; set; }
         public string? CustodyDate  { get; set; }
         public string? Notes        { get; set; }
+        public bool    IsPrimary    { get; set; } = true;
+        public long?   ParentCustodyId { get; set; }
     }
 
     public class TxForm
@@ -2883,7 +2902,7 @@
 
     private async Task SaveIssue()
     {
-        if (_nf.TripId is null) { _ok = false; _msg = "اختار الرحلة"; return; }
+        if (_nf.IsPrimary && _nf.TripId is null) { _ok = false; _msg = "اختار الرحلة"; return; }
         if (_nf.OwnerId <= 0)   { _ok = false; _msg = "اختار صاحب العهدة"; return; }
 
         _saving = true; _msg = null;
@@ -2891,12 +2910,14 @@
         {
             var res = await Http.PostAsJsonAsync("api/custodies", new
             {
-                tripId       = _nf.TripId,
-                ownerType    = _nf.OwnerType,
-                ownerId      = _nf.OwnerId,
-                amountIssued = _nf.AmountIssued,
-                custodyDate  = _nf.CustodyDate,
-                notes        = _nf.Notes
+                tripId          = _nf.TripId,
+                ownerType       = _nf.OwnerType,
+                ownerId         = _nf.OwnerId,
+                amountIssued    = _nf.AmountIssued,
+                custodyDate     = _nf.CustodyDate,
+                notes           = _nf.Notes,
+                isPrimary       = _nf.IsPrimary,
+                parentCustodyId = _nf.ParentCustodyId
             });
             _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
             if (res.IsSuccessStatusCode)

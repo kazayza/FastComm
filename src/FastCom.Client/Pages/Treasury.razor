@@ -20,37 +20,29 @@
             <div class="fc-head-actions">
                 <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
                                OnClick="Reload" Style="color:#9FB4CC" />
-                @if (CanTransfer)
-                {
-                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Route"
-                               OnClick="OpenTransfer">تحويل بين خزينتين</MudButton>
-                }
-                @if (CanPost)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add"
-                               OnClick="OpenPost">حركة جديدة</MudButton>
-                }
             </div>
         </div>
 
         @if (CanView)
         {
             <div class="fc-kpis fc-kpis-glass">
-                <div class="fc-kpi">
+                <div class="fc-kpi fc-kpi-click @(_kpi == "" ? "fc-kpi-active" : "")" role="button" tabindex="0"
+                     @onclick='() => SetKpi("")' title="عرض كل الحركات">
                     <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.AccountBalance" /></div>
                     <div><div class="fc-kpi-num">@Money(TotalBalance)</div><div class="fc-kpi-lb">إجمالي الأرصدة</div></div>
                 </div>
-                <div class="fc-kpi">
+                <div class="fc-kpi fc-kpi-click @(_kpi == "Receipt" ? "fc-kpi-active" : "")" role="button" tabindex="0"
+                     @onclick='() => SetKpi("Receipt")' title="وارد النهاردة">
                     <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Payments" /></div>
                     <div><div class="fc-kpi-num">@Money(TodayIn)</div><div class="fc-kpi-lb">وارد النهاردة</div></div>
                 </div>
-                <div class="fc-kpi">
+                <div class="fc-kpi fc-kpi-click @(_kpi == "Payment" ? "fc-kpi-active" : "")" role="button" tabindex="0"
+                     @onclick='() => SetKpi("Payment")' title="صادر النهاردة">
                     <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
                     <div><div class="fc-kpi-num">@Money(TodayOut)</div><div class="fc-kpi-lb">صادر النهاردة</div></div>
                 </div>
-                <div class="fc-kpi">
+                <div class="fc-kpi fc-kpi-click @(_kpi == "posted" ? "fc-kpi-active" : "")" role="button" tabindex="0"
+                     @onclick='() => SetKpi("posted")' title="الحركات السارية">
                     <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.FactCheck" /></div>
                     <div><div class="fc-kpi-num">@_txs.Count(t => t.Status == "Posted")</div><div class="fc-kpi-lb">حركة سارية</div></div>
                 </div>
@@ -84,7 +76,7 @@
             <div class="tr-boxes-grid">
                 @foreach (var b in _boxes)
                 {
-                    <div class="tr-box-card">
+                    <div class="tr-box-card @(b.Status == "Closed" ? "box-closed" : "")">
                         <div class="tr-box-icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24" width="22" height="22"
                                  fill="none" stroke="currentColor" stroke-width="2">
@@ -94,8 +86,29 @@
                             </svg>
                         </div>
                         <div class="tr-box-info">
-                            <div class="tr-box-name">@b.NameAr</div>
+                            <div class="tr-box-name">
+                                @b.NameAr
+                                @if (b.Code == _defaultBoxCode)
+                                {
+                                    <span class="tr-box-badge badge-main">رئيسية</span>
+                                }
+                                @if (b.Status == "Closed")
+                                {
+                                    <span class="tr-box-badge badge-closed">مقفولة</span>
+                                }
+                            </div>
                             <div class="tr-box-code">@b.Code · @b.TxCount حركة</div>
+                            @if (!string.IsNullOrEmpty(b.ResponsibleEmployeeName))
+                            {
+                                <div class="tr-box-emp">
+                                    <svg viewBox="0 0 24 24" width="11" height="11" fill="none"
+                                         stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                        <circle cx="12" cy="7" r="4"/>
+                                    </svg>
+                                    @b.ResponsibleEmployeeName
+                                </div>
+                            }
                         </div>
                         <div class="tr-box-balance">
                             <div class="tr-box-amount @(b.CurrentBalance >= 0 ? "bal-pos" : "bal-neg")">
@@ -103,7 +116,61 @@
                             </div>
                             <div class="tr-box-currency">@b.CurrencyCode</div>
                         </div>
+                        @if (CanManage)
+                        {
+                            <div class="tr-box-actions">
+                                @if (b.Status == "Open" && b.Code != _defaultBoxCode)
+                                {
+                                    <a class="tr-box-act" href="/treasury/boxes/new/@b.CashBoxId"
+                                       title="تعديل الخزينة" aria-label="تعديل @b.NameAr">
+                                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                                             stroke="currentColor" stroke-width="2">
+                                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                        </svg>
+                                    </a>
+                                    <button class="tr-box-act act-settle"
+                                            title="تسوية وإقفال"
+                                            aria-label="تسوية @b.NameAr"
+                                            @onclick="() => OpenSettle(b)">
+                                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                                             stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="11" width="18" height="11" rx="2"/>
+                                            <path d="M7 11V7a5 5 0 0110 0v4"/>
+                                        </svg>
+                                    </button>
+                                }
+                                @if (b.Status == "Closed")
+                                {
+                                    <button class="tr-box-act act-reopen"
+                                            title="إعادة فتح"
+                                            aria-label="إعادة فتح @b.NameAr"
+                                            @onclick="() => OpenReopen(b)">
+                                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                                             stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="11" width="18" height="11" rx="2"/>
+                                            <path d="M7 11V7a5 5 0 019.9-1"/>
+                                        </svg>
+                                    </button>
+                                }
+                            </div>
+                        }
                     </div>
+                }
+                @if (CanManage)
+                {
+                    <a class="tr-box-card tr-box-add" href="/treasury/boxes/new" aria-label="خزينة جديدة">
+                        <div class="tr-box-add-plus" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none"
+                                 stroke="currentColor" stroke-width="2.2">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="tr-box-info">
+                            <div class="tr-box-name">خزينة جديدة</div>
+                            <div class="tr-box-code">درج موظف أو خزينة فرعية</div>
+                        </div>
+                    </a>
                 }
             </div>
         }
@@ -122,7 +189,7 @@
                         <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
                     </svg>
                     <input class="tr-search-input"
-                           placeholder="ابحث بالبيان أو المرجع أو الشيك..."
+                           placeholder="ابحث بالبيان أو المرجع أو العميل..."
                            @bind="_search" @bind:event="oninput"
                            aria-label="بحث" />
                     @if (!string.IsNullOrWhiteSpace(_search))
@@ -271,7 +338,31 @@
                                         <div class="tr-tx-cell">
                                             <div class="tr-tx-avatar @TxAvatarClass(t.TransactionType)"
                                                  aria-hidden="true">
-                                                @TxIcon(t.TransactionType)
+                                                <svg viewBox="0 0 24 24" width="16" height="16"
+                                                     fill="none" stroke="currentColor" stroke-width="2.1"
+                                                     stroke-linecap="round" stroke-linejoin="round">
+                                                    @if (t.TransactionType == "Receipt")
+                                                    {
+                                                        <path d="M12 3v13M6 11l6 6 6-6" />
+                                                    }
+                                                    else if (t.TransactionType == "Payment")
+                                                    {
+                                                        <path d="M12 21V8M6 13l6-6 6 6" />
+                                                    }
+                                                    else if (t.TransactionType == "TransferIn")
+                                                    {
+                                                        <path d="M4 12h15M13 6l6 6-6 6" />
+                                                    }
+                                                    else if (t.TransactionType == "TransferOut")
+                                                    {
+                                                        <path d="M20 12H5M11 6l-6 6 6 6" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <rect x="2" y="5" width="20" height="14" rx="2" />
+                                                        <path d="M2 10h20" />
+                                                    }
+                                                </svg>
                                             </div>
                                             <div class="tr-tx-info">
                                                 <span class="tr-tx-chip @TxChipClass(t.TransactionType)">
@@ -453,7 +544,13 @@
             {
                 <div class="tr-modal-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
                     <span>@_msg</span>
-                    <button @onclick="() => _msg = null">✕</button>
+                    <button class="tr-banner-close" @onclick="() => _msg = null"
+                            aria-label="إغلاق التنبيه">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+                             stroke="currentColor" stroke-width="2.4" aria-hidden="true">
+                            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                        </svg>
+                    </button>
                 </div>
             }
 
@@ -643,25 +740,6 @@
                     </div>
 
                     <div class="tr-mfield">
-                        <label class="tr-mlabel">رقم الشيك</label>
-                        <div class="tr-mfield-group">
-                            <span class="tr-mprefix" aria-hidden="true">
-                                <svg viewBox="0 0 16 16" width="13" height="13"
-                                     fill="none" stroke="currentColor" stroke-width="1.7">
-                                    <rect x="2" y="4" width="12" height="9" rx="1"/>
-                                    <path d="M5 8h6M5 11h4" stroke-linecap="round"/>
-                                </svg>
-                            </span>
-                            <input class="tr-minput with-prefix"
-                                   value="@_pf.ChequeNumber"
-                                   maxlength="50"
-                                   placeholder="رقم الشيك"
-                                   dir="ltr"
-                                   @onchange="e => _pf.ChequeNumber = e.Value?.ToString()" />
-                        </div>
-                    </div>
-
-                    <div class="tr-mfield">
                         <label class="tr-mlabel">المرجع</label>
                         <input class="tr-minput"
                                value="@_pf.ReferenceNumber"
@@ -730,7 +808,7 @@
                     </svg>
                 </div>
                 <div>
-                    <div class="tr-modal-title">تحويل بين خزينتين 🔄</div>
+                    <div class="tr-modal-title">تحويل بين خزينتين</div>
                     <div class="tr-modal-sub">بيتسجّل كحركتين مربوطتين — الإلغاء بيلغيهم مع بعض</div>
                 </div>
                 <button class="tr-modal-close" @onclick="CloseTransfer" aria-label="إغلاق">
@@ -745,7 +823,13 @@
             {
                 <div class="tr-modal-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
                     <span>@_msg</span>
-                    <button @onclick="() => _msg = null">✕</button>
+                    <button class="tr-banner-close" @onclick="() => _msg = null"
+                            aria-label="إغلاق التنبيه">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+                             stroke="currentColor" stroke-width="2.4" aria-hidden="true">
+                            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                        </svg>
+                    </button>
                 </div>
             }
 
@@ -893,6 +977,159 @@
     </div>
 }
 
+
+@* ══════════════ FAB — الإجراءات السريعة ══════════════ *@
+@if (CanView && (CanPost || CanTransfer || CanManage))
+{
+    <div class="fc-fab-container">
+        <div class="fc-fab-menu @(_fabOpen ? "is-open" : "")">
+            @if (CanManage)
+            {
+                <a class="fc-fab-item" href="/treasury/boxes/new" @onclick="() => _fabOpen = false">
+                    <span class="fc-fab-icon">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="2" y="7" width="20" height="14" rx="2"/>
+                            <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
+                            <circle cx="12" cy="14" r="2"/>
+                        </svg>
+                    </span>
+                    <span class="fc-fab-label">خزينة جديدة</span>
+                </a>
+            }
+            @if (CanTransfer)
+            {
+                <button class="fc-fab-item" @onclick="() => { _fabOpen = false; OpenTransfer(); }">
+                    <span class="fc-fab-icon">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M17 1l4 4-4 4"/>
+                            <path d="M3 11V9a4 4 0 014-4h14"/>
+                            <path d="M7 23l-4-4 4-4"/>
+                            <path d="M21 13v2a4 4 0 01-4 4H3"/>
+                        </svg>
+                    </span>
+                    <span class="fc-fab-label">تحويل بين خزينتين</span>
+                </button>
+            }
+            @if (CanPost)
+            {
+                <button class="fc-fab-item" @onclick="() => { _fabOpen = false; OpenPost(); }">
+                    <span class="fc-fab-icon">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="2" y="5" width="20" height="14" rx="2"/>
+                            <path d="M2 10h20"/>
+                        </svg>
+                    </span>
+                    <span class="fc-fab-label">حركة جديدة</span>
+                </button>
+            }
+        </div>
+        <button class="fc-fab-main @(_fabOpen ? "is-open" : "")"
+                @onclick="() => _fabOpen = !_fabOpen"
+                aria-label="إجراءات سريعة" aria-expanded="@_fabOpen">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none"
+                 stroke="currentColor" stroke-width="2.4" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+            </svg>
+        </button>
+    </div>
+}
+
+@* ══════════════ مودال تسوية خزينة ══════════════ *@
+@if (_settleTarget is not null)
+{
+    <div class="tr-modal-backdrop" @onclick="() => _settleTarget = null"
+         role="dialog" aria-modal="true" aria-label="تسوية خزينة">
+        <div class="tr-modal" @onclick:stopPropagation="true">
+            <div class="tr-modal-head">
+                <div class="tr-modal-icon icon-red" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
+                         stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2"/>
+                        <path d="M7 11V7a5 5 0 0110 0v4"/>
+                    </svg>
+                </div>
+                <div style="flex:1; min-width:0">
+                    <div class="tr-modal-title">تسوية وإقفال @_settleTarget.NameAr</div>
+                    <div class="tr-modal-sub">الرصيد هيتحوّل كامل للخزينة الرئيسية (@_defaultBoxCode)</div>
+                </div>
+            </div>
+            <div class="tr-modal-body">
+                <div class="tr-settle-box">
+                    <div class="tr-settle-label">رصيد الخزينة الحالي</div>
+                    <div class="tr-settle-amount @(_settleTarget.CurrentBalance >= 0 ? "bal-pos" : "bal-neg")">
+                        @Money(_settleTarget.CurrentBalance) @_settleTarget.CurrencyCode
+                    </div>
+                </div>
+                <p class="tr-settle-note">
+                    الحركات والأرشيف هيفضلوا محفوظين — وممكن تعيد فتح الخزينة في أي وقت برصيد افتتاحي جديد.
+                </p>
+            </div>
+            <div class="tr-modal-foot">
+                <button class="tr-modal-cancel" @onclick="() => _settleTarget = null">تراجع</button>
+                <button class="tr-modal-save save-red" @onclick="DoSettle" disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <span class="btn-spinner sm" aria-hidden="true"></span>
+                        <span>جاري التسوية...</span>
+                    }
+                    else
+                    {
+                        <span>تسوية وإقفال</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ══════════════ مودال إعادة فتح خزينة ══════════════ *@
+@if (_reopenTarget is not null)
+{
+    <div class="tr-modal-backdrop" @onclick="() => _reopenTarget = null"
+         role="dialog" aria-modal="true" aria-label="إعادة فتح خزينة">
+        <div class="tr-modal" @onclick:stopPropagation="true">
+            <div class="tr-modal-head">
+                <div class="tr-modal-icon icon-green" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
+                         stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2"/>
+                        <path d="M7 11V7a5 5 0 019.9-1"/>
+                    </svg>
+                </div>
+                <div style="flex:1; min-width:0">
+                    <div class="tr-modal-title">إعادة فتح @_reopenTarget.NameAr</div>
+                    <div class="tr-modal-sub">الرصيد = الافتتاحي + الحركات السارية</div>
+                </div>
+            </div>
+            <div class="tr-modal-body">
+                <div class="tr-mfield">
+                    <label class="tr-mlabel">الرصيد الافتتاحي الجديد</label>
+                    <input type="number" min="0" step="0.01" class="tr-minput"
+                           value="@_reopenOpening"
+                           @onchange="e => _reopenOpening = ParseDec(e.Value)" />
+                    <div class="fc-field-hint">الفلوس اللي هتتحط في الدرج كبداية</div>
+                </div>
+            </div>
+            <div class="tr-modal-foot">
+                <button class="tr-modal-cancel" @onclick="() => _reopenTarget = null">تراجع</button>
+                <button class="tr-modal-save save-green" @onclick="DoReopen" disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <span class="btn-spinner sm" aria-hidden="true"></span>
+                        <span>جاري الفتح...</span>
+                    }
+                    else
+                    {
+                        <span>إعادة فتح</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
 
 <style>
 
@@ -1161,10 +1398,10 @@
         font-size: 15px;
     }
 
-    .av-receipt    { background: var(--fc-green-lt); border: 1px solid #b0e0c5; }
-    .av-payment    { background: var(--fc-red-lt);   border: 1px solid #ffc8cf; }
-    .av-transferin  { background: var(--fc-blue-lt); border: 1px solid #c0d4fb; }
-    .av-transferout { background: var(--fc-purple-lt); border: 1px solid #d0bfef; }
+    .av-receipt    { background: var(--fc-green-lt); border: 1px solid #b0e0c5; color: var(--fc-green); }
+    .av-payment    { background: var(--fc-red-lt);   border: 1px solid #ffc8cf; color: var(--fc-red); }
+    .av-transferin  { background: var(--fc-blue-lt); border: 1px solid #c0d4fb; color: var(--fc-blue); }
+    .av-transferout { background: var(--fc-purple-lt); border: 1px solid #d0bfef; color: #7c5cd6; }
 
     .tr-tx-info { display: flex; flex-direction: column; gap: 3px; }
 
@@ -1465,6 +1702,120 @@
         .tr-tab-dot { display: none; }
     }
 
+    /* ═══ المرحلة 2 — خزائن + FAB + كروت فلاتر ═══ */
+    .tr-box-card { position: relative; }
+    .tr-box-card.box-closed { opacity: .62; }
+    .tr-box-card.box-closed:hover { opacity: 1; }
+
+    .tr-box-badge {
+        display: inline-block; font-size: 9px; font-weight: 800; padding: 1px 7px;
+        border-radius: 999px; margin-right: 6px; vertical-align: middle;
+    }
+    .badge-main   { background: #eaf1ff; color: var(--fc-blue); border: 1px solid #bdd4fc; }
+    .badge-closed { background: #f0f4fa; color: #6b7d94; border: 1px solid #dbe4ee; }
+
+    .tr-box-emp {
+        display: flex; align-items: center; gap: 4px;
+        font-size: 10px; font-weight: 700; color: #5c6e85; margin-top: 3px;
+    }
+
+    .tr-box-actions {
+        position: absolute; top: 8px; left: 8px;
+        display: flex; gap: 5px; opacity: 0; transition: opacity .18s ease;
+    }
+    .tr-box-card:hover .tr-box-actions,
+    .tr-box-card:focus-within .tr-box-actions { opacity: 1; }
+
+    .tr-box-act {
+        width: 26px; height: 26px; border-radius: 8px; display: inline-flex;
+        align-items: center; justify-content: center; cursor: pointer;
+        background: #fff; border: 1px solid var(--fc-line, #e3e9f0); color: #5c6e85;
+        transition: all .15s ease;
+    }
+    .tr-box-act:hover { border-color: var(--fc-blue); color: var(--fc-blue); }
+    .tr-box-act.act-settle:hover { border-color: var(--fc-red); color: var(--fc-red); }
+    .tr-box-act.act-reopen:hover { border-color: var(--fc-green); color: var(--fc-green); }
+
+    .tr-box-add {
+        border-style: dashed; justify-content: center; text-decoration: none;
+        color: var(--fc-blue); gap: 12px;
+    }
+    .tr-box-add:hover { border-color: var(--fc-blue); background: #f5f9ff; }
+    .tr-box-add-plus {
+        width: 40px; height: 40px; border-radius: 12px; flex: 0 0 auto;
+        background: #eaf1ff; color: var(--fc-blue);
+        display: flex; align-items: center; justify-content: center;
+    }
+
+    .tr-settle-box {
+        background: #f5f8fb; border: 1px solid var(--fc-line, #e3e9f0);
+        border-radius: 12px; padding: 14px; text-align: center;
+    }
+    .tr-settle-label { font-size: 11px; font-weight: 800; color: #5c6e85; }
+    .tr-settle-amount { font-size: 22px; font-weight: 900; margin-top: 4px; }
+    .tr-settle-note { font-size: 11.5px; color: #5c6e85; line-height: 1.7; margin: 0; }
+
+    .tr-banner-close {
+        background: none; border: none; cursor: pointer; padding: 4px;
+        display: inline-flex; align-items: center; justify-content: center;
+        color: inherit; opacity: .7; transition: opacity .15s ease;
+    }
+    .tr-banner-close:hover { opacity: 1; }
+
+    /* كروت KPI — فلترة */
+    .fc-kpi-click { cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
+    .fc-kpi-click:hover { transform: translateY(-2px); }
+    .fc-kpi-active {
+        outline: 2px solid var(--fc-blue);
+        outline-offset: -2px;
+        box-shadow: 0 4px 14px rgba(30,110,245,.18);
+    }
+
+    /* FAB */
+    .fc-fab-container {
+        position: fixed; bottom: 24px; left: 24px; z-index: 1000;
+        display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 12px;
+    }
+    .fc-fab-main {
+        width: 56px; height: 56px; border-radius: 50%; border: none;
+        background: linear-gradient(135deg, #1e6ef5, #1558d6); color: #fff;
+        cursor: pointer; display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 16px rgba(30,110,245,.4);
+        transition: all .25s cubic-bezier(.34,1.3,.64,1);
+    }
+    .fc-fab-main:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(30,110,245,.5); }
+    .fc-fab-main.is-open { transform: rotate(45deg); }
+    .fc-fab-menu {
+        display: flex; flex-direction: column; gap: 10px;
+        opacity: 0; visibility: hidden; transform: translateY(10px);
+        transition: all .25s cubic-bezier(.34,1.3,.64,1);
+    }
+    .fc-fab-menu.is-open { opacity: 1; visibility: visible; transform: translateY(0); }
+    .fc-fab-item {
+        display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+        background: #fff; border: 1px solid #e4eaf2; border-radius: 12px;
+        cursor: pointer; box-shadow: 0 2px 12px rgba(10,20,50,.12);
+        transition: all .2s ease; white-space: nowrap; text-decoration: none;
+    }
+    .fc-fab-item:hover { background: #f5f8fb; border-color: #c8d8f0; transform: translateX(-4px); }
+    .fc-fab-icon {
+        width: 36px; height: 36px; border-radius: 10px;
+        background: var(--fc-blue-lt, #e8f1ff); color: var(--fc-blue, #1e6ef5);
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .fc-fab-label { font-size: 13px; font-weight: 700; color: #344258; }
+
+    @@media (max-width: 768px) {
+        .fc-fab-container { bottom: 16px; left: 16px; }
+        .fc-fab-main { width: 48px; height: 48px; }
+        .fc-fab-item { padding: 8px 12px; }
+        .fc-fab-label { font-size: 12px; }
+    }
+
+    @@media print {
+        .fc-fab-container { display: none !important; }
+    }
+
 </style>
 
 
@@ -1474,6 +1825,7 @@
     private bool CanPost     => _user?.Can("TREASURY.POST")     ?? false;
     private bool CanVoid     => _user?.Can("TREASURY.VOID")     ?? false;
     private bool CanTransfer => _user?.Can("TREASURY.TRANSFER") ?? false;
+    private bool CanManage   => _user?.Can("TREASURY.MANAGE")   ?? false;
 
     private static readonly (string Key, string Value)[] _tabItems =
     {
@@ -1508,6 +1860,14 @@
     private bool         _transferOpen;
     private TransferForm _tf = new();
 
+    /* ── المرحلة 2: خزائن متعددة ── */
+    private bool    _fabOpen;
+    private string  _kpi = "";
+    private string  _defaultBoxCode = "MAIN";
+    private Box?    _settleTarget;
+    private Box?    _reopenTarget;
+    private decimal _reopenOpening;
+
     /* ── DTOs ── */
     public class Opt    { public int Id { get; set; } public string Label { get; set; } = ""; }
     public class Cust   { public int Id { get; set; } public string Label { get; set; } = ""; }
@@ -1523,7 +1883,13 @@
         public decimal CurrentBalance  { get; set; }
         public string  CurrencyCode    { get; set; } = "EGP";
         public int     TxCount         { get; set; }
+        public bool    IsActive        { get; set; }
+        public string  Status          { get; set; } = "Open";
+        public int?    ResponsibleEmployeeId   { get; set; }
+        public string? ResponsibleEmployeeName { get; set; }
     }
+
+    public class DefaultBoxRes { public string Code { get; set; } = "MAIN"; }
 
     public class Tx
     {
@@ -1606,15 +1972,6 @@
         _             => t
     };
 
-    private static string TxIcon(string t) => t switch
-    {
-        "Receipt"     => "⬇️",
-        "Payment"     => "⬆️",
-        "TransferIn"  => "↙️",
-        "TransferOut" => "↗️",
-        _             => "💳"
-    };
-
     private static string TxChipClass(string t) => t switch
     {
         "Receipt"     => "chip-receipt",
@@ -1658,6 +2015,12 @@
         _customers = await SafeGetT<Cust>("api/treasury/customers");
         _suppliers = await SafeGetT<Opt>("api/options/suppliers");
         _methods   = await SafeGetT<Method>("api/options/payment-methods");
+        try
+        {
+            var db = await Http.GetFromJsonAsync<DefaultBoxRes>("api/treasury/default-box");
+            if (db is not null && !string.IsNullOrWhiteSpace(db.Code)) _defaultBoxCode = db.Code;
+        }
+        catch { /* الافتراضي MAIN */ }
     }
 
     private async Task<List<T>> SafeGetT<T>(string url)
@@ -1785,6 +2148,60 @@
             if (res.IsSuccessStatusCode) await LoadAsync();
         }
         catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    /* ── فلترة بالكروت ── */
+    private async Task SetKpi(string k)
+    {
+        _kpi = _kpi == k ? "" : k;          // الضغط تاني بيلغي الفلتر
+        if (_kpi is "" or "posted")
+        {
+            _tab = "all"; _from = null; _to = null;
+        }
+        else
+        {
+            _tab = _kpi;                     // Receipt / Payment
+            _from = DateTime.Now.ToString("yyyy-MM-dd");
+            _to   = _from;
+        }
+        _confirmId = null;
+        await LoadAsync();
+    }
+
+    /* ── تسوية / إعادة فتح خزينة ── */
+    private void OpenSettle(Box b) { _settleTarget = b; }
+
+    private void OpenReopen(Box b) { _reopenTarget = b; _reopenOpening = 0m; }
+
+    private async Task DoSettle()
+    {
+        if (_settleTarget is null) return;
+        _saving = true;
+        try
+        {
+            var res = await Http.PostAsync($"api/treasury/boxes/{_settleTarget.CashBoxId}/settle", null);
+            var m = await MsgOf(res);
+            if (res.IsSuccessStatusCode) { Snackbar.Add(m, Severity.Success); _settleTarget = null; await LoadAsync(); }
+            else Snackbar.Add(m, Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        finally { _saving = false; }
+    }
+
+    private async Task DoReopen()
+    {
+        if (_reopenTarget is null) return;
+        _saving = true;
+        try
+        {
+            var res = await Http.PostAsJsonAsync($"api/treasury/boxes/{_reopenTarget.CashBoxId}/reopen",
+                new { openingBalance = _reopenOpening });
+            var m = await MsgOf(res);
+            if (res.IsSuccessStatusCode) { Snackbar.Add(m, Severity.Success); _reopenTarget = null; await LoadAsync(); }
+            else Snackbar.Add(m, Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        finally { _saving = false; }
     }
 
     private static async Task<string> MsgOf(HttpResponseMessage res)

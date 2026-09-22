@@ -48,7 +48,7 @@ public class OperationsController : ControllerBase
         decimal UnitPrice, decimal Discount, int? TaxRateId, long? PriceRuleId);
 
     public record OperationUpsert(long? BookingId, int CustomerId, int? ServiceId, int? PortId,
-        int? DestinationId, int? TripTypeId, string? PlannedDate, decimal EstimatedCost,
+        int? DestinationId, int? TahteeqPortId, int? TripTypeId, string? PlannedDate, decimal EstimatedCost,
         string? Notes, List<RevenueLineDto>? RevenueLines);
 
     public record ListItem(long OperationId, string OperationNumber, string? BookingNumber,
@@ -62,7 +62,7 @@ public class OperationsController : ControllerBase
 
     public record Detail(long OperationId, string OperationNumber, long? BookingId,
         string? BookingNumber, int CustomerId, string CustomerName, int? ServiceId, int? PortId,
-        int? DestinationId, int? TripTypeId, string? PlannedDate, decimal EstimatedCost,
+        int? DestinationId, int? TahteeqPortId, string? TahteeqPortName, int? TripTypeId, string? PlannedDate, decimal EstimatedCost,
         string? Notes, string Status, decimal RevenueNet, decimal RevenueTax, decimal ActualCost,
         DateTime CreatedAt);
 
@@ -131,6 +131,12 @@ public class OperationsController : ControllerBase
                 .Where(b => b.BookingId == o.BookingId).Select(b => b.BookingNumber)
                 .FirstOrDefaultAsync(ct);
 
+        string? tahteeqPortName = null;
+        if (o.TahteeqPortId is not null)
+            tahteeqPortName = await _db.Ports.AsNoTracking()
+                .Where(x => x.PortId == o.TahteeqPortId).Select(x => x.NameAr)
+                .FirstOrDefaultAsync(ct);
+
         var lines = await _db.OperationRevenueItems.AsNoTracking()
             .Where(r => r.OperationId == id)
             .OrderBy(r => r.OperationRevenueItemId)
@@ -141,7 +147,8 @@ public class OperationsController : ControllerBase
             .ToListAsync(ct);
 
         var detail = new Detail(o.OperationId, o.OperationNumber, o.BookingId, bookingNumber,
-            o.CustomerId, customerName, o.ServiceId, o.PortId, o.DestinationId, o.TripTypeId,
+            o.CustomerId, customerName, o.ServiceId, o.PortId, o.DestinationId,
+            o.TahteeqPortId, tahteeqPortName, o.TripTypeId,
             o.PlannedDate?.ToString("yyyy-MM-ddTHH:mm"), o.EstimatedCost, o.Notes, o.Status,
             o.RevenueNet, o.RevenueTax, o.ActualCost, o.CreatedAt);
 
@@ -172,7 +179,7 @@ public class OperationsController : ControllerBase
     public async Task<IActionResult> PriceSuggest(
         [FromQuery] int customerId, [FromQuery] int serviceId,
         [FromQuery] int? portId, [FromQuery] int? destinationId,
-        [FromQuery] int? tripTypeId, [FromQuery] int? containerTypeId,
+        [FromQuery] int? tahteeqPortId, [FromQuery] int? tripTypeId, [FromQuery] int? containerTypeId,
         [FromQuery] string? date, CancellationToken ct = default)
     {
         if (customerId <= 0 || serviceId <= 0)
@@ -190,10 +197,12 @@ public class OperationsController : ControllerBase
         var match = rules
             .Where(r => portId == null || r.PortId == null || r.PortId == portId)
             .Where(r => destinationId == null || r.DestinationId == null || r.DestinationId == destinationId)
+            .Where(r => tahteeqPortId == null || r.TahteeqPortId == null || r.TahteeqPortId == tahteeqPortId)
             .Where(r => tripTypeId == null || r.TripTypeId == null || r.TripTypeId == tripTypeId)
             .Where(r => containerTypeId == null || r.ContainerTypeId == null || r.ContainerTypeId == containerTypeId)
             // القاعدة الأخص (أبعاد معبّاة أكتر) تكسب، وبعدين الأولوية (الرقم الأصغر أعلى)
             .OrderByDescending(r => (r.PortId is not null ? 1 : 0) + (r.DestinationId is not null ? 1 : 0)
+                                  + (r.TahteeqPortId is not null ? 1 : 0)
                                   + (r.TripTypeId is not null ? 1 : 0) + (r.ContainerTypeId is not null ? 1 : 0))
             .ThenBy(r => r.Priority)
             .ThenByDescending(r => r.ValidFrom)
@@ -263,6 +272,7 @@ public class OperationsController : ControllerBase
             ServiceId       = req.ServiceId,
             PortId          = req.PortId,
             DestinationId   = req.DestinationId,
+            TahteeqPortId   = req.TahteeqPortId,
             TripTypeId      = req.TripTypeId,
             PlannedDate     = Dt(req.PlannedDate),
             EstimatedCost   = req.EstimatedCost < 0 ? 0 : req.EstimatedCost,
@@ -318,6 +328,7 @@ public class OperationsController : ControllerBase
         o.ServiceId     = req.ServiceId;
         o.PortId        = req.PortId;
         o.DestinationId = req.DestinationId;
+        o.TahteeqPortId = req.TahteeqPortId;
         o.TripTypeId    = req.TripTypeId;
         o.PlannedDate   = Dt(req.PlannedDate);
         o.EstimatedCost = req.EstimatedCost < 0 ? 0 : req.EstimatedCost;
@@ -638,6 +649,8 @@ public class OperationsController : ControllerBase
             return "الميناء مش موجود";
         if (r.DestinationId is not null && !await _db.Destinations.AnyAsync(x => x.DestinationId == r.DestinationId, ct))
             return "الجهة مش موجودة";
+        if (r.TahteeqPortId is not null && !await _db.Ports.AnyAsync(x => x.PortId == r.TahteeqPortId, ct))
+            return "ميناء التعتيق مش موجود";
         if (r.TripTypeId is not null && !await _db.TripTypes.AnyAsync(x => x.TripTypeId == r.TripTypeId, ct))
             return "نوع الرحلة مش موجود";
 

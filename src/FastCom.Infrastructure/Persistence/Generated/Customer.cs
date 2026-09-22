@@ -84,6 +84,9 @@ public partial class Customer
     [InverseProperty("Customer")]
     public virtual ICollection<Booking> Bookings { get; set; } = new List<Booking>();
 
+    [InverseProperty("EndCustomer")]
+    public virtual ICollection<Booking> EndCustomerBookings { get; set; } = new List<Booking>();
+
     [InverseProperty("Customer")]
     public virtual ICollection<CashTransaction> CashTransactions { get; set; } = new List<CashTransaction>();
 

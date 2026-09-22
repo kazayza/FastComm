@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @attribute [Authorize]
 @implements IDisposable
 @using System.Net.Http.Json
@@ -8,6 +8,7 @@
 @inject HttpClient Http
 @inject AuthService Auth
 @inject NavigationManager Nav
+@inject IJSRuntime Js
 
 <PageTitle>الرئيسية — @_company.DisplayName</PageTitle>
 
@@ -62,14 +63,6 @@ else
                     </div>
                 </div>
 
-                @* ── ⚡ Quick Actions — أسرع 4 عمليات يومية ── *@
-                <div class="fc-quick">
-                    <button class="fc-qbtn" @onclick='@(() => Nav.NavigateTo("/operations/new"))'>🚢 عملية جديدة</button>
-                    <button class="fc-qbtn" @onclick='@(() => Nav.NavigateTo("/bookings/new"))'>📦 حجز جديد</button>
-                    <button class="fc-qbtn" @onclick='@(() => Nav.NavigateTo("/trips/new"))'>🚚 رحلة جديدة</button>
-                    <button class="fc-qbtn" @onclick='@(() => Nav.NavigateTo("/expenses/new"))'>💸 مصروف جديد</button>
-                </div>
-
                 @* ── KPI التشغيل — 4 كروت تفاعلية (الضغط بيفتح الصفحة) ── *@
                 <div class="fc-kpis fc-kpis-glass">
                     <KpiCard Value="@((_s?.OpenOperations ?? 0).ToString())" Label="عملية شغالة"
@@ -104,9 +97,6 @@ else
             </div>
         </div>
 
-        @* â•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گ
-           ط´ط¨ظƒط© ط§ظ„ظƒط±ظˆطھ â€” ط¹ظ…ظˆط¯ظٹظ† + طھط¯ط§ط®ظ„ ظ…ط¹ ط§ظ„ظ‡ظٹط±ظˆ
-        â•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گâ•گ *@
         <div class="home-content">
 
             <div class="v3-card v3-card-alerts">
@@ -135,7 +125,7 @@ else
                     }
                     else
                     {
-                        <div class="v3-badge v3-badge-green">✓</div>
+                        <div class="v3-badge v3-badge-green"><MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" /></div>
                     }
                 </div>
 
@@ -335,7 +325,7 @@ else
                     @if (CanSeeFinance && (_s?.CustodyOutstanding ?? 0) > 0)
                     {
                         <div class="v3-custody-alert" role="alert" style="margin-top:14px">
-                            <div class="v3-custody-icon" aria-hidden="true">⚠</div>
+                            <div class="v3-custody-icon" aria-hidden="true"><MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" /></div>
                             <div>
                                 عهد سواقين مفتوحة بمبلغ <strong>@Money(_s!.CustodyOutstanding) ج.م</strong> لسه ماتسوّتش
                             </div>
@@ -379,7 +369,7 @@ else
                         @if (!_top.Any())
                         {
                             <div class="v3-empty">
-                                <span>👥</span>
+                                <MudIcon Icon="@Icons.Material.Filled.Groups" Size="Size.Small" />
                                 <span>مافيش فواتير في الفترة دي</span>
                             </div>
                         }
@@ -466,6 +456,29 @@ else
             <span>@_company.DisplayName</span>
         </footer>
 
+
+        @* ⚡ FAB — الإجراءات السريعة (أسفل يسار الشاشة) *@
+        @if (_fabOpen)
+        {
+            <div class="fc-fab-scrim" @onclick="CloseFab"></div>
+        }
+
+        <div class="fc-fab-wrap @(_fabOpen ? "is-open" : "") @(_fabHidden ? "fc-fab-hidden" : "")">
+            <div class="fc-fab-menu" role="menu" aria-label="الإجراءات السريعة">
+                @foreach (var q in QuickActions)
+                {
+                    <button type="button" class="fc-fab-item" role="menuitem" @onclick="() => Go(q.Url)">
+                        <span class="fc-fab-ic"><MudIcon Icon="@q.Icon" Size="Size.Small" /></span>
+                        <span class="fc-fab-lb">@q.Label</span>
+                    </button>
+                }
+            </div>
+
+            <button type="button" class="fc-fab" @onclick="ToggleFab" @onkeydown="OnFabKeyDown"
+                    aria-label="الإجراءات السريعة" aria-expanded="@(_fabOpen ? "true" : "false")">
+                <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Large" />
+            </button>
+        </div>
     </div>
 }
 
@@ -495,6 +508,46 @@ else
     private static string Money(decimal v) => v.ToString("N0");
     private void GoReports() => Nav.NavigateTo("/reports");
 
+    /* ── ⚡ الإجراءات السريعة (FAB) ── */
+    private bool _fabOpen;
+    private bool _fabHidden;   // يختفي في أول الصفحة ويظهر بعد تمرير 280px
+
+    private sealed record QuickAction(string Label, string Url, string Icon);
+
+    private static readonly QuickAction[] QuickActions =
+    {
+        new("عملية جديدة", "/operations/new", Icons.Material.Filled.LocalShipping),
+        new("حجز جديد", "/bookings/new", Icons.Material.Filled.Inventory2),
+        new("رحلة جديدة", "/trips/new", Icons.Material.Filled.AirportShuttle),
+        new("مصروف جديد", "/expenses/new", Icons.Material.Filled.Payments),
+    };
+
+    private void ToggleFab() => _fabOpen = !_fabOpen;
+    private void CloseFab() => _fabOpen = false;
+
+    // يخفي/يظهر الـ FAB حسب موضع التمرير (JS event على window) — الصفحة تبقى نظيفة في الهيرو
+    private async Task OnScroll()
+    {
+        try
+        {
+            var y = await Js.InvokeAsync<int>("eval", "window.scrollY");
+            var hidden = y < 280;
+            if (hidden != _fabHidden) { _fabHidden = hidden; StateHasChanged(); }
+        }
+        catch (JSDisconnectedException) { /* الصفحة اتقفلت */ }
+    }
+
+    private void OnFabKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") _fabOpen = false;
+    }
+
+    private void Go(string url)
+    {
+        _fabOpen = false;   // نقفل قبل التنقل عشان الحالة ما تفضلش مفتوحة
+        Nav.NavigateTo(url);
+    }
+
     /* ── Lifecycle ── */
     protected override async Task OnInitializedAsync()
     {
@@ -507,6 +560,15 @@ else
         {
             await LoadAsync(silent: true);
         }), null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // نربط تمرير الـ window عشان نظافرة الهيرو (والـ FAB يظهر بعد النزول)
+            await OnScroll();
+        }
     }
 
     private async Task Reload() => await LoadAsync();

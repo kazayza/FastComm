@@ -536,6 +536,76 @@
                                     </div>
                                 </div>
 
+                                @* التعتيق (الميناء النهائي) *@
+                                <div class="form-field">
+                                    <label class="field-label" for="tahteeq">التعتيق (الميناء النهائي)</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                            <path d="M9 22V12h6v10"/>
+                                        </svg>
+                                        <select id="tahteeq"
+                                                class="field-input field-select"
+                                                @bind="_f.TahteeqPortId"
+                                                disabled="@_locked">
+                                            <option value="">— اختار ميناء التعتيق —</option>
+                                            @foreach (var p in _ports)
+                                            {
+                                                <option value="@p.Id">@p.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
+                                @* العميل النهائي *@
+                                <div class="form-field">
+                                    <label class="field-label" for="endcustomer">العميل النهائي (اختياري)</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                            <circle cx="12" cy="7" r="4"/>
+                                        </svg>
+                                        <select id="endcustomer"
+                                                class="field-input field-select"
+                                                @bind="_f.EndCustomerId"
+                                                disabled="@_locked">
+                                            <option value="">— نفس العميل —</option>
+                                            @foreach (var c in _customers)
+                                            {
+                                                <option value="@c.Id">@c.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="agent">
+                                            <svg viewBox="0 0 24 24" class="ico"
+                                                 width="14" height="14" fill="none"
+                                                 stroke="currentColor" stroke-width="2"
+                                                 aria-hidden="true">
+                                                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                                <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
+                                            </svg>
+                                            الوكيل الملاحي
+                                        </label>
+                                        <select id="agent"
+                                                class="field-input field-select"
+                                                @bind="_f.ShippingAgentId"
+                                                disabled="@_locked">
+                                            <option value="">— اختار الوكيل —</option>
+                                            @foreach (var a in _shippingAgents)
+                                            {
+                                                <option value="@a.Id">@a.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
                             </div>
 
                             @* Route Visual *@
@@ -545,7 +615,7 @@
                                     <div class="route-point">
                                         <div class="route-dot dot-from" aria-hidden="true"></div>
                                         <div class="route-label">
-                                            <span class="route-caption">ميناء الإقلاع</span>
+                                            <span class="route-caption">ميناء السحب</span>
                                             <strong>@(_ports.FirstOrDefault(p => p.Id == _f.PortId)?.Label ?? "—")</strong>
                                         </div>
                                     </div>
@@ -556,15 +626,33 @@
                                                   stroke="#1e6ef5" stroke-width="1.5"
                                                   stroke-dasharray="4 3"/>
                                         </svg>
-                                        <div class="route-truck" aria-hidden="true">🚛</div>
                                     </div>
                                     <div class="route-point">
-                                        <div class="route-dot dot-to" aria-hidden="true"></div>
+                                        <div class="route-dot dot-mid" aria-hidden="true"></div>
                                         <div class="route-label">
-                                            <span class="route-caption">جهة الوصول</span>
+                                            <span class="route-caption">الوجهة</span>
                                             <strong>@(_destinations.FirstOrDefault(d => d.Id == _f.DestinationId)?.Label ?? "—")</strong>
                                         </div>
                                     </div>
+                                    @if (_f.TahteeqPortId.HasValue)
+                                    {
+                                        <div class="route-line" aria-hidden="true">
+                                            <svg viewBox="0 0 100 20" width="100" height="20"
+                                                 preserveAspectRatio="none">
+                                                <path d="M0 10 Q50 2 100 10" fill="none"
+                                                      stroke="#1e6ef5" stroke-width="1.5"
+                                                      stroke-dasharray="4 3"/>
+                                            </svg>
+                                        </div>
+                                        <div class="route-point">
+                                            <div class="route-dot dot-to" aria-hidden="true"></div>
+                                            <div class="route-label">
+                                                <span class="route-caption">التعتيق</span>
+                                                <strong>@(_ports.FirstOrDefault(p => p.Id == _f.TahteeqPortId)?.Label ?? "—")</strong>
+                                            </div>
+                                        </div>
+                                    }
+
                                 </div>
                             }
 
@@ -777,6 +865,83 @@
                                                            @onchange="e => ln.Notes = e.Value?.ToString()" />
                                                 </div>
 
+                                            </div>
+
+                                            @* Container Details *@
+                                            <div class="bk-cc-details">
+                                                <div class="bk-cc-details-head">
+                                                    <span>أرقام الحاويات الفعلية</span>
+                                                    @if (!_locked)
+                                                    {
+                                                        <button class="bk-add-detail-btn" @onclick="() => AddDetail(idx)">
+                                                            <svg viewBox="0 0 24 24" width="13" height="13"
+                                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                                <path d="M12 5v14M5 12h14"/>
+                                                            </svg>
+                                                            إضافة حاوية
+                                                        </button>
+                                                    }
+                                                </div>
+                                                @if (ln.Details.Count == 0)
+                                                {
+                                                    <div class="bk-cc-no-details">مافيش حاويات فعلية متسجلة</div>
+                                                }
+                                                else
+                                                {
+                                                    @foreach (var dt in ln.Details)
+                                                    {
+                                                        var dtIdx = ln.Details.IndexOf(dt);
+                                                        <div class="bk-cc-detail-row">
+                                                            <div class="form-field">
+                                                                <label class="field-label">رقم الحاوية</label>
+                                                                <input type="text" class="field-input"
+                                                                       @bind="dt.ContainerNumber"
+                                                                       disabled="@_locked"
+                                                                       placeholder="MSCU1234567" />
+                                                            </div>
+                                                            <div class="form-field">
+                                                                <label class="field-label">رقم الرصاص</label>
+                                                                <input type="text" class="field-input"
+                                                                       @bind="dt.SealNumber"
+                                                                       disabled="@_locked" />
+                                                            </div>
+                                                            <div class="form-field">
+                                                                <label class="field-label">شركة الشحن</label>
+                                                                <input type="text" class="field-input"
+                                                                       @bind="dt.ShippingLine"
+                                                                       disabled="@_locked" />
+                                                            </div>
+                                                            <div class="form-field">
+                                                                <label class="field-label">رقم البوليصة</label>
+                                                                <input type="text" class="field-input"
+                                                                       @bind="dt.BLNumber"
+                                                                       disabled="@_locked" />
+                                                            </div>
+                                                            <div class="form-field">
+                                                                <label class="field-label">رقم الحجز</label>
+                                                                <input type="text" class="field-input"
+                                                                       @bind="dt.BookingReference"
+                                                                       disabled="@_locked" />
+                                                            </div>
+                                                            <div class="form-field">
+                                                                <label class="field-label">الوزن (كجم)</label>
+                                                                <input type="number" class="field-input"
+                                                                       @bind="dt.WeightKg"
+                                                                       disabled="@_locked" />
+                                                            </div>
+                                                            @if (!_locked)
+                                                            {
+                                                                <button class="bk-cc-detail-del"
+                                                                        @onclick="() => RemoveDetail(idx, dtIdx)">
+                                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                                        <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                                    </svg>
+                                                                </button>
+                                                            }
+                                                        </div>
+                                                    }
+                                                }
                                             </div>
 
                                         </div>
@@ -1507,6 +1672,7 @@
     private List<Opt> _services       = new();
     private List<Opt> _ports          = new();
     private List<Opt> _destinations   = new();
+    private List<Opt> _shippingAgents = new();
     private List<Opt> _tripTypes      = new();
     private List<Opt> _containerTypes = new();
 
@@ -1557,6 +1723,19 @@
         public int      Qty      { get; set; } = 1;
         public decimal? WeightKg { get; set; }
         public string?  Notes    { get; set; }
+        public List<ContainerDetailRow> Details { get; set; } = new();
+    }
+
+    public class ContainerDetailRow
+    {
+        public long?    ContainerId       { get; set; }
+        public string?  ContainerNumber   { get; set; }
+        public string?  SealNumber        { get; set; }
+        public string?  ShippingLine      { get; set; }
+        public string?  BLNumber          { get; set; }
+        public string?  BookingReference  { get; set; }
+        public decimal? WeightKg          { get; set; }
+        public string?  Notes             { get; set; }
     }
 
     public class Form
@@ -1567,7 +1746,10 @@
         public int?    ServiceId         { get; set; }
         public int?    PortId            { get; set; }
         public int?    DestinationId     { get; set; }
+        public int?    TahteeqPortId     { get; set; }
+        public int?    EndCustomerId     { get; set; }
         public int?    TripTypeId        { get; set; }
+        public int?    ShippingAgentId   { get; set; }
         public string? CustomerReference { get; set; }
         public string? Notes             { get; set; }
     }
@@ -1578,6 +1760,19 @@
         public int      RequestedQty    { get; set; }
         public decimal? WeightKg        { get; set; }
         public string?  Notes           { get; set; }
+        public List<ContainerDetailItem>? ContainerDetails { get; set; }
+    }
+
+    public class ContainerDetailItem
+    {
+        public long?    ContainerId       { get; set; }
+        public string?  ContainerNumber   { get; set; }
+        public string?  SealNumber        { get; set; }
+        public string?  ShippingLine      { get; set; }
+        public string?  BLNumber          { get; set; }
+        public string?  BookingReference  { get; set; }
+        public decimal? WeightKg          { get; set; }
+        public string?  Notes             { get; set; }
     }
 
     public class DetailBooking
@@ -1588,6 +1783,10 @@
         public int?    ServiceId          { get; set; }
         public int?    PortId             { get; set; }
         public int?    DestinationId      { get; set; }
+        public int?    TahteeqPortId      { get; set; }
+        public string? TahteeqPortName    { get; set; }
+        public int?    EndCustomerId      { get; set; }
+        public string? EndCustomerName    { get; set; }
         public int?    TripTypeId         { get; set; }
         public string? CustomerReference  { get; set; }
         public int?    ContactId          { get; set; }
@@ -1623,6 +1822,7 @@
             _services       = await SafeGet("api/options/services");
             _ports          = await SafeGet("api/options/ports");
             _destinations   = await SafeGet("api/options/destinations");
+            _shippingAgents = await SafeGet("api/shipping-agents/options");
             _tripTypes      = await SafeGet("api/options/trip-types");
             _containerTypes = await SafeGet("api/options/container-types");
 
@@ -1656,6 +1856,8 @@
             ServiceId         = d.Booking.ServiceId,
             PortId            = d.Booking.PortId,
             DestinationId     = d.Booking.DestinationId,
+            TahteeqPortId     = d.Booking.TahteeqPortId,
+            EndCustomerId     = d.Booking.EndCustomerId,
             TripTypeId        = d.Booking.TripTypeId,
             CustomerReference = d.Booking.CustomerReference,
             Notes             = d.Booking.Notes
@@ -1666,7 +1868,18 @@
             TypeId   = l.ContainerTypeId,
             Qty      = l.RequestedQty,
             WeightKg = l.WeightKg,
-            Notes    = l.Notes
+            Notes    = l.Notes,
+            Details  = l.ContainerDetails?.Select(cd => new ContainerDetailRow
+            {
+                ContainerId      = cd.ContainerId,
+                ContainerNumber  = cd.ContainerNumber,
+                SealNumber       = cd.SealNumber,
+                ShippingLine     = cd.ShippingLine,
+                BLNumber         = cd.BLNumber,
+                BookingReference = cd.BookingReference,
+                WeightKg         = cd.WeightKg,
+                Notes            = cd.Notes
+            }).ToList() ?? new()
         }).ToList();
 
         if (_lines.Count == 0) AddLine();
@@ -1685,6 +1898,22 @@
     private void RemoveLine(int idx)
     {
         if (idx >= 0 && idx < _lines.Count) _lines.RemoveAt(idx);
+    }
+
+    private void AddDetail(int lineIdx)
+    {
+        if (lineIdx >= 0 && lineIdx < _lines.Count)
+            _lines[lineIdx].Details.Add(new ContainerDetailRow());
+    }
+
+    private void RemoveDetail(int lineIdx, int detailIdx)
+    {
+        if (lineIdx >= 0 && lineIdx < _lines.Count)
+        {
+            var details = _lines[lineIdx].Details;
+            if (detailIdx >= 0 && detailIdx < details.Count)
+                details.RemoveAt(detailIdx);
+        }
     }
 
     private async Task OnCustomerChanged(ChangeEventArgs e)
@@ -1737,6 +1966,8 @@
             serviceId         = _f.ServiceId,
             portId            = _f.PortId,
             destinationId     = _f.DestinationId,
+            tahteeqPortId     = _f.TahteeqPortId,
+            endCustomerId     = _f.EndCustomerId,
             tripTypeId        = _f.TripTypeId,
             customerReference = _f.CustomerReference,
             contactId         = _f.ContactId,
@@ -1747,7 +1978,18 @@
                 requestedQty    = l.Qty,
                 weightKg        = l.WeightKg,
                 notes           = l.Notes
-            })
+            }),
+            containerDetails    = lines.SelectMany(l => l.Details.Select(d => new
+            {
+                containerId      = d.ContainerId,
+                containerNumber  = d.ContainerNumber,
+                sealNumber       = d.SealNumber,
+                shippingLine     = d.ShippingLine,
+                blNumber         = d.BLNumber,
+                bookingReference = d.BookingReference,
+                weightKg         = d.WeightKg,
+                notes            = d.Notes
+            }))
         };
 
         _saving = true;

@@ -46,6 +46,17 @@ public class CustodiesController : ControllerBase
     private static string? B(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
     private static DateTime Dt(string? s) => DateTime.TryParse(s, out var d) ? d : DateTime.UtcNow;
 
+    /// <summary>اسم الحالة بالعربي — لرسائل الرفض الواضحة.</summary>
+    private static string StatusAr(string? s) => s switch
+    {
+        "Open"             => "مفتوحة",
+        "PartiallySettled" => "مسوّاة جزئيًا",
+        "Submitted"        => "متقدّمة للتسوية",
+        "Approved"         => "معتمدة",
+        "Closed"           => "مقفولة",
+        _                  => s ?? "غير معروفة"
+    };
+
     private async Task<int?> ResolveBranchIdAsync(CancellationToken ct)
     {
         if (int.TryParse(User.FindFirstValue("branchId"), out var b) && b > 0) return b;
@@ -55,23 +66,25 @@ public class CustodiesController : ControllerBase
 
     // ═══════════════ DTOs ═══════════════
 
-    public record CustodyCreate(long TripId, string OwnerType, int OwnerId,
-        decimal AmountIssued, string? CustodyDate, string? Notes);
+    public record CustodyCreate(long? TripId, string OwnerType, int OwnerId,
+        decimal AmountIssued, string? CustodyDate, string? Notes,
+        bool IsPrimary = true, long? ParentCustodyId = null);
 
     public record TxRequest(string? Type, decimal Amount, string? TxDate, long? ExpenseId, string? Notes);
 
     public record ApproveRequest(bool AddAdditional);
 
     public record ListItem(long CustodyId, string CustodyNumber, DateTime CustodyDate,
-        string OwnerType, string OwnerName, long TripId, string TripNumber, string? DriverName,
+        string OwnerType, string OwnerName, long? TripId, string? TripNumber, string? DriverName,
         decimal AmountIssued, decimal AmountSpent, decimal AmountReturned, decimal AdditionalDue,
-        decimal Remaining, string Status, int TxCount);
+        decimal Remaining, string Status, int TxCount,
+        bool IsPrimary, long? ParentCustodyId, string? ParentCustodyNumber, int SubCount);
 
     public record Detail(long CustodyId, string CustodyNumber, DateTime CustodyDate,
-        string OwnerType, int OwnerId, string OwnerName, long TripId, string TripNumber,
+        string OwnerType, int OwnerId, string OwnerName, long? TripId, string? TripNumber,
         string? DriverName, decimal AmountIssued, decimal AmountSpent, decimal AmountReturned,
         decimal AdditionalDue, decimal Remaining, string Status, string? Notes,
-        DateTime? ClosedAt);
+        DateTime? ClosedAt, bool IsPrimary, long? ParentCustodyId, string? ParentCustodyNumber);
 
     public record TxLine(long CustodyTransactionId, string TransactionType, DateTime TransactionDate,
         decimal Amount, long? ExpenseId, string? ExpenseNumber, string? Notes);
@@ -111,12 +124,15 @@ public class CustodiesController : ControllerBase
                 c.OwnerType == "Driver"
                     ? _db.Drivers.Where(d => d.DriverId == c.OwnerId).Select(d => d.FullName).FirstOrDefault() ?? "—"
                     : _db.Employees.Where(e => e.EmployeeId == c.OwnerId).Select(e => e.FullNameAr).FirstOrDefault() ?? "—",
-                c.TripId, c.Trip.TripNumber,
-                c.Trip.Driver.FullName,
+                c.TripId, c.Trip != null ? c.Trip.TripNumber : null,
+                c.Trip != null ? c.Trip.Driver.FullName : null,
                 c.AmountIssued, c.AmountSpent, c.AmountReturned, c.AdditionalDue,
                 c.AmountIssued + c.AdditionalDue - c.AmountSpent - c.AmountReturned,
                 c.Status,
-                _db.CustodyTransactions.Count(t => t.CustodyId == c.CustodyId)))
+                _db.CustodyTransactions.Count(t => t.CustodyId == c.CustodyId),
+                c.IsPrimary, c.ParentCustodyId,
+                c.ParentCustody != null ? c.ParentCustody.CustodyNumber : null,
+                _db.DriverCustodies.Count(sc => sc.ParentCustodyId == c.CustodyId && !sc.IsDeleted)))
             .ToListAsync(ct);
 
         return Ok(rows);
@@ -157,11 +173,17 @@ public class CustodiesController : ControllerBase
                 e.Amount, e.ExpenseDate, e.Description, e.PaymentStatus))
             .ToListAsync(ct);
 
+        string? parentNumber = null;
+        if (c.ParentCustodyId is not null)
+            parentNumber = await _db.DriverCustodies.AsNoTracking()
+                .Where(pc => pc.CustodyId == c.ParentCustodyId)
+                .Select(pc => pc.CustodyNumber).FirstOrDefaultAsync(ct);
+
         var detail = new Detail(c.CustodyId, c.CustodyNumber, c.CustodyDate, c.OwnerType, c.OwnerId,
-            owner ?? "—", c.TripId, trip?.TripNumber ?? "—", trip?.Driver,
+            owner ?? "—", c.TripId, trip?.TripNumber, trip?.Driver,
             c.AmountIssued, c.AmountSpent, c.AmountReturned, c.AdditionalDue,
             c.AmountIssued + c.AdditionalDue - c.AmountSpent - c.AmountReturned,
-            c.Status, c.Notes, c.ClosedAt);
+            c.Status, c.Notes, c.ClosedAt, c.IsPrimary, c.ParentCustodyId, parentNumber);
 
         return Ok(new { Custody = detail, Transactions = txs, Expenses = expenses });
     }
@@ -209,52 +231,62 @@ public class CustodiesController : ControllerBase
         var custodyMax = await _settings.GetDecimalAsync(SettingKeys.CustodyMaxAmount,
                                                        SettingDefaults.CustodyMaxAmount, ct);
         if (custodyMax > 0 && req.AmountIssued > custodyMax)
-            {
-            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "Custody", null, description: "إنشاء عهدة", ct: ct);
-            
-            }
+        {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "Custody", null,
+                description: $"محاولة إنشاء عهدة فوق السقف ({req.AmountIssued:N2} > {custodyMax:N2})", ct: ct);
+            return BadRequest(new { message = $"أقصى مبلغ للعهدة {custodyMax:N2} — المطلوب {req.AmountIssued:N2}" });
+        }
         if (req.OwnerId <= 0) return BadRequest(new { message = "اختار صاحب العهدة" });
 
         if (req.OwnerType is not ("Driver" or "Employee"))
             return BadRequest(new { message = "نوع صاحب العهدة لازم يكون سائق أو موظف" });
 
-        var trip = await _db.Trips.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.TripId == req.TripId && !t.IsDeleted, ct);
-        if (trip is null) return BadRequest(new { message = "الرحلة مش موجودة" });
-        if (trip.Status == "Cancelled") return BadRequest(new { message = "الرحلة ملغية — مافيش عهدة عليها" });
+        Trip? trip = null;
+        if (req.TripId is not null)
+        {
+            trip = await _db.Trips.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.TripId == req.TripId && !t.IsDeleted, ct);
+            if (trip is null) return BadRequest(new { message = "الرحلة مش موجودة" });
+            if (trip.Status == "Cancelled") return BadRequest(new { message = "الرحلة ملغية — مافيش عهدة عليها" });
+        }
 
         if (req.OwnerType == "Driver")
         {
             var d = await _db.Drivers.AsNoTracking()
                 .FirstOrDefaultAsync(x => x.DriverId == req.OwnerId && !x.IsDeleted, ct);
             if (d is null) return BadRequest(new { message = "السائق مش موجود" });
-            if (d.DriverId != trip.DriverId)
+            if (trip is not null && d.DriverId != trip.DriverId)
                 return BadRequest(new { message = $"السائق ده مش سائق الرحلة {trip.TripNumber}" });
         }
         else if (!await _db.Employees.AnyAsync(e => e.EmployeeId == req.OwnerId && !e.IsDeleted, ct))
             return BadRequest(new { message = "الموظف مش موجود" });
 
-        // عهدة واحدة مفتوحة لكل (رحلة + صاحب)
-        var dup = await _db.DriverCustodies.AsNoTracking().AnyAsync(c =>
-            !c.IsDeleted && c.TripId == req.TripId && c.OwnerType == req.OwnerType &&
-            c.OwnerId == req.OwnerId && c.Status != "Closed", ct);
-        if (dup) return BadRequest(new { message = "في عهدة مفتوحة لنفس الشخص على الرحلة دي — صفّيها الأول" });
+        // عهدة واحدة مفتوحة لكل (رحلة + صاحب) — لو فيه رحلة
+        if (req.TripId is not null)
+        {
+            var dup = await _db.DriverCustodies.AsNoTracking().AnyAsync(c =>
+                !c.IsDeleted && c.TripId == req.TripId && c.OwnerType == req.OwnerType &&
+                c.OwnerId == req.OwnerId && c.Status != "Closed", ct);
+            if (dup) return BadRequest(new { message = "في عهدة مفتوحة لنفس الشخص على الرحلة دي — صفّيها الأول" });
+        }
 
         var branchId = await ResolveBranchIdAsync(ct);
         if (branchId is null) return BadRequest(new { message = "مافيش فرع معرّف في النظام" });
 
         var c = new DriverCustody
         {
-            CustodyNumber = await _numbers.NextAsync("CUSTODY", ct),
-            BranchId      = branchId.Value,
-            TripId        = req.TripId,
-            OwnerType     = req.OwnerType,
-            OwnerId       = req.OwnerId,
-            CustodyDate   = Dt(req.CustodyDate),
-            AmountIssued  = req.AmountIssued,
-            Status        = "Open",
-            Notes         = B(req.Notes),
-            CreatedBy     = CurrentUserId()
+            CustodyNumber    = await _numbers.NextAsync("CUSTODY", ct),
+            BranchId         = branchId.Value,
+            TripId           = req.TripId,
+            OwnerType        = req.OwnerType,
+            OwnerId          = req.OwnerId,
+            CustodyDate      = Dt(req.CustodyDate),
+            AmountIssued     = req.AmountIssued,
+            Status           = "Open",
+            Notes            = B(req.Notes),
+            CreatedBy        = CurrentUserId(),
+            IsPrimary        = req.IsPrimary,
+            ParentCustodyId  = req.ParentCustodyId
         };
         // 🔴 Atomicity: العهدة + سطر «صرف» في الدفتر — معاملة واحدة
         await _db.Database.BeginTransactionAsync(ct);
@@ -279,7 +311,11 @@ public class CustodiesController : ControllerBase
 
                 /* 🔴 الخزينة — صرف العهدة = فلوس **خرجت** من الخزينة للسائق.
                    ده بيحصل مرة واحدة بس (وقت الصرف)، والمصروفات المربوطة بالعهدة
-                   **مابتعملش** حركة خزينة تانية — وإلا هتتحسب مرتين. */
+                   **مابتعملش** حركة خزينة تانية — وإلا هتتحسب مرتين.
+                   🔴 الفرعية **ماتعملش** حركة خزينة — الفلوس خرجت مع الرئيسية. */
+                if (!req.IsPrimary) { /* فرعية — مافيش حركة خزينة */ }
+                else
+                {
                 var paid = await _cash.PaymentAsync(new CashEntry(
                     ReferenceNumber : $"CUST-ISSUE:{c.CustodyNumber}",
                     Amount          : c.AmountIssued,
@@ -288,6 +324,7 @@ public class CustodiesController : ControllerBase
                     Description     : $"صرف عهدة {c.CustodyNumber}",
                     Date            : DateOnly.FromDateTime(c.CustodyDate)), ct);
                 if (paid) await _db.SaveChangesAsync(ct);
+                }
             }
 
             await _db.Database.CommitTransactionAsync(ct);
@@ -299,7 +336,7 @@ public class CustodiesController : ControllerBase
         }
 
         return Ok(new { id = c.CustodyId, number = c.CustodyNumber,
-            message = $"✅ اتفتحت العهدة برقم {c.CustodyNumber}" });
+            message = $"اتفتحت العهدة برقم {c.CustodyNumber}" });
     }
 
     // ═══════════════ حركة — رد باقى / إضافة مبلغ ═══════════════
@@ -313,10 +350,11 @@ public class CustodiesController : ControllerBase
         var txMax = await _settings.GetDecimalAsync(SettingKeys.CustodyMaxAmount,
                                                     SettingDefaults.CustodyMaxAmount, ct);
         if (txMax > 0 && req.Amount > txMax)
-            {
-            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "Custody", null, description: "حركة عهدة", ct: ct);
-            
-            }
+        {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "Custody", null,
+                description: $"محاولة تسجيل حركة عهدة فوق السقف ({req.Amount:N2} > {txMax:N2})", ct: ct);
+            return BadRequest(new { message = $"أقصى مبلغ للحركة {txMax:N2} — المطلوب {req.Amount:N2}" });
+        }
         if (req.Type is not ("Additional" or "Refund"))
             return BadRequest(new { message = "نوع الحركة لازم يكون «رد باقي» أو «إضافة مبلغ»" });
 
@@ -372,7 +410,7 @@ public class CustodiesController : ControllerBase
 
         return Ok(new
         {
-            message = (req.Type == "Refund" ? "✅ اتسجل رد الباقي" : "✅ اتسجلت الإضافة")
+            message = (req.Type == "Refund" ? "اتسجل رد الباقي" : "اتسجلت الإضافة")
                       + (toTreasury ? " — واتسجل إيض في الخزينة" : ""),
             spent    = now.AmountSpent,
             returned = now.AmountReturned,
@@ -412,7 +450,7 @@ public class CustodiesController : ControllerBase
 
         return Ok(new
         {
-            message = "🗑️ اتحذفت الحركة والأرصدة اتظبطت",
+            message = "اتحذفت الحركة والأرصدة اتظبطت",
             spent    = now.AmountSpent,
             returned = now.AmountReturned,
             due      = now.AdditionalDue,
@@ -430,10 +468,11 @@ public class CustodiesController : ControllerBase
         var c = await _db.DriverCustodies.FirstOrDefaultAsync(x => x.CustodyId == id && !x.IsDeleted, ct);
         if (c is null) return NotFound(new { message = "العهدة مش موجودة" });
         if (c.Status is not ("Open" or "PartiallySettled"))
-            {
-            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Settle, "Custody", null, description: "تسوية عهدة", ct: ct);
-            
-            }
+        {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Settle, "Custody", c.CustodyId.ToString(),
+                description: $"محاولة تسوية عهدة بحالة {c.Status}", ct: ct);
+            return BadRequest(new { message = $"العهدة حالتها {StatusAr(c.Status)} — التسوية بتتقدم من عهدة مفتوحة بس" });
+        }
 
         var moved = await _db.CustodyTransactions.AnyAsync(
             t => t.CustodyId == id && t.TransactionType != "Issue", ct);
@@ -445,7 +484,7 @@ public class CustodiesController : ControllerBase
         c.UpdatedBy = CurrentUserId();
         await _db.SaveChangesAsync(ct);
 
-        return Ok(new { message = "📤 اتقدّمت التسوية — مستنية الاعتماد" });
+        return Ok(new { message = "اتقدّمت التسوية — مستنية الاعتماد" });
     }
 
     // ═══════════════ اعتماد التسوية ═══════════════
@@ -457,10 +496,11 @@ public class CustodiesController : ControllerBase
         var c = await _db.DriverCustodies.FirstOrDefaultAsync(x => x.CustodyId == id && !x.IsDeleted, ct);
         if (c is null) return NotFound(new { message = "العهدة مش موجودة" });
         if (c.Status != "Submitted")
-            {
-            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Approve, "Custody", null, description: "اعتماد عهدة", ct: ct);
-            
-            }
+        {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Approve, "Custody", c.CustodyId.ToString(),
+                description: $"محاولة اعتماد عهدة بحالة {c.Status}", ct: ct);
+            return BadRequest(new { message = $"العهدة حالتها {StatusAr(c.Status)} — الاعتماد بيتم على تسوية متقدّمة بس" });
+        }
 
         var extra = c.AmountSpent + c.AmountReturned - (c.AmountIssued + c.AdditionalDue);
         if (extra > 0 && req?.AddAdditional != true)
@@ -477,7 +517,7 @@ public class CustodiesController : ControllerBase
         c.UpdatedBy = CurrentUserId();
         await _db.SaveChangesAsync(ct);
 
-        return Ok(new { message = "✅ اعتمدت التسوية — جاهزة للإغلاق" });
+        return Ok(new { message = "اعتمدت التسوية — جاهزة للإغلاق" });
     }
 
     // ═══════════════ إغلاق ═══════════════
@@ -489,10 +529,21 @@ public class CustodiesController : ControllerBase
         var c = await _db.DriverCustodies.FirstOrDefaultAsync(x => x.CustodyId == id && !x.IsDeleted, ct);
         if (c is null) return NotFound(new { message = "العهدة مش موجودة" });
         if (c.Status != "Approved")
-            {
-            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Close, "Custody", null, description: "إقفال عهدة", ct: ct);
-            
-            }
+        {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Close, "Custody", c.CustodyId.ToString(),
+                description: $"محاولة إغلاق عهدة بحالة {c.Status}", ct: ct);
+            return BadRequest(new { message = $"العهدة حالتها {StatusAr(c.Status)} — الإغلاق بيتم بعد الاعتماد بس" });
+        }
+
+        /* 🔴 باج: كان بيقفل والباقي لسه مع السائق من غير ما يحاسبه.
+           الإغلاق مش مسموح غير والعهدة متصفاة تمامًا (الباقي = صفر). */
+        var remaining = c.AmountIssued + c.AdditionalDue - c.AmountSpent - c.AmountReturned;
+        if (remaining > 0)
+        {
+            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Close, "Custody", c.CustodyId.ToString(),
+                description: $"محاولة إغلاق عهدة وباقي {remaining:N2} لسه مااتردش", ct: ct);
+            return BadRequest(new { message = $"فاضل مع صاحب العهدة {remaining:N2} — سجّلها مصروفات أو رد باقي الأول" });
+        }
 
         c.Status    = "Closed";
         c.ClosedAt  = DateTime.UtcNow;
@@ -501,7 +552,7 @@ public class CustodiesController : ControllerBase
         c.UpdatedBy = CurrentUserId();
         await _db.SaveChangesAsync(ct);
 
-        return Ok(new { message = "🔒 اتقفلت العهدة" });
+        return Ok(new { message = "اتقفلت العهدة" });
     }
 
     // ═══════════════ حذف ═══════════════
@@ -540,6 +591,6 @@ public class CustodiesController : ControllerBase
         c.DeletedBy = CurrentUserId();
         await _db.SaveChangesAsync(ct);
 
-        return Ok(new { message = "🗑️ اتحذفت العهدة" });
+        return Ok(new { message = "اتحذفت العهدة" });
     }
 }

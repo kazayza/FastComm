@@ -58,15 +58,14 @@ public sealed record CashEntry(
 /// <inheritdoc cref="ICashBook"/>
 public sealed class CashBook : ICashBook
 {
-    /* 🔴 كود الخزينة الافتراضية — موجود في الـ seed (`FastCom-schema.sql:2219`).
-       لو محتاج صندوق تاني يبقى الإعداد ده بيتغيّر. */
-    private const string DefaultBoxCode = "MAIN";
-
+    /* 🔴 المرحلة 2: كان ثابت "MAIN" — بقى من الإعداد `TREASURY.DEFAULT_BOX`.
+       ولو الخزينة دي مقفولة/مش موجودة → أول خزينة مفتوحة. */
     private readonly FastComDbContext _db;
     private readonly ILogger<CashBook> _log;
+    private readonly ISettingsService _settings;
 
-    public CashBook(FastComDbContext db, ILogger<CashBook> log)
-    { _db = db; _log = log; }
+    public CashBook(FastComDbContext db, ILogger<CashBook> log, ISettingsService settings)
+    { _db = db; _log = log; _settings = settings; }
 
     // ═══════════════ Public ═══════════════
 
@@ -115,8 +114,8 @@ public sealed class CashBook : ICashBook
         var box = await ResolveBoxAsync(ct);
         if (box is null)
         {
-            _log.LogWarning("CashBook: مافيش خزينة نشطة ({Code}) — الحركة {Ref} ما اتسجلتش",
-                            DefaultBoxCode, e.ReferenceNumber);
+            _log.LogWarning("CashBook: مافيش خزينة مفتوحة — الحركة {Ref} ما اتسجلتش",
+                            e.ReferenceNumber);
             return false;
         }
 
@@ -143,17 +142,22 @@ public sealed class CashBook : ICashBook
     }
 
     /// <summary>
-    /// الخزينة الافتراضية للفرع: الكود <c>MAIN</c> — ولو مش موجود، أول خزينة نشطة.
+    /// الخزينة الافتراضية: كودها من الإعداد <c>TREASURY.DEFAULT_BOX</c> (الافتراضي MAIN) —
+    /// ولو مش موجودة أو مقفولة، أول خزينة نشطة ومفتوحة.
     /// </summary>
     private async Task<CashBox?> ResolveBoxAsync(CancellationToken ct)
     {
+        var code = await _settings.GetStringAsync(SettingKeys.TreasuryDefaultBox,
+                                                  SettingDefaults.TreasuryDefaultBox, ct);
+        if (string.IsNullOrWhiteSpace(code)) code = SettingDefaults.TreasuryDefaultBox;
+
         var box = await _db.CashBoxes.AsNoTracking()
-            .Where(b => !b.IsDeleted && b.IsActive && b.Code == DefaultBoxCode)
+            .Where(b => !b.IsDeleted && b.IsActive && b.Status == "Open" && b.Code == code)
             .OrderBy(b => b.CashBoxId)
             .FirstOrDefaultAsync(ct);
 
         return box ?? await _db.CashBoxes.AsNoTracking()
-            .Where(b => !b.IsDeleted && b.IsActive)
+            .Where(b => !b.IsDeleted && b.IsActive && b.Status == "Open")
             .OrderBy(b => b.CashBoxId)
             .FirstOrDefaultAsync(ct);
     }

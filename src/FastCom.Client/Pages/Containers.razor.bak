@@ -1,0 +1,224 @@
+@page "/containers"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>الحاويات — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">البيانات الأساسية · الأسطول</div>
+                <h1 class="fc-hero-title">الحاويات</h1>
+                <p class="fc-hero-sub">أرقام الحاويات الفعلية — النوع والملكية والوزن وأين الحاوية دلوقتي</p>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
+                @if (CanManage)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add" OnClick="GoNew">حاوية جديدة</MudButton>
+                }
+            </div>
+        </div>
+        @if (CanView)
+        {
+            <div class="fc-kpis fc-kpis-glass">
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.List" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي الحاويات</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(c => c.CurrentStatus == "Available")</div><div class="fc-kpi-lb">متاحة</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.AirportShuttle" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(c => c.CurrentStatus == "InTransit")</div><div class="fc-kpi-lb">في الطريق</div></div></div>
+                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Construction" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(c => c.IsReefer)</div><div class="fc-kpi-lb">حاويات مبردة</div></div></div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanView)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض الحاويات.</MudAlert>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+            <div class="fc-toolbar">
+                <div class="fc-filters">
+                    @foreach (var t in Tabs)
+                    {
+                        <button class='fc-filter @(_tab == t.Key ? "on" : "")' @onclick="() => SetTab(t.Key)">@t.Value</button>
+                    }
+                </div>
+                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
+                              Placeholder="ابحث برقم الحاوية أو المالك..." Variant="Variant.Outlined" Dense="true"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Class="fc-search-box" Immediate="true" />
+                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+            }
+            else
+            {
+                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
+                    <thead><tr>
+                        <th>رقم الحاوية</th><th>النوع</th><th>المقاس</th><th>الملكية</th>
+                        <th>الوزن</th><th>الحالة</th>
+                        @if (CanManage) { <th style="width:120px; text-align:left">إجراءات</th> }
+                    </tr></thead>
+                    <tbody>
+                        @foreach (var c in Filtered)
+                        {
+                            <tr>
+                                <td><span class="fc-role-chip">@c.ContainerNumber</span></td>
+                                <td><div class="fc-cell-main">@c.TypeName</div></td>
+                                <td class="fc-cell-sub">@c.SizeFeet قدم
+                                    @if (c.IsReefer) { <span class="fc-chip fc-chip-blue"><i></i>مبردة</span> }</td>
+                                <td class="fc-cell-sub">@OwnerAr(c.OwnerType)
+                                    @if (c.OwnerName is not null) { <div class="fc-cell-sub">@c.OwnerName</div> }</td>
+                                <td class="fc-cell-sub">@(c.WeightKg?.ToString("0.##") ?? "—") كجم</td>
+                                <td><span class="fc-chip @ChipClass(c.CurrentStatus)"><i></i>@StatusAr(c.CurrentStatus)</span></td>
+                                @if (CanManage)
+                                {
+                                    <td><div class="fc-row-actions">
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
+                                                       Color="Color.Primary" OnClick="() => GoEdit(c)" />
+                                        @if (_confirmId == c.ContainerId)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                                                       OnClick="() => Delete(c)">متأكد؟</MudButton>
+                                        }
+                                        else
+                                        {
+                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
+                                                           Color="Color.Error" OnClick="() => _confirmId = c.ContainerId" />
+                                        }
+                                    </div></td>
+                                }
+                            </tr>
+                        }
+                        @if (!Filtered.Any())
+                        {
+                            <tr><td colspan="7"><div class="fc-empty"><div>لايوجد حاويات في الفلتر ده</div></div></td></tr>
+                        }
+                    </tbody>
+                </table></div>
+            }
+        </div></div>
+    }
+
+</div>
+
+@code {
+    private AuthUser? _user;
+    private bool CanView   => _user?.Can("MASTERDATA.VIEW") ?? false;
+    private bool CanManage => _user?.Can("MASTERDATA.MANAGE") ?? false;
+
+    private static readonly Dictionary<string, string> Tabs = new()
+    {
+        ["all"] = "الكل", ["Available"] = "متاحة", ["InTransit"] = "في الطريق",
+        ["AtPort"] = "في الميناء", ["AtDepot"] = "في المخزن",
+        ["Delivered"] = "تم التسليم", ["Returned"] = "مرتجعة"
+    };
+
+    private List<Item> _items = new();
+    private bool _loading; private string _search = ""; private string _tab = "all";
+    private long? _confirmId;
+
+    public class Item
+    {
+        public long ContainerId { get; set; }
+        public string ContainerNumber { get; set; } = "";
+        public string TypeName { get; set; } = "";
+        public byte SizeFeet { get; set; }
+        public bool IsReefer { get; set; }
+        public string OwnerType { get; set; } = "";
+        public string? OwnerName { get; set; }
+        public decimal? WeightKg { get; set; }
+        public string CurrentStatus { get; set; } = "";
+    }
+
+
+    private static string StatusAr(string s) => s switch
+    {
+        "Available" => "متاحة", "InTransit" => "في الطريق", "AtPort" => "في الميناء",
+        "AtDepot" => "في المخزن", "Delivered" => "تم التسليم", "Returned" => "مرتجعة", _ => s
+    };
+
+    private static string OwnerAr(string o) => o switch
+    {
+        "ShippingLine" => "خط ملاحي", "Customer" => "العميل",
+        "Leased" => "مستأجرة", "Company" => "الشركة", _ => o
+    };
+
+    private static string ChipClass(string s) => s switch
+    {
+        "Available" => "fc-chip-gray", "InTransit" => "fc-chip-purple",
+        "AtPort" => "fc-chip-blue", "AtDepot" => "fc-chip-blue",
+        "Delivered" => "fc-chip-gold", "Returned" => "fc-chip-bad", _ => "fc-chip-gray"
+    };
+
+    private static decimal? ParseDec(object? v) =>
+        decimal.TryParse(v?.ToString(), out var n) && n > 0 ? n : null;
+
+    private IEnumerable<Item> Filtered => _items.Where(c =>
+        (_tab == "all" || c.CurrentStatus == _tab) &&
+        (string.IsNullOrWhiteSpace(_search) ||
+         c.ContainerNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         (c.OwnerName ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (CanView) await LoadAsync();
+    }
+
+    /* 🔴 الفورم بقى شاشة مستقلة — `/containers/new` */
+    private void GoNew() => Nav.NavigateTo("/containers/new");
+    private void GoEdit(Item c) => Nav.NavigateTo($"/containers/new/{c.ContainerId}");
+
+    private async Task Reload() { await LoadAsync(); }
+
+    private void SetTab(string t) { _tab = t; _confirmId = null; }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/containers") ?? new(); }
+        catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
+        finally { _loading = false; }
+    }
+
+    private async Task Delete(Item c)
+    {
+        try
+        {
+            var res = await Http.DeleteAsync($"api/containers/{c.ContainerId}");
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            _confirmId = null;
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+    }
+}

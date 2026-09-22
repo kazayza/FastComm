@@ -103,6 +103,8 @@ public partial class FastComDbContext
 
     public virtual DbSet<Service> Services { get; set; }
 
+    public virtual DbSet<ShippingAgent> ShippingAgents { get; set; }
+
     public virtual DbSet<Supplier> Suppliers { get; set; }
 
     public virtual DbSet<SupplierInvoice> SupplierInvoices { get; set; }
@@ -191,6 +193,10 @@ public partial class FastComDbContext
             entity.HasOne(d => d.Service).WithMany(p => p.Bookings).HasConstraintName("FK_Bookings_Services");
 
             entity.HasOne(d => d.TripType).WithMany(p => p.Bookings).HasConstraintName("FK_Bookings_TripTypes");
+
+            entity.HasOne(d => d.TahteeqPort).WithMany(p => p.Bookings).HasConstraintName("FK_Bookings_TahteeqPorts");
+
+            entity.HasOne(d => d.EndCustomer).WithMany(p => p.EndCustomerBookings).HasConstraintName("FK_Bookings_EndCustomers");
         });
 
         modelBuilder.Entity<BookingContainerDetail>(entity =>
@@ -396,6 +402,8 @@ public partial class FastComDbContext
             entity.HasOne(d => d.TaxRate).WithMany(p => p.CustomerPriceRules).HasConstraintName("FK_CPR_TaxRates");
 
             entity.HasOne(d => d.TripType).WithMany(p => p.CustomerPriceRules).HasConstraintName("FK_CPR_TripTypes");
+
+            entity.HasOne(d => d.TahteeqPort).WithMany(p => p.CustomerPriceRules).HasConstraintName("FK_CPR_TahteeqPorts");
         });
 
         modelBuilder.Entity<Department>(entity =>
@@ -449,6 +457,7 @@ public partial class FastComDbContext
             entity.Property(e => e.CustodyDate).HasDefaultValueSql("(sysutcdatetime())");
             entity.Property(e => e.OwnerType).HasDefaultValue("Driver");
             entity.Property(e => e.Status).HasDefaultValue("Open");
+            entity.Property(e => e.IsPrimary).HasDefaultValue(true);
 
             entity.HasOne(d => d.Branch).WithMany(p => p.DriverCustodies)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -457,6 +466,9 @@ public partial class FastComDbContext
             entity.HasOne(d => d.Trip).WithMany(p => p.DriverCustodies)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Custodies_Trips");
+
+            entity.HasOne(d => d.ParentCustody).WithMany(p => p.SubCustodies)
+                .HasConstraintName("FK_Custodies_Parent");
         });
 
         modelBuilder.Entity<Employee>(entity =>
@@ -650,6 +662,8 @@ public partial class FastComDbContext
             entity.HasOne(d => d.Service).WithMany(p => p.Operations).HasConstraintName("FK_Operations_Services");
 
             entity.HasOne(d => d.TripType).WithMany(p => p.Operations).HasConstraintName("FK_Operations_TripTypes");
+
+            entity.HasOne(d => d.TahteeqPort).WithMany(p => p.Operations).HasConstraintName("FK_Operations_TahteeqPorts");
         });
 
         modelBuilder.Entity<OperationContainer>(entity =>
@@ -918,6 +932,12 @@ public partial class FastComDbContext
             entity.HasOne(d => d.Vehicle).WithMany(p => p.Trips)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Trips_Vehicles");
+
+            entity.HasOne(d => d.Port).WithMany(p => p.Trips).HasConstraintName("FK_Trips_Ports");
+
+            entity.HasOne(d => d.Destination).WithMany(p => p.Trips).HasConstraintName("FK_Trips_Destinations");
+
+            entity.HasOne(d => d.TahteeqPort).WithMany(p => p.Trips).HasConstraintName("FK_Trips_TahteeqPorts");
         });
 
         modelBuilder.Entity<TripCostAllocation>(entity =>

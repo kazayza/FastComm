@@ -154,13 +154,14 @@ public class PriceListsController : ControllerBase
     public record RuleItem(long CustomerPriceRuleId, int CustomerId, string CustomerName,
         int? PriceListId, string? PriceListName, int ServiceId, string ServiceName,
         int? PortId, string? PortName, int? DestinationId, string? DestinationName,
+        int? TahteeqPortId, string? TahteeqPortName,
         int? ContainerTypeId, string? ContainerTypeName, int? TripTypeId, string? TripTypeName,
         decimal UnitPrice, decimal? CostPrice, int? TaxRateId, string? TaxRateName,
         DateOnly ValidFrom, DateOnly? ValidTo, int Priority, bool IsActive, string? Notes,
         int Specificity);
 
     public record RuleUpsert(int CustomerId, int? PriceListId, int ServiceId,
-        int? PortId, int? DestinationId, int? ContainerTypeId, int? TripTypeId,
+        int? PortId, int? DestinationId, int? TahteeqPortId, int? ContainerTypeId, int? TripTypeId,
         decimal UnitPrice, decimal? CostPrice, int? TaxRateId,
         string ValidFrom, string? ValidTo, int Priority, bool IsActive, string? Notes);
 
@@ -215,6 +216,7 @@ public class PriceListsController : ControllerBase
             ServiceId       = req.ServiceId,
             PortId          = req.PortId,
             DestinationId   = req.DestinationId,
+            TahteeqPortId   = req.TahteeqPortId,
             ContainerTypeId = req.ContainerTypeId,
             TripTypeId      = req.TripTypeId,
             UnitPrice       = req.UnitPrice,
@@ -247,6 +249,7 @@ public class PriceListsController : ControllerBase
         r.ServiceId       = req.ServiceId;
         r.PortId          = req.PortId;
         r.DestinationId   = req.DestinationId;
+        r.TahteeqPortId   = req.TahteeqPortId;
         r.ContainerTypeId = req.ContainerTypeId;
         r.TripTypeId      = req.TripTypeId;
         r.UnitPrice       = req.UnitPrice;
@@ -287,7 +290,7 @@ public class PriceListsController : ControllerBase
     [Authorize(Policy = "PERM:PRICING.VIEW")]
     public async Task<IActionResult> Match(int id, [FromQuery] int customerId, [FromQuery] int serviceId,
         [FromQuery] int? portId, [FromQuery] int? destinationId,
-        [FromQuery] int? containerTypeId, [FromQuery] int? tripTypeId,
+        [FromQuery] int? tahteeqPortId, [FromQuery] int? containerTypeId, [FromQuery] int? tripTypeId,
         [FromQuery] string? date, CancellationToken ct)
     {
         if (customerId <= 0 || serviceId <= 0)
@@ -305,6 +308,7 @@ public class PriceListsController : ControllerBase
         var match = all
             .Where(r => portId == null || r.PortId == null || r.PortId == portId)
             .Where(r => destinationId == null || r.DestinationId == null || r.DestinationId == destinationId)
+            .Where(r => tahteeqPortId == null || r.TahteeqPortId == null || r.TahteeqPortId == tahteeqPortId)
             .Where(r => tripTypeId == null || r.TripTypeId == null || r.TripTypeId == tripTypeId)
             .Where(r => containerTypeId == null || r.ContainerTypeId == null || r.ContainerTypeId == containerTypeId)
             .OrderByDescending(r => r.Specificity)
@@ -336,6 +340,7 @@ public class PriceListsController : ControllerBase
         var listIds = raw.Where(r => r.PriceListId != null).Select(r => r.PriceListId!.Value).Distinct().ToList();
         var portIds = raw.Where(r => r.PortId != null).Select(r => r.PortId!.Value).Distinct().ToList();
         var destIds = raw.Where(r => r.DestinationId != null).Select(r => r.DestinationId!.Value).Distinct().ToList();
+        var tahIds  = raw.Where(r => r.TahteeqPortId != null).Select(r => r.TahteeqPortId!.Value).Distinct().ToList();
         var ctIds   = raw.Where(r => r.ContainerTypeId != null).Select(r => r.ContainerTypeId!.Value).Distinct().ToList();
         var ttIds   = raw.Where(r => r.TripTypeId != null).Select(r => r.TripTypeId!.Value).Distinct().ToList();
 
@@ -351,6 +356,8 @@ public class PriceListsController : ControllerBase
             .Select(p => new { p.PortId, p.NameAr }).ToListAsync(ct)).ToDictionary(x => x.PortId, x => x.NameAr);
         var dst = (await _db.Destinations.AsNoTracking().Where(d => destIds.Contains(d.DestinationId))
             .Select(d => new { d.DestinationId, d.NameAr }).ToListAsync(ct)).ToDictionary(x => x.DestinationId, x => x.NameAr);
+        var tah = (await _db.Ports.AsNoTracking().Where(t => tahIds.Contains(t.PortId))
+            .Select(t => new { t.PortId, t.NameAr }).ToListAsync(ct)).ToDictionary(x => x.PortId, x => x.NameAr);
         var cty = (await _db.ContainerTypes.AsNoTracking().Where(c => ctIds.Contains(c.ContainerTypeId))
             .Select(c => new { c.ContainerTypeId, c.NameAr }).ToListAsync(ct)).ToDictionary(x => x.ContainerTypeId, x => x.NameAr);
         var ttp = (await _db.TripTypes.AsNoTracking().Where(t => ttIds.Contains(t.TripTypeId))
@@ -359,6 +366,7 @@ public class PriceListsController : ControllerBase
         return raw.Select(r =>
         {
             var spec = (r.PortId is not null ? 1 : 0) + (r.DestinationId is not null ? 1 : 0)
+                     + (r.TahteeqPortId is not null ? 1 : 0)
                      + (r.TripTypeId is not null ? 1 : 0) + (r.ContainerTypeId is not null ? 1 : 0);
             return new RuleItem(
                 r.CustomerPriceRuleId, r.CustomerId,
@@ -369,6 +377,7 @@ public class PriceListsController : ControllerBase
                 svc.TryGetValue(r.ServiceId, out var sn) ? sn : "?",
                 r.PortId,        r.PortId        is not null && prt.TryGetValue(r.PortId.Value, out var pn) ? pn : null,
                 r.DestinationId, r.DestinationId is not null && dst.TryGetValue(r.DestinationId.Value, out var dn) ? dn : null,
+                r.TahteeqPortId, r.TahteeqPortId is not null && tah.TryGetValue(r.TahteeqPortId.Value, out var th) ? th : null,
                 r.ContainerTypeId, r.ContainerTypeId is not null && cty.TryGetValue(r.ContainerTypeId.Value, out var tn) ? tn : null,
                 r.TripTypeId,    r.TripTypeId    is not null && ttp.TryGetValue(r.TripTypeId.Value, out var tt) ? tt : null,
                 r.UnitPrice, r.CostPrice, r.TaxRateId, null,

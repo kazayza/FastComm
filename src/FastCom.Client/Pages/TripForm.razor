@@ -403,6 +403,76 @@
                                     </div>
                                 </div>
 
+                                @* الخط: سحب → وجهة → تعتيق *@
+                                <div class="form-field">
+                                    <label class="field-label" for="tf-port">ميناء السحب</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                            <path d="M9 22V12h6v10"/>
+                                        </svg>
+                                        <select id="tf-port"
+                                                class="field-input field-select"
+                                                @bind="_f.PortId"
+                                                disabled="@_locked">
+                                            <option value="">— اختار الميناء —</option>
+                                            @foreach (var p in _ports)
+                                            {
+                                                <option value="@p.Id">@p.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="field-label" for="tf-dest">الوجهة</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                                            <circle cx="12" cy="10" r="3"/>
+                                        </svg>
+                                        <select id="tf-dest"
+                                                class="field-input field-select"
+                                                @bind="_f.DestinationId"
+                                                disabled="@_locked">
+                                            <option value="">— اختار الجهة —</option>
+                                            @foreach (var d in _destinations)
+                                            {
+                                                <option value="@d.Id">@d.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="field-label" for="tf-tahteeq">التعتيق (الميناء النهائي)</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                            <path d="M9 22V12h6v10"/>
+                                        </svg>
+                                        <select id="tf-tahteeq"
+                                                class="field-input field-select"
+                                                @bind="_f.TahteeqPortId"
+                                                disabled="@_locked">
+                                            <option value="">— اختار ميناء التعتيق —</option>
+                                            @foreach (var p in _ports)
+                                            {
+                                                <option value="@p.Id">@p.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
                                 @* التحرك المخطط *@
                                 <div class="form-field">
                                     <label class="field-label">التحرك المخطط</label>
@@ -1576,10 +1646,12 @@
     private bool    _loading; private bool _saving; private bool _distributing;
     private string? _msg;     private bool _ok;
 
-    private List<Opt>   _drivers   = new();
-    private List<Opt>   _vehicles  = new();
-    private List<Opt>   _trailers  = new();
-    private List<Opt>   _tripTypes = new();
+    private List<Opt>   _drivers      = new();
+    private List<Opt>   _vehicles     = new();
+    private List<Opt>   _trailers     = new();
+    private List<Opt>   _tripTypes    = new();
+    private List<Opt>   _ports        = new();
+    private List<Opt>   _destinations = new();
     private List<Avail> _available = new();
 
     private List<OpRow>    _ops       = new();
@@ -1631,6 +1703,9 @@
         public int     DriverId       { get; set; }
         public int     VehicleId      { get; set; }
         public int?    TrailerId      { get; set; }
+        public int?    PortId         { get; set; }
+        public int?    DestinationId  { get; set; }
+        public int?    TahteeqPortId  { get; set; }
         public int?    TripTypeId     { get; set; }
         public string? PlannedStartAt { get; set; }
         public string? Notes          { get; set; }
@@ -1663,6 +1738,9 @@
         public int     DriverId          { get; set; }
         public int     VehicleId         { get; set; }
         public int?    TrailerId         { get; set; }
+        public int?    PortId            { get; set; }
+        public int?    DestinationId     { get; set; }
+        public int?    TahteeqPortId     { get; set; }
         public int?    TripTypeId        { get; set; }
         public string? PlannedStartAt    { get; set; }
         public string? Notes             { get; set; }
@@ -1712,10 +1790,12 @@
         _loading = true;
         try
         {
-            _drivers   = await SafeGet("api/options/drivers");
-            _vehicles  = await SafeGet("api/options/vehicles");
-            _trailers  = await SafeGet("api/options/trailers");
-            _tripTypes = await SafeGet("api/options/trip-types");
+            _drivers      = await SafeGet("api/options/drivers");
+            _vehicles     = await SafeGet("api/options/vehicles");
+            _trailers     = await SafeGet("api/options/trailers");
+            _tripTypes    = await SafeGet("api/options/trip-types");
+            _ports        = await SafeGet("api/options/ports");
+            _destinations = await SafeGet("api/options/destinations");
 
             if (_id is not null)
             {
@@ -1759,6 +1839,9 @@
             DriverId       = d.Trip.DriverId,
             VehicleId      = d.Trip.VehicleId,
             TrailerId      = d.Trip.TrailerId,
+            PortId         = d.Trip.PortId,
+            DestinationId  = d.Trip.DestinationId,
+            TahteeqPortId  = d.Trip.TahteeqPortId,
             TripTypeId     = d.Trip.TripTypeId,
             PlannedStartAt = d.Trip.PlannedStartAt,
             Notes          = d.Trip.Notes
@@ -1833,6 +1916,9 @@
             driverId       = _f.DriverId,
             vehicleId      = _f.VehicleId,
             trailerId      = _f.TrailerId,
+            portId         = _f.PortId,
+            destinationId  = _f.DestinationId,
+            tahteeqPortId  = _f.TahteeqPortId,
             tripTypeId     = _f.TripTypeId,
             plannedStartAt = _f.PlannedStartAt,
             notes          = _f.Notes,

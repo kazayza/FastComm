@@ -46,7 +46,7 @@ public class BookingsController : ControllerBase
 
     public record BookingUpsert(
         int CustomerId, string? RequestedDate, int? ServiceId, int? PortId, int? DestinationId,
-        int? TripTypeId, string? CustomerReference, int? ContactId, string? Notes,
+        int? TahteeqPortId, int? EndCustomerId, int? TripTypeId, string? CustomerReference, int? ContactId, string? Notes,
         List<BookingLineDto>? Lines);
 
     public record ListItem(
@@ -61,7 +61,8 @@ public class BookingsController : ControllerBase
     public record Detail(
         long BookingId, string BookingNumber, int CustomerId, string CustomerName,
         string? RequestedDate, int? ServiceId, string? ServiceName, int? PortId, string? PortName,
-        int? DestinationId, string? DestinationName, int? TripTypeId, string? TripTypeName,
+        int? DestinationId, string? DestinationName, int? TahteeqPortId, string? TahteeqPortName,
+        int? EndCustomerId, string? EndCustomerName, int? TripTypeId, string? TripTypeName,
         string? CustomerReference, int? ContactId, string? Notes, string Status, DateTime CreatedAt);
 
     public record DetailResponse(Detail Booking, List<LineItem> Lines);
@@ -133,16 +134,16 @@ public class BookingsController : ControllerBase
             b.BookingId, b.BookingNumber, b.CustomerId, customerName,
             b.RequestedDate?.ToString("yyyy-MM-dd"), b.ServiceId, names.Service,
             b.PortId, names.Port, b.DestinationId, names.Destination,
-            b.TripTypeId, names.TripType, b.CustomerReference, b.ContactId,
+            b.TahteeqPortId, names.TahteeqPort, b.EndCustomerId, names.EndCustomer, b.TripTypeId, names.TripType, b.CustomerReference, b.ContactId,
             b.Notes, b.Status, b.CreatedAt);
 
         return Ok(new DetailResponse(detail, lines));
     }
 
-    private async Task<(string? Service, string? Port, string? Destination, string? TripType)>
+    private async Task<(string? Service, string? Port, string? Destination, string? TahteeqPort, string? EndCustomer, string? TripType)>
         LookupNamesAsync(Booking b, CancellationToken ct)
     {
-        string? svc = null, port = null, dest = null, tt = null;
+        string? svc = null, port = null, dest = null, tah = null, endCust = null, tt = null;
         if (b.ServiceId is not null)
             svc = await _db.Services.AsNoTracking().Where(x => x.ServiceId == b.ServiceId)
                 .Select(x => x.NameAr).FirstOrDefaultAsync(ct);
@@ -152,10 +153,16 @@ public class BookingsController : ControllerBase
         if (b.DestinationId is not null)
             dest = await _db.Destinations.AsNoTracking().Where(x => x.DestinationId == b.DestinationId)
                 .Select(x => x.NameAr).FirstOrDefaultAsync(ct);
+        if (b.TahteeqPortId is not null)
+            tah = await _db.Ports.AsNoTracking().Where(x => x.PortId == b.TahteeqPortId)
+                .Select(x => x.NameAr).FirstOrDefaultAsync(ct);
+        if (b.EndCustomerId is not null)
+            endCust = await _db.Customers.AsNoTracking().Where(x => x.CustomerId == b.EndCustomerId)
+                .Select(x => x.NameAr).FirstOrDefaultAsync(ct);
         if (b.TripTypeId is not null)
             tt = await _db.TripTypes.AsNoTracking().Where(x => x.TripTypeId == b.TripTypeId)
                 .Select(x => x.NameAr).FirstOrDefaultAsync(ct);
-        return (svc, port, dest, tt);
+        return (svc, port, dest, tah, endCust, tt);
     }
 
     // ═══════════════ CREATE ═══════════════
@@ -179,6 +186,8 @@ public class BookingsController : ControllerBase
             ServiceId       = req.ServiceId,
             PortId          = req.PortId,
             DestinationId   = req.DestinationId,
+            TahteeqPortId   = req.TahteeqPortId,
+            EndCustomerId   = req.EndCustomerId,
             TripTypeId      = req.TripTypeId,
             CustomerReference = B(req.CustomerReference),
             ContactId       = req.ContactId,
@@ -233,6 +242,8 @@ public class BookingsController : ControllerBase
         b.ServiceId       = req.ServiceId;
         b.PortId          = req.PortId;
         b.DestinationId   = req.DestinationId;
+        b.TahteeqPortId   = req.TahteeqPortId;
+        b.EndCustomerId   = req.EndCustomerId;
         b.TripTypeId      = req.TripTypeId;
         b.CustomerReference = B(req.CustomerReference);
         b.ContactId       = req.ContactId;
@@ -409,6 +420,10 @@ public class BookingsController : ControllerBase
             return "الميناء مش موجود";
         if (r.DestinationId is not null && !await _db.Destinations.AnyAsync(x => x.DestinationId == r.DestinationId, ct))
             return "الجهة مش موجودة";
+        if (r.TahteeqPortId is not null && !await _db.Ports.AnyAsync(x => x.PortId == r.TahteeqPortId, ct))
+            return "ميناء التعتيق مش موجود";
+        if (r.EndCustomerId is not null && !await _db.Customers.AnyAsync(x => x.CustomerId == r.EndCustomerId, ct))
+            return "العميل النهائي مش موجود";
         if (r.TripTypeId is not null && !await _db.TripTypes.AnyAsync(x => x.TripTypeId == r.TripTypeId, ct))
             return "نوع الرحلة مش موجود";
 

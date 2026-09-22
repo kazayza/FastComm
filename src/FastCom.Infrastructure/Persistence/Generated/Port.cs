@@ -48,4 +48,7 @@ public partial class Port
 
     [InverseProperty("Port")]
     public virtual ICollection<Operation> Operations { get; set; } = new List<Operation>();
+
+    [InverseProperty("Port")]
+    public virtual ICollection<Trip> Trips { get; set; } = new List<Trip>();
 }

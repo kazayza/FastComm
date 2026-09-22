@@ -468,6 +468,30 @@
                                     </div>
                                 </div>
 
+                                @* التعتيق (الميناء النهائي) *@
+                                <div class="form-field">
+                                    <label class="field-label" for="tahteeq">التعتيق (الميناء النهائي)</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                            <path d="M9 22V12h6v10"/>
+                                        </svg>
+                                        <select id="tahteeq"
+                                                class="field-input field-select"
+                                                @bind="_f.TahteeqPortId"
+                                                disabled="@_locked">
+                                            <option value="">— اختار ميناء التعتيق —</option>
+                                            @foreach (var p in _ports)
+                                            {
+                                                <option value="@p.Id">@p.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
                             </div>
 
                             @* Route Visual *@
@@ -477,7 +501,7 @@
                                     <div class="route-point">
                                         <div class="route-dot dot-from" aria-hidden="true"></div>
                                         <div class="route-label">
-                                            <span class="route-caption">ميناء الإقلاع</span>
+                                            <span class="route-caption">ميناء السحب</span>
                                             <strong>@(_ports.FirstOrDefault(p => p.Id == _f.PortId)?.Label ?? "—")</strong>
                                         </div>
                                     </div>
@@ -488,15 +512,32 @@
                                                   stroke="#1e6ef5" stroke-width="1.5"
                                                   stroke-dasharray="4 3"/>
                                         </svg>
-                                        <div class="route-truck" aria-hidden="true">🚛</div>
                                     </div>
                                     <div class="route-point">
-                                        <div class="route-dot dot-to" aria-hidden="true"></div>
+                                        <div class="route-dot dot-mid" aria-hidden="true"></div>
                                         <div class="route-label">
-                                            <span class="route-caption">جهة الوصول</span>
+                                            <span class="route-caption">الوجهة</span>
                                             <strong>@(_destinations.FirstOrDefault(d => d.Id == _f.DestinationId)?.Label ?? "—")</strong>
                                         </div>
                                     </div>
+                                    @if (_f.TahteeqPortId.HasValue)
+                                    {
+                                        <div class="route-line" aria-hidden="true">
+                                            <svg viewBox="0 0 100 20" width="100" height="20"
+                                                 preserveAspectRatio="none">
+                                                <path d="M0 10 Q50 2 100 10" fill="none"
+                                                      stroke="#1e6ef5" stroke-width="1.5"
+                                                      stroke-dasharray="4 3"/>
+                                            </svg>
+                                        </div>
+                                        <div class="route-point">
+                                            <div class="route-dot dot-to" aria-hidden="true"></div>
+                                            <div class="route-label">
+                                                <span class="route-caption">التعتيق</span>
+                                                <strong>@(_ports.FirstOrDefault(p => p.Id == _f.TahteeqPortId)?.Label ?? "—")</strong>
+                                            </div>
+                                        </div>
+                                    }
                                 </div>
                             }
 
@@ -1748,6 +1789,7 @@
         public int?    ServiceId     { get; set; }
         public int?    PortId        { get; set; }
         public int?    DestinationId { get; set; }
+        public int?    TahteeqPortId { get; set; }
         public int?    TripTypeId    { get; set; }
         public string? PlannedDate   { get; set; }
         public decimal EstimatedCost { get; set; }
@@ -1783,6 +1825,8 @@
         public int?    ServiceId       { get; set; }
         public int?    PortId          { get; set; }
         public int?    DestinationId   { get; set; }
+        public int?    TahteeqPortId   { get; set; }
+        public string? TahteeqPortName { get; set; }
         public int?    TripTypeId      { get; set; }
         public string? PlannedDate     { get; set; }
         public decimal EstimatedCost   { get; set; }
@@ -1805,6 +1849,7 @@
         public int?    ServiceId          { get; set; }
         public int?    PortId             { get; set; }
         public int?    DestinationId      { get; set; }
+        public int?    TahteeqPortId      { get; set; }
         public int?    TripTypeId         { get; set; }
         public string? CustomerReference  { get; set; }
     }
@@ -1902,6 +1947,7 @@
             ServiceId     = d.Operation.ServiceId,
             PortId        = d.Operation.PortId,
             DestinationId = d.Operation.DestinationId,
+            TahteeqPortId = d.Operation.TahteeqPortId,
             TripTypeId    = d.Operation.TripTypeId,
             PlannedDate   = d.Operation.PlannedDate,
             EstimatedCost = d.Operation.EstimatedCost,
@@ -1948,6 +1994,7 @@
             _f.ServiceId     = d.Booking.ServiceId;
             _f.PortId        = d.Booking.PortId;
             _f.DestinationId = d.Booking.DestinationId;
+            _f.TahteeqPortId = d.Booking.TahteeqPortId;
             _f.TripTypeId    = d.Booking.TripTypeId;
             if (d.Booking.RequestedDate is not null)
                 _f.PlannedDate = d.Booking.RequestedDate + "T08:00";
@@ -1968,6 +2015,7 @@
         var url = $"api/operations/price-suggest?customerId={_f.CustomerId}&serviceId={ln.ServiceId}" +
                   (_f.PortId        is not null ? $"&portId={_f.PortId}" : "") +
                   (_f.DestinationId is not null ? $"&destinationId={_f.DestinationId}" : "") +
+                  (_f.TahteeqPortId is not null ? $"&tahteeqPortId={_f.TahteeqPortId}" : "") +
                   (_f.TripTypeId    is not null ? $"&tripTypeId={_f.TripTypeId}" : "");
 
         try
@@ -2014,6 +2062,7 @@
             serviceId     = _f.ServiceId,
             portId        = _f.PortId,
             destinationId = _f.DestinationId,
+            tahteeqPortId = _f.TahteeqPortId,
             tripTypeId    = _f.TripTypeId,
             plannedDate   = _f.PlannedDate,
             estimatedCost = _f.EstimatedCost,

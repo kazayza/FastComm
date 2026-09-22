@@ -35,6 +35,13 @@ public partial class CashBox
 
     public bool IsActive { get; set; }
 
+    /// <summary>الموظف المسؤول عن الخزينة (درج الكاشير) — NULL للخزينة الرئيسية.</summary>
+    public int? ResponsibleEmployeeId { get; set; }
+
+    /// <summary>'Open' أو 'Closed' — المقفولة اتسوّت للرئيسية.</summary>
+    [StringLength(20)]
+    public string Status { get; set; } = "Open";
+
     public bool IsDeleted { get; set; }
 
     [Precision(0)]

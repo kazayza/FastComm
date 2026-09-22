@@ -28,6 +28,8 @@ public partial class Operation
 
     public int? DestinationId { get; set; }
 
+    public int? TahteeqPortId { get; set; }
+
     public int? TripTypeId { get; set; }
 
     [Precision(0)]
@@ -133,4 +135,8 @@ public partial class Operation
     [ForeignKey("TripTypeId")]
     [InverseProperty("Operations")]
     public virtual TripType? TripType { get; set; }
+
+    [ForeignKey("TahteeqPortId")]
+    [InverseProperty("Operations")]
+    public virtual Port? TahteeqPort { get; set; }
 }

@@ -25,6 +25,12 @@ public partial class Trip
 
     public int? TripTypeId { get; set; }
 
+    public int? PortId { get; set; }
+
+    public int? DestinationId { get; set; }
+
+    public int? TahteeqPortId { get; set; }
+
     [Precision(0)]
     public DateTime? PlannedStartAt { get; set; }
 
@@ -96,6 +102,18 @@ public partial class Trip
     [ForeignKey("TripTypeId")]
     [InverseProperty("Trips")]
     public virtual TripType? TripType { get; set; }
+
+    [ForeignKey("PortId")]
+    [InverseProperty("Trips")]
+    public virtual Port? Port { get; set; }
+
+    [ForeignKey("DestinationId")]
+    [InverseProperty("Trips")]
+    public virtual Destination? Destination { get; set; }
+
+    [ForeignKey("TahteeqPortId")]
+    [InverseProperty("Trips")]
+    public virtual Port? TahteeqPort { get; set; }
 
     [ForeignKey("VehicleId")]
     [InverseProperty("Trips")]

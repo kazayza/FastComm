@@ -42,4 +42,7 @@ public partial class Destination
 
     [InverseProperty("Destination")]
     public virtual ICollection<Operation> Operations { get; set; } = new List<Operation>();
+
+    [InverseProperty("Destination")]
+    public virtual ICollection<Trip> Trips { get; set; } = new List<Trip>();
 }

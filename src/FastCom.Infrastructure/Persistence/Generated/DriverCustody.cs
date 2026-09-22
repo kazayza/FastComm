@@ -18,12 +18,16 @@ public partial class DriverCustody
 
     public int BranchId { get; set; }
 
-    public long TripId { get; set; }
+    public long? TripId { get; set; }
 
     [StringLength(20)]
     public string OwnerType { get; set; } = null!;
 
     public int OwnerId { get; set; }
+
+    public long? ParentCustodyId { get; set; }
+
+    public bool IsPrimary { get; set; }
 
     [Precision(0)]
     public DateTime CustodyDate { get; set; }
@@ -83,5 +87,12 @@ public partial class DriverCustody
 
     [ForeignKey("TripId")]
     [InverseProperty("DriverCustodies")]
-    public virtual Trip Trip { get; set; } = null!;
+    public virtual Trip? Trip { get; set; }
+
+    [ForeignKey("ParentCustodyId")]
+    [InverseProperty("SubCustodies")]
+    public virtual DriverCustody? ParentCustody { get; set; }
+
+    [InverseProperty("ParentCustody")]
+    public virtual ICollection<DriverCustody> SubCustodies { get; set; } = new List<DriverCustody>();
 }

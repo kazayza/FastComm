@@ -54,7 +54,15 @@ public class TreasuryController : ControllerBase
         decimal Amount, string? Description);
 
     public record BoxOut(int CashBoxId, string Code, string NameAr, decimal OpeningBalance,
-        decimal CurrentBalance, string CurrencyCode, int TxCount);
+        decimal CurrentBalance, string CurrencyCode, int TxCount, bool IsActive, string Status,
+        int? ResponsibleEmployeeId, string? ResponsibleEmployeeName);
+
+    public record BoxUpsert(string? Code, string? NameAr, string? NameEn, int? ResponsibleEmployeeId,
+        decimal OpeningBalance, bool? IsActive);
+
+    public record ReopenRequest(decimal OpeningBalance);
+
+    public record EmpOpt(int Id, string Label);
 
     public record TxOut(long CashTransactionId, DateTime TransactionDate, string TransactionType,
         int CashBoxId, string CashBoxName, decimal Amount, string? MethodName,
@@ -84,7 +92,12 @@ public class TreasuryController : ControllerBase
             .Select(b => new BoxOut(b.CashBoxId, b.Code, b.NameAr, b.OpeningBalance,
                 b.CurrentBalance, b.CurrencyCode,
                 _db.CashTransactions.Count(t => t.CashBoxId == b.CashBoxId &&
-                                                t.Status == "Posted" && !t.IsDeleted)))
+                                                t.Status == "Posted" && !t.IsDeleted),
+                b.IsActive, b.Status, b.ResponsibleEmployeeId,
+                b.ResponsibleEmployeeId != null
+                    ? _db.Employees.Where(e => e.EmployeeId == b.ResponsibleEmployeeId)
+                                   .Select(e => e.FullNameAr).FirstOrDefault()
+                    : null))
             .ToListAsync(ct);
 
         return Ok(boxes);
@@ -102,15 +115,35 @@ public class TreasuryController : ControllerBase
 
     public record CustOpt(int Id, string Label, string Code);
 
-    /// <summary>الصناديق النشطة — للدروبداون.</summary>
+    /// <summary>الصناديق المفتوحة — للدروبداون. المقفولة ماتظهرش.</summary>
     [HttpGet("box-options")]
     [Authorize(Policy = "PERM:TREASURY.VIEW")]
     public async Task<IActionResult> BoxOptions(CancellationToken ct) =>
         Ok(await _db.CashBoxes.AsNoTracking()
-            .Where(b => !b.IsDeleted && b.IsActive)
+            .Where(b => !b.IsDeleted && b.IsActive && b.Status == "Open")
             .OrderBy(b => b.CashBoxId)
             .Select(b => new BoxOpt(b.CashBoxId, b.NameAr, b.Code, b.CurrentBalance))
             .ToListAsync(ct));
+
+    /// <summary>الموظفين — لدروبداون «المسؤول عن الخزينة».</summary>
+    [HttpGet("employees")]
+    [Authorize(Policy = "PERM:TREASURY.VIEW")]
+    public async Task<IActionResult> Employees(CancellationToken ct) =>
+        Ok(await _db.Employees.AsNoTracking()
+            .Where(e => !e.IsDeleted)
+            .OrderBy(e => e.FullNameAr)
+            .Select(e => new EmpOpt(e.EmployeeId, e.FullNameAr))
+            .ToListAsync(ct));
+
+    /// <summary>كود الخزينة الرئيسية — عشان الشاشة تعرف أنهي واحدة ماتتقفلش.</summary>
+    [HttpGet("default-box")]
+    [Authorize(Policy = "PERM:TREASURY.VIEW")]
+    public async Task<IActionResult> DefaultBox(CancellationToken ct)
+    {
+        var code = await _settings.GetStringAsync(SettingKeys.TreasuryDefaultBox,
+                                                 SettingDefaults.TreasuryDefaultBox, ct);
+        return Ok(new { code = string.IsNullOrWhiteSpace(code) ? SettingDefaults.TreasuryDefaultBox : code });
+    }
 
     // ═══════════════ دفتر الحركات ═══════════════
 
@@ -163,10 +196,7 @@ public class TreasuryController : ControllerBase
     {
         if (req is null) return BadRequest(new { message = "البيانات مش كاملة" });
         if (req.Type is not ("Receipt" or "Payment"))
-            {
-            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "CashTransaction", null, description: "حركة خزينة", ct: ct);
-            
-            }
+            return BadRequest(new { message = "نوع الحركة لازم يكون وارد أو صادر" });
         if (req.Amount <= 0) return BadRequest(new { message = "المبلغ لازم يكون أكتر من صفر" });
         /* 🔴 كان hard-coded — بقى من `TREASURY.MAX_AMOUNT`.
            ⚠️ المفتاح لسه مش في الـ seed — هيشتغل بالافتراضي (100,000,000). */
@@ -243,8 +273,8 @@ public class TreasuryController : ControllerBase
             id = t.CashTransactionId,
             balance = now,
             message = req.Type == "Receipt"
-                ? $"✅ اتسجّل القبض — رصيد {box.NameAr} بقى {now:N2}"
-                : $"✅ اتسجّل الصرف — رصيد {box.NameAr} بقى {now:N2}"
+                ? $"اتسجّل القبض — رصيد {box.NameAr} بقى {now:N2}"
+                : $"اتسجّل الصرف — رصيد {box.NameAr} بقى {now:N2}"
         });
     }
 
@@ -257,10 +287,7 @@ public class TreasuryController : ControllerBase
         if (req is null) return BadRequest(new { message = "البيانات مش كاملة" });
         if (req.Amount <= 0) return BadRequest(new { message = "المبلغ لازم يكون أكتر من صفر" });
         if (req.FromCashBoxId == req.ToCashBoxId)
-            {
-            await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "CashTransaction", null, description: "تحويل بين خزينتين", ct: ct);
-            
-            }
+            return BadRequest(new { message = "الخزينة المصروفة والمستلمة ماينفعش يكونوا نفس الخزينة" });
 
         var from = await _db.CashBoxes.AsNoTracking()
             .FirstOrDefaultAsync(b => b.CashBoxId == req.FromCashBoxId && !b.IsDeleted, ct);
@@ -312,7 +339,7 @@ public class TreasuryController : ControllerBase
             throw;
         }
 
-        return Ok(new { message = $"✅ اتحوّل {req.Amount:N2} من {from.NameAr} إلى {to.NameAr}" });
+        return Ok(new { message = $"اتحوّل {req.Amount:N2} من {from.NameAr} إلى {to.NameAr}" });
     }
 
     // ═══════════════ إلغاء حركة ═══════════════
@@ -355,8 +382,8 @@ public class TreasuryController : ControllerBase
         return Ok(new
         {
             message = targets.Count > 1
-                ? $"❌ اتلغى التحويل ({targets.Count} حركات) والأرصدة اتظبطت"
-                : "❌ اتلغت الحركة والرصيد اتظبط"
+                ? $"اتلغى التحويل ({targets.Count} حركات) والأرصدة اتظبطت"
+                : "اتلغت الحركة والرصيد اتظبط"
         });
     }
 
@@ -428,5 +455,188 @@ public class TreasuryController : ControllerBase
 
         return Ok(new StatementOut(cust.NameAr, opening, lines,
             lines.Sum(l => l.Debit), lines.Sum(l => l.Credit), bal));
+    }
+
+    // ═══════════════ إدارة الخزائن — المرحلة 2 ═══════════════
+
+    /// <summary>إضافة خزينة (درج موظف أو خزينة فرعية).</summary>
+    [HttpPost("boxes")]
+    [Authorize(Policy = "PERM:TREASURY.MANAGE")]
+    public async Task<IActionResult> CreateBox([FromBody] BoxUpsert req, CancellationToken ct)
+    {
+        if (req is null) return BadRequest(new { message = "البيانات مش كاملة" });
+        var code = B(req.Code)?.ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(code)) return BadRequest(new { message = "كود الخزينة مطلوب" });
+        if (string.IsNullOrWhiteSpace(B(req.NameAr))) return BadRequest(new { message = "اسم الخزينة مطلوب" });
+        if (req.OpeningBalance < 0) return BadRequest(new { message = "الرصيد الافتتاحي ماينفعش يكون سالب" });
+
+        var branchId = await ResolveBranchIdAsync(ct);
+        if (branchId is null) return BadRequest(new { message = "مافيش فرع معرّف في النظام" });
+
+        if (await _db.CashBoxes.AnyAsync(b => !b.IsDeleted && b.BranchId == branchId.Value && b.Code == code, ct))
+            return BadRequest(new { message = "في خزينة تانية بنفس الكود" });
+
+        if (req.ResponsibleEmployeeId is not null &&
+            !await _db.Employees.AnyAsync(e => e.EmployeeId == req.ResponsibleEmployeeId && !e.IsDeleted, ct))
+            return BadRequest(new { message = "الموظف المسؤول مش موجود" });
+
+        var box = new CashBox
+        {
+            BranchId              = branchId.Value,
+            Code                  = code!,
+            NameAr                = B(req.NameAr)!,
+            NameEn                = B(req.NameEn),
+            CurrencyCode          = "EGP",
+            OpeningBalance        = req.OpeningBalance,
+            CurrentBalance        = req.OpeningBalance,
+            ResponsibleEmployeeId = req.ResponsibleEmployeeId,
+            Status                = "Open",
+            IsActive              = true,
+            CreatedBy             = CurrentUserId()
+        };
+        _db.CashBoxes.Add(box);
+        await _db.SaveChangesAsync(ct);
+
+        await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "CashBox",
+            box.CashBoxId.ToString(), description: $"إنشاء خزينة {box.NameAr}", ct: ct);
+
+        return Ok(new { id = box.CashBoxId, message = $"اتضافت خزينة {box.NameAr}" });
+    }
+
+    /// <summary>تعديل خزينة — الكود مايتغيرش.</summary>
+    [HttpPut("boxes/{id:int}")]
+    [Authorize(Policy = "PERM:TREASURY.MANAGE")]
+    public async Task<IActionResult> UpdateBox(int id, [FromBody] BoxUpsert req, CancellationToken ct)
+    {
+        if (req is null) return BadRequest(new { message = "البيانات مش كاملة" });
+        var box = await _db.CashBoxes.FirstOrDefaultAsync(b => b.CashBoxId == id && !b.IsDeleted, ct);
+        if (box is null) return NotFound(new { message = "الخزينة مش موجودة" });
+        if (string.IsNullOrWhiteSpace(B(req.NameAr))) return BadRequest(new { message = "اسم الخزينة مطلوب" });
+
+        if (req.ResponsibleEmployeeId is not null &&
+            !await _db.Employees.AnyAsync(e => e.EmployeeId == req.ResponsibleEmployeeId && !e.IsDeleted, ct))
+            return BadRequest(new { message = "الموظف المسؤول مش موجود" });
+
+        box.NameAr                = B(req.NameAr)!;
+        box.NameEn                = B(req.NameEn);
+        box.ResponsibleEmployeeId = req.ResponsibleEmployeeId;
+        await _db.SaveChangesAsync(ct);
+
+        await _audit.LogAsync(FastCom.Server.Services.AuditActions.Update, "CashBox",
+            box.CashBoxId.ToString(), description: $"تعديل خزينة {box.NameAr}", ct: ct);
+
+        return Ok(new { message = "اتعدّلت الخزينة" });
+    }
+
+    /// <summary>
+    /// تسوية خزينة: الرصيد يتحوّل كامل للخزينة الرئيسية وبعدين تتقفل.
+    /// <para>الخزينة الرئيسية نفسها ماتتسوّاش.</para>
+    /// </summary>
+    [HttpPost("boxes/{id:int}/settle")]
+    [Authorize(Policy = "PERM:TREASURY.MANAGE")]
+    public async Task<IActionResult> SettleBox(int id, CancellationToken ct)
+    {
+        var box = await _db.CashBoxes.FirstOrDefaultAsync(b => b.CashBoxId == id && !b.IsDeleted, ct);
+        if (box is null) return NotFound(new { message = "الخزينة مش موجودة" });
+        if (box.Status == "Closed") return BadRequest(new { message = "الخزينة مقفولة أصلًا" });
+
+        var mainCode = await _settings.GetStringAsync(SettingKeys.TreasuryDefaultBox,
+                                                      SettingDefaults.TreasuryDefaultBox, ct);
+        if (box.Code == mainCode)
+            return BadRequest(new { message = "دي الخزينة الرئيسية — ماتتسوّاش ولا تتقفل" });
+
+        var main = await _db.CashBoxes.FirstOrDefaultAsync(
+            b => !b.IsDeleted && b.Status == "Open" && b.Code == mainCode, ct);
+        if (main is null)
+            return BadRequest(new { message = $"الخزينة الرئيسية ({mainCode}) مش موجودة أو مقفولة" });
+
+        var branchId = await ResolveBranchIdAsync(ct);
+        if (branchId is null) return BadRequest(new { message = "مافيش فرع معرّف في النظام" });
+
+        var uid  = CurrentUserId();
+        var when = DateTime.UtcNow;
+        var amt  = box.CurrentBalance;
+
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            /* لو فيها رصيد — يتحوّل كامل للرئيسية (حركتين مربوطين).
+               لو صفر — تتقفل على طول من غير حركات. */
+            if (amt > 0)
+            {
+                var group = Guid.NewGuid();
+                var desc  = $"تسوية خزينة {box.NameAr}";
+                _db.CashTransactions.AddRange(
+                    new CashTransaction
+                    {
+                        BranchId = branchId.Value, CashBoxId = box.CashBoxId, TransactionDate = when,
+                        TransactionType = "TransferOut", Amount = amt,
+                        TransferGroupId = group, CounterpartCashBoxId = main.CashBoxId,
+                        ReferenceNumber = $"BOXSETTLE-OUT:{box.Code}:{when:yyyyMMddHHmmss}",
+                        Description = desc, Status = "Posted", CreatedBy = uid
+                    },
+                    new CashTransaction
+                    {
+                        BranchId = branchId.Value, CashBoxId = main.CashBoxId, TransactionDate = when,
+                        TransactionType = "TransferIn", Amount = amt,
+                        TransferGroupId = group, CounterpartCashBoxId = box.CashBoxId,
+                        ReferenceNumber = $"BOXSETTLE-IN:{box.Code}:{when:yyyyMMddHHmmss}",
+                        Description = desc, Status = "Posted", CreatedBy = uid
+                    });
+            }
+
+            box.Status   = "Closed";
+            box.IsActive = false;
+            await _db.SaveChangesAsync(ct);
+
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
+
+        await _audit.LogAsync(FastCom.Server.Services.AuditActions.Close, "CashBox",
+            box.CashBoxId.ToString(), description: $"تسوية وإقفال خزينة {box.NameAr}", ct: ct);
+
+        return Ok(new
+        {
+            message = amt > 0
+                ? $"اتحوّل {amt:N2} من {box.NameAr} للرئيسية — واتقفلت"
+                : $"اتقفلت خزينة {box.NameAr} (كانت فاضية)"
+        });
+    }
+
+    /// <summary>إعادة فتح خزينة مقفولة — برصيد افتتاحي جديد.</summary>
+    [HttpPost("boxes/{id:int}/reopen")]
+    [Authorize(Policy = "PERM:TREASURY.MANAGE")]
+    public async Task<IActionResult> ReopenBox(int id, [FromBody] ReopenRequest? req, CancellationToken ct)
+    {
+        var box = await _db.CashBoxes.FirstOrDefaultAsync(b => b.CashBoxId == id && !b.IsDeleted, ct);
+        if (box is null) return NotFound(new { message = "الخزينة مش موجودة" });
+        if (box.Status != "Closed") return BadRequest(new { message = "الخزينة مفتوحة أصلًا" });
+
+        var opening = req?.OpeningBalance ?? 0m;
+        if (opening < 0) return BadRequest(new { message = "الرصيد الافتتاحي ماينفعش يكون سالب" });
+
+        /* 🔴 الرصيد = الافتتاحي + صافي الحركات — نفس معادلة
+           `trg_CashTransactions_BalanceSync` بالظبط. */
+        var net = await _db.CashTransactions.AsNoTracking()
+            .Where(t => t.CashBoxId == id && t.Status == "Posted" && !t.IsDeleted)
+            .Select(t => t.TransactionType == "Receipt" || t.TransactionType == "TransferIn"
+                ? t.Amount : -t.Amount)
+            .SumAsync(ct);
+
+        box.OpeningBalance = opening;
+        box.CurrentBalance = opening + net;
+        box.Status         = "Open";
+        box.IsActive       = true;
+        await _db.SaveChangesAsync(ct);
+
+        await _audit.LogAsync(FastCom.Server.Services.AuditActions.Reopen, "CashBox",
+            box.CashBoxId.ToString(), description: $"إعادة فتح خزينة {box.NameAr}", ct: ct);
+
+        return Ok(new { message = $"اتفتحت خزينة {box.NameAr} تاني — الرصيد {box.CurrentBalance:N2}" });
     }
 }

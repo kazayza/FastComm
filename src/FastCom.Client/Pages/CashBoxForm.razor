@@ -1,0 +1,239 @@
+@page "/treasury/boxes/new"
+@page "/treasury/boxes/new/{Id:int}"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_id is null ? "خزينة جديدة" : "تعديل خزينة") — فاست كوم</PageTitle>
+
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">المالية · الخزينة</div>
+                <h1 class="fc-hero-title">@(_id is null ? "خزينة جديدة" : $"تعديل {_f.NameAr}")</h1>
+                <p class="fc-hero-sub">
+                    @(_id is null
+                        ? "درج كاشير أو خزينة فرعية — تربطها بموظف مسؤول، ووقتها تسويتها بتتحوّل للرئيسية وتتحط مقفولة"
+                        : "الاسم والموظف المسؤول — الكود مايتغيرش")
+                </p>
+            </div>
+            <div class="fc-head-actions">
+                <MudButton Variant="Variant.Outlined" OnClick="GoBack" Style="color:#9FB4CC">رجوع</MudButton>
+                @if (CanManage)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving"
+                               StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="SaveAsync">حفظ</MudButton>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="fc-page">
+    @if (!CanManage)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">
+            ليس لديك صلاحية إدارة الخزائن.
+        </MudAlert>
+    }
+    else if (_loading)
+    {
+        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+    }
+    else
+    {
+        <div class="fc-overlap"><div class="fc-card">
+
+            @if (_msg is not null)
+            {
+                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
+                          Class="mb-4">@_msg</MudAlert>
+            }
+
+            <div class="fc-panel-sub" style="margin-bottom:14px">بيانات الخزينة</div>
+            <div class="fc-form-grid">
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">الكود *</div>
+                    <input class="fc-sel fc-sel-lg" @bind="_f.Code" maxlength="30" dir="ltr"
+                           style="text-align:right" disabled="@(_id is not null)" />
+                    <div class="fc-field-hint">حروف إنجليزية — مثال: CASH-OP1 (مايتغيرش بعد الحفظ)</div>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">الاسم *</div>
+                    <input class="fc-sel fc-sel-lg" @bind="_f.NameAr" maxlength="150" />
+                    <div class="fc-field-hint">مثال: درج أحمد — خزينة التشغيل</div>
+                </div>
+                <div>
+                    <div class="fc-panel-sub" style="margin-bottom:6px">الموظف المسؤول</div>
+                    <select class="fc-sel fc-sel-lg" @bind="_f.ResponsibleEmployeeId">
+                        <option value="0">— من غير مسؤول محدد —</option>
+                        @foreach (var e in _employees)
+                        {
+                            <option value="@e.Id">@e.Label</option>
+                        }
+                    </select>
+                    <div class="fc-field-hint">مين اللي ماسك الدرج ده</div>
+                </div>
+                @if (_id is null)
+                {
+                    <div>
+                        <div class="fc-panel-sub" style="margin-bottom:6px">الرصيد الافتتاحي</div>
+                        <input type="number" min="0" step="0.01" class="fc-sel fc-sel-lg"
+                               value="@_f.OpeningBalance"
+                               @onchange="e => _f.OpeningBalance = ParseDec(e.Value)" />
+                        <div class="fc-field-hint">الفلوس الموجودة في الدرج دلوقتي</div>
+                    </div>
+                }
+            </div>
+
+            @if (_id is not null && _box is not null)
+            {
+                <div class="fc-panel-sub" style="margin:26px 0 14px">الرصيد الحالي</div>
+                <div class="fc-kpis">
+                    <div class="fc-kpi">
+                        <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" /></div>
+                        <div><div class="fc-kpi-num">@Money(_box.CurrentBalance)</div><div class="fc-kpi-lb">الرصيد الحالي (@_box.CurrencyCode)</div></div>
+                    </div>
+                    <div class="fc-kpi">
+                        <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.ReceiptLong" /></div>
+                        <div><div class="fc-kpi-num">@_box.TxCount</div><div class="fc-kpi-lb">عدد الحركات</div></div>
+                    </div>
+                    <div class="fc-kpi">
+                        <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.Info" /></div>
+                        <div><div class="fc-kpi-num">@(_box.Status == "Closed" ? "مقفولة" : "مفتوحة")</div><div class="fc-kpi-lb">الحالة</div></div>
+                    </div>
+                </div>
+            }
+
+        </div></div>
+    }
+</div>
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private AuthUser? _user;
+    private bool CanManage => _user?.Can("TREASURY.MANAGE") ?? false;
+
+    private bool    _loading = true;
+    private bool    _saving;
+    private string? _msg;
+    private bool    _ok;
+    private int?    _id;
+
+    private List<Opt>  _employees = new();
+    private FormModel  _f = new();
+    private BoxInfo?   _box;
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+
+    public class FormModel
+    {
+        public string  Code                  { get; set; } = "";
+        public string  NameAr                { get; set; } = "";
+        public int     ResponsibleEmployeeId { get; set; }
+        public decimal OpeningBalance        { get; set; }
+    }
+
+    public class BoxInfo
+    {
+        public int     CashBoxId               { get; set; }
+        public string  Code                    { get; set; } = "";
+        public string  NameAr                  { get; set; } = "";
+        public string? NameEn                  { get; set; }
+        public decimal CurrentBalance          { get; set; }
+        public string  CurrencyCode            { get; set; } = "EGP";
+        public int     TxCount                 { get; set; }
+        public string  Status                  { get; set; } = "Open";
+        public int?    ResponsibleEmployeeId   { get; set; }
+        public string? ResponsibleEmployeeName { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        _id = Id;
+        if (!CanManage) { _loading = false; return; }
+
+        _employees = await SafeOpts("api/treasury/employees");
+
+        if (_id is not null)
+        {
+            try
+            {
+                var boxes = await Http.GetFromJsonAsync<List<BoxInfo>>("api/treasury/boxes") ?? new();
+                _box = boxes.FirstOrDefault(b => b.CashBoxId == _id.Value);
+                if (_box is not null)
+                {
+                    _f.Code                  = _box.Code;
+                    _f.NameAr                = _box.NameAr;
+                    _f.ResponsibleEmployeeId = _box.ResponsibleEmployeeId ?? 0;
+                }
+            }
+            catch (Exception ex) { _msg = "فشل تحميل الخزينة: " + ex.Message; _ok = false; }
+        }
+        _loading = false;
+    }
+
+    private async Task<List<Opt>> SafeOpts(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<Opt>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_f.Code))   { _ok = false; _msg = "اكتب كود الخزينة"; return; }
+        if (string.IsNullOrWhiteSpace(_f.NameAr)) { _ok = false; _msg = "اكتب اسم الخزينة"; return; }
+        if (_id is null && _f.OpeningBalance < 0) { _ok = false; _msg = "الرصيد الافتتاحي ماينفعش يكون سالب"; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var payload = new
+            {
+                code                  = _f.Code.Trim().ToUpperInvariant(),
+                nameAr                = _f.NameAr.Trim(),
+                nameEn                = (string?)null,
+                responsibleEmployeeId = _f.ResponsibleEmployeeId == 0 ? (int?)null : _f.ResponsibleEmployeeId,
+                openingBalance        = _f.OpeningBalance,
+                isActive              = (bool?)null
+            };
+
+            var res = _id is null
+                ? await Http.PostAsJsonAsync("api/treasury/boxes", payload)
+                : await Http.PutAsJsonAsync($"api/treasury/boxes/{_id.Value}", payload);
+
+            _msg = await MsgOf(res);
+            _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(_msg, Severity.Success);
+                Nav.NavigateTo("/treasury");
+            }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private void GoBack() => Nav.NavigateTo("/treasury");
+
+    private static string Money(decimal v)   => v.ToString("N2");
+    private static decimal ParseDec(object? v) => decimal.TryParse(v?.ToString(), out var n) ? n : 0m;
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+    }
+}

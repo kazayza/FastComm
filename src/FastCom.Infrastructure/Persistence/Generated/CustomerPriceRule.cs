@@ -21,6 +21,8 @@ public partial class CustomerPriceRule
 
     public int? DestinationId { get; set; }
 
+    public int? TahteeqPortId { get; set; }
+
     public int? ContainerTypeId { get; set; }
 
     public int? TripTypeId { get; set; }
@@ -93,4 +95,8 @@ public partial class CustomerPriceRule
     [ForeignKey("TripTypeId")]
     [InverseProperty("CustomerPriceRules")]
     public virtual TripType? TripType { get; set; }
+
+    [ForeignKey("TahteeqPortId")]
+    [InverseProperty("CustomerPriceRules")]
+    public virtual Port? TahteeqPort { get; set; }
 }

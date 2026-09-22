@@ -189,9 +189,9 @@ public class OptionsController : ControllerBase
     /// <summary>العهود المفتوحة على رحلة — بتظهر في فورم المصروف.</summary>
     [HttpGet("custodies")]
     [Authorize(Policy = "PERM:EXPENSE.VIEW")]
-    public async Task<IActionResult> Custodies(long tripId, CancellationToken ct) =>
+    public async Task<IActionResult> Custodies(long? tripId, CancellationToken ct) =>
         Ok(await _db.DriverCustodies.AsNoTracking()
-            .Where(c => !c.IsDeleted && c.TripId == tripId &&
+            .Where(c => !c.IsDeleted && (tripId == null || c.TripId == tripId) &&
                         c.Status != "Closed" && c.Status != "Approved")
             .OrderBy(c => c.CustodyNumber)
             .Select(c => new CustodyOpt(c.CustodyId, c.CustodyNumber, c.OwnerType, c.OwnerId,
@@ -199,7 +199,7 @@ public class OptionsController : ControllerBase
             .ToListAsync(ct));
 
     public record CustodyOpt(long Id, string Label, string OwnerType, int OwnerId,
-                             long TripId, decimal AmountIssued);
+                             long? TripId, decimal AmountIssued);
 
     [HttpGet("tax-rates")]
     [Authorize(Policy = "PERM:OPERATION.VIEW")]

@@ -178,6 +178,8 @@ public static class SettingKeys
     /* 🔴 كان ناقص — TreasuryController كان فيه سقف hard-coded من غير مفتاح.
        ⚠️ لسه مش متضاف في الـ seed — هيشتغل بالقيمة الافتراضية لحد ما يتضاف. */
     public const string TreasuryMaxAmount      = "TREASURY.MAX_AMOUNT";
+    /* المرحلة 2: كود الخزينة الافتراضية للحركات التلقائية — كان ثابت "MAIN" في CashBook. */
+    public const string TreasuryDefaultBox     = "TREASURY.DEFAULT_BOX";
 
     public const string ShowTaxBreakdown       = "BRANDING.SHOW_TAX_BREAKDOWN";
     public const string EInvoiceEnabled        = "ETA.EINVOICE_ENABLED";
@@ -204,4 +206,6 @@ public static class SettingDefaults
     public const decimal ExpenseMaxAmount         = 10_000_000m;
     public const decimal PaymentMaxAmount         = 100_000_000m;
     public const decimal TreasuryMaxAmount        = 100_000_000m;
+    /* المرحلة 2: الخزينة الافتراضية — موجود في `sql/FastCom-treasury-multi.sql`. */
+    public const string  TreasuryDefaultBox       = "MAIN";
 }

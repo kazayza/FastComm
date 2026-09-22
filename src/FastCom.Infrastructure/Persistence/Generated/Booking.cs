@@ -30,12 +30,18 @@ public partial class Booking
 
     public int? DestinationId { get; set; }
 
+    public int? TahteeqPortId { get; set; }
+
+    public int? EndCustomerId { get; set; }
+
     public int? TripTypeId { get; set; }
 
     [StringLength(100)]
     public string? CustomerReference { get; set; }
 
     public int? ContactId { get; set; }
+
+    public int? ShippingAgentId { get; set; }
 
     [StringLength(30)]
     public string Status { get; set; } = null!;
@@ -71,6 +77,10 @@ public partial class Booking
     [InverseProperty("Bookings")]
     public virtual CustomerContact? Contact { get; set; }
 
+    [ForeignKey("ShippingAgentId")]
+    [InverseProperty("Bookings")]
+    public virtual ShippingAgent? ShippingAgent { get; set; }
+
     [ForeignKey("CustomerId")]
     [InverseProperty("Bookings")]
     public virtual Customer Customer { get; set; } = null!;
@@ -89,6 +99,14 @@ public partial class Booking
     [ForeignKey("ServiceId")]
     [InverseProperty("Bookings")]
     public virtual Service? Service { get; set; }
+
+    [ForeignKey("TahteeqPortId")]
+    [InverseProperty("Bookings")]
+    public virtual Port? TahteeqPort { get; set; }
+
+    [ForeignKey("EndCustomerId")]
+    [InverseProperty("EndCustomerBookings")]
+    public virtual Customer? EndCustomer { get; set; }
 
     [ForeignKey("TripTypeId")]
     [InverseProperty("Bookings")]

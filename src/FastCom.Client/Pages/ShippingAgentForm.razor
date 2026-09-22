@@ -1,0 +1,926 @@
+@page "/shipping-agents/new"
+@page "/shipping-agents/new/{Id:int}"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_id is null ? "وكيل ملاحي جديد" : "تعديل وكيل") — فاست كوم</PageTitle>
+
+@* ═══════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════ *@
+<div class="saf-hero">
+    <div class="hero-bg-circles" aria-hidden="true">
+        <span class="hbc-1"></span>
+        <span class="hbc-2"></span>
+    </div>
+
+    <div class="saf-hero-inner">
+        <div class="saf-hero-top">
+
+            <div class="saf-hero-left">
+
+                <button class="hero-back-btn" @onclick="GoBack" aria-label="رجوع">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    الوكلاء الملاحيين
+                </button>
+
+                <div class="saf-hero-crumb">
+                    <svg viewBox="0 0 24 24" width="12" height="12"
+                         fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
+                    @(_id is null ? "إضافة وكيل ملاحي جديد" : "تعديل بيانات الوكيل")
+                </div>
+
+                <h1 class="saf-hero-title">
+                    @if (_id is null)
+                    {
+                        <span>وكيل جديد</span>
+                        <span class="hero-title-badge new">جديد</span>
+                    }
+                    else
+                    {
+                        <span>@_f.NameAr</span>
+                        <span class="hero-title-badge edit">تعديل</span>
+                    }
+                </h1>
+
+                @if (_id is not null && !string.IsNullOrEmpty(AgentCode))
+                {
+                    <div class="saf-hero-meta">
+                        <span class="meta-chip">
+                            <svg viewBox="0 0 16 16" width="11" height="11"
+                                 fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                <rect x="2" y="2" width="12" height="12" rx="2"/>
+                                <path d="M5 8h6M5 5h6M5 11h4" stroke-linecap="round"/>
+                            </svg>
+                            @AgentCode
+                        </span>
+                        <span class="meta-chip">
+                            <svg viewBox="0 0 24 24" width="12" height="12"
+                                 fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                <path d="M2 17l10 5 10-5"/>
+                            </svg>
+                            شركة ملاحة
+                        </span>
+                    </div>
+                }
+
+            </div>
+
+        </div>
+    </div>
+</div>
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="saf-body">
+
+    @if (!CanSave)
+    {
+        <div class="saf-state-box">
+            <div class="state-icon-wrap perm">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>@(_id is null ? "ليس لديك صلاحية إضافة وكيل ملاحي" : "ليس لديك صلاحية تعديل هذا الوكيل")</p>
+            <button class="state-back-btn" @onclick="GoBack">العودة للقائمة</button>
+        </div>
+    }
+    else if (_loading)
+    {
+        <div class="saf-loading-wrap">
+            <div class="saf-spinner" aria-label="جاري التحميل..."></div>
+            <div class="saf-loading-text">جاري تحميل بيانات الوكيل الملاحي...</div>
+        </div>
+    }
+    else
+    {
+        @if (_msg is not null)
+        {
+            <div class="saf-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                <div class="banner-icon" aria-hidden="true">
+                    @if (_ok)
+                    {
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+                             stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                            <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+                             stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                        </svg>
+                    }
+                </div>
+                <span>@_msg</span>
+                <button class="banner-close" @onclick="() => _msg = null" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+                         stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+        }
+
+        <div class="saf-tabs-wrap">
+            <MudTabs Elevation="0"
+                     Rounded="false"
+                     ApplyEffectsToContainer="true"
+                     PanelClass="saf-tab-panel"
+                     @bind-ActivePanelIndex="_activeTab"
+                     Class="saf-mud-tabs">
+
+                @* ════════ TAB 1 — التعريف ════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="ctab-label">
+                            <div class="ctab-icon ctab-icon-blue" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="16" height="16"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                    <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
+                                </svg>
+                            </div>
+                            <span>التعريف بالوكيل</span>
+                            @if (HasTabError(1))
+                            {
+                                <span class="ctab-err-dot" aria-label="يوجد خطأ"></span>
+                            }
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="tab-section">
+                            <div class="tab-section-head">
+                                <div class="tab-section-icon blue" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18"
+                                         fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                        <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="tab-section-title">التعريف الأساسي للوكيل</div>
+                                    <div class="tab-section-sub">اسم شركة الملاحة وحالة نشاطها — الحقول بالنجمة مطلوبة</div>
+                                </div>
+                            </div>
+
+                            <div class="saf-form-grid">
+                                <div class="form-field">
+                                    <label class="field-label" for="nameAr">
+                                        الاسم بالعربي
+                                        <span class="field-required" aria-label="مطلوب">*</span>
+                                    </label>
+                                    <input id="nameAr"
+                                           class="field-input @(string.IsNullOrWhiteSpace(_f.NameAr) && _triedSave ? "field-error" : "")"
+                                           @bind="_f.NameAr" maxlength="150"
+                                           placeholder="اسم شركة الملاحة بالعربية"
+                                           aria-required="true" />
+                                    @if (string.IsNullOrWhiteSpace(_f.NameAr) && _triedSave)
+                                    {
+                                        <div class="field-err-msg" role="alert">الاسم بالعربي مطلوب</div>
+                                    }
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="field-label" for="nameEn">الاسم بالإنجليزي</label>
+                                    <input id="nameEn" class="field-input"
+                                           @bind="_f.NameEn" maxlength="150"
+                                           placeholder="Shipping agent English name"
+                                           dir="ltr" />
+                                </div>
+
+                                <div class="form-field saf-full">
+                                    <div class="saf-toggle-box @(_f.IsActive ? "toggle-active" : "")">
+                                        <div class="saf-toggle-content">
+                                            <div class="saf-toggle-icon @(_f.IsActive ? "icon-active" : "")" aria-hidden="true">
+                                                @if (_f.IsActive)
+                                                {
+                                                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
+                                                         stroke="currentColor" stroke-width="1.8">
+                                                        <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                                                        <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                }
+                                                else
+                                                {
+                                                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
+                                                         stroke="currentColor" stroke-width="1.8">
+                                                        <circle cx="12" cy="12" r="10"/>
+                                                        <path d="M10 15V9M14 15V9" stroke-linecap="round"/>
+                                                    </svg>
+                                                }
+                                            </div>
+                                            <div class="saf-toggle-text">
+                                                <div class="saf-toggle-title">تفعيل الوكيل الملاحي</div>
+                                                <div class="saf-toggle-sub">الوكلاء النشطين فقط هم من يظهرون بالفواتير والمطالبات</div>
+                                            </div>
+                                        </div>
+                                        <label class="toggle-switch" aria-label="تفعيل الوكيل">
+                                            <input type="checkbox" @bind="_f.IsActive"
+                                                   role="switch" aria-checked="@_f.IsActive" />
+                                            <span class="toggle-track">
+                                                <span class="toggle-thumb"></span>
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+                @* ════════ TAB 2 — التواصل ════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="ctab-label">
+                            <div class="ctab-icon ctab-icon-green" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="16" height="16"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 16.92v3a2 2 0 01-2.18 2A19.86 19.86 0 013.09 5.18 2 2 0 015.11 3h3a2 2 0 012 1.72c.127.96.362 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 11.91a16 16 0 006 6l2.27-2.27a2 2 0 012.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+                                </svg>
+                            </div>
+                            <span>التواصل والعنوان</span>
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="tab-section">
+                            <div class="tab-section-head">
+                                <div class="tab-section-icon green" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18"
+                                         fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M22 16.92v3a2 2 0 01-2.18 2A19.86 19.86 0 013.09 5.18 2 2 0 015.11 3h3a2 2 0 012 1.72c.127.96.362 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 11.91a16 16 0 006 6l2.27-2.27a2 2 0 012.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="tab-section-title">بيانات التواصل والعنوان</div>
+                                    <div class="tab-section-sub">أرقام الهواتف، البريد الإلكتروني والموقع الجغرافي</div>
+                                </div>
+                            </div>
+
+                            <div class="saf-form-grid">
+                                <div class="form-field">
+                                    <label class="field-label" for="phone">التليفون</label>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+                                                 stroke="currentColor" stroke-width="2">
+                                                <path d="M22 16.92v3a2 2 0 01-2.18 2A19.86 19.86 0 013.09 5.18 2 2 0 015.11 3h3a2 2 0 012 1.72c.127.96.362 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 11.91a16 16 0 006 6l2.27-2.27a2 2 0 012.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+                                            </svg>
+                                        </span>
+                                        <input id="phone" class="field-input with-prefix"
+                                               @bind="_f.Phone" maxlength="30"
+                                               placeholder="02-XXXXXXXX" type="tel" dir="ltr" />
+                                    </div>
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="field-label" for="email">البريد الإلكتروني</label>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+                                                 stroke="currentColor" stroke-width="2">
+                                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                                                <path d="M22 6l-10 7L2 6"/>
+                                            </svg>
+                                        </span>
+                                        <input id="email" class="field-input with-prefix"
+                                               @bind="_f.Email" maxlength="150"
+                                               placeholder="info@maritime-line.com"
+                                               type="email" dir="ltr" />
+                                    </div>
+                                </div>
+
+                                <div class="form-field saf-full">
+                                    <label class="field-label" for="address">العنوان</label>
+                                    <textarea id="address"
+                                              class="field-input field-textarea"
+                                              @bind="_f.Address"
+                                              maxlength="500" rows="2"
+                                              placeholder="العنوان التفصيلي لمقر شركة الملاحة...">
+                                    </textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+                @* ════════ TAB 3 — ملاحظات ════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="ctab-label">
+                            <div class="ctab-icon ctab-icon-amber" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="16" height="16"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <span>ملاحظات</span>
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="tab-section">
+                            <div class="tab-section-head">
+                                <div class="tab-section-icon amber" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18"
+                                         fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                        <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="tab-section-title">الملاحظات والشروط</div>
+                                    <div class="tab-section-sub">أي تفاصيل أو شروط تعاقدية إضافية خاصة بشركة الملاحة</div>
+                                </div>
+                            </div>
+
+                            <div class="saf-form-grid">
+                                <div class="form-field saf-full">
+                                    <textarea id="notes"
+                                              class="field-input field-textarea"
+                                              @bind="_f.Notes"
+                                              maxlength="500" rows="5"
+                                              placeholder="اكتب ملاحظاتك هنا...">
+                                    </textarea>
+                                    <div class="saf-char-count">
+                                        <span>@(_f.Notes?.Length ?? 0)</span> / 500
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+            </MudTabs>
+        </div>
+
+        @* ── Bottom Actions ── *@
+        <div class="saf-bottom-actions">
+            <button class="bottom-back-btn" @onclick="GoBack">
+                <svg viewBox="0 0 24 24" width="16" height="16"
+                     fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                رجوع للقائمة
+            </button>
+        </div>
+    }
+</div>
+
+@* ═══════════════════════════════════════════
+   FAB — زر الحفظ العائم
+═══════════════════════════════════════════ *@
+@if (CanSave && !_loading)
+{
+    <div class="saf-fab-group">
+        <button class="saf-fab saf-fab-save" @onclick="SaveAsync"
+                disabled="@_saving"
+                title="حفظ البيانات" aria-label="حفظ البيانات">
+            @if (_saving)
+            {
+                <span class="btn-spinner" aria-hidden="true"></span>
+            }
+            else
+            {
+                <svg viewBox="0 0 24 24" width="22" height="22"
+                     fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                    <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                    <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            }
+        </button>
+    </div>
+}
+
+<style>
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-navy:      #0f2952;
+        --fc-navy-2:    #1a3a6b;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ── Hero ── */
+    .saf-hero {
+        position: relative;
+        background: linear-gradient(135deg, #0d2654 0%, #1a3a6b 45%, #1e4d8c 100%);
+        padding: 24px 24px 72px;
+        overflow: hidden;
+    }
+    .hero-bg-circles { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+    .hbc-1,.hbc-2 { position: absolute; border-radius: 50%; opacity: .06; background: #fff; }
+    .hbc-1 { width: 380px; height: 380px; top: -160px; left: -60px; }
+    .hbc-2 { width: 220px; height: 220px; bottom: -70px; right: 100px; opacity: .04; }
+
+    .saf-hero-inner {
+        position: relative; z-index: 1;
+        max-width: 1100px; margin: 0 auto;
+    }
+    .saf-hero-top {
+        display: flex; align-items: flex-end;
+        justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    }
+    .saf-hero-left { display: flex; flex-direction: column; gap: 6px; }
+
+    .hero-back-btn {
+        display: inline-flex; align-items: center; gap: 5px;
+        background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15);
+        border-radius: 8px; color: rgba(255,255,255,.65);
+        font-family: inherit; font-size: 11px; font-weight: 700;
+        padding: 5px 11px; cursor: pointer;
+        transition: background .15s ease; margin-bottom: 4px;
+    }
+    .hero-back-btn:hover { background: rgba(255,255,255,.14); }
+    .hero-back-btn svg { transform: rotate(180deg); }
+
+    .saf-hero-crumb {
+        display: flex; align-items: center; gap: 5px;
+        font-size: 10.5px; font-weight: 600; color: rgba(255,255,255,.5);
+    }
+    .saf-hero-title {
+        margin: 0; font-size: clamp(22px, 2.4vw, 30px);
+        font-weight: 900; color: #fff;
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .hero-title-badge {
+        display: inline-flex; align-items: center;
+        padding: 3px 10px; border-radius: 20px;
+        font-size: 11px; font-weight: 800;
+    }
+    .hero-title-badge.new  { background: rgba(34,197,94,.2);  color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+    .hero-title-badge.edit { background: rgba(234,179,8,.2);   color: #fde68a; border: 1px solid rgba(234,179,8,.3); }
+
+    .saf-hero-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .meta-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 3px 10px; border-radius: 20px;
+        background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.14);
+        color: rgba(255,255,255,.7); font-size: 10.5px; font-weight: 700;
+    }
+
+    /* ── Body ── */
+    .saf-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 160px);
+        padding: 0 clamp(16px, 3vw, 40px) 100px;
+        width: 100%; margin: -52px auto 0;
+        position: relative; z-index: 2;
+        box-sizing: border-box;
+    }
+
+    /* ── States ── */
+    .saf-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .state-icon-wrap {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .state-icon-wrap.perm { background: #fff0f2; color: var(--fc-red); }
+    .saf-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .saf-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+    .state-back-btn {
+        margin-top: 8px; padding: 9px 20px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-text);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+    }
+    .state-back-btn:hover { background: #f0f4fa; }
+
+    /* ── Loading ── */
+    .saf-loading-wrap {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 14px; min-height: 280px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .saf-spinner {
+        width: 40px; height: 40px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: saf-spin .75s linear infinite;
+    }
+    @@keyframes saf-spin { to { transform: rotate(360deg); } }
+    .saf-loading-text { font-size: 13px; font-weight: 600; color: var(--fc-muted); }
+
+    /* ── Banner ── */
+    .saf-banner {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 16px; border-radius: 10px;
+        font-size: 13px; font-weight: 600; margin-bottom: 14px;
+        animation: banner-in .25s ease;
+    }
+    @@keyframes banner-in { from { opacity:0; transform:translateY(-6px) } to { opacity:1; transform:none } }
+    .banner-success { background: #e9f8f0; color: #0e7a43; border: 1px solid #b5e8d0; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8d0; }
+    .banner-icon { flex: 0 0 auto; }
+    .banner-close {
+        margin-right: auto; background: none; border: none;
+        color: inherit; opacity: .6; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        width: 24px; height: 24px; border-radius: 5px;
+    }
+    .banner-close:hover { opacity: 1; }
+
+    /* ── MudTabs ── */
+    .saf-tabs-wrap {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06),
+                    0 20px 48px rgba(15,41,82,.03);
+        overflow: hidden; width: 100%;
+    }
+    .saf-mud-tabs .mud-tabs-toolbar {
+        background: linear-gradient(180deg, #f9fafd 0%, #f3f6fb 100%);
+        border-bottom: 2px solid #e8edf5;
+        padding: 0 16px; min-height: 54px;
+    }
+    .saf-mud-tabs .mud-tab {
+        font-family: "Cairo","Tajawal","Inter",Arial,sans-serif;
+        font-size: 12px; font-weight: 700; color: var(--fc-muted);
+        padding: 0 6px; min-width: unset; transition: color .15s ease;
+    }
+    .saf-mud-tabs .mud-tab.mud-tab-active { color: var(--fc-blue) !important; font-weight: 800; }
+    .saf-mud-tabs .mud-tab-slider {
+        background: var(--fc-blue) !important; height: 3px; border-radius: 3px 3px 0 0;
+    }
+    .saf-mud-tabs .mud-tab:hover:not(.mud-tab-active) {
+        color: var(--fc-text); background: rgba(0,0,0,.03); border-radius: 8px;
+    }
+    .saf-tab-panel { padding: 0; }
+
+    .ctab-label {
+        display: flex; align-items: center; gap: 7px;
+        padding: 0 4px; white-space: nowrap; position: relative;
+    }
+    .ctab-icon {
+        width: 26px; height: 26px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 7px;
+    }
+    .ctab-icon-blue   { background: var(--fc-blue-lt);   color: var(--fc-blue); }
+    .ctab-icon-green  { background: var(--fc-green-lt);   color: var(--fc-green); }
+    .ctab-icon-amber  { background: var(--fc-amber-lt);   color: var(--fc-amber); }
+    .ctab-err-dot {
+        width: 7px; height: 7px; border-radius: 50%; background: var(--fc-red);
+        animation: saf-pulse 1.5s ease infinite;
+    }
+    @@keyframes saf-pulse {
+        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.4); }
+        50%     { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
+    }
+
+    /* ── Tab Section ── */
+    .tab-section { padding: 24px 28px 28px; }
+    .tab-section-head {
+        display: flex; align-items: flex-start; gap: 12px;
+        margin-bottom: 22px; padding-bottom: 18px;
+        border-bottom: 1px solid #edf1f7;
+    }
+    .tab-section-icon {
+        width: 42px; height: 42px; flex: 0 0 42px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 12px; flex-shrink: 0;
+    }
+    .tab-section-icon.blue   { background: var(--fc-blue-lt);  color: var(--fc-blue);  border: 1px solid #bdd4fc; }
+    .tab-section-icon.green  { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .tab-section-icon.amber  { background: var(--fc-amber-lt); color: var(--fc-amber); border: 1px solid #f0d070; }
+    .tab-section-title { font-size: 15px; font-weight: 800; color: #1c2b43; line-height: 1.2; }
+    .tab-section-sub { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
+
+    /* ── Form ── */
+    .saf-form-grid {
+        display: grid; grid-template-columns: repeat(2, 1fr);
+        gap: 18px; width: 100%;
+    }
+    .form-field { display: flex; flex-direction: column; gap: 6px; }
+    .saf-full { grid-column: 1 / -1; }
+    .field-label {
+        font-size: 12px; font-weight: 800; color: #344258;
+        display: flex; align-items: center; gap: 4px;
+    }
+    .field-required { color: var(--fc-red); font-size: 14px; line-height: 1; }
+    .field-input {
+        height: 42px; width: 100%;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 13px; padding: 0 12px;
+        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+        outline: none; box-sizing: border-box;
+    }
+    .field-input:focus {
+        border-color: var(--fc-blue);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.10);
+        background: #fff;
+    }
+    .field-input.field-error {
+        border-color: var(--fc-red);
+        box-shadow: 0 0 0 3px rgba(224,48,72,.08);
+        background: #fffafb;
+    }
+    .field-input::placeholder { color: #b0bcc8; }
+    .field-textarea {
+        height: auto; padding: 10px 12px;
+        resize: vertical; min-height: 80px; line-height: 1.6;
+    }
+    .field-input-group { position: relative; display: flex; align-items: center; width: 100%; }
+    .field-prefix {
+        position: absolute; right: 12px;
+        display: flex; align-items: center;
+        color: #9aaabb; pointer-events: none; z-index: 1;
+    }
+    .field-input.with-prefix { padding-right: 36px; }
+    .saf-char-count {
+        text-align: left; font-size: 10.5px; color: #b4c0d0; margin-top: 4px; font-weight: 600;
+    }
+    .field-err-msg {
+        font-size: 10.5px; color: var(--fc-red); font-weight: 700;
+        animation: banner-in .2s ease;
+    }
+
+    /* ── Toggle Box ── */
+    .saf-toggle-box {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 16px; padding: 16px 18px;
+        border: 1px solid #dde5f0; border-radius: 12px;
+        background: #f8fafc; margin-top: 6px;
+        transition: all .2s ease;
+    }
+    .saf-toggle-box.toggle-active {
+        border-color: #bdd4fc; background: var(--fc-blue-lt);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.07);
+    }
+    .saf-toggle-content { display: flex; align-items: center; gap: 14px; }
+    .saf-toggle-icon {
+        width: 44px; height: 44px; flex: 0 0 44px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 11px; background: #edf1f7; color: var(--fc-muted);
+        transition: all .2s ease;
+    }
+    .saf-toggle-icon.icon-active { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .saf-toggle-title { font-size: 13px; font-weight: 800; color: var(--fc-text); }
+    .saf-toggle-sub   { font-size: 11px; color: var(--fc-muted); margin-top: 2px; }
+
+    .toggle-switch { display: flex; align-items: center; cursor: pointer; flex-shrink: 0; }
+    .toggle-switch input { display: none; }
+    .toggle-track {
+        position: relative; width: 46px; height: 26px;
+        background: #d8e2f0; border-radius: 999px;
+        transition: background .2s ease;
+        display: flex; align-items: center; padding: 0 3px;
+    }
+    .toggle-switch input:checked + .toggle-track { background: var(--fc-blue); }
+    .toggle-thumb {
+        position: absolute; left: 3px; width: 20px; height: 20px;
+        border-radius: 50%; background: #fff;
+        box-shadow: 0 2px 6px rgba(0,0,0,.2);
+        transition: left .2s ease;
+    }
+    .toggle-switch input:checked + .toggle-track .toggle-thumb {
+        left: calc(100% - 23px);
+    }
+
+    /* ── Bottom Actions ── */
+    .saf-bottom-actions {
+        display: flex; align-items: center; justify-content: flex-start;
+        gap: 12px; margin-top: 16px;
+        padding: 14px 20px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 8px rgba(15,41,82,.04);
+        width: 100%; box-sizing: border-box;
+    }
+    .bottom-back-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 16px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .bottom-back-btn:hover { background: #f0f4fa; border-color: #c0ccd8; color: var(--fc-text); }
+    .bottom-back-btn svg { transform: rotate(180deg); }
+
+    /* ══════════════════════════════════════
+       FAB — زر الحفظ العائم
+    ══════════════════════════════════════ */
+    .saf-fab-group {
+        position: fixed; bottom: 24px; left: 24px;
+        z-index: 999;
+        display: flex; flex-direction: column;
+        align-items: center; gap: 12px;
+    }
+    .saf-fab {
+        display: flex; align-items: center; justify-content: center;
+        border: none; border-radius: 50%; cursor: pointer;
+        transition: all 0.25s cubic-bezier(0.34, 1.3, 0.64, 1);
+    }
+    .saf-fab:active { transform: scale(.92); }
+
+    .saf-fab-save {
+        width: 56px; height: 56px;
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: #fff;
+        box-shadow: 0 4px 16px rgba(22,163,74,0.4), 0 2px 6px rgba(0,0,0,0.1);
+    }
+    .saf-fab-save:hover:not(:disabled) {
+        transform: translateY(-4px) scale(1.08);
+        box-shadow: 0 8px 24px rgba(22,163,74,0.5), 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .saf-fab-save:disabled { opacity: .6; cursor: not-allowed; }
+
+    .btn-spinner {
+        width: 20px; height: 20px;
+        border: 2.5px solid rgba(255,255,255,.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: saf-spin .7s linear infinite;
+    }
+    .btn-spinner.sm { width: 14px; height: 14px; border-width: 2px; }
+
+    /* ── Responsive ── */
+    @@media (max-width: 900px) {
+        .saf-form-grid { grid-template-columns: 1fr; }
+        .saf-body { padding: 0 14px 90px; }
+        .tab-section { padding: 18px 16px 22px; }
+    }
+    @@media (max-width: 680px) {
+        .saf-hero { padding: 18px 14px 64px; }
+        .saf-hero-title { font-size: 20px; }
+        .saf-bottom-actions { flex-direction: column; }
+        .bottom-back-btn { width: 100%; justify-content: center; }
+        .saf-fab-group { bottom: 18px; left: 18px; }
+        .saf-fab-save { width: 50px; height: 50px; }
+    }
+    @@media (max-width: 480px) {
+        .saf-body { padding: 0 10px 90px; margin-top: -40px; }
+        .hero-title-badge { display: none; }
+    }
+</style>
+
+@code {
+    [Parameter] public int? Id { get; set; }
+    private int? _id;
+    private string AgentCode = "";
+    private int _activeTab;
+    private bool _triedSave;
+
+    private AuthUser? _user;
+    private bool CanCreate => _user?.Can("SHIPPING_AGENT.CREATE") ?? false;
+    private bool CanEdit   => _user?.Can("SHIPPING_AGENT.EDIT")   ?? false;
+    private bool CanSave   => _id is null ? CanCreate : CanEdit;
+
+    private bool _loading;
+    private bool _saving;
+    private string? _msg;
+    private bool _ok = true;
+
+    private FormModel _f = new();
+
+    private bool HasTabError(int tab) => _triedSave && tab switch
+    {
+        1 => string.IsNullOrWhiteSpace(_f.NameAr),
+        _ => false
+    };
+
+    public class FormModel
+    {
+        public string NameAr { get; set; } = "";
+        public string? NameEn { get; set; }
+        public string? Phone { get; set; }
+        public string? Email { get; set; }
+        public string? Address { get; set; }
+        public string? Notes { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+
+    public class DetailDto
+    {
+        public int ShippingAgentId { get; set; }
+        public string Code { get; set; } = "";
+        public string NameAr { get; set; } = "";
+        public string? NameEn { get; set; }
+        public string? Phone { get; set; }
+        public string? Email { get; set; }
+        public string? Address { get; set; }
+        public string? Notes { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        _id = Id;
+        if (!CanSave) return;
+        _loading = true;
+        try
+        {
+            if (_id is not null) await LoadAsync(_id.Value);
+        }
+        catch (Exception ex) { _msg = "فشل التحميل: " + ex.Message; _ok = false; }
+        finally { _loading = false; }
+    }
+
+    private async Task LoadAsync(int id)
+    {
+        var d = await Http.GetFromJsonAsync<DetailDto>($"api/shipping-agents/{id}");
+        if (d is null) { _msg = "الوكيل الملاحي غير موجود"; _ok = false; return; }
+        AgentCode = d.Code;
+        _f = new FormModel
+        {
+            NameAr = d.NameAr, NameEn = d.NameEn,
+            Phone = d.Phone, Email = d.Email,
+            Address = d.Address, Notes = d.Notes,
+            IsActive = d.IsActive
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_saving) return;
+        _triedSave = true;
+
+        if (string.IsNullOrWhiteSpace(_f.NameAr))
+        { _msg = "الاسم بالعربي مطلوب"; _ok = false; _activeTab = 0; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var payload = new
+            {
+                nameAr = _f.NameAr.Trim(),
+                nameEn = _f.NameEn?.Trim(),
+                phone = _f.Phone?.Trim(),
+                email = _f.Email?.Trim(),
+                address = _f.Address?.Trim(),
+                notes = _f.Notes?.Trim(),
+                isActive = _f.IsActive
+            };
+
+            var res = _id is null
+                ? await Http.PostAsJsonAsync("api/shipping-agents", payload)
+                : await Http.PutAsJsonAsync($"api/shipping-agents/{_id}", payload);
+
+            _msg = await MsgOf(res);
+            _ok = res.IsSuccessStatusCode;
+            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) GoBack();
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private void GoBack() => Nav.NavigateTo("/shipping-agents");
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم حفظ البيانات بنجاح" : "حصل خطأ — حاول مجدداً"; }
+    }
+}
