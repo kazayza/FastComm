@@ -10,131 +10,231 @@
 
 <PageTitle>بوابة العملاء — فاست كوم</PageTitle>
 
-<div class="fc-hero">
-    <div class="fc-hero-inner">
-        <div class="fc-page-head">
-            <div>
-                <div class="fc-crumb">الإدارة</div>
-                <h1 class="fc-hero-title">بوابة العملاء</h1>
-                <p class="fc-hero-sub">روابط مؤقّتة يشوف بيها العميل فواتيره وكشف حسابه من غير ما يسجّل دخول</p>
-            </div>
-            <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="LoadTokensAsync" Style="color:#9FB4CC" />
-                @if (Can)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="OpenNew"
-                               Disabled="@(_cust == 0)">رابط جديد</MudButton>
-                }
-            </div>
-        </div>
+@* ═══════════════════════════════════════════
+   HERO — كارت مستقل بحواف دائرية 20px
+   يحفظ خلفية وتدرج ولولو الـ fc-hero الأصلي تماماً
+═══════════════════════════════════════════ *@
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
 
-        <div class="fc-kpis-glass">
-            <div class="fc-kpi"><div class="fc-kpi-lb">الروابط</div><div class="fc-kpi-num">@_tokens.Count</div></div>
-            <div class="fc-kpi"><div class="fc-kpi-lb">نشطة</div><div class="fc-kpi-num">@_tokens.Count(t => t.IsActive)</div></div>
-            <div class="fc-kpi"><div class="fc-kpi-lb">مرات الاستخدام</div>
-                <div class="fc-kpi-num">@_tokens.Sum(t => t.UsedCount)</div></div>
+            <div class="ptl-hero-row">
+                <div class="ptl-hero-left">
+                    <div class="ptl-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="11" width="18" height="11" rx="2"/>
+                            <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                        </svg>
+                        <span>الإدارة · بوابة العملاء</span>
+                    </div>
+                    <h1 class="fc-hero-title fc-hero-title-slim">روابط بوابات العملاء المؤقتة</h1>
+                    <span class="ptl-hero-sub">توفير وصول آمن مؤقت للعملاء لاستعراض فواتيرهم وكشوف الحسابات دون الحاجة للتسجيل</span>
+                </div>
+
+                <div class="ptl-hero-right">
+                    <span class="ptl-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                    <span class="ptl-hero-chip ptl-chip-highlight">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
+                        </svg>
+                        الروابط النشطة: @_tokens.Count(t => t.IsActive)
+                    </span>
+                </div>
+            </div>
+
+            @if (Can)
+            {
+                <div class="ptl-kpis-row">
+                    <div class="ptl-kpi ptl-kpi-blue">
+                        <div class="ptl-kpi-inner">
+                            <div class="ptl-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Small" /></div>
+                            <div class="ptl-kpi-data">
+                                <div class="ptl-kpi-num">@_tokens.Count</div>
+                                <div class="ptl-kpi-label">إجمالي الروابط</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ptl-kpi ptl-kpi-green">
+                        <div class="ptl-kpi-inner">
+                            <div class="ptl-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" /></div>
+                            <div class="ptl-kpi-data">
+                                <div class="ptl-kpi-num">@_tokens.Count(t => t.IsActive)</div>
+                                <div class="ptl-kpi-label">روابط نشطة حالياً</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ptl-kpi ptl-kpi-gold">
+                        <div class="ptl-kpi-inner">
+                            <div class="ptl-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Small" /></div>
+                            <div class="ptl-kpi-data">
+                                <div class="ptl-kpi-num">@_tokens.Sum(t => t.UsedCount)</div>
+                                <div class="ptl-kpi-label">إجمالي عدد الاستخدامات</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
         </div>
     </div>
 </div>
 
-<div class="fc-page">
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="ptl-body">
     @if (!Can)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية إدارة بوابة العملاء.</MudAlert>
+        <div class="ptl-state-box">
+            <div class="state-icon-wrap perm">
+                <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليست لديك الصلاحية الكافية لإدارة بوابة العملاء (CUSTOMER.PORTAL_TOKEN)</p>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
+        <div class="ptl-card">
 
+            @* ── رسائل الحالة والتأكيد ── *@
             @if (_msg is not null)
             {
-                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
-                          Class="mb-4">@_msg</MudAlert>
+                <div class="ptl-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                    <div class="banner-icon" aria-hidden="true">
+                        @if (_ok)
+                        {
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                                <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                            </svg>
+                        }
+                    </div>
+                    <span>@_msg</span>
+                    <button class="banner-close" @onclick="() => _msg = null">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
             }
 
-            @* ── الرابط الجديد (يظهر مرة واحدة بس) ── *@
+            @* ── عرض الرابط المنشأ حديثاً (مرة واحدة فقط) ── *@
             @if (_newLink is not null)
             {
-                <div class="fc-alert fc-alert-info">
-                    <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Key" /></div>
-                    <div class="fc-alert-body">
-                        <div class="fc-alert-title">الرابط جاهز — انسخه وابعته للعميل</div>
-                        <div class="fc-link-box" @onclick="CopyAsync">
-                            @_newLink
-                            <span class="fc-cell-sub">اضغط للنسخ</span>
+                <div class="ptl-banner banner-info" role="alert">
+                    <div class="banner-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="ptl-new-link-inner">
+                        <strong>رابط الوصول المؤقت جاهز ومفعل للعميل:</strong>
+                        <div class="ptl-link-copy-box" @onclick="CopyAsync" title="اضغط للنسخ">
+                            <span class="ptl-link-url">@_newLink</span>
+                            <span class="ptl-link-action-tag">نسخ الرابط المباشر</span>
                         </div>
-                        <div style="margin-top:6px">🔴 الرابط ده <b>مش بيتحفظ</b> — بنخزّن البصمة بس.
-                            لو ضاع، اعمل رابط جديد.</div>
+                        <p class="ptl-link-warning">يرجى ملاحظة أن هذا الرابط المباشر يظهر لك لمرة واحدة فقط لغايات الحماية التشغيلية. لا يتم حفظ الروابط المشفرة في النظام بل تحفظ البصمات الأمنية فقط.</p>
                     </div>
                 </div>
             }
 
-            <div class="fc-fsec">
-                <div class="fc-fsec-head">
-                    <span class="fc-fsec-n">1</span>
-                    <div>
-                        <div class="fc-fsec-t">روابط العميل</div>
-                        <div class="fc-fsec-d">اختار العميل الأول — الروابط بتظهر له</div>
-                    </div>
-                    <span class="fc-fsec-ic"><MudIcon Icon="@Icons.Material.Filled.Key" Size="Size.Small" /></span>
-                </div>
-
-                <div class="fc-filters">
-                    <select class="fc-sel" @bind="_cust" style="max-width:340px">
-                        <option value="0">— اختار العميل —</option>
+            @* ── شريط فلاتر واختيار العميل ── *@
+            <div class="ptl-toolbar">
+                <div class="ptl-filters">
+                    <select class="ptl-select" @bind="_cust" style="max-width: 320px;" title="العميل">
+                        <option value="0">— اختر العميل المستهدف —</option>
                         @foreach (var c in _customers) { <option value="@c.Id">@c.Label</option> }
                     </select>
-                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
-                               OnClick="LoadTokensAsync" Disabled="@(_cust == 0)">عرض الروابط</MudButton>
-                </div>
 
-                <div class="fc-table-wrap"><table class="fc-table">
-                    <thead><tr>
-                        <th>الغرض</th><th>اتعمل</th><th>ينتهي</th>
-                        <th>الاستخدام</th><th>آخر استخدام</th><th>الحالة</th><th style="width:120px"></th>
-                    </tr></thead>
+                    <button class="ptl-btn-apply" @onclick="LoadTokensAsync" disabled="@(_cust == 0)">عرض الروابط الفعالة</button>
+                </div>
+            </div>
+
+            @* ── جدول مصفوفة الروابط ── *@
+            <div class="ptl-table-wrap">
+                <table class="ptl-table" aria-label="مصفوفة الروابط">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="th-start">الغرض والوصول</th>
+                            <th scope="col">تاريخ الإنشاء</th>
+                            <th scope="col">تاريخ انتهاء الصلاحية</th>
+                            <th scope="col">الاستخدام الحالي</th>
+                            <th scope="col">آخر حركة وصول</th>
+                            <th scope="col">حالة الرابط</th>
+                            <th scope="col" style="width: 120px">إجراءات</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         @foreach (var t in _tokens)
                         {
                             <tr>
-                                <td class="fc-cell-main">
-                                    @PurposeAr(t.Purpose)
-                                    @if (t.InvoiceId is not null)
-                                    {
-                                        <div class="fc-cell-sub">فاتورة #@t.InvoiceId</div>
-                                    }
+                                <td class="td-start">
+                                    <div class="ptl-purpose-cell">
+                                        <span class="ptl-purpose-title">@PurposeAr(t.Purpose)</span>
+                                        @if (t.InvoiceId is not null)
+                                        {
+                                            <span class="ptl-invoice-id">مرتبط بفاتورة رقم #@t.InvoiceId</span>
+                                        }
+                                    </div>
                                 </td>
-                                <td class="fc-cell-sub">@t.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td class="td-muted">@t.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
                                 <td>
                                     @if (t.ExpiresAt is null)
                                     {
-                                        <span class="fc-cell-sub">مفتوح</span>
+                                        <span class="td-muted">غير محدود الصلاحية</span>
                                     }
                                     else
                                     {
-                                        @t.ExpiresAt.Value.ToString("yyyy-MM-dd")
+                                        <span class="ptl-expiry-date">@t.ExpiresAt.Value.ToString("yyyy-MM-dd")</span>
                                     }
                                 </td>
                                 <td>
-                                    @t.UsedCount
+                                    <span class="ptl-use-count">@t.UsedCount</span>
                                     @if (t.MaxUses is not null)
                                     {
-                                        <span class="fc-cell-sub"> / @t.MaxUses</span>
+                                        <span class="td-muted"> / @t.MaxUses</span>
                                     }
                                 </td>
-                                <td class="fc-cell-sub">
-                                    @(t.LastUsedAt is null ? "لم يُستخدم" : t.LastUsedAt.Value.ToString("yyyy-MM-dd HH:mm"))
+                                <td class="td-muted">
+                                    @(t.LastUsedAt is null ? "لم يتم الدخول بعد" : t.LastUsedAt.Value.ToString("yyyy-MM-dd HH:mm"))
                                 </td>
-                                <td><span class="fc-chip @ChipCls(t)">@ChipTxt(t)</span></td>
                                 <td>
-                                    <div class="fc-row-actions">
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.FactCheck"
-                                                       Color="Color.Primary" title="سجل الدخول" OnClick="() => ShowLogs(t)" />
+                                    <span class="ptl-status-chip @ChipCls(t)">
+                                        <span class="chip-dot" aria-hidden="true"></span>
+                                        @ChipTxt(t)
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="ptl-row-actions">
+                                        <button class="ptl-btn-action view" @onclick="() => ShowLogs(t)" title="استعراض سجلات الدخول للرابط">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                                            </svg>
+                                        </button>
                                         @if (t.IsActive)
                                         {
-                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Close"
-                                                           Color="Color.Error" title="إبطال" OnClick="() => RevokeAsync(t)" />
+                                            <button class="ptl-btn-action revoke" @onclick="() => RevokeAsync(t)" title="إبطال وإلغاء فاعلية الرابط فوراً">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                                                </svg>
+                                            </button>
                                         }
                                     </div>
                                 </td>
@@ -142,116 +242,623 @@
                         }
                         @if (_tokens.Count == 0)
                         {
-                            <tr><td colspan="7">
-                                <div class="fc-empty">@(_cust == 0 ? "اختار العميل الأول" : "مافيش روابط للعميل ده")</div>
-                            </td></tr>
+                            <tr>
+                                <td colspan="7">
+                                    <div class="ptl-empty-table">
+                                        @(_cust == 0 ? "يرجى تحديد العميل المستهدف أولاً من شريط الفلاتر العلوي" : "لا توجد أي روابط أو تصاريح وصول مسجلة للعميل المختار")
+                                    </div>
+                                </td>
+                            </tr>
                         }
                     </tbody>
-                </table></div>
+                </table>
             </div>
 
-            @* ── سجل الدخول ── *@
+            @* ── كارد سجل حركة العميل للرابط المحدد ── *@
             @if (_logsToken is not null)
             {
-                <div class="fc-fsec" style="margin-top:26px">
-                    <div class="fc-fsec-head">
-                        <span class="fc-fsec-n">2</span>
-                        <div>
-                            <div class="fc-fsec-t">سجل دخول العميل</div>
-                            <div class="fc-fsec-d">رابط #@_logsToken · آخر 200 حركة</div>
+                <div class="ptl-logs-section">
+                    <div class="ptl-logs-head">
+                        <div class="ptl-logs-head-left">
+                            <span class="ptl-logs-title">سجل دخول ووصول العميل للرابط</span>
+                            <span class="ptl-logs-sub">تفاصيل أحدث 200 حركة وصول للرابط التعريفي المختار رقم (#@_logsToken)</span>
                         </div>
                     </div>
 
-                    <div class="fc-table-wrap"><table class="fc-table">
-                        <thead><tr>
-                            <th>الوقت</th><th>الحركة</th><th>العنصر</th><th>IP</th>
-                        </tr></thead>
-                        <tbody>
-                            @foreach (var l in _logs)
-                            {
+                    <div class="ptl-table-wrap">
+                        <table class="ptl-table ptl-table-compact" aria-label="جدول سجل حركة العميل">
+                            <thead>
                                 <tr>
-                                    <td class="fc-cell-sub">@l.AccessedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
-                                    <td>@l.Action</td>
-                                    <td class="fc-cell-sub">
-                                        @(string.IsNullOrWhiteSpace(l.EntityType) ? "—" : $"{l.EntityType} #{l.EntityId}")
-                                    </td>
-                                    <td class="fc-cell-sub">@(l.IpAddress ?? "—")</td>
+                                    <th scope="col" class="th-start">توقيت وتاريخ الحركة</th>
+                                    <th scope="col">العملية المنفذة</th>
+                                    <th scope="col" class="th-start">المستند المستعرض</th>
+                                    <th scope="col">عنوان شبكة الوصول IP</th>
                                 </tr>
-                            }
-                            @if (_logs.Count == 0)
-                            {
-                                <tr><td colspan="4"><div class="fc-empty">العميل لسه مادخلش بالرابط ده</div></td></tr>
-                            }
-                        </tbody>
-                    </table></div>
+                            </thead>
+                            <tbody>
+                                @foreach (var l in _logs)
+                                {
+                                    <tr>
+                                        <td class="td-muted td-start">@l.AccessedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                        <td><strong>@l.Action</strong></td>
+                                        <td class="td-start">
+                                            @(string.IsNullOrWhiteSpace(l.EntityType) ? "—" : $"{l.EntityType} #{l.EntityId}")
+                                        </td>
+                                        <td class="td-muted font-mono">@(l.IpAddress ?? "—")</td>
+                                    </tr>
+                                }
+                                @if (_logs.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="4">
+                                            <div class="ptl-empty-table">العميل لم يقم بتسجيل أي حركة دخول على هذا الرابط حتى الآن</div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             }
 
-        </div></div>
+        </div>
     }
 </div>
 
-@* ═══════════ مودال: رابط جديد ═══════════ *@
+@* ═══════════════════════════════════════════
+   ⚡ GLOW FAB — الوميض الذهبي الدائم متعدد الإجراءات
+═══════════════════════════════════════════ *@
+@if (Can && !_loading)
+{
+    <div class="fc-fab-container">
+        <div class="fc-fab-menu @(_fabOpen ? "is-open" : "")" role="menu" aria-label="الإجراءات السريعة">
+            @* زر إنشاء رابط جديد *@
+            <button type="button" class="fc-fab-item" role="menuitem" @onclick="OpenNew" disabled="@(_cust == 0)">
+                <span class="fc-fab-icon"><MudIcon Icon="@Icons.Material.Filled.AddLink" Size="Size.Small" /></span>
+                <span class="fc-fab-label">رابط بوابة جديد</span>
+            </button>
+            @* زر التحديث *@
+            <button type="button" class="fc-fab-item" role="menuitem" @onclick="LoadTokensAsync">
+                <span class="fc-fab-icon"><MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" /></span>
+                <span class="fc-fab-label">تحديث البيانات</span>
+            </button>
+        </div>
+
+        @* زر الوميض *@
+        <button type="button" class="fc-fab-main fc-glow-gold @(_fabOpen ? "is-open" : "")" @onclick="ToggleFab" aria-label="التحكم" aria-expanded="@(_fabOpen ? "true" : "false")">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" class="fc-fab-svg">
+                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+            </svg>
+        </button>
+    </div>
+}
+
+@* ═══════════════════════════════════════════
+   MODAL — توليد رابط بوابة جديد
+═══════════════════════════════════════════ *@
 @if (_open && Can)
 {
-    <div class="fc-modal-backdrop" @onclick="Close">
-        <div class="fc-modal fc-modal-sm" @onclick:stopPropagation="true">
-            <div class="fc-modal-head">
-                <div>
-                    <div class="fc-modal-title">رابط بوابة جديد</div>
-                    <div class="fc-modal-sub">للعميل: @_custName</div>
-                </div>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="Close" />
-            </div>
-            <div class="fc-modal-body">
+    <div class="cust-modal-backdrop" @onclick="Close" role="dialog" aria-modal="true">
+        <div class="cust-modal cust-modal-sm" @onclick:stopPropagation="true">
 
-                <div class="fc-alert fc-alert-warn">
-                    <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
-                    <div class="fc-alert-body">
-                        <div class="fc-alert-title">العميل لازم يكون مفعّل البوابة</div>
-                        <div>لو مش مفعّلة، هترفض. فعّلها من بيانات العميل (خانة «البوابة»).</div>
+            <div class="modal-head">
+                <div class="modal-head-icon icon-blue" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M15 7a2 2 0 012 2m-3.83 3.83a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="modal-title">إنشاء رابط بوابة جديد</div>
+                    <div class="modal-sub">للعميل: @_custName</div>
+                </div>
+                <button class="modal-close-btn" @onclick="Close" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            @if (_msg is not null)
+            {
+                <div class="modal-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                    <span>@_msg</span>
+                    <button class="banner-close" @onclick="() => _msg = null">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+            }
+
+            <div class="modal-body">
+                <div class="ptl-inline-alert" role="alert">
+                    <div class="ptl-alert-icon">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="ptl-alert-body">
+                        <strong>متطلب مسبق:</strong> يرجى التأكد من تفعيل خانة "البوابة" ضمن ملف بيانات العميل الأساسية، وإلا سيقوم خادم الحماية برفض طلبات الربط والوصول.
                     </div>
                 </div>
 
-                <div class="fc-form-grid" style="margin-top:14px">
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">الغرض<i>*</i></div>
-                        <select class="fc-sel fc-sel-lg" @bind="_purpose">
-                            <option value="Portal">البوابة كاملة (فواتير + كشف حساب)</option>
-                            <option value="Statement">كشف الحساب بس</option>
-                            <option value="InvoiceView">فاتورة واحدة بس</option>
+                <div class="modal-form-grid" style="margin-top: 14px;">
+                    <div class="modal-form-field modal-field-full">
+                        <label class="modal-field-label">الغرض وتصريح الوصول <span class="field-required">*</span></label>
+                        <select class="modal-field-input" @bind="_purpose">
+                            <option value="Portal">البوابة بالكامل (الفواتير وكشف الحساب المالي)</option>
+                            <option value="Statement">كشف الحساب المالي فقط</option>
+                            <option value="InvoiceView">عرض وإقرار فاتورة تشغيلية واحدة</option>
                         </select>
                     </div>
+
                     @if (_purpose == "InvoiceView")
                     {
-                        <div class="fc-fld">
-                            <div class="fc-fld-lb">رقم الفاتورة<i>*</i></div>
-                            <input type="number" min="1" class="fc-sel fc-sel-lg" value="@_invoiceId"
-                                   @onchange="e => _invoiceId = Lng(e.Value)" />
+                        <div class="modal-form-field modal-field-full">
+                            <label class="modal-field-label">رقم الفاتورة المرتبطة <span class="field-required">*</span></label>
+                            <input type="number" min="1" class="modal-field-input" value="@_invoiceId"
+                                   @onchange="e => _invoiceId = Lng(e.Value)" placeholder="اكتب المعرف الرقمي للفاتورة المطلوبة" />
                         </div>
                     }
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">صالح لمدة (أيام)</div>
-                        <input type="number" min="1" max="365" class="fc-sel fc-sel-lg" value="@_days"
+
+                    <div class="modal-form-field">
+                        <label class="modal-field-label">مدة الفاعلية (أيام)</label>
+                        <input type="number" min="1" max="365" class="modal-field-input" value="@_days"
                                @onchange="e => _days = (int)Lng(e.Value)" />
-                        <div class="fc-fld-hint">من يوم لـ 365</div>
+                        <div class="modal-field-hint">بحد أقصى سنة ميلادية واحدة</div>
                     </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">أقصى عدد استخدامات</div>
-                        <input type="number" min="1" max="1000" class="fc-sel fc-sel-lg" value="@_maxUses"
-                               @onchange="e => _maxUses = (int)Lng(e.Value)" />
-                        <div class="fc-fld-hint">فاضي = من غير حد</div>
+
+                    <div class="modal-form-field">
+                        <label class="modal-field-label">الحد الأقصى للاستخدام</label>
+                        <input type="number" min="1" max="1000" class="modal-field-input" value="@_maxUses"
+                               @onchange="e => _maxUses = (int)Lng(e.Value)" placeholder="اتركه فارغاً للاستخدام المفتوح" />
+                        <div class="modal-field-hint">الحد الأقصى لمرات فتح واستعراض الرابط</div>
                     </div>
                 </div>
             </div>
-            <div class="fc-modal-foot">
-                <MudButton Variant="Variant.Text" OnClick="Close">إلغاء</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
-                           StartIcon="@Icons.Material.Filled.Key" OnClick="CreateAsync">إنشاء الرابط</MudButton>
+
+            <div class="modal-foot">
+                <button class="modal-cancel-btn" @onclick="Close">إلغاء</button>
+                <button class="modal-save-btn" @onclick="CreateAsync" disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <span class="btn-spinner sm"></span>
+                        <span>جاري الإنشاء...</span>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M15 7a2 2 0 012 2m-3.83 3.83a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                        </svg>
+                        <span>توليد الرابط</span>
+                    }
+                </button>
             </div>
+
         </div>
     </div>
 }
+
+<style>
+    /* ════════════════════════════════════════════════════════
+       HERO WRAPPER — كارت مستقل بحواف دائرية 20px
+       يحفظ خلفية وتدرج ولولو الـ fc-hero الأصلي تماماً
+    ════════════════════════════════════════════════════════ */
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: var(--fc-page-w);
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 1;
+    }
+
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important;
+        overflow: hidden;
+        box-shadow:
+            0 12px 32px rgba(13, 38, 84, 0.15),
+            0 4px 12px rgba(13, 38, 84, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .hero-wrapper .fc-hero.fc-hero-slim {
+        padding-top: 18px !important;
+        padding-bottom: 22px !important;
+    }
+
+    .fc-hero-title-slim {
+        font-size: clamp(18px, 2vw, 24px) !important;
+        margin: 0 !important;
+    }
+
+    .ptl-hero-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+    }
+
+    .ptl-hero-left {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .ptl-hero-crumb {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 10.5px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.55);
+        margin-bottom: 2px;
+    }
+
+    .ptl-hero-sub {
+        font-size: 10.5px;
+        color: rgba(255, 255, 255, 0.55);
+        font-weight: 600;
+    }
+
+    .ptl-hero-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+
+    .ptl-hero-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 11px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 10.5px;
+        font-weight: 700;
+        font-family: "Inter", Arial, sans-serif;
+        white-space: nowrap;
+    }
+
+    .ptl-chip-highlight {
+        background: rgba(251, 191, 36, 0.15) !important;
+        border-color: rgba(251, 191, 36, 0.35) !important;
+        color: #fcd34d !important;
+    }
+
+    /* KPIs Row */
+    .ptl-kpis-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .ptl-kpi {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(12px);
+        border-radius: 10px;
+        padding: 10px 12px;
+    }
+
+    .ptl-kpi-inner { display: flex; align-items: center; gap: 10px; }
+
+    .ptl-kpi-icon {
+        width: 34px; height: 34px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .ptl-kpi-blue .ptl-kpi-icon  { background: rgba(125, 211, 252, 0.15); color: #7dd3fc; }
+    .ptl-kpi-green .ptl-kpi-icon { background: rgba(110, 231, 183, 0.15); color: #6ee7b7; }
+    .ptl-kpi-gold .ptl-kpi-icon  { background: rgba(252, 211, 77, 0.15);  color: #fcd34d; }
+
+    .ptl-kpi-data { flex: 1; min-width: 0; }
+    .ptl-kpi-num { font-family: "Inter", Arial, sans-serif; font-size: 18px; font-weight: 900; color: #fff; line-height: 1; }
+    .ptl-kpi-label { font-size: 10.5px; font-weight: 700; color: rgba(255, 255, 255, 0.6); margin-top: 3px; }
+
+    /* ── Body Main Card ── */
+    .ptl-body {
+        padding: 18px clamp(16px, 3vw, 40px) 100px;
+        max-width: var(--fc-page-w);
+        margin-inline: auto;
+        box-sizing: border-box;
+        width: 100%;
+        position: relative;
+        z-index: 2;
+    }
+
+    .ptl-card {
+        background: #fff;
+        border: 1px solid #dde5f0;
+        border-radius: 18px;
+        box-shadow: 0 4px 24px rgba(15, 41, 82, 0.05);
+        overflow: hidden;
+    }
+
+    /* ── Banners & Copy Link Alerts (Emoji-Free) ── */
+    .ptl-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 18px;
+        border-radius: 0;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.6;
+        border-bottom: 1px solid transparent;
+    }
+    .banner-info {
+        background: #f4f8ff;
+        color: #1a56db;
+        border-bottom-color: #dbe8fc;
+    }
+    .banner-success { background: #e9f8f0; color: #0e7a43; border-bottom-color: #b5e8d0; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); border-bottom-color: #ffc8cf; }
+    .banner-icon { flex: 0 0 auto; margin-top: 2px; }
+    .banner-close {
+        margin-right: auto; background: none; border: none;
+        color: inherit; opacity: 0.6; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        width: 24px; height: 24px; border-radius: 5px;
+    }
+    .banner-close:hover { opacity: 1; }
+
+    /* Copy Link Box */
+    .ptl-new-link-inner { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+    .ptl-link-copy-box {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 10px 14px; border-radius: 8px; border: 1.5px dashed #bdd4fc;
+        background: #fff; cursor: pointer; transition: all 0.15s ease;
+    }
+    .ptl-link-copy-box:hover { border-color: var(--fc-blue); background: #eaf1ff; }
+    .ptl-link-url { font-family: "Inter", sans-serif; font-size: 12px; color: var(--fc-blue); word-break: break-all; font-weight: 700; }
+    .ptl-link-action-tag { font-size: 10.5px; font-weight: 800; color: var(--fc-blue); background: #eaf1ff; padding: 2px 8px; border-radius: 5px; }
+    .ptl-link-warning { font-size: 10.5px; color: #7c8899; margin: 2px 0 0; }
+
+    /* ── State Box ── */
+    .ptl-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: #fff; border: 1px solid #dde5f0;
+        border-radius: 14px; padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .state-icon-wrap {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .state-icon-wrap.perm { background: #fff0f2; color: var(--fc-red); }
+    .ptl-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .ptl-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    /* ── Toolbar ── */
+    .ptl-toolbar {
+        padding: 14px 18px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .ptl-filters {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .ptl-select {
+        height: 38px; width: 100%;
+        border: 1px solid #d8e2f0;
+        border-radius: 9px;
+        background: #fafcff;
+        color: #1c2c44;
+        font-family: inherit;
+        font-size: 12.5px;
+        padding: 0 28px 0 10px;
+        outline: none;
+        cursor: pointer;
+        -webkit-appearance: none;
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7d95' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: left 10px center;
+        background-size: 12px;
+        transition: border-color .15s ease;
+        box-sizing: border-box;
+    }
+    .ptl-select:focus { border-color: var(--fc-blue); }
+
+    .ptl-btn-apply {
+        height: 38px;
+        padding: 0 18px;
+        border: none;
+        border-radius: 9px;
+        background: var(--fc-blue, #1e6ef5);
+        color: #fff;
+        font-family: inherit;
+        font-size: 12.5px;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(30,110,245,0.22);
+        transition: all 0.15s ease;
+    }
+    .ptl-btn-apply:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 10px rgba(30,110,245,0.3);
+    }
+    .ptl-btn-apply:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Table Styling ── */
+    .ptl-table-wrap { overflow-x: auto; }
+    .ptl-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .ptl-table thead th {
+        padding: 11px 14px;
+        background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 11px; font-weight: 800;
+        text-align: center; border-bottom: 2px solid #e4eaf3;
+        white-space: nowrap;
+    }
+    .ptl-table .th-start { text-align: right; }
+    .ptl-table tbody tr {
+        border-bottom: 1px solid #f0f3f8; transition: background .12s ease;
+    }
+    .ptl-table tbody tr:last-child { border-bottom: none; }
+    .ptl-table tbody tr:hover { background: #fafcff; }
+    .ptl-table tbody td {
+        padding: 12px 14px; color: #526070; text-align: center; vertical-align: middle;
+    }
+    .td-start { text-align: right !important; }
+    .td-muted { color: #8899ae; font-size: 11.5px; }
+
+    .ptl-purpose-cell { display: flex; flex-direction: column; gap: 2px; }
+    .ptl-purpose-title { font-size: 12.5px; font-weight: 800; color: #1c2c44; }
+    .ptl-invoice-id { font-size: 10px; color: #8899ae; font-weight: 700; }
+    .ptl-expiry-date { font-family: "Inter", sans-serif; font-weight: 700; color: #1c2c44; }
+    .ptl-use-count { font-family: "Inter", sans-serif; font-weight: 700; color: #1c2c44; }
+
+    /* Indicator Status Chips */
+    .ptl-status-chip {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 3px 9px; border-radius: 6px;
+        font-size: 10px; font-weight: 800;
+    }
+    .fc-chip-ok   { background: #e9f8f0; color: #0e7a43; border: 1px solid #b0e0c5; }
+    .fc-chip-bad  { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8cf; }
+    .fc-chip-gray { background: #f0f3f8; color: #6b7d95; border: 1px solid #dde5f0; }
+    .chip-dot { width: 5px; height: 5px; border-radius: 50%; }
+    .fc-chip-ok .chip-dot   { background: #16a35b; }
+    .fc-chip-bad .chip-dot  { background: #e03048; }
+    .fc-chip-gray .chip-dot { background: #6b7d95; }
+
+    /* Actions */
+    .ptl-row-actions { display: flex; align-items: center; gap: 6px; justify-content: center; }
+    .ptl-btn-action {
+        width: 30px; height: 30px; border-radius: 7px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; cursor: pointer;
+        transition: all 0.15s ease; background: transparent;
+    }
+    .ptl-btn-action.view   { color: var(--fc-blue); }
+    .ptl-btn-action.view:hover { background: #eaf1ff; border-color: #bdd4fc; }
+    .ptl-btn-action.revoke { color: var(--fc-red); }
+    .ptl-btn-action.revoke:hover { background: #fff0f2; border-color: #ffc8cf; }
+
+    .ptl-empty-table { padding: 40px; text-align: center; color: #9aaabb; font-size: 13px; font-weight: 700; }
+
+    /* ── Logs Section ── */
+    .ptl-logs-section {
+        margin-top: 24px;
+        border-top: 1px solid #edf1f7;
+    }
+    .ptl-logs-head {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 16px 18px 12px;
+    }
+    .ptl-logs-head-left { display: flex; flex-direction: column; gap: 2px; }
+    .ptl-logs-title { font-size: 13.5px; font-weight: 800; color: #1c2b43; }
+    .ptl-logs-sub { font-size: 10.5px; color: #8899ae; }
+
+    /* ── Warning & Info Alerts ── */
+    .ptl-inline-alert {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 12px 16px; border-radius: 10px;
+        background: #fff0f2; border: 1px solid #ffc8cf;
+    }
+    .ptl-alert-icon { flex: 0 0 auto; color: var(--fc-red); margin-top: 2px; }
+    .ptl-alert-body { font-size: 11.5px; color: #c02040; line-height: 1.6; }
+    .ptl-alert-body strong { display: block; font-size: 12.5px; font-weight: 800; color: #b02040; }
+
+    /* ── الـ Overlap لحماية الهيرو والتأكد من عدم تغطية المحتوى ── */
+    .fc-overlap {
+        margin-top: 20px !important;
+        position: relative;
+        z-index: 2;
+    }
+
+    /* ════════════════════════════════════════════════════════
+       ⚡ GOLD GLOW FAB ANIMATION (نفس الـ markup والمحاذاة لـ app.css)
+    ════════════════════════════════════════════════════════ */
+    .fc-fab-main.fc-glow-gold {
+        position: relative;
+        background: linear-gradient(135deg, var(--fc-blue) 0%, var(--fc-navy) 100%) !important;
+        border: 2px solid var(--fc-gold) !important;
+        box-shadow: 0 4px 16px rgba(11, 86, 223, 0.4);
+        animation: fc-gold-glow-pulse 2.2s infinite;
+    }
+
+    .fc-fab-main.fc-glow-gold::before {
+        content: "";
+        position: absolute;
+        inset: -2px;
+        border-radius: 50%;
+        border: 2px solid var(--fc-gold);
+        opacity: 0;
+        pointer-events: none;
+        animation: fc-ring-expand 2.2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+    }
+
+    @@keyframes fc-gold-glow-pulse {
+        0%, 100% {
+            box-shadow: 
+                0 0 0 0 rgba(255, 128, 21, 0.6), 
+                0 8px 24px rgba(11, 86, 223, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+        50% {
+            box-shadow: 
+                0 0 0 12px rgba(255, 128, 21, 0), 
+                0 12px 32px rgba(11, 86, 223, 0.55),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+    }
+
+    @@keyframes fc-ring-expand {
+        0% {
+            transform: scale(1);
+            opacity: 0.8;
+            border-width: 3px;
+        }
+        100% {
+            transform: scale(1.6);
+            opacity: 0;
+            border-width: 1px;
+        }
+    }
+
+    .fc-fab-wrap.is-open .fc-fab-main.fc-glow-gold {
+        background: linear-gradient(135deg, var(--fc-error) 0%, #991b1b) !important;
+        border-color: #fca5a5 !important;
+        animation: none !important;
+        box-shadow: 0 8px 24px rgba(214, 69, 69, 0.5) !important;
+    }
+    .fc-fab-wrap.is-open .fc-fab-main.fc-glow-gold::before {
+        animation: none !important;
+    }
+
+    /* ── Responsive ── */
+    @@media (max-width: 900px) {
+        .ptl-toolbar { padding: 10px 12px; }
+        .ptl-filters { flex-direction: column; align-items: stretch; gap: 8px; }
+        .ptl-select, .ptl-btn-apply { width: 100% !important; }
+    }
+    @@media (max-width: 680px) {
+        .hero-wrapper { padding: 12px 12px 0; }
+        .hero-wrapper .fc-hero { border-radius: 16px !important; }
+        .ptl-hero-chip:first-child { display: none; }
+        .ptl-body { padding: 14px 12px 90px; }
+        .ptl-table { font-size: 11px; }
+        .ptl-table-compact { font-size: 10.5px; }
+        .fc-overlap { margin-top: 14px !important; }
+    }
+</style>
 
 @code {
     private AuthUser? _user;
@@ -270,10 +877,11 @@
     private long _invoiceId;
     private int _days = 7;
     private int _maxUses = 20;
+    private bool _fabOpen;
+    private bool _loading;
 
     public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
 
-    /// <summary>مطابق لـ <c>PortalController.TokenRow</c> — 10 حقول.</summary>
     public class Tok
     {
         public long PortalTokenId { get; set; }
@@ -288,7 +896,6 @@
         public DateTime? RevokedAt { get; set; }
     }
 
-    /// <summary>مطابق لـ <c>PortalController.LogRow</c> — 5 حقول.</summary>
     public class Log
     {
         public DateTime AccessedAt { get; set; }
@@ -298,7 +905,6 @@
         public string? IpAddress { get; set; }
     }
 
-    /// <summary>مطابق لـ <c>PortalController.NewToken</c> — 4 حقول.</summary>
     public class NewTok
     {
         public long PortalTokenId { get; set; }
@@ -319,19 +925,22 @@
 
     private async Task LoadTokensAsync()
     {
+        _fabOpen = false;
         if (_cust == 0) return;
+        _loading = true;
         try { _tokens = await Http.GetFromJsonAsync<List<Tok>>($"api/portal/tokens?customerId={_cust}") ?? new(); }
-        catch (Exception ex) { _ok = false; _msg = "فشل التحميل: " + ex.Message; }
+        catch (Exception ex) { _ok = false; _msg = "فشل تحميل البيانات: " + ex.Message; }
+        finally { _loading = false; }
     }
 
-    private void OpenNew() { _msg = null; _newLink = null; _open = true; }
+    private void OpenNew() { _fabOpen = false; _msg = null; _newLink = null; _open = true; }
     private void Close() { _open = false; _msg = null; }
 
     private async Task CreateAsync()
     {
         if (_saving) return;
-        if (_cust == 0) { _ok = false; _msg = "اختار العميل"; return; }
-        if (_purpose == "InvoiceView" && _invoiceId <= 0) { _ok = false; _msg = "رقم الفاتورة مطلوب"; return; }
+        if (_cust == 0) { _ok = false; _msg = "يرجى اختيار العميل المستهدف أولاً"; return; }
+        if (_purpose == "InvoiceView" && _invoiceId <= 0) { _ok = false; _msg = "رقم الفاتورة المرتبطة مطلوب"; return; }
 
         _saving = true; _msg = null;
         try
@@ -349,7 +958,7 @@
             {
                 var nt = await res.Content.ReadFromJsonAsync<NewTok>();
                 _newLink = nt is null ? null : Base() + nt.Path;
-                _msg = "✅ الرابط اتعمل — انسخه دلوقتي، مش هيظهر تاني";
+                _msg = "تم توليد رابط الوصول المؤقت للعميل بنجاح. يرجى نسخه فوراً لغايات الحماية.";
                 _ok = true;
                 _open = false;
                 await LoadTokensAsync();
@@ -360,7 +969,7 @@
             }
             Snackbar.Add(_msg ?? "", _ok ? Severity.Success : Severity.Error);
         }
-        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        catch (Exception ex) { _ok = false; _msg = "فشل توليد الرابط: " + ex.Message; }
         finally { _saving = false; }
     }
 
@@ -373,7 +982,7 @@
             Snackbar.Add(_msg, _ok ? Severity.Success : Severity.Error);
             if (res.IsSuccessStatusCode) await LoadTokensAsync();
         }
-        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        catch (Exception ex) { _ok = false; _msg = "فشل في إبطال الرابط: " + ex.Message; }
     }
 
     private async Task ShowLogs(Tok t)
@@ -388,10 +997,9 @@
         if (_newLink is null) return;
         try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", _newLink); }
         catch { }
-        Snackbar.Add("اتنسخ", Severity.Success);
+        Snackbar.Add("تم نسخ الرابط الحافظة بنجاح", Severity.Success);
     }
 
-    /* 🔴 أي `"` جوه attribute = RZ1010 — فالـ class من helper */
     private static string ChipCls(Tok t)
     {
         if (!t.IsActive) return "fc-chip-gray";
@@ -403,7 +1011,7 @@
     {
         if (!t.IsActive) return "مُبطل";
         if (t.ExpiresAt is not null && t.ExpiresAt < DateTime.UtcNow) return "منتهي";
-        if (t.MaxUses is not null && t.UsedCount >= t.MaxUses) return "وصل للحد";
+        if (t.MaxUses is not null && t.UsedCount >= t.MaxUses) return "استنفد الحد";
         return "نشط";
     }
 
@@ -425,6 +1033,11 @@
             var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
             return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
         }
-        catch { return res.IsSuccessStatusCode ? "✅ تم" : "حصل خطأ — حاول تاني"; }
+        catch { return res.IsSuccessStatusCode ? "تمت العملية بنجاح" : "حصل خطأ غير متوقع"; }
     }
+
+    /* ── FAB States ── */
+    private void ToggleFab() => _fabOpen = !_fabOpen;
+    private void CloseFab() => _fabOpen = false;
+    private void OnFabKeyDown(KeyboardEventArgs e) { if (e.Key == "Escape") _fabOpen = false; }
 }

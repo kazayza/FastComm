@@ -8,27 +8,16 @@
 @inject HttpClient Http
 @inject AuthService Auth
 @inject NavigationManager Nav
-@inject IJSRuntime Js
+@inject ISnackbar Snackbar
 
 <PageTitle>الرئيسية — @_company.DisplayName</PageTitle>
 
-
-@* ═══════════════════════════════════════════
-   LOADING SKELETON
-═══════════════════════════════════════════ *@
 @if (_loading)
 {
     <div class="home-skeleton" dir="rtl">
-        <div class="sk-hero sk-pulse"></div>
-        <div class="sk-kpi-row">
-            @for (var i = 0; i < 4; i++)
-            {
-                <div class="sk-kpi sk-pulse"></div>
-            }
-        </div>
-        <div class="sk-grid">
-            <div class="sk-card sk-pulse"></div>
-            <div class="sk-card-wide sk-pulse"></div>
+        <div class="sk-hero sk-pulse" style="height:170px;border-radius:20px;margin:16px"></div>
+        <div class="sk-kpi-row" style="padding:0 16px">
+            @for (var i = 0; i < 4; i++) { <div class="sk-kpi sk-pulse" style="height:60px"></div> }
         </div>
     </div>
 }
@@ -36,77 +25,79 @@ else
 {
     <div class="home-root" dir="rtl">
 
+        @* ═══════════════════════════════════════════
+   HERO — .fc-hero الأصلي (من app.css) بحواف دائرية فقط
+═══════════════════════════════════════════ *@
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
+
+            <div class="fc-page-head">
+                <div>
+                    <h1 class="fc-hero-title fc-hero-title-slim">
+                        أهلاً، <span class="hero-welcome-name">@_user?.DisplayName</span>
+                    </h1>
+                </div>
+
+                <div class="hero-top-actions">
+                    <span class="hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+
+                    <span class="hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 6v6l4 2" stroke-linecap="round"/>
+                        </svg>
+                        @_lastUpdated
+                    </span>
+
+                    <button class="hero-refresh" @onclick="Reload" title="تحديث البيانات">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none"
+                             stroke="currentColor" stroke-width="2.5">
+                            <path d="M23 4v6h-6" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M1 20v-6h6" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"
+                                  stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="hero-kpis-row">
+                <KpiCard Value="@((_s?.OpenOperations ?? 0).ToString())" Label="العمليات الجارية"
+                         Icon="@Icons.Material.Filled.LocalShipping" Tone="blue" Href="/operations" />
+                <KpiCard Value="@((_s?.DelayedOperations ?? 0).ToString())" Label="عمليات متأخرة"
+                         Icon="@Icons.Material.Filled.Warning" Tone="red" Href="/operations" />
+                <KpiCard Value="@((_s?.TripsToday ?? 0).ToString())" Label="رحلات اليوم"
+                         Icon="@Icons.Material.Filled.AirportShuttle" Tone="gold" Href="/trips" />
+                <KpiCard Value="@((_s?.ClosedThisMonth ?? 0).ToString())" Label="مُنجزة هذا الشهر"
+                         Icon="@Icons.Material.Filled.CheckCircle" Tone="green" Href="/operations"
+                         TrendPct="@_trends?.ClosedOps?.ChangePct" />
+                    </div>
+
+        </div>
+    </div>
+</div>
 
         @* ═══════════════════════════════════════════
-           HERO — نفس نمط باقي النظام (.fc-hero)
-           + 🚀 V4: Quick Actions + آخر تحديث + تحديث تلقائي
+           MAIN CONTENT
         ═══════════════════════════════════════════ *@
-        <div class="fc-hero">
-            <div class="fc-hero-inner">
-
-                <div class="fc-page-head">
-                    <div>
-                        <div class="fc-crumb">@DateTime.Now.ToString("dddd، dd MMMM yyyy")</div>
-                        <h1 class="fc-hero-title">أهلًا، @_user?.DisplayName </h1>
-                        <p class="fc-hero-sub">@_company.DisplayName — لوحة مؤشرات اليوم</p>
-                    </div>
-                    <div class="fc-head-actions">
-                        <span class="fc-updated" title="تحديث تلقائي كل 5 دقائق">
-                            <MudIcon Icon="@Icons.Material.Filled.Update" Size="Size.Small" />
-                            آخر تحديث: @_lastUpdated
-                        </span>
-                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث البيانات"
-                                       OnClick="Reload" Style="color:#9FB4CC" />
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                                   StartIcon="@Icons.Material.Filled.BarChart"
-                                   OnClick="GoReports">التقارير</MudButton>
-                    </div>
-                </div>
-
-                @* ── KPI التشغيل — 4 كروت تفاعلية (الضغط بيفتح الصفحة) ── *@
-                <div class="fc-kpis fc-kpis-glass">
-                    <KpiCard Value="@((_s?.OpenOperations ?? 0).ToString())" Label="عملية شغالة"
-                             Icon="@Icons.Material.Filled.LocalShipping" Tone="blue" Href="/operations" />
-                    <KpiCard Value="@((_s?.DelayedOperations ?? 0).ToString())" Label="عملية متأخرة"
-                             Icon="@Icons.Material.Filled.Warning" Tone="red" Href="/operations" />
-                    <KpiCard Value="@((_s?.TripsToday ?? 0).ToString())" Label="رحلات اليوم"
-                             Icon="@Icons.Material.Filled.AirportShuttle" Tone="gold" Href="/trips" />
-                    <KpiCard Value="@((_s?.ClosedThisMonth ?? 0).ToString())" Label="أُغلقت هذا الشهر"
-                             Icon="@Icons.Material.Filled.CheckCircle" Tone="green" Href="/operations"
-                             TrendPct="@_trends?.ClosedOps?.ChangePct" />
-                </div>
-
-                @* ── KPI المالية — للمصرح لهم بس + نسبة التغيير عن الشهر الماضي ── *@
-                @if (CanSeeFinance)
-                {
-                    <div class="fc-kpis fc-kpis-glass" style="margin-top:12px">
-                        <KpiCard Value="@Money(_trends?.Invoiced?.Current ?? 0)" Label="مفوتر هذا الشهر (ج.م)"
-                                 Icon="@Icons.Material.Filled.ReceiptLong" Tone="blue" Href="/invoices"
-                                 TrendPct="@_trends?.Invoiced?.ChangePct" />
-                        <KpiCard Value="@Money(_trends?.Collected?.Current ?? 0)" Label="محصّل هذا الشهر (ج.م)"
-                                 Icon="@Icons.Material.Filled.Paid" Tone="green" Href="/payments"
-                                 TrendPct="@_trends?.Collected?.ChangePct" />
-                        <KpiCard Value="@Money(_trends?.Expenses?.Current ?? 0)" Label="مصروفات الشهر (ج.م)"
-                                 Icon="@Icons.Material.Filled.Receipt" Tone="gold" Href="/expenses"
-                                 TrendPct="@_trends?.Expenses?.ChangePct" />
-                        <KpiCard Value="@Money(_s?.Receivables ?? 0)" Label="مديونيات مستحقة (ج.م)"
-                                 Icon="@Icons.Material.Filled.AccountBalanceWallet" Tone="red" Href="/invoices" />
-                    </div>
-                }
-
-            </div>
-        </div>
-
         <div class="home-content">
 
-            <div class="v3-card v3-card-alerts">
-
-                @* الهيدر الجديد *@
+            @* ── تنبيهات ── *@
+            <div class="v3-card">
                 <div class="v3-head">
                     <div class="v3-head-right">
                         <div class="v3-icon-box v3-icon-red" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" width="20" height="20"
-                                 fill="none" stroke="currentColor" stroke-width="2">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+                                 stroke="currentColor" stroke-width="2">
                                 <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                                 <path d="M13.73 21a2 2 0 01-3.46 0" stroke-linecap="round"/>
                             </svg>
@@ -125,23 +116,25 @@ else
                     }
                     else
                     {
-                        <div class="v3-badge v3-badge-green"><MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" /></div>
+                        <div class="v3-badge v3-badge-green">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+                                 stroke="currentColor" stroke-width="3">
+                                <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
                     }
                 </div>
-
-                @* المحتوى *@
                 <div class="v3-body">
                     @if (!_alerts.Any())
                     {
                         <div class="v3-empty">
                             <div class="v3-empty-glow green"></div>
-                            <svg viewBox="0 0 24 24" width="36" height="36"
-                                 fill="none" stroke="currentColor" stroke-width="1.5"
-                                 aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="36" height="36" fill="none"
+                                 stroke="currentColor" stroke-width="1.5">
                                 <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
                                 <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
-                            <span>لايوجد تنبيهات — كله تمام </span>
+                            <span>لا توجد تنبيهات — كل شيء يعمل بنجاح</span>
                         </div>
                     }
                     else
@@ -151,50 +144,43 @@ else
                             {
                                 <button class="v3-alert-item v3-sev-@a.Severity"
                                         @onclick="() => Nav.NavigateTo(a.Route)">
-
                                     <div class="v3-alert-stripe" aria-hidden="true"></div>
-
                                     <div class="v3-alert-icon" aria-hidden="true">
                                         @if (a.Severity == "bad")
                                         {
-                                            <svg viewBox="0 0 24 24" width="18" height="18"
-                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                                                 stroke="currentColor" stroke-width="2">
                                                 <circle cx="12" cy="12" r="10"/>
                                                 <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
                                             </svg>
                                         }
                                         else if (a.Severity == "warn")
                                         {
-                                            <svg viewBox="0 0 24 24" width="18" height="18"
-                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                                                 stroke="currentColor" stroke-width="2">
                                                 <circle cx="12" cy="12" r="10"/>
                                                 <path d="M12 8v4M12 16h.01" stroke-linecap="round"/>
                                             </svg>
                                         }
                                         else
                                         {
-                                            <svg viewBox="0 0 24 24" width="18" height="18"
-                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                                                 stroke="currentColor" stroke-width="2">
                                                 <circle cx="12" cy="12" r="10"/>
                                                 <path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
                                             </svg>
                                         }
                                     </div>
-
                                     <div class="v3-alert-body">
-                                        <div class="v3-alert-title">
-                                            @a.Kind <strong>— @a.Ref</strong>
-                                        </div>
+                                        <div class="v3-alert-title">@a.Kind <strong>— @a.Ref</strong></div>
                                         <div class="v3-alert-detail">@a.Detail · @a.Date</div>
                                     </div>
-
                                     <div class="v3-alert-go" aria-hidden="true">
-                                        <svg viewBox="0 0 24 24" width="16" height="16"
-                                             fill="none" stroke="currentColor" stroke-width="2">
+                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
+                                             stroke="currentColor" stroke-width="2">
                                             <path d="M9 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
                                         </svg>
                                     </div>
-
                                 </button>
                             }
                         </div>
@@ -202,181 +188,241 @@ else
                 </div>
             </div>
 
-        <div class="v3-card v3-card-chart">
-
-            <div class="v3-head">
-                <div class="v3-head-right">
-                    <div class="v3-icon-box v3-icon-blue" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="20" height="20"
-                             fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M18 20V10M12 20V4M6 20v-6" stroke-linecap="round"/>
-                        </svg>
+            @* ── الخلاصة المالية ── *@
+            @if (CanSeeFinance)
+            {
+                <div class="v3-card">
+                    <div class="v3-head">
+                        <div class="v3-head-right">
+                            <div class="v3-icon-box v3-icon-green" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+                                     stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="4" width="20" height="16" rx="2"/>
+                                    <path d="M12 8v8M8 12h8" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="v3-title">الخلاصة المالية</div>
+                                <div class="v3-subtitle">Monthly Financial Summary</div>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <div class="v3-title">حركة آخر 6 شهور</div>
-                        <div class="v3-subtitle">Cash Flow Trend</div>
-                    </div>
-                </div>
-            </div>
+                    <div class="v3-body">
+                        <div class="fin-grid">
+                            <div class="fin-item fin-blue">
+                                <div class="fin-lbl">إجمالي المفوتر</div>
+                                <div class="fin-val">@Money(_trends?.Invoiced?.Current ?? 0) <small>ج.م</small></div>
+                                @if (_trends?.Invoiced?.ChangePct is decimal ip)
+                                {
+                                    <div class="fin-trend @(ip >= 0 ? "up" : "down")">
+                                        <MudIcon Icon="@(ip >= 0 ? Icons.Material.Filled.ArrowUpward : Icons.Material.Filled.ArrowDownward)" Size="Size.Small" />
+                                        @Math.Abs(ip).ToString("0.#")%
+                                    </div>
+                                }
+                            </div>
+                            <div class="fin-item fin-green">
+                                <div class="fin-lbl">إجمالي المحصّل</div>
+                                <div class="fin-val">@Money(_trends?.Collected?.Current ?? 0) <small>ج.م</small></div>
+                                @if (_trends?.Collected?.ChangePct is decimal cp)
+                                {
+                                    <div class="fin-trend @(cp >= 0 ? "up" : "down")">
+                                        <MudIcon Icon="@(cp >= 0 ? Icons.Material.Filled.ArrowUpward : Icons.Material.Filled.ArrowDownward)" Size="Size.Small" />
+                                        @Math.Abs(cp).ToString("0.#")%
+                                    </div>
+                                }
+                            </div>
+                            <div class="fin-item fin-amber">
+                                <div class="fin-lbl">إجمالي المصروفات</div>
+                                <div class="fin-val">@Money(_trends?.Expenses?.Current ?? 0) <small>ج.م</small></div>
+                                @if (_trends?.Expenses?.ChangePct is decimal ep)
+                                {
+                                    <div class="fin-trend @(ep <= 0 ? "up" : "down")">
+                                        <MudIcon Icon="@(ep <= 0 ? Icons.Material.Filled.ArrowDownward : Icons.Material.Filled.ArrowUpward)" Size="Size.Small" />
+                                        @Math.Abs(ep).ToString("0.#")%
+                                    </div>
+                                }
+                            </div>
+                        </div>
 
-            <div class="v3-body v3-chart-body">
-                <CashFlowChart Points="_flow" />
-            </div>
-        </div>
-
-
-        <div class="v3-card v3-card-donut">
-
-            <div class="v3-head">
-                <div class="v3-head-right">
-                    <div class="v3-icon-box v3-icon-purple" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="20" height="20"
-                             fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="M12 2a10 10 0 019.54 7H12V2z"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <div class="v3-title">توزيع حالات العمليات</div>
-                        <div class="v3-subtitle">Operations Breakdown</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="v3-body">
-                <StatusDonut Counts="_opsStatus" />
-            </div>
-        </div>
-
-
-        <div class="v3-card v3-card-fleet">
-
-            <div class="v3-head">
-                <div class="v3-head-right">
-                    <div class="v3-icon-box v3-icon-green" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="20" height="20"
-                             fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="1" y="3" width="15" height="13" rx="2"/>
-                            <path d="M16 8h4l3 3v5h-7V8z"/>
-                            <circle cx="5.5" cy="18.5" r="2.5"/>
-                            <circle cx="18.5" cy="18.5" r="2.5"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <div class="v3-title">حالة الأسطول</div>
-                        <div class="v3-subtitle">Fleet Status</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="v3-body">
-                <FleetGauge Counts="_fleet" />
-            </div>
-        </div>
-
-
-        <div class="v3-card v3-card-activity">
-
-            <div class="v3-head">
-                <div class="v3-head-right">
-                    <div class="v3-icon-box v3-icon-blue" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="20" height="20"
-                             fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="M12 6v6l4 2" stroke-linecap="round"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <div class="v3-title">آخر الأنشطة</div>
-                        <div class="v3-subtitle">Recent Activity</div>
+                        <div class="fin-recv">
+                            <div class="fin-recv-top">
+                                <span class="fin-recv-lbl">المديونيات المستحقة للتحصيل</span>
+                                <span class="fin-recv-val">@Money(_s?.Receivables ?? 0) ج.م</span>
+                            </div>
+                            @{
+                                var totalInv = (_trends?.Invoiced?.Current ?? 0);
+                                var outstand = (_s?.Receivables ?? 0);
+                                var collPct = totalInv > 0 ? Math.Clamp((double)((totalInv - outstand) / totalInv * 100), 0, 100) : 100;
+                            }
+                            <div class="fin-recv-bar-track">
+                                <div class="fin-recv-bar-fill" style="width:@collPct.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)%"></div>
+                            </div>
+                            <div class="fin-recv-note">نسبة التحصيل: @collPct.ToString("0.#")% من إجمالي المبيعات</div>
+                        </div>
                     </div>
                 </div>
-            </div>
+            }
 
-            <div class="v3-body">
-                <ActivityFeed Items="_activity" />
-            </div>
-        </div>
-
-
-        @if (CanSeeFinance)
-        {
-            <div class="v3-card v3-card-aging">
-
+            @* ── حركة السيولة ── *@
+            <div class="v3-card">
                 <div class="v3-head">
                     <div class="v3-head-right">
-                        <div class="v3-icon-box v3-icon-amber" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" width="20" height="20"
-                                 fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 8v4l3 3"/>
-                                <circle cx="12" cy="12" r="10"/>
+                        <div class="v3-icon-box v3-icon-blue" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+                                 stroke="currentColor" stroke-width="2">
+                                <path d="M18 20V10M12 20V4M6 20v-6" stroke-linecap="round"/>
                             </svg>
                         </div>
                         <div>
-                            <div class="v3-title">أعمار الديون</div>
-                            <div class="v3-subtitle">Receivables Aging</div>
+                            <div class="v3-title">تدفقات السيولة النقدية</div>
+                            <div class="v3-subtitle">Cash Flow — 6 Months</div>
                         </div>
                     </div>
-                    <div class="v3-head-chip">حسب تاريخ الاستحقاق</div>
                 </div>
-
-                <div class="v3-body">
-                    <AgingBar Aging="_aging" />
-                    @if (CanSeeFinance && (_s?.CustodyOutstanding ?? 0) > 0)
-                    {
-                        <div class="v3-custody-alert" role="alert" style="margin-top:14px">
-                            <div class="v3-custody-icon" aria-hidden="true"><MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" /></div>
-                            <div>
-                                عهد سواقين مفتوحة بمبلغ <strong>@Money(_s!.CustodyOutstanding) ج.م</strong> لسه ماتسوّتش
-                            </div>
-                        </div>
-                    }
+                <div class="v3-body v3-chart-body">
+                    <CashFlowChart Points="_flow" />
                 </div>
             </div>
-        }
 
+            @* ── توزيع العمليات ── *@
+            <div class="v3-card v3-card-donut">
+                <div class="v3-head">
+                    <div class="v3-head-right">
+                        <div class="v3-icon-box v3-icon-purple" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+                                 stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 019.54 7H12V2z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="v3-title">توزيع حالات العمليات</div>
+                            <div class="v3-subtitle">Operations Breakdown</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="v3-body">
+                    <StatusDonut Counts="_opsStatus" />
+                </div>
+            </div>
+
+            @* ── حالة الأسطول ── *@
+            <div class="v3-card v3-card-fleet">
+                <div class="v3-head">
+                    <div class="v3-head-right">
+                        <div class="v3-icon-box v3-icon-green" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+                                 stroke="currentColor" stroke-width="2">
+                                <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                <path d="M16 8h4l3 3v5h-7V8z"/>
+                                <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="v3-title">حالة الأسطول</div>
+                            <div class="v3-subtitle">Fleet Status</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="v3-body">
+                    <FleetGauge Counts="_fleet" />
+                </div>
+            </div>
+
+            @* ── آخر الأنشطة ── *@
+            <div class="v3-card v3-card-activity">
+                <div class="v3-head">
+                    <div class="v3-head-right">
+                        <div class="v3-icon-box v3-icon-blue" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+                                 stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="v3-title">سجل الأنشطة</div>
+                            <div class="v3-subtitle">Recent Activity</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="v3-body">
+                    <ActivityFeed Items="_activity" />
+                </div>
+            </div>
+
+            @* ── أعمار الديون ── *@
+            @if (CanSeeFinance)
+            {
+                <div class="v3-card v3-card-aging">
+                    <div class="v3-head">
+                        <div class="v3-head-right">
+                            <div class="v3-icon-box v3-icon-amber" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+                                     stroke="currentColor" stroke-width="2">
+                                    <path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="v3-title">تحليل أعمار الديون</div>
+                                <div class="v3-subtitle">Receivables Aging</div>
+                            </div>
+                        </div>
+                        <div class="v3-head-chip">حسب تاريخ الاستحقاق</div>
+                    </div>
+                    <div class="v3-body">
+                        <AgingBar Aging="_aging" />
+                        @if ((_s?.CustodyOutstanding ?? 0) > 0)
+                        {
+                            <div class="v3-custody-alert" role="alert" style="margin-top:14px">
+                                <div class="v3-custody-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
+                                         stroke="currentColor" stroke-width="2">
+                                        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                                        <path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
+                                    </svg>
+                                </div>
+                                <div>عهد سائقين مفتوحة بقيمة <strong>@Money(_s!.CustodyOutstanding) ج.م</strong> تتطلب تسوية</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            @* ── أعلى العملاء ── *@
             @if (CanSeeFinance)
             {
                 <div class="v3-card v3-card-full v3-card-customers">
-
                     <div class="v3-head">
                         <div class="v3-head-right">
                             <div class="v3-icon-box v3-icon-purple" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" width="20" height="20"
-                                     fill="none" stroke="currentColor" stroke-width="2">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+                                     stroke="currentColor" stroke-width="2">
                                     <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
                                     <circle cx="9" cy="7" r="4"/>
                                     <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
                                 </svg>
                             </div>
                             <div>
-                                <div class="v3-title">أعلى العملاء</div>
-                                <div class="v3-subtitle">Top Customers — آخر 3 شهور</div>
+                                <div class="v3-title">كبار العملاء ومعدلات التحصيل</div>
+                                <div class="v3-subtitle">Top Customers — Last 3 Months</div>
                             </div>
                         </div>
-                        <div class="v3-head-chip">
-                            <svg viewBox="0 0 16 16" width="11" height="11"
-                                 fill="none" stroke="currentColor" stroke-width="1.8"
-                                 aria-hidden="true">
-                                <circle cx="8" cy="8" r="6"/>
-                                <path d="M8 5v3l2 1" stroke-linecap="round"/>
-                            </svg>
-                            آخر 3 شهور
-                        </div>
                     </div>
-
                     <div class="v3-body v3-body-flush">
                         @if (!_top.Any())
                         {
                             <div class="v3-empty">
-                                <MudIcon Icon="@Icons.Material.Filled.Groups" Size="Size.Small" />
-                                <span>مافيش فواتير في الفترة دي</span>
+                                <svg viewBox="0 0 24 24" width="36" height="36" fill="none"
+                                     stroke="currentColor" stroke-width="1.5">
+                                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                                    <circle cx="9" cy="7" r="4"/>
+                                </svg>
+                                <span>لا توجد فواتير في هذه الفترة</span>
                             </div>
                         }
                         else
                         {
                             <div class="v3-table-wrap">
-                                <table class="v3-table" aria-label="جدول أعلى العملاء">
+                                <table class="v3-table">
                                     <thead>
                                         <tr>
                                             <th scope="col">#</th>
@@ -392,39 +438,23 @@ else
                                         @foreach (var (c, ci) in _top.Select((x, i) => (x, i + 1)))
                                         {
                                             var remaining = c.Invoiced - c.Paid;
-                                            var paidPct   = c.Invoiced > 0
-                                                ? (double)(c.Paid / c.Invoiced * 100)
-                                                : 0;
-
+                                            var paidPct = c.Invoiced > 0 ? (double)(c.Paid / c.Invoiced * 100) : 0;
                                             <tr>
-                                                <td>
-                                                    <span class="v3-rank v3-rank-@ci">@ci</span>
-                                                </td>
+                                                <td><span class="v3-rank v3-rank-@ci">@ci</span></td>
                                                 <td class="td-start">
                                                     <div class="v3-customer">
                                                         <div class="v3-avatar @(ci <= 3 ? $"v3-avatar-{ci}" : "")">
-                                                            @(c.CustomerName.Length > 0
-                                                                ? c.CustomerName[0].ToString()
-                                                                : "؟")
+                                                            @(c.CustomerName.Length > 0 ? c.CustomerName[0].ToString() : "؟")
                                                         </div>
                                                         <strong>@c.CustomerName</strong>
                                                     </div>
                                                 </td>
-                                                <td>
-                                                    <span class="v3-inv-chip">@c.Invoices</span>
-                                                </td>
-                                                <td class="td-money">
-                                                    @Money(c.Invoiced)
-                                                    <small>ج.م</small>
-                                                </td>
-                                                <td class="td-money td-muted">
-                                                    @Money(c.Paid)
-                                                    <small>ج.م</small>
-                                                </td>
+                                                <td><span class="v3-inv-chip">@c.Invoices</span></td>
+                                                <td class="td-money">@Money(c.Invoiced) <small>ج.م</small></td>
+                                                <td class="td-money td-muted">@Money(c.Paid) <small>ج.م</small></td>
                                                 <td>
                                                     <span class="@(remaining > 0 ? "v3-due" : "v3-paid")">
-                                                        @Money(remaining)
-                                                        <small>ج.م</small>
+                                                        @Money(remaining) <small>ج.م</small>
                                                     </span>
                                                 </td>
                                                 <td>
@@ -449,51 +479,504 @@ else
             }
 
         </div>
-        @* ── Footer ── *@
-        <footer class="home-footer">
-            <span>FastCom ERP © @DateTime.Now.Year</span>
-            <span aria-hidden="true">·</span>
-            <span>@_company.DisplayName</span>
-        </footer>
 
-
-        @* ⚡ FAB — الإجراءات السريعة (أسفل يسار الشاشة) *@
+        @* ═══════════════════════════════════════════
+           ⚡ FAB — بوميض ذهبي دائم وواضح
+        ═══════════════════════════════════════════ *@
         @if (_fabOpen)
         {
-            <div class="fc-fab-scrim" @onclick="CloseFab"></div>
+            <div class="glow-fab-scrim" @onclick="CloseFab"></div>
         }
 
-        <div class="fc-fab-wrap @(_fabOpen ? "is-open" : "") @(_fabHidden ? "fc-fab-hidden" : "")">
-            <div class="fc-fab-menu" role="menu" aria-label="الإجراءات السريعة">
+        <div class="glow-fab-wrap @(_fabOpen ? "is-open" : "")">
+
+            <div class="glow-fab-menu" role="menu" aria-label="الإجراءات السريعة">
                 @foreach (var q in QuickActions)
                 {
-                    <button type="button" class="fc-fab-item" role="menuitem" @onclick="() => Go(q.Url)">
-                        <span class="fc-fab-ic"><MudIcon Icon="@q.Icon" Size="Size.Small" /></span>
-                        <span class="fc-fab-lb">@q.Label</span>
+                    <button type="button" class="glow-fab-item" role="menuitem"
+                            @onclick="() => Go(q.Url)">
+                        <span class="glow-fab-item-ic">
+                            <MudIcon Icon="@q.Icon" Size="Size.Small" />
+                        </span>
+                        <span class="glow-fab-item-lb">@q.Label</span>
                     </button>
                 }
             </div>
 
-            <button type="button" class="fc-fab" @onclick="ToggleFab" @onkeydown="OnFabKeyDown"
-                    aria-label="الإجراءات السريعة" aria-expanded="@(_fabOpen ? "true" : "false")">
-                <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Large" />
-            </button>
+            @* الزر مع طبقات الوميض المتعددة *@
+            <div class="glow-fab-container">
+                @* حلقات الوميض الخارجية *@
+                <span class="glow-ring glow-ring-1" aria-hidden="true"></span>
+                <span class="glow-ring glow-ring-2" aria-hidden="true"></span>
+                <span class="glow-ring glow-ring-3" aria-hidden="true"></span>
+
+                @* الهالة الذهبية الثابتة *@
+                <span class="glow-halo" aria-hidden="true"></span>
+
+                @* الزر نفسه *@
+                <button type="button" class="glow-fab-btn" @onclick="ToggleFab"
+                        @onkeydown="OnFabKeyDown"
+                        aria-label="الإجراءات السريعة"
+                        aria-expanded="@(_fabOpen ? "true" : "false")">
+                    <svg viewBox="0 0 24 24" width="26" height="26" fill="none"
+                         stroke="currentColor" stroke-width="2.8" class="glow-fab-icon"
+                         aria-hidden="true">
+                        <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
         </div>
+
     </div>
 }
 
+<style>
+    /* ════════════════════════════════════════════════════════
+       ROOT
+    ════════════════════════════════════════════════════════ */
+    .home-root {
+        background: #f4f7fb;
+        min-height: 100vh;
+        padding-bottom: 100px;
+    }
+
+    /* ════════════════════════════════════════════════════════
+       HERO WRAPPER — نخلي .fc-hero الأصلي (من app.css) شكله كارت
+       بحواف دائرية بدون تغيير الألوان أو الخلفية أو اللوجو
+    ════════════════════════════════════════════════════════ */
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px;
+        margin: 0 auto;
+        box-sizing: border-box;
+        width: 100%;
+        position: relative;
+        z-index: 1;
+    }
+
+    /* نطبق الحواف الدائرية والظل على .fc-hero الأصلي بدون لمس الألوان */
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important;
+        overflow: hidden;
+        box-shadow:
+            0 12px 32px rgba(13, 38, 84, 0.15),
+            0 4px 12px rgba(13, 38, 84, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* Hero Slim — ارتفاع أقل */
+    .hero-wrapper .fc-hero.fc-hero-slim {
+        padding-top: 18px !important;
+        padding-bottom: 22px !important;
+    }
+
+    .fc-hero-title-slim {
+        font-size: clamp(18px, 2vw, 24px) !important;
+        margin: 0 !important;
+    }
+
+    .hero-welcome-name {
+        color: #7dd3fc;
+        font-weight: 900;
+    }
+
+    /* التاريخ والتحديث في أقصى اليسار */
+    .hero-top-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+
+    .hero-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 11px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 10.5px;
+        font-weight: 700;
+        font-family: "Inter", Arial, sans-serif;
+        white-space: nowrap;
+    }
+
+    .hero-refresh {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .hero-refresh:hover {
+        background: rgba(255, 255, 255, 0.18);
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.35);
+        transform: rotate(-90deg);
+    }
+
+    /* KPIs Row داخل الهيرو */
+    .hero-kpis-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-top: 12px;
+    }
+
+    /* ════════════════════════════════════════════════════════
+       CONTENT — الكروت تحت الهيرو (z-index أعلى)
+    ════════════════════════════════════════════════════════ */
+    .home-content {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 18px;
+        padding: 18px clamp(16px, 3vw, 40px);
+        max-width: 1440px;
+        width: 100%;
+        margin-inline: auto;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 2;
+    }
+
+    /* التأكد إن الكروت واضحة وظاهرة */
+    .home-content .v3-card {
+        position: relative;
+        z-index: 2;
+    }
+
+    /* ════════════════════════════════════════════════════════
+       FINANCIAL CARD
+    ════════════════════════════════════════════════════════ */
+    .fin-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+    }
+    .fin-item {
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid #edf1f7;
+        position: relative;
+    }
+    .fin-blue  { background: #f4f8ff; border-color: #dbe8fc; }
+    .fin-green { background: #f3faf5; border-color: #d1f2dd; }
+    .fin-amber { background: #fffcf0; border-color: #fce8bd; }
+
+    .fin-lbl { font-size: 10.5px; font-weight: 700; color: #6b7d95; }
+    .fin-val {
+        font-family: "Inter", Arial, sans-serif;
+        font-size: 17px; font-weight: 900; color: #1c2c44;
+        margin-top: 6px;
+    }
+    .fin-val small { font-size: 10px; opacity: .7; }
+
+    .fin-trend {
+        position: absolute; top: 10px; left: 10px;
+        display: inline-flex; align-items: center; gap: 2px;
+        font-size: 9.5px; font-weight: 800;
+        font-family: "Inter", Arial, sans-serif;
+        padding: 1px 5px; border-radius: 4px;
+    }
+    .fin-trend.up   { background: #e6f9ee; color: #16a35b; }
+    .fin-trend.down { background: #ffeaed; color: #e03048; }
+
+    .fin-recv {
+        margin-top: 14px; padding: 12px 14px;
+        border-radius: 10px; background: #f8fafc;
+        border: 1px solid #e4eaf3;
+    }
+    .fin-recv-top {
+        display: flex; align-items: center;
+        justify-content: space-between; gap: 10px;
+    }
+    .fin-recv-lbl { font-size: 11px; font-weight: 800; color: #4a5a74; }
+    .fin-recv-val {
+        font-family: "Inter", Arial, sans-serif;
+        font-size: 13.5px; font-weight: 900; color: #1c2b43;
+    }
+    .fin-recv-bar-track {
+        height: 6px; background: #e4edf5;
+        border-radius: 4px; overflow: hidden; margin-top: 8px;
+    }
+    .fin-recv-bar-fill {
+        height: 100%; border-radius: 4px;
+        background: linear-gradient(90deg, #1e6ef5, #2563eb);
+        transition: width .8s ease;
+    }
+    .fin-recv-note {
+        font-size: 9.5px; font-weight: 700;
+        color: #6b7d95; margin-top: 6px; text-align: left;
+    }
+
+    /* ════════════════════════════════════════════════════════
+       ⚡ GLOW FAB — بوميض ذهبي دائم وواضح
+    ════════════════════════════════════════════════════════ */
+    .glow-fab-scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 1298;
+        background: rgba(10, 20, 40, 0.4);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        animation: glow-fab-fadein 0.2s ease both;
+    }
+
+    @@keyframes glow-fab-fadein {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+
+    .glow-fab-wrap {
+        position: fixed;
+        left: 28px;
+        bottom: 28px;
+        z-index: 1299;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 14px;
+    }
+
+    /* Container للزر مع كل طبقات الوميض */
+    .glow-fab-container {
+        position: relative;
+        width: 64px;
+        height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* الهالة الذهبية الثابتة حول الزر */
+    .glow-halo {
+        position: absolute;
+        inset: -6px;
+        border-radius: 50%;
+        background: radial-gradient(
+            circle,
+            rgba(251, 191, 36, 0.55) 0%,
+            rgba(245, 158, 11, 0.35) 40%,
+            rgba(245, 158, 11, 0) 75%
+        );
+        filter: blur(12px);
+        animation: halo-breath 2.5s ease-in-out infinite;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    @@keyframes halo-breath {
+        0%, 100% {
+            opacity: 0.7;
+            transform: scale(1);
+        }
+        50% {
+            opacity: 1;
+            transform: scale(1.15);
+        }
+    }
+
+    /* حلقات وميض متعاقبة تخرج من الزر */
+    .glow-ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 2.5px solid #fbbf24;
+        pointer-events: none;
+        opacity: 0;
+        z-index: 2;
+    }
+
+    .glow-ring-1 { animation: glow-ring-expand 2.4s ease-out infinite; animation-delay: 0s; }
+    .glow-ring-2 { animation: glow-ring-expand 2.4s ease-out infinite; animation-delay: 0.8s; }
+    .glow-ring-3 { animation: glow-ring-expand 2.4s ease-out infinite; animation-delay: 1.6s; }
+
+    @@keyframes glow-ring-expand {
+        0% {
+            opacity: 0.8;
+            transform: scale(1);
+            border-width: 3px;
+        }
+        60% { opacity: 0.4; }
+        100% {
+            opacity: 0;
+            transform: scale(2);
+            border-width: 1px;
+        }
+    }
+
+    /* الزر نفسه */
+    .glow-fab-btn {
+        position: relative;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        border: 2.5px solid #fbbf24;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        background: linear-gradient(135deg, #1e6ef5 0%, #0d47a1 100%);
+        color: #fff;
+        box-shadow:
+            0 8px 24px rgba(30, 110, 245, 0.5),
+            0 4px 12px rgba(251, 191, 36, 0.35),
+            inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        transition: transform 0.25s cubic-bezier(0.34, 1.3, 0.64, 1);
+        z-index: 3;
+    }
+
+    .glow-fab-btn:hover { transform: scale(1.08); }
+    .glow-fab-btn:active { transform: scale(0.94); }
+    .glow-fab-btn:focus-visible { outline: none; }
+
+    .glow-fab-icon {
+        transition: transform 0.3s cubic-bezier(0.34, 1.3, 0.64, 1);
+    }
+
+    .glow-fab-wrap.is-open .glow-fab-icon {
+        transform: rotate(135deg);
+    }
+
+    .glow-fab-wrap.is-open .glow-fab-btn {
+        background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+        border-color: #fca5a5;
+        box-shadow:
+            0 8px 24px rgba(220, 38, 38, 0.5),
+            0 4px 12px rgba(252, 165, 165, 0.35);
+    }
+
+    .glow-fab-wrap.is-open .glow-halo {
+        background: radial-gradient(
+            circle,
+            rgba(252, 165, 165, 0.55) 0%,
+            rgba(220, 38, 38, 0.35) 40%,
+            rgba(220, 38, 38, 0) 75%
+        );
+    }
+
+    .glow-fab-wrap.is-open .glow-ring { border-color: #fca5a5; }
+
+    /* قائمة الأزرار */
+    .glow-fab-menu {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(15px) scale(0.9);
+        transform-origin: bottom left;
+        transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.34, 1.3, 0.64, 1);
+    }
+
+    .glow-fab-wrap.is-open .glow-fab-menu {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0) scale(1);
+    }
+
+    .glow-fab-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 180px;
+        padding: 10px 14px;
+        background: #fff;
+        border: 1px solid #e4eaf2;
+        border-radius: 12px;
+        box-shadow:
+            0 6px 20px rgba(15, 41, 82, 0.14),
+            0 2px 6px rgba(15, 41, 82, 0.08);
+        font-family: inherit;
+        font-size: 12.5px;
+        font-weight: 800;
+        color: #1c2b43;
+        cursor: pointer;
+        transition: all 0.18s ease;
+        white-space: nowrap;
+    }
+
+    .glow-fab-item:hover {
+        border-color: #1e6ef5;
+        transform: translateX(-4px);
+        box-shadow:
+            0 8px 24px rgba(30, 110, 245, 0.22),
+            0 3px 8px rgba(15, 41, 82, 0.12);
+    }
+
+    .glow-fab-item-ic {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #eaf1ff, #dbe8fc);
+        color: #1e6ef5;
+        flex-shrink: 0;
+    }
+
+    .glow-fab-item-lb { flex: 1; text-align: right; }
+
+    .glow-fab-wrap.is-open .glow-fab-item:nth-child(1) { transition-delay: 0.04s; }
+    .glow-fab-wrap.is-open .glow-fab-item:nth-child(2) { transition-delay: 0.08s; }
+    .glow-fab-wrap.is-open .glow-fab-item:nth-child(3) { transition-delay: 0.12s; }
+    .glow-fab-wrap.is-open .glow-fab-item:nth-child(4) { transition-delay: 0.16s; }
+
+    /* ════════════════════════════════════════════════════════
+       RESPONSIVE
+    ════════════════════════════════════════════════════════ */
+    @@media (max-width: 1024px) {
+        .hero-kpis-row { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @@media (max-width: 900px) {
+        .home-content { grid-template-columns: 1fr; }
+        .fin-grid { grid-template-columns: 1fr; }
+    }
+
+    @@media (max-width: 680px) {
+        .hero-wrapper { padding: 12px 12px 0; }
+        .hero-wrapper .fc-hero { border-radius: 16px !important; }
+        .hero-chip:first-child { display: none; }
+        .home-content { padding: 14px 12px; }
+        .glow-fab-wrap { left: 18px; bottom: 18px; }
+        .glow-fab-container { width: 58px; height: 58px; }
+        .glow-fab-btn { width: 54px; height: 54px; }
+        .glow-fab-item { min-width: 165px; font-size: 12px; }
+    }
+
+    @@media (max-width: 480px) {
+        .hero-kpis-row { grid-template-columns: 1fr 1fr; }
+    }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .glow-halo, .glow-ring { animation: none; }
+        .glow-halo { opacity: 0.5; }
+    }
+</style>
 
 @code {
     private CompanyInfo _company = new();
-    private AuthUser?   _user;
-    private Summary?    _s;
-    private TrendsOut?  _trends;
-    private List<AlertItem>    _alerts    = new();
-    private List<MonthFlow>    _flow      = new();
-    private List<TopCustomer>  _top       = new();
-    private List<StatusCount>  _opsStatus = new();
-    private List<StatusCount>  _fleet     = new();
-    private List<ActivityItem> _activity  = new();
+    private AuthUser? _user;
+    private Summary? _s;
+    private TrendsOut? _trends;
+    private List<AlertItem> _alerts = new();
+    private List<MonthFlow> _flow = new();
+    private List<TopCustomer> _top = new();
+    private List<StatusCount> _opsStatus = new();
+    private List<StatusCount> _fleet = new();
+    private List<ActivityItem> _activity = new();
     private AgingOut? _aging;
     private bool _loading = true;
     private string _lastUpdated = "—";
@@ -504,13 +987,10 @@ else
         _user is not null &&
         (_user.Can("INVOICE.VIEW") || _user.Can("TREASURY.VIEW"));
 
-    /* ── Helpers ── */
     private static string Money(decimal v) => v.ToString("N0");
-    private void GoReports() => Nav.NavigateTo("/reports");
 
-    /* ── ⚡ الإجراءات السريعة (FAB) ── */
+    /* ── FAB State ── */
     private bool _fabOpen;
-    private bool _fabHidden;   // يختفي في أول الصفحة ويظهر بعد تمرير 280px
 
     private sealed record QuickAction(string Label, string Url, string Icon);
 
@@ -524,51 +1004,20 @@ else
 
     private void ToggleFab() => _fabOpen = !_fabOpen;
     private void CloseFab() => _fabOpen = false;
-
-    // يخفي/يظهر الـ FAB حسب موضع التمرير (JS event على window) — الصفحة تبقى نظيفة في الهيرو
-    private async Task OnScroll()
-    {
-        try
-        {
-            var y = await Js.InvokeAsync<int>("eval", "window.scrollY");
-            var hidden = y < 280;
-            if (hidden != _fabHidden) { _fabHidden = hidden; StateHasChanged(); }
-        }
-        catch (JSDisconnectedException) { /* الصفحة اتقفلت */ }
-    }
-
-    private void OnFabKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape") _fabOpen = false;
-    }
-
-    private void Go(string url)
-    {
-        _fabOpen = false;   // نقفل قبل التنقل عشان الحالة ما تفضلش مفتوحة
-        Nav.NavigateTo(url);
-    }
+    private void OnFabKeyDown(KeyboardEventArgs e) { if (e.Key == "Escape") _fabOpen = false; }
+    private void Go(string url) { _fabOpen = false; Nav.NavigateTo(url); }
 
     /* ── Lifecycle ── */
     protected override async Task OnInitializedAsync()
     {
         _company = await Company.GetAsync();
-        _user    = await Auth.GetUserAsync();
+        _user = await Auth.GetUserAsync();
         await LoadAsync();
 
-        // 🔄 تحديث تلقائي كل 5 دقائق
         _timer = new Timer(async _ => await InvokeAsync(async () =>
         {
             await LoadAsync(silent: true);
         }), null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            // نربط تمرير الـ window عشان نظافرة الهيرو (والـ FAB يظهر بعد النزول)
-            await OnScroll();
-        }
     }
 
     private async Task Reload() => await LoadAsync();
@@ -578,33 +1027,25 @@ else
         if (!silent) { _loading = true; StateHasChanged(); }
         try
         {
-            _s         = await Http.GetFromJsonAsync<Summary>("api/dashboard/summary", _cts.Token);
-            _alerts    = await Http.GetFromJsonAsync<List<AlertItem>>("api/dashboard/alerts?take=5", _cts.Token) ?? new();
-            _flow      = await Http.GetFromJsonAsync<List<MonthFlow>>("api/dashboard/monthly", _cts.Token) ?? new();
-            _trends    = await Http.GetFromJsonAsync<TrendsOut>("api/dashboard/trends", _cts.Token);
+            _s = await Http.GetFromJsonAsync<Summary>("api/dashboard/summary", _cts.Token);
+            _alerts = await Http.GetFromJsonAsync<List<AlertItem>>("api/dashboard/alerts?take=5", _cts.Token) ?? new();
+            _flow = await Http.GetFromJsonAsync<List<MonthFlow>>("api/dashboard/monthly", _cts.Token) ?? new();
+            _trends = await Http.GetFromJsonAsync<TrendsOut>("api/dashboard/trends", _cts.Token);
             _opsStatus = await Http.GetFromJsonAsync<List<StatusCount>>("api/dashboard/operation-status-breakdown", _cts.Token) ?? new();
-            _fleet     = await Http.GetFromJsonAsync<List<StatusCount>>("api/dashboard/fleet-status", _cts.Token) ?? new();
-            _activity  = await Http.GetFromJsonAsync<List<ActivityItem>>("api/dashboard/recent-activity?take=8", _cts.Token) ?? new();
+            _fleet = await Http.GetFromJsonAsync<List<StatusCount>>("api/dashboard/fleet-status", _cts.Token) ?? new();
+            _activity = await Http.GetFromJsonAsync<List<ActivityItem>>("api/dashboard/recent-activity?take=8", _cts.Token) ?? new();
 
             if (CanSeeFinance)
             {
-                _top   = await Http.GetFromJsonAsync<List<TopCustomer>>("api/dashboard/top-customers?take=5", _cts.Token) ?? new();
+                _top = await Http.GetFromJsonAsync<List<TopCustomer>>("api/dashboard/top-customers?take=5", _cts.Token) ?? new();
                 _aging = await Http.GetFromJsonAsync<AgingOut>("api/dashboard/receivables-aging", _cts.Token);
             }
 
             _lastUpdated = DateTime.Now.ToString("HH:mm");
         }
-        catch (OperationCanceledException) { /* التحديث التلقائي اتلغى — عادي */ }
-        catch (Exception ex)
-        {
-            // 🔴 الرئيسية ماتقعش لو فيه endpoint مفقود — نسجل ونكمّل
-            Console.WriteLine("Home LoadAsync: " + ex.Message);
-        }
-        finally
-        {
-            _loading = false;
-            StateHasChanged();
-        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { Console.WriteLine("Dashboard: " + ex.Message); }
+        finally { _loading = false; StateHasChanged(); }
     }
 
     public void Dispose()
@@ -614,4 +1055,3 @@ else
         _cts.Dispose();
     }
 }
-

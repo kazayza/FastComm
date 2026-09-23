@@ -101,7 +101,7 @@ public partial class Booking
     public virtual Service? Service { get; set; }
 
     [ForeignKey("TahteeqPortId")]
-    [InverseProperty("Bookings")]
+    [InverseProperty("TahteeqBookings")]
     public virtual Port? TahteeqPort { get; set; }
 
     [ForeignKey("EndCustomerId")]

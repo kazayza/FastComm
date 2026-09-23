@@ -137,6 +137,6 @@ public partial class Operation
     public virtual TripType? TripType { get; set; }
 
     [ForeignKey("TahteeqPortId")]
-    [InverseProperty("Operations")]
+    [InverseProperty("TahteeqOperations")]
     public virtual Port? TahteeqPort { get; set; }
 }

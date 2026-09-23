@@ -1,5 +1,5 @@
-@page "/expenses/new"
-@page "/expenses/new/{Id:long}"
+@page "/employees/new"
+@page "/employees/new/{Id:int}"
 @attribute [Authorize]
 @using System.Net.Http.Json
 @using FastCom.Client.Auth
@@ -8,60 +8,44 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
-<PageTitle>@(_id is null ? "مصروف جديد" : "تعديل مصروف") — فاست كوم</PageTitle>
+<PageTitle>@(_id is null ? "موظف جديد" : "تعديل موظف") — فاست كوم</PageTitle>
 
 
-@* ═══════════════════════════════════════════
-   HERO
-═══════════════════════════════════════════ *@
 <div class="fc-hero">
     <div class="fc-hero-inner">
         <div class="fc-page-head">
 
             <div>
-                <div class="fc-crumb">المالية · المصروفات</div>
+                <div class="fc-crumb">البيانات الأساسية · الموظفون</div>
                 <h1 class="fc-hero-title">
                     @if (_id is null)
                     {
-                        <span>مصروف جديد</span>
-                        <span class="ex-hero-badge badge-new">جديد</span>
+                        <span>موظف جديد</span>
+                        <span class="emp-hero-badge badge-new">جديد</span>
                     }
                     else
                     {
-                        <span>@ExpenseNumber</span>
-                        <span class="ex-hero-badge @PayStatusBadge(_paymentStatus)">
-                            @PayAr(_paymentStatus)
+                        <span>@EmployeeCode</span>
+                        <span class="emp-hero-badge @StatusHeroBadge(_f.EmploymentStatus)">
+                            @StatusName(_f.EmploymentStatus)
                         </span>
                     }
                 </h1>
-                <p class="fc-hero-sub">سجّل المصروف وحدد مين دفعه وإزاي — والنظام يقرر يدخل الخزينة ولا لأ</p>
+                <p class="fc-hero-sub">سجّل بيانات الموظف — والكود بيتولد تلقائياً (EMP-)</p>
             </div>
 
             <div class="fc-head-actions">
-                <button class="ex-back-btn" @onclick="GoBack">
+                <button class="emp-back-btn" @onclick="GoBack">
                     <svg viewBox="0 0 24 24" width="16" height="16"
                          fill="none" stroke="currentColor" stroke-width="2"
                          aria-hidden="true">
                         <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
-                    المصروفات
+                    الموظفين
                 </button>
                 @if (CanSave)
                 {
-                    <button class="ex-draft-btn"
-                            @onclick="() => SaveAsync(true)"
-                            disabled="@_saving">
-                        <svg viewBox="0 0 24 24" width="15" height="15"
-                             fill="none" stroke="currentColor" stroke-width="2"
-                             aria-hidden="true">
-                            <path d="M12 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                            <path d="M12 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
-                        </svg>
-                        <span>مسودة</span>
-                    </button>
-                    <button class="ex-save-btn"
-                            @onclick="() => SaveAsync(false)"
-                            disabled="@_saving">
+                    <button class="emp-save-btn" @onclick="SaveAsync" disabled="@_saving">
                         @if (_saving)
                         {
                             <span class="btn-spinner" aria-hidden="true"></span>
@@ -69,87 +53,30 @@
                         }
                         else
                         {
-                            <svg viewBox="0 0 24 24" width="15" height="15"
+                            <svg viewBox="0 0 24 24" width="16" height="16"
                                  fill="none" stroke="currentColor" stroke-width="2"
                                  aria-hidden="true">
-                                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
-                                <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                <path d="M17 21v-8H7v8M7 3v5h8"
+                                      stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
-                            <span>حفظ وتأكيد</span>
+                            <span>حفظ الموظف</span>
                         }
                     </button>
                 }
             </div>
 
         </div>
-
-        @* ── Treasury Status Strip ── *@
-        @if (!_loading)
-        {
-            <div class="ex-treasury-strip">
-
-                <div class="ex-treasury-checks">
-                    <div class="ex-chk @(_stApproved ? "chk-on" : "chk-off")">
-                        <div class="ex-chk-dot" aria-hidden="true"></div>
-                        <span>معتمد</span>
-                    </div>
-                    <div class="ex-chk-arrow" aria-hidden="true">→</div>
-                    <div class="ex-chk @(_stPaid ? "chk-on" : "chk-off")">
-                        <div class="ex-chk-dot" aria-hidden="true"></div>
-                        <span>اتدفع</span>
-                    </div>
-                    <div class="ex-chk-arrow" aria-hidden="true">→</div>
-                    <div class="ex-chk @(_stNoCustody ? "chk-on" : "chk-off")">
-                        <div class="ex-chk-dot" aria-hidden="true"></div>
-                        <span>مش عهدة</span>
-                    </div>
-                    <div class="ex-chk-arrow" aria-hidden="true">→</div>
-                    <div class="ex-chk @(_stCash ? "chk-on" : "chk-off")">
-                        <div class="ex-chk-dot" aria-hidden="true"></div>
-                        <span>نقدي</span>
-                    </div>
-                </div>
-
-                <div class="ex-treasury-result @(_willTreasury ? "result-yes" : "result-no")">
-                    @if (_willTreasury)
-                    {
-                        <svg viewBox="0 0 24 24" width="16" height="16"
-                             fill="none" stroke="currentColor" stroke-width="2"
-                             aria-hidden="true">
-                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
-                            <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        <span>هيدخل الخزينة</span>
-                    }
-                    else
-                    {
-                        <svg viewBox="0 0 24 24" width="16" height="16"
-                             fill="none" stroke="currentColor" stroke-width="2"
-                             aria-hidden="true">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
-                        </svg>
-                        <span>مش هيدخل الخزينة</span>
-                    }
-                </div>
-
-            </div>
-        }
-
     </div>
 </div>
 
 
-@* ═══════════════════════════════════════════
-   BODY
-═══════════════════════════════════════════ *@
-<div class="ex-body">
+<div class="empf-body">
 
-    @* No Permission *@
     @if (!CanSave)
     {
-        <div class="ex-state-box">
-            <div class="ex-state-icon perm" aria-hidden="true">
+        <div class="empf-state-box">
+            <div class="empf-state-icon perm" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="34" height="34"
                      fill="none" stroke="currentColor" stroke-width="1.7">
                     <rect x="3" y="11" width="18" height="11" rx="2"/>
@@ -157,45 +84,22 @@
                 </svg>
             </div>
             <h3>ليس لديك صلاحية</h3>
-            <p>@(_id is null ? "ليس لديك صلاحية تسجيل مصروف" : "ليس لديك صلاحية تعديل مصروف")</p>
-            <button class="ex-state-back" @onclick="GoBack">العودة للقائمة</button>
+            <p>@(_id is null ? "ليس لديك صلاحية إضافة موظف" : "ليس لديك صلاحية تعديل موظف")</p>
+            <button class="empf-state-back" @onclick="GoBack">العودة للقائمة</button>
         </div>
     }
-
-    @* Loading *@
     else if (_loading)
     {
-        <div class="ex-loading-wrap">
-            <div class="ex-spinner" aria-label="جاري التحميل"></div>
-            <div class="ex-loading-text">جاري تحميل بيانات المصروف...</div>
+        <div class="empf-loading-wrap">
+            <div class="empf-spinner" aria-label="جاري التحميل"></div>
+            <div class="empf-loading-text">جاري تحميل بيانات الموظف...</div>
         </div>
     }
-
-    @* Main Form *@
     else
     {
-        @* Cancelled Banner *@
-        @if (_cancelled)
-        {
-            <div class="ex-cancelled-banner" role="alert">
-                <div class="cancelled-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="20" height="20"
-                         fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"/>
-                        <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
-                    </svg>
-                </div>
-                <div class="cancelled-text">
-                    <strong>المصروف ملغي</strong>
-                    <span>المصروف ده ملغي — مش هينفع تعدّله</span>
-                </div>
-            </div>
-        }
-
-        @* Error/Success Banner *@
         @if (_msg is not null)
         {
-            <div class="ex-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+            <div class="empf-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
                 <div aria-hidden="true">
                     @if (_ok)
                     {
@@ -215,74 +119,51 @@
                     }
                 </div>
                 <span>@_msg</span>
-                <button class="banner-close" @onclick="() => _msg = null" aria-label="إغلاق التنبيه">
-                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
-                             stroke="currentColor" stroke-width="2.4" aria-hidden="true">
-                            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
-                        </svg>
-                    </button>
+                <button class="banner-close" @onclick="() => _msg = null">✕</button>
             </div>
         }
 
-        @* Treasury Reason Card *@
-        <div class="ex-treasury-card @(_willTreasury ? "treasury-yes" : "treasury-no")">
-            <div class="treasury-card-icon" aria-hidden="true">
-                @if (_willTreasury)
-                {
-                    <svg viewBox="0 0 24 24" width="22" height="22"
-                         fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="2" y="7" width="20" height="14" rx="2"/>
-                        <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
-                        <circle cx="12" cy="14" r="2"/>
-                        <path d="M12 16v2" stroke-linecap="round"/>
-                    </svg>
-                }
-                else
-                {
-                    <svg viewBox="0 0 24 24" width="22" height="22"
+        @if (_id is not null && _f.EmploymentStatus == "Terminated")
+        {
+            <div class="empf-terminated-banner" role="alert">
+                <div class="term-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"
                          fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="10"/>
-                        <path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                        <path d="M12 8v4M12 16h.01" stroke-linecap="round"/>
                     </svg>
-                }
+                </div>
+                <div class="term-text">
+                    <strong>الموظف منتهي الخدمة</strong>
+                    <span>مش هيظهر في قوائم الاختيار — بس سجله وبياناته محفوظين</span>
+                </div>
             </div>
-            <div class="treasury-card-text">
-                <strong>
-                    @(_willTreasury
-                        ? "المصروف ده هيتسجل في الخزينة"
-                        : "المصروف ده مش هيدخل الخزينة")
-                </strong>
-                <span>@TreasuryReason</span>
-            </div>
-        </div>
+        }
 
-
-        @* ═══════ TABS ═══════ *@
-        <div class="ex-tabs-wrap">
+        <div class="empf-tabs-wrap">
 
             <MudTabs Elevation="0"
                      Rounded="false"
                      ApplyEffectsToContainer="true"
-                     PanelClass="ex-tab-panel"
+                     PanelClass="empf-tab-panel"
                      @bind-ActivePanelIndex="_activeTab"
-                     Class="ex-mud-tabs">
+                     Class="empf-mud-tabs">
 
 
                 @* ══════════════════════════════════════
-                   TAB 1 — بيانات المصروف
+                   TAB 1 — الهوية والبيانات الشخصية
                 ══════════════════════════════════════ *@
                 <MudTabPanel>
                     <TabContent>
                         <div class="etab-label">
-                            <div class="etab-num">١</div>
                             <div class="etab-icon etab-blue" aria-hidden="true">
                                 <svg viewBox="0 0 24 24" width="14" height="14"
                                      fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                    <circle cx="12" cy="7" r="4"/>
                                 </svg>
                             </div>
-                            <span>بيانات المصروف</span>
+                            <span>الهوية</span>
                             @if (HasTabError(1))
                             {
                                 <span class="etab-err-dot" aria-label="يوجد خطأ"></span>
@@ -291,140 +172,150 @@
                     </TabContent>
 
                     <ChildContent>
-                        <div class="tab-section">
+                        <div class="empf-tab-section">
 
-                            <div class="tab-section-head">
-                                <div class="tab-section-icon blue" aria-hidden="true">
-                                    <svg viewBox="0 0 24 24" width="18" height="18"
-                                         fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                                        <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="tab-section-title">بيانات المصروف</div>
-                                    <div class="tab-section-sub">إيه المصروف · بكام · وإمتى</div>
-                                </div>
-                            </div>
-
-                            <div class="ex-form-grid">
-
-                                @* نوع المصروف *@
-                                <div class="form-field">
-                                    <label class="field-label">
-                                        نوع المصروف
-                                        <span class="field-required">*</span>
-                                    </label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                             width="14" height="14" fill="none"
-                                             stroke="currentColor" stroke-width="2"
-                                             aria-hidden="true">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                                            <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round"/>
+                            @* ── البيانات الأساسية ── *@
+                            <div class="empf-section-card">
+                                <div class="empf-section-head">
+                                    <div class="empf-section-icon icon-blue" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                            <circle cx="12" cy="7" r="4"/>
                                         </svg>
-                                        <select class="field-input field-select @(_f.ExpenseTypeId <= 0 && _triedSave ? "field-error" : "")"
-                                                value="@_f.ExpenseTypeId"
-                                                @onchange="OnTypeChanged"
-                                                aria-required="true">
-                                            @foreach (var t in _types)
-                                            {
-                                                <option value="@t.Id">@t.Label</option>
-                                            }
-                                        </select>
                                     </div>
-                                    @if (CurrentType is not null)
-                                    {
-                                        <div class="field-hint">
+                                    <div>
+                                        <div class="empf-section-title">البيانات الشخصية</div>
+                                        <div class="empf-section-sub">الاسم والهوية الوطنية</div>
+                                    </div>
+                                </div>
+
+                                <div class="empf-form-grid">
+
+                                    <div class="empf-field">
+                                        <label class="empf-label">
+                                            الاسم بالعربي
+                                            <span class="empf-required">*</span>
+                                        </label>
+                                        <input class="empf-input @(string.IsNullOrWhiteSpace(_f.FullNameAr) && _triedSave ? "input-error" : "")"
+                                               @bind="_f.FullNameAr"
+                                               maxlength="150"
+                                               placeholder="الاسم الكامل بالعربي"
+                                               aria-required="true" />
+                                        @if (string.IsNullOrWhiteSpace(_f.FullNameAr) && _triedSave)
+                                        {
+                                            <div class="empf-err-msg" role="alert">الاسم بالعربي مطلوب</div>
+                                        }
+                                    </div>
+
+                                    <div class="empf-field">
+                                        <label class="empf-label">الاسم بالإنجليزي</label>
+                                        <input class="empf-input"
+                                               @bind="_f.FullNameEn"
+                                               maxlength="150"
+                                               placeholder="Full Name in English"
+                                               dir="ltr" />
+                                    </div>
+
+                                    <div class="empf-field">
+                                        <label class="empf-label">الرقم القومي</label>
+                                        <div class="empf-input-group">
+                                            <span class="empf-prefix" aria-hidden="true">
+                                                <svg viewBox="0 0 16 16" width="13" height="13"
+                                                     fill="none" stroke="currentColor" stroke-width="1.7">
+                                                    <rect x="2" y="4" width="12" height="9" rx="1"/>
+                                                    <circle cx="6" cy="8" r="1.5"/>
+                                                    <path d="M9 7h3M9 9.5h2" stroke-linecap="round"/>
+                                                </svg>
+                                            </span>
+                                            <input class="empf-input with-prefix"
+                                                   @bind="_f.NationalId"
+                                                   maxlength="14"
+                                                   placeholder="14 رقم"
+                                                   dir="ltr" />
+                                        </div>
+                                        <div class="empf-hint">
                                             <svg viewBox="0 0 16 16" width="10" height="10"
                                                  fill="none" stroke="currentColor" stroke-width="1.8"
                                                  aria-hidden="true">
                                                 <circle cx="8" cy="8" r="6"/>
                                                 <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
                                             </svg>
-                                            @TypeHint
+                                            14 رقم — مطلوب للتأمينات
                                         </div>
-                                    }
-                                    @if (_f.ExpenseTypeId <= 0 && _triedSave)
-                                    {
-                                        <div class="field-err-msg" role="alert">اختيار نوع المصروف مطلوب</div>
-                                    }
-                                </div>
-
-                                @* المبلغ *@
-                                <div class="form-field">
-                                    <label class="field-label">
-                                        المبلغ
-                                        <span class="field-required">*</span>
-                                    </label>
-                                    <div class="field-input-group">
-                                        <span class="field-prefix" aria-hidden="true">ج.م</span>
-                                        <input type="number" min="0.01" step="0.01"
-                                               class="field-input with-prefix @(_f.Amount <= 0 && _triedSave ? "field-error" : "")"
-                                               value="@_f.Amount"
-                                               placeholder="0.00"
-                                               @onchange="e => _f.Amount = ParseAmount(e.Value)"
-                                               aria-required="true" />
                                     </div>
-                                    @if (_f.Amount <= 0 && _triedSave)
-                                    {
-                                        <div class="field-err-msg" role="alert">المبلغ لازم يكون أكتر من صفر</div>
-                                    }
-                                </div>
 
-                                @* التاريخ *@
-                                <div class="form-field">
-                                    <label class="field-label">التاريخ</label>
-                                    <div class="field-input-group">
-                                        <span class="field-prefix" aria-hidden="true">
-                                            <svg viewBox="0 0 24 24" width="14" height="14"
-                                                 fill="none" stroke="currentColor" stroke-width="2">
-                                                <rect x="3" y="5" width="18" height="16" rx="2"/>
-                                                <path d="M7 3V7M17 3V7M3 10H21" stroke-linecap="round"/>
-                                            </svg>
-                                        </span>
-                                        <input type="datetime-local"
-                                               class="field-input with-prefix"
-                                               value="@_f.ExpenseDate"
-                                               @onchange="e => _f.ExpenseDate = e.Value?.ToString()" />
-                                    </div>
                                 </div>
+                            </div>
 
-                                @* رقم مرجعي *@
-                                <div class="form-field">
-                                    <label class="field-label">رقم مرجعي</label>
-                                    <div class="field-input-group">
-                                        <span class="field-prefix" aria-hidden="true">
-                                            <svg viewBox="0 0 24 24" width="14" height="14"
-                                                 fill="none" stroke="currentColor" stroke-width="2">
-                                                <path d="M4 7V4h16v3M9 20h6M12 4v16" stroke-linecap="round"/>
-                                            </svg>
-                                        </span>
-                                        <input class="field-input with-prefix"
-                                               @bind="_f.ReferenceNumber"
-                                               maxlength="100"
-                                               placeholder="رقم الإيصال أو الفاتورة" />
-                                    </div>
-                                    <div class="field-hint">
-                                        <svg viewBox="0 0 16 16" width="10" height="10"
-                                             fill="none" stroke="currentColor" stroke-width="1.8"
-                                             aria-hidden="true">
-                                            <circle cx="8" cy="8" r="6"/>
-                                            <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+
+                            @* ── التواصل ── *@
+                            <div class="empf-section-card">
+                                <div class="empf-section-head">
+                                    <div class="empf-section-icon icon-green" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-4.99-5 19.79 19.79 0 01-3.07-8.67A2 2 0 014 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
                                         </svg>
-                                        رقم الإيصال أو فاتورة المورد
+                                    </div>
+                                    <div>
+                                        <div class="empf-section-title">بيانات التواصل</div>
+                                        <div class="empf-section-sub">الموبايل والبريد والعنوان</div>
                                     </div>
                                 </div>
 
-                                @* البيان *@
-                                <div class="form-field form-field-full">
-                                    <label class="field-label">البيان</label>
-                                    <input class="field-input"
-                                           @bind="_f.Description"
-                                           maxlength="500"
-                                           placeholder="وصف مختصر للمصروف..." />
-                                </div>
+                                <div class="empf-form-grid">
 
+                                    <div class="empf-field">
+                                        <label class="empf-label">الموبايل</label>
+                                        <div class="empf-input-group">
+                                            <span class="empf-prefix" aria-hidden="true">📱</span>
+                                            <input class="empf-input with-prefix"
+                                                   @bind="_f.Mobile"
+                                                   maxlength="20"
+                                                   placeholder="01X-XXXXXXXX"
+                                                   type="tel"
+                                                   dir="ltr" />
+                                        </div>
+                                    </div>
+
+                                    <div class="empf-field">
+                                        <label class="empf-label">البريد الإلكتروني</label>
+                                        <div class="empf-input-group">
+                                            <span class="empf-prefix" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="13" height="13"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                                                    <path d="M22 6l-10 7L2 6"/>
+                                                </svg>
+                                            </span>
+                                            <input class="empf-input with-prefix"
+                                                   @bind="_f.Email"
+                                                   maxlength="150"
+                                                   placeholder="employee@company.com"
+                                                   type="email"
+                                                   dir="ltr" />
+                                        </div>
+                                    </div>
+
+                                    <div class="empf-field empf-field-full">
+                                        <label class="empf-label">العنوان</label>
+                                        <div class="empf-input-group">
+                                            <span class="empf-prefix" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="13" height="13"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                                                    <circle cx="12" cy="10" r="3"/>
+                                                </svg>
+                                            </span>
+                                            <input class="empf-input with-prefix"
+                                                   @bind="_f.Address"
+                                                   maxlength="300"
+                                                   placeholder="العنوان الكامل" />
+                                        </div>
+                                    </div>
+
+                                </div>
                             </div>
 
                         </div>
@@ -433,443 +324,233 @@
 
 
                 @* ══════════════════════════════════════
-                   TAB 2 — المحاسبة والدفع
+                   TAB 2 — الوظيفة والتعيين
                 ══════════════════════════════════════ *@
                 <MudTabPanel>
                     <TabContent>
                         <div class="etab-label">
-                            <div class="etab-num">٢</div>
-                            <div class="etab-icon etab-green" aria-hidden="true">
+                            <div class="etab-icon etab-amber" aria-hidden="true">
                                 <svg viewBox="0 0 24 24" width="14" height="14"
                                      fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="1" y="4" width="22" height="16" rx="2"/>
-                                    <path d="M1 10h22"/>
+                                    <path d="M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/>
+                                    <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>
                                 </svg>
                             </div>
-                            <span>المحاسبة والدفع</span>
+                            <span>الوظيفة</span>
                         </div>
                     </TabContent>
 
                     <ChildContent>
-                        <div class="tab-section">
+                        <div class="empf-tab-section">
 
-                            <div class="tab-section-head">
-                                <div class="tab-section-icon green" aria-hidden="true">
-                                    <svg viewBox="0 0 24 24" width="18" height="18"
-                                         fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="1" y="4" width="22" height="16" rx="2"/>
-                                        <path d="M1 10h22"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="tab-section-title">المحاسبة والدفع</div>
-                                    <div class="tab-section-sub">الضريبة · طريقة الدفع اللي بتحدد دخول الخزينة</div>
-                                </div>
-                            </div>
-
-                            <div class="ex-form-grid">
-
-                                @* الضريبة *@
-                                <div class="form-field">
-                                    <label class="field-label">الضريبة</label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                             width="14" height="14" fill="none"
-                                             stroke="currentColor" stroke-width="2"
-                                             aria-hidden="true">
-                                            <path d="M20 12V22H4V12M22 7H2v5h20V7zM12 22V7M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/>
+                            <div class="empf-section-card">
+                                <div class="empf-section-head">
+                                    <div class="empf-section-icon icon-amber" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/>
+                                            <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>
                                         </svg>
-                                        <select class="field-input field-select" @bind="_f.TaxRateId">
-                                            <option value="">بدون ضريبة</option>
-                                            @foreach (var t in _taxRates)
-                                            {
-                                                <option value="@t.Id">@t.Label</option>
-                                            }
-                                        </select>
+                                    </div>
+                                    <div>
+                                        <div class="empf-section-title">بيانات الوظيفة</div>
+                                        <div class="empf-section-sub">القسم والمسمى والمدير المباشر</div>
                                     </div>
                                 </div>
 
-                                @* قابلة للخصم *@
-                                <div class="form-field">
-                                    <label class="field-label">الضريبة قابلة للخصم</label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                             width="14" height="14" fill="none"
-                                             stroke="currentColor" stroke-width="2"
-                                             aria-hidden="true">
-                                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
-                                            <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
-                                        </svg>
-                                        <select class="field-input field-select" @bind="_f.IsTaxDeductible">
-                                            <option value="true">أيوه — تُخصم</option>
-                                            <option value="false">لأ — ضريبة جدول</option>
-                                        </select>
-                                    </div>
-                                </div>
+                                <div class="empf-form-grid">
 
-                                @* طريقة الدفع *@
-                                <div class="form-field">
-                                    <label class="field-label">طريقة الدفع</label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                             width="14" height="14" fill="none"
-                                             stroke="currentColor" stroke-width="2"
-                                             aria-hidden="true">
-                                            <rect x="1" y="4" width="22" height="16" rx="2"/>
-                                            <path d="M1 10h22"/>
-                                        </svg>
-                                        <select class="field-input field-select" @bind="_f.PaymentMethodId">
-                                            <option value="">— لسه ما اتحددش —</option>
-                                            @foreach (var m in _methods)
-                                            {
-                                                <option value="@m.Id">@m.Label</option>
-                                            }
-                                        </select>
-                                    </div>
-                                    <div class="field-hint">
-                                        <svg viewBox="0 0 16 16" width="10" height="10"
-                                             fill="none" stroke="currentColor" stroke-width="1.8"
-                                             aria-hidden="true">
-                                            <circle cx="8" cy="8" r="6"/>
-                                            <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
-                                        </svg>
-                                        النقدي بيدخل الخزينة تلقائياً · التحويل والبطاقة لأ
-                                    </div>
-                                </div>
-
-                                @* الإجمالي *@
-                                @if (_f.Amount > 0 && _f.TaxRateId is not null)
-                                {
-                                    <div class="form-field">
-                                        <label class="field-label">الإجمالي بعد الضريبة</label>
-                                        <div class="ex-total-display">
-                                            <span class="ex-total-num">@Money(TotalWithTax)</span>
-                                            <span class="ex-total-curr">ج.م</span>
+                                    @* تاريخ التعيين *@
+                                    <div class="empf-field">
+                                        <label class="empf-label">تاريخ التعيين</label>
+                                        <div class="empf-input-group">
+                                            <span class="empf-prefix" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="13" height="13"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <rect x="3" y="5" width="18" height="16" rx="2"/>
+                                                    <path d="M7 3V7M17 3V7M3 10H21" stroke-linecap="round"/>
+                                                </svg>
+                                            </span>
+                                            <input type="date"
+                                                   class="empf-input with-prefix"
+                                                   value="@_f.HireDate"
+                                                   @onchange="OnHireDateChanged" />
                                         </div>
-                                        <div class="field-hint">
-                                            <svg viewBox="0 0 16 16" width="10" height="10"
-                                                 fill="none" stroke="currentColor" stroke-width="1.8"
+                                    </div>
+
+                                    @* القسم *@
+                                    <div class="empf-field">
+                                        <label class="empf-label">القسم</label>
+                                        <div class="empf-select-wrap">
+                                            <svg class="empf-sel-icon" viewBox="0 0 24 24"
+                                                 width="14" height="14" fill="none"
+                                                 stroke="currentColor" stroke-width="2"
                                                  aria-hidden="true">
-                                                <circle cx="8" cy="8" r="6"/>
-                                                <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                                <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                                <path d="M9 22V12h6v10"/>
                                             </svg>
-                                            المبلغ + الضريبة المحسوبة تلقائياً
+                                            <select class="empf-input empf-select" @bind="_f.DepartmentId">
+                                                <option value="">— بدون قسم —</option>
+                                                @foreach (var d in _depts)
+                                                {
+                                                    <option value="@d.Id">@d.Label</option>
+                                                }
+                                            </select>
                                         </div>
+                                    </div>
+
+                                    @* المسمى الوظيفي *@
+                                    <div class="empf-field">
+                                        <label class="empf-label">المسمى الوظيفي</label>
+                                        <div class="empf-select-wrap">
+                                            <svg class="empf-sel-icon" viewBox="0 0 24 24"
+                                                 width="14" height="14" fill="none"
+                                                 stroke="currentColor" stroke-width="2"
+                                                 aria-hidden="true">
+                                                <path d="M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/>
+                                                <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>
+                                            </svg>
+                                            <select class="empf-input empf-select" @bind="_f.JobTitleId">
+                                                <option value="">— بدون مسمى —</option>
+                                                @foreach (var j in _titles)
+                                                {
+                                                    <option value="@j.Id">@j.Label</option>
+                                                }
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    @* المدير المباشر *@
+                                    <div class="empf-field">
+                                        <label class="empf-label">المدير المباشر</label>
+                                        <div class="empf-select-wrap">
+                                            <svg class="empf-sel-icon" viewBox="0 0 24 24"
+                                                 width="14" height="14" fill="none"
+                                                 stroke="currentColor" stroke-width="2"
+                                                 aria-hidden="true">
+                                                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                                                <circle cx="9" cy="7" r="4"/>
+                                                <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+                                            </svg>
+                                            <select class="empf-input empf-select" @bind="_f.ManagerEmployeeId">
+                                                <option value="">— بدون مدير —</option>
+                                                @foreach (var m in Managers)
+                                                {
+                                                    <option value="@m.EmployeeId">
+                                                        @m.FullNameAr (@m.EmployeeCode)
+                                                    </option>
+                                                }
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                </div>
+
+                                @if (_depts.Count == 0 && _titles.Count == 0)
+                                {
+                                    <div class="empf-info-box">
+                                        <svg viewBox="0 0 24 24" width="16" height="16"
+                                             fill="none" stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <circle cx="12" cy="12" r="10"/>
+                                            <path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                                        </svg>
+                                        مافيش أقسام ومسميات؟ بتتضاف من قاعدة البيانات — النظام لسه مافيهش شاشة ليها
                                     </div>
                                 }
 
                             </div>
 
-                            @* Payment Method Visual *@
-                            @if (CurrentMethod is not null)
-                            {
-                                <div class="ex-method-card @(CurrentMethod.IsCashBased ? "method-cash" : "method-noncash")">
-                                    <div class="method-card-icon" aria-hidden="true">
-                                        @if (CurrentMethod.IsCashBased)
-                                        {
-                                            <svg viewBox="0 0 24 24" width="20" height="20"
-                                                 fill="none" stroke="currentColor" stroke-width="2">
-                                                <rect x="2" y="7" width="20" height="14" rx="2"/>
-                                                <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
-                                                <circle cx="12" cy="14" r="2"/>
-                                            </svg>
-                                        }
-                                        else
-                                        {
-                                            <svg viewBox="0 0 24 24" width="20" height="20"
-                                                 fill="none" stroke="currentColor" stroke-width="2">
-                                                <rect x="1" y="4" width="22" height="16" rx="2"/>
-                                                <path d="M1 10h22"/>
-                                            </svg>
-                                        }
-                                    </div>
-                                    <div class="method-card-text">
-                                        <strong>@CurrentMethod.Label</strong>
-                                        <span>
-                                            @(CurrentMethod.IsCashBased
-                                                ? "طريقة نقدية — المصروف هيدخل الخزينة لو باقي الشروط اتحققت"
-                                                : "طريقة غير نقدية — المصروف مش هيدخل الخزينة حتى لو اتأكد")
-                                        </span>
-                                    </div>
-                                </div>
-                            }
-
                         </div>
                     </ChildContent>
                 </MudTabPanel>
 
 
                 @* ══════════════════════════════════════
-                   TAB 3 — الربط
+                   TAB 3 — حالة الخدمة
                 ══════════════════════════════════════ *@
                 <MudTabPanel>
                     <TabContent>
                         <div class="etab-label">
-                            <div class="etab-num">٣</div>
-                            <div class="etab-icon etab-amber" aria-hidden="true">
+                            <div class="etab-icon etab-green" aria-hidden="true">
                                 <svg viewBox="0 0 24 24" width="14" height="14"
                                      fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
-                                    <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
+                                    <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                                    <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
                                 </svg>
                             </div>
-                            <span>الربط</span>
-                            @if (IsOperationCost)
-                            {
-                                <span class="etab-required-badge">مطلوب</span>
-                            }
+                            <span>حالة الخدمة</span>
                         </div>
                     </TabContent>
 
                     <ChildContent>
-                        <div class="tab-section">
+                        <div class="empf-tab-section">
 
-                            <div class="tab-section-head">
-                                <div class="tab-section-icon amber" aria-hidden="true">
-                                    <svg viewBox="0 0 24 24" width="18" height="18"
-                                         fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
-                                        <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="tab-section-title">الربط</div>
-                                    <div class="tab-section-sub">@LinkHint</div>
-                                </div>
-                            </div>
-
-                            @if (IsOperationCost)
-                            {
-                                <div class="ex-form-grid">
-
-                                    @* العملية *@
-                                    <div class="form-field">
-                                        <label class="field-label">العملية</label>
-                                        <div class="field-select-wrap">
-                                            <svg class="field-select-icon" viewBox="0 0 24 24"
-                                                 width="14" height="14" fill="none"
-                                                 stroke="currentColor" stroke-width="2"
-                                                 aria-hidden="true">
-                                                <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
-                                            </svg>
-                                            <select class="field-input field-select" @bind="_f.OperationId">
-                                                <option value="">—</option>
-                                                @foreach (var o in _operations)
-                                                {
-                                                    <option value="@o.OperationId">
-                                                        @o.OperationNumber — @o.CustomerName
-                                                    </option>
-                                                }
-                                            </select>
-                                        </div>
-                                        <div class="field-hint">
-                                            <svg viewBox="0 0 16 16" width="10" height="10"
-                                                 fill="none" stroke="currentColor" stroke-width="1.8"
-                                                 aria-hidden="true">
-                                                <circle cx="8" cy="8" r="6"/>
-                                                <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
-                                            </svg>
-                                            مصروف تشغيلي — لازم يتربط عشان يدخل في تكلفة العملية
-                                        </div>
-                                    </div>
-
-                                    @* الرحلة *@
-                                    <div class="form-field">
-                                        <label class="field-label">الرحلة</label>
-                                        <div class="field-select-wrap">
-                                            <svg class="field-select-icon" viewBox="0 0 24 24"
-                                                 width="14" height="14" fill="none"
-                                                 stroke="currentColor" stroke-width="2"
-                                                 aria-hidden="true">
-                                                <rect x="1" y="3" width="15" height="13" rx="2"/>
-                                                <path d="M16 8h4l3 3v5h-7V8z"/>
-                                                <circle cx="5.5" cy="18.5" r="2.5"/>
-                                                <circle cx="18.5" cy="18.5" r="2.5"/>
-                                            </svg>
-                                            <select class="field-input field-select"
-                                                    value="@_f.TripId"
-                                                    @onchange="OnTripChanged">
-                                                <option value="">—</option>
-                                                @foreach (var t in _trips)
-                                                {
-                                                    <option value="@t.TripId">
-                                                        @t.TripNumber — @t.DriverName
-                                                    </option>
-                                                }
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    @* العهدة *@
-                                    <div class="form-field">
-                                        <label class="field-label">العهدة</label>
-                                        @if (_f.TripId is null)
-                                        {
-                                            <div class="ex-custody-hint">
-                                                <svg viewBox="0 0 16 16" width="12" height="12"
-                                                     fill="none" stroke="currentColor" stroke-width="1.8"
-                                                     aria-hidden="true">
-                                                    <circle cx="8" cy="8" r="6"/>
-                                                    <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
-                                                </svg>
-                                                اختار الرحلة أولاً لعرض العهد
-                                            </div>
-                                        }
-                                        else if (!_custodies.Any())
-                                        {
-                                            <div class="ex-custody-hint">
-                                                مافيش عهد مفتوحة على الرحلة دي
-                                            </div>
-                                        }
-                                        else
-                                        {
-                                            <div class="field-select-wrap">
-                                                <svg class="field-select-icon" viewBox="0 0 24 24"
-                                                     width="14" height="14" fill="none"
-                                                     stroke="currentColor" stroke-width="2"
-                                                     aria-hidden="true">
-                                                    <rect x="2" y="7" width="20" height="14" rx="2"/>
-                                                    <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
-                                                </svg>
-                                                <select class="field-input field-select"
-                                                        value="@_f.CustodyId"
-                                                        @onchange="OnCustodyChanged">
-                                                    <option value="">— بدون عهدة —</option>
-                                                    @foreach (var c in _custodies)
-                                                    {
-                                                        <option value="@c.Id">@c.Label</option>
-                                                    }
-                                                </select>
-                                            </div>
-                                        }
-                                        <div class="field-hint">
-                                            <svg viewBox="0 0 16 16" width="10" height="10"
-                                                 fill="none" stroke="currentColor" stroke-width="1.8"
-                                                 aria-hidden="true">
-                                                <circle cx="8" cy="8" r="6"/>
-                                                <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
-                                            </svg>
-                                            اللي من عهدة فلوسه اتصرفت — مش هيتحسب تاني
-                                        </div>
-                                    </div>
-
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="ex-admin-info">
-                                    <div class="admin-info-icon" aria-hidden="true">
-                                        <svg viewBox="0 0 24 24" width="22" height="22"
+                            <div class="empf-section-card">
+                                <div class="empf-section-head">
+                                    <div class="empf-section-icon icon-green" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
                                              fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-                                            <path d="M9 22V12h6v10"/>
+                                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                                            <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
                                         </svg>
                                     </div>
-                                    <div class="admin-info-text">
-                                        <strong>ده مصروف إداري — مش محتاج ربط</strong>
-                                        <p>
-                                            بيتحمل على الشركة كلها، ومش بيدخل في تكلفة أي عملية.
-                                            اختياريًا تقدر تربطه بمورد من التبويب التالي.
-                                        </p>
+                                    <div>
+                                        <div class="empf-section-title">حالة الخدمة الوظيفية</div>
+                                        <div class="empf-section-sub">نشط / إجازة / موقوف / منتهي الخدمة</div>
                                     </div>
                                 </div>
-                            }
 
-                        </div>
-                    </ChildContent>
-                </MudTabPanel>
+                                @* Status Cards *@
+                                <div class="empf-status-grid" role="group" aria-label="حالة الموظف">
 
-
-                @* ══════════════════════════════════════
-                   TAB 4 — الجهة والسائق
-                ══════════════════════════════════════ *@
-                <MudTabPanel>
-                    <TabContent>
-                        <div class="etab-label">
-                            <div class="etab-num">٤</div>
-                            <div class="etab-icon etab-purple" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" width="14" height="14"
-                                     fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
-                                    <circle cx="9" cy="7" r="4"/>
-                                    <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
-                                </svg>
-                            </div>
-                            <span>الجهة والملاحظات</span>
-                        </div>
-                    </TabContent>
-
-                    <ChildContent>
-                        <div class="tab-section">
-
-                            <div class="tab-section-head">
-                                <div class="tab-section-icon purple" aria-hidden="true">
-                                    <svg viewBox="0 0 24 24" width="18" height="18"
-                                         fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
-                                        <circle cx="9" cy="7" r="4"/>
-                                        <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="tab-section-title">الجهة والسائق</div>
-                                    <div class="tab-section-sub">مين اللي اتدفع له · ومين اللي صرف</div>
-                                </div>
-                            </div>
-
-                            <div class="ex-form-grid">
-
-                                @* المورد *@
-                                <div class="form-field">
-                                    <label class="field-label">المورد</label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                             width="14" height="14" fill="none"
-                                             stroke="currentColor" stroke-width="2"
-                                             aria-hidden="true">
-                                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-                                            <path d="M9 22V12h6v10"/>
-                                        </svg>
-                                        <select class="field-input field-select" @bind="_f.SupplierId">
-                                            <option value="">—</option>
-                                            @foreach (var s in _suppliers)
+                                    @foreach (var (val, lbl, sub, cls, icon) in new[]
+                                    {
+                                        ("Active",     "نشط",              "يعمل حالياً",           "status-green",  "✅"),
+                                        ("OnLeave",    "في إجازة",         "غائب مؤقتاً",           "status-amber",  "🌴"),
+                                        ("Suspended",  "موقوف",            "موقوف عن العمل",        "status-red",    "⛔"),
+                                        ("Terminated", "منتهي الخدمة",    "انتهت علاقة العمل",     "status-gray",   "🚪"),
+                                    })
+                                    {
+                                        var v = val;
+                                        <button type="button"
+                                                class="empf-status-card @(_f.EmploymentStatus == v ? cls + " status-selected" : "")"
+                                                @onclick="() => _f.EmploymentStatus = v"
+                                                aria-pressed="@(_f.EmploymentStatus == v)">
+                                            <span class="status-card-icon">@icon</span>
+                                            <div class="status-card-text">
+                                                <span class="status-card-label">@lbl</span>
+                                                <span class="status-card-sub">@sub</span>
+                                            </div>
+                                            @if (_f.EmploymentStatus == v)
                                             {
-                                                <option value="@s.Id">@s.Label</option>
+                                                <span class="status-card-check" aria-hidden="true">
+                                                    <svg viewBox="0 0 24 24" width="16" height="16"
+                                                         fill="none" stroke="currentColor" stroke-width="2.5">
+                                                        <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                </span>
                                             }
-                                        </select>
-                                    </div>
+                                        </button>
+                                    }
+
                                 </div>
 
-                                @* السائق *@
-                                <div class="form-field">
-                                    <label class="field-label">السائق</label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                             width="14" height="14" fill="none"
-                                             stroke="currentColor" stroke-width="2"
+                                @if (_f.EmploymentStatus == "Terminated" && _id is not null)
+                                {
+                                    <div class="empf-warn-box" role="alert" style="margin-top:16px">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"
+                                             fill="none" stroke="currentColor" stroke-width="2"
                                              aria-hidden="true">
-                                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-                                            <circle cx="12" cy="7" r="4"/>
+                                            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                                            <path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
                                         </svg>
-                                        <select class="field-input field-select" @bind="_f.DriverId">
-                                            <option value="">—</option>
-                                            @foreach (var d in _drivers)
-                                            {
-                                                <option value="@d.Id">@d.Label</option>
-                                            }
-                                        </select>
+                                        <div>
+                                            <strong>تنبيه</strong>
+                                            <p>الموظف بحالة «منتهي الخدمة» مش هيظهر في قوائم الاختيار — بس بياناته محفوظين</p>
+                                        </div>
                                     </div>
-                                </div>
-
-                                @* ملاحظات *@
-                                <div class="form-field form-field-full">
-                                    <label class="field-label">ملاحظات</label>
-                                    <textarea class="field-input field-textarea"
-                                              rows="4"
-                                              maxlength="500"
-                                              placeholder="أي ملاحظات إضافية..."
-                                              @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
-                                </div>
+                                }
 
                             </div>
 
@@ -882,10 +563,9 @@
         </div>
 
 
-        @* ── Bottom Actions ── *@
-        <div class="ex-bottom-actions">
-
-            <button class="ex-bottom-back" @onclick="GoBack">
+        @* Bottom Actions *@
+        <div class="empf-bottom-actions">
+            <button class="empf-bottom-back" @onclick="GoBack">
                 <svg viewBox="0 0 24 24" width="15" height="15"
                      fill="none" stroke="currentColor" stroke-width="2"
                      aria-hidden="true">
@@ -896,11 +576,11 @@
 
             @if (CanSave)
             {
-                <div class="ex-bottom-right">
+                <div class="empf-bottom-right">
 
-                    @if (_activeTab < 3)
+                    @if (_activeTab < 2)
                     {
-                        <button class="ex-next-btn" @onclick="() => _activeTab++">
+                        <button class="empf-next-btn" @onclick="() => _activeTab++">
                             التالي
                             <svg viewBox="0 0 24 24" width="15" height="15"
                                  fill="none" stroke="currentColor" stroke-width="2"
@@ -910,21 +590,7 @@
                         </button>
                     }
 
-                    <button class="ex-draft-bottom-btn"
-                            @onclick="() => SaveAsync(true)"
-                            disabled="@_saving">
-                        <svg viewBox="0 0 24 24" width="14" height="14"
-                             fill="none" stroke="currentColor" stroke-width="2"
-                             aria-hidden="true">
-                            <path d="M12 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                            <path d="M12 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
-                        </svg>
-                        حفظ كمسودة
-                    </button>
-
-                    <button class="ex-confirm-btn"
-                            @onclick="() => SaveAsync(false)"
-                            disabled="@_saving">
+                    <button class="empf-bottom-save" @onclick="SaveAsync" disabled="@_saving">
                         @if (_saving)
                         {
                             <span class="btn-spinner sm" aria-hidden="true"></span>
@@ -932,28 +598,24 @@
                         }
                         else
                         {
-                            <svg viewBox="0 0 24 24" width="14" height="14"
+                            <svg viewBox="0 0 24 24" width="15" height="15"
                                  fill="none" stroke="currentColor" stroke-width="2"
                                  aria-hidden="true">
-                                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
-                                <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
-                            <span>حفظ وتأكيد</span>
+                            <span>حفظ الموظف</span>
                         }
                     </button>
 
                 </div>
             }
-
         </div>
 
     }
 </div>
 
 
-@* ═══════════════════════════════════════════
-   CSS
-═══════════════════════════════════════════ *@
 <style>
 
     :root {
@@ -975,61 +637,20 @@
         --fc-radius:    14px;
     }
 
-    /* ================================================================
-       HERO ADDITIONS
-    ================================================================ */
-    .ex-hero-badge {
+    /* Hero */
+    .emp-hero-badge {
         display: inline-flex; align-items: center;
         padding: 3px 10px; border-radius: 20px;
         font-size: 11px; font-weight: 800;
     }
+    .badge-new      { background: rgba(34,197,94,.2);  color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+    .badge-active   { background: rgba(34,197,94,.25); color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+    .badge-onleave  { background: rgba(234,179,8,.25); color: #fde68a; border: 1px solid rgba(234,179,8,.3); }
+    .badge-suspended  { background: rgba(239,68,68,.25); color: #fca5a5; border: 1px solid rgba(239,68,68,.3); }
+    .badge-terminated { background: rgba(255,255,255,.12); color: rgba(255,255,255,.65); border: 1px solid rgba(255,255,255,.2); }
+    .badge-edit     { background: rgba(234,179,8,.2);  color: #fde68a; border: 1px solid rgba(234,179,8,.3); }
 
-    .badge-new     { background: rgba(34,197,94,.2);  color: #86efac; border: 1px solid rgba(34,197,94,.3); }
-    .badge-unpaid  { background: rgba(255,255,255,.12); color: rgba(255,255,255,.75); border: 1px solid rgba(255,255,255,.2); }
-    .badge-partial { background: rgba(234,179,8,.25); color: #fde68a; border: 1px solid rgba(234,179,8,.3); }
-    .badge-paid    { background: rgba(34,197,94,.25); color: #86efac; border: 1px solid rgba(34,197,94,.3); }
-
-    /* Treasury Strip */
-    .ex-treasury-strip {
-        display: flex; align-items: center; justify-content: space-between;
-        gap: 16px; flex-wrap: wrap;
-        padding: 10px 14px;
-        background: rgba(0,0,0,.12); border: 1px solid rgba(255,255,255,.10);
-        border-radius: 10px; backdrop-filter: blur(8px);
-        margin-top: 4px;
-    }
-
-    .ex-treasury-checks { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-
-    .ex-chk {
-        display: flex; align-items: center; gap: 5px;
-        font-size: 10.5px; font-weight: 700;
-    }
-
-    .ex-chk-dot {
-        width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px;
-        border: 2px solid;
-        transition: all .2s ease;
-    }
-
-    .chk-on  { color: #6ee7b7; }
-    .chk-on .ex-chk-dot { background: #6ee7b7; border-color: #6ee7b7; }
-    .chk-off { color: rgba(255,255,255,.35); }
-    .chk-off .ex-chk-dot { background: transparent; border-color: rgba(255,255,255,.25); }
-
-    .ex-chk-arrow { color: rgba(255,255,255,.2); font-size: 12px; font-weight: 700; }
-
-    .ex-treasury-result {
-        display: flex; align-items: center; gap: 6px;
-        padding: 5px 12px; border-radius: 8px;
-        font-size: 11px; font-weight: 800; white-space: nowrap;
-    }
-
-    .result-yes { background: rgba(34,197,94,.2); color: #6ee7b7; border: 1px solid rgba(34,197,94,.25); }
-    .result-no  { background: rgba(255,255,255,.08); color: rgba(255,255,255,.55); border: 1px solid rgba(255,255,255,.12); }
-
-    /* Hero Buttons */
-    .ex-back-btn {
+    .emp-back-btn {
         display: inline-flex; align-items: center; gap: 5px;
         height: 36px; padding: 0 13px;
         border: 1px solid rgba(255,255,255,.2); border-radius: 9px;
@@ -1037,21 +658,10 @@
         font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
         transition: background .15s ease;
     }
-    .ex-back-btn:hover { background: rgba(255,255,255,.14); }
-    .ex-back-btn svg  { transform: rotate(180deg); }
+    .emp-back-btn:hover { background: rgba(255,255,255,.14); }
+    .emp-back-btn svg { transform: rotate(180deg); }
 
-    .ex-draft-btn {
-        display: inline-flex; align-items: center; gap: 6px;
-        height: 36px; padding: 0 14px;
-        border: 1px solid rgba(255,255,255,.20); border-radius: 9px;
-        background: rgba(255,255,255,.08); color: rgba(255,255,255,.75);
-        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
-        transition: background .15s ease;
-    }
-    .ex-draft-btn:hover:not(:disabled) { background: rgba(255,255,255,.14); }
-    .ex-draft-btn:disabled { opacity: .5; cursor: not-allowed; }
-
-    .ex-save-btn {
+    .emp-save-btn {
         display: inline-flex; align-items: center; gap: 7px;
         height: 38px; padding: 0 18px;
         border: 0; border-radius: 10px;
@@ -1061,307 +671,235 @@
         box-shadow: 0 4px 14px rgba(22,163,74,.35);
         transition: all .15s ease;
     }
-    .ex-save-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(22,163,74,.4); }
-    .ex-save-btn:disabled { opacity: .6; cursor: not-allowed; }
+    .emp-save-btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .emp-save-btn:disabled { opacity: .6; cursor: not-allowed; }
 
-    /* ================================================================
-       BODY
-    ================================================================ */
-    .ex-body {
+    /* Body */
+    .empf-body {
         background: var(--fc-bg);
         min-height: calc(100vh - 180px);
         padding: 16px 20px 32px;
-        max-width: 1050px; width: 100%;
+        max-width: 900px; width: 100%;
         margin: 0 auto;
         display: flex; flex-direction: column; gap: 14px;
     }
 
-    /* ================================================================
-       STATES
-    ================================================================ */
-    .ex-state-box {
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
+    /* States */
+    .empf-state-box {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
         gap: 12px; min-height: 280px;
         background: var(--fc-card); border: 1px solid var(--fc-border);
         border-radius: var(--fc-radius); padding: 40px; text-align: center;
         box-shadow: 0 4px 20px rgba(15,41,82,.06);
     }
-
-    .ex-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-    .ex-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
-    .ex-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
-    .ex-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
-
-    .ex-state-back {
+    .empf-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .empf-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+    .empf-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .empf-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+    .empf-state-back {
         margin-top: 8px; padding: 9px 20px;
         border: 1px solid var(--fc-border); border-radius: 9px;
         background: var(--fc-card); color: var(--fc-text);
         font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
         transition: background .15s ease;
     }
-    .ex-state-back:hover { background: #f0f4fa; }
+    .empf-state-back:hover { background: #f0f4fa; }
 
-    /* ================================================================
-       LOADING
-    ================================================================ */
-    .ex-loading-wrap {
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
+    /* Loading */
+    .empf-loading-wrap {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
         gap: 14px; min-height: 260px;
         background: var(--fc-card); border: 1px solid var(--fc-border);
         border-radius: var(--fc-radius); box-shadow: 0 4px 20px rgba(15,41,82,.06);
     }
-
-    .ex-spinner {
+    .empf-spinner {
         width: 36px; height: 36px;
         border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
-        border-radius: 50%; animation: ex-spin .75s linear infinite;
+        border-radius: 50%; animation: empf-spin .75s linear infinite;
     }
-    @@keyframes ex-spin { to { transform: rotate(360deg); } }
-    .ex-loading-text { font-size: 13px; font-weight: 600; color: var(--fc-muted); }
+    @@keyframes empf-spin { to { transform: rotate(360deg); } }
+    .empf-loading-text { font-size: 13px; font-weight: 600; color: var(--fc-muted); }
 
-    /* ================================================================
-       BANNERS
-    ================================================================ */
-    .ex-cancelled-banner {
-        display: flex; align-items: center; gap: 12px;
-        padding: 14px 18px; border-radius: 12px;
-        background: linear-gradient(135deg, #fff0f2, #ffe8ec);
-        border: 1px solid #ffc8cf;
-    }
-    .cancelled-icon  { flex: 0 0 auto; color: var(--fc-red); }
-    .cancelled-text  { display: flex; flex-direction: column; gap: 2px; }
-    .cancelled-text strong { font-size: 13px; font-weight: 800; color: #b02040; }
-    .cancelled-text span   { font-size: 11.5px; color: var(--fc-red); }
-
-    .ex-banner {
+    /* Banners */
+    .empf-banner {
         display: flex; align-items: center; gap: 10px;
         padding: 12px 16px; border-radius: 10px;
         font-size: 13px; font-weight: 600;
-        animation: ex-banner-in .25s ease;
+        animation: empf-banner-in .25s ease;
     }
-    @@keyframes ex-banner-in {
-        from { opacity: 0; transform: translateY(-6px); }
-        to   { opacity: 1; transform: translateY(0); }
-    }
+    @@keyframes empf-banner-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
     .banner-success { background: #e9f8f0; color: #0e7a43; border: 1px solid #b5e8d0; }
     .banner-error   { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8d0; }
-    .banner-close {
-        margin-right: auto; background: none; border: none;
-        color: inherit; opacity: .6; cursor: pointer; font-size: 13px;
-    }
-    .banner-close:hover { opacity: 1; }
+    .banner-close { margin-right: auto; background: none; border: none; color: inherit; opacity: .6; cursor: pointer; font-size: 13px; }
 
-    /* Treasury Card */
-    .ex-treasury-card {
-        display: flex; align-items: flex-start; gap: 14px;
+    .empf-terminated-banner {
+        display: flex; align-items: center; gap: 12px;
         padding: 14px 18px; border-radius: 12px;
-        transition: all .2s ease;
+        background: #f0f3f8; border: 1px solid #dde5f0;
     }
-    .treasury-yes { background: var(--fc-green-lt); border: 1px solid #b0e0c5; }
-    .treasury-no  { background: #fafbfe; border: 1px solid #e4eaf3; }
+    .term-icon { flex: 0 0 auto; color: #6b7d95; }
+    .term-text { display: flex; flex-direction: column; gap: 2px; }
+    .term-text strong { font-size: 13px; font-weight: 800; color: #344258; }
+    .term-text span   { font-size: 11.5px; color: #6b7d95; }
 
-    .treasury-card-icon { flex: 0 0 auto; }
-    .treasury-yes .treasury-card-icon { color: var(--fc-green); }
-    .treasury-no  .treasury-card-icon { color: var(--fc-muted); }
-
-    .treasury-card-text { display: flex; flex-direction: column; gap: 4px; }
-    .treasury-yes .treasury-card-text strong { font-size: 13px; font-weight: 800; color: #0d8a48; }
-    .treasury-no  .treasury-card-text strong { font-size: 13px; font-weight: 800; color: #344258; }
-    .treasury-card-text span { font-size: 11.5px; color: var(--fc-muted); line-height: 1.5; }
-
-    /* ================================================================
-       TABS
-    ================================================================ */
-    .ex-tabs-wrap {
+    /* Tabs */
+    .empf-tabs-wrap {
         background: var(--fc-card); border: 1px solid var(--fc-border);
         border-radius: var(--fc-radius);
         box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
         overflow: hidden; flex: 1;
     }
 
-    .ex-mud-tabs .mud-tabs-toolbar {
+    .empf-mud-tabs .mud-tabs-toolbar {
         background: linear-gradient(180deg, #f9fafd 0%, #f3f6fb 100%);
-        border-bottom: 2px solid #e8edf5;
-        padding: 0 16px; min-height: 54px;
+        border-bottom: 2px solid #e8edf5; padding: 0 16px; min-height: 54px;
     }
+    .empf-mud-tabs .mud-tab { font-family: "Cairo","Tajawal","Inter",Arial,sans-serif; font-size: 12px; font-weight: 700; color: var(--fc-muted); padding: 0 6px; min-width: unset; transition: color .15s ease; }
+    .empf-mud-tabs .mud-tab.mud-tab-active { color: var(--fc-blue) !important; font-weight: 800; }
+    .empf-mud-tabs .mud-tab-slider { background: var(--fc-blue) !important; height: 3px; border-radius: 3px 3px 0 0; }
+    .empf-mud-tabs .mud-tab:hover:not(.mud-tab-active) { color: var(--fc-text); background: rgba(0,0,0,.03); border-radius: 8px; }
+    .empf-tab-panel { padding: 0; }
 
-    .ex-mud-tabs .mud-tab {
-        font-family: "Cairo","Tajawal","Inter",Arial,sans-serif;
-        font-size: 12px; font-weight: 700; color: var(--fc-muted);
-        padding: 0 6px; min-width: unset; transition: color .15s ease;
+    /* Tab Labels */
+    .etab-label { display: flex; align-items: center; gap: 7px; padding: 0 4px; white-space: nowrap; }
+    .etab-icon  { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 7px; }
+    .etab-blue  { background: var(--fc-blue-lt);  color: var(--fc-blue); }
+    .etab-amber { background: var(--fc-amber-lt); color: var(--fc-amber); }
+    .etab-green { background: var(--fc-green-lt); color: var(--fc-green); }
+    .etab-err-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--fc-red); flex: 0 0 7px; animation: empf-pulse 1.5s ease infinite; }
+    @@keyframes empf-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.4); } 50% { box-shadow: 0 0 0 5px rgba(224,48,72,0); } }
+
+    /* Tab Section */
+    .empf-tab-section { padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 16px; }
+
+    /* Section Cards */
+    .empf-section-card {
+        border: 1px solid #e4edf8; border-radius: 14px;
+        background: linear-gradient(180deg, #fafcff, #f5f8fb);
+        padding: 18px 20px;
+        transition: border-color .15s ease;
     }
-    .ex-mud-tabs .mud-tab.mud-tab-active { color: var(--fc-blue) !important; font-weight: 800; }
-    .ex-mud-tabs .mud-tab-slider { background: var(--fc-blue) !important; height: 3px; border-radius: 3px 3px 0 0; }
-    .ex-mud-tabs .mud-tab:hover:not(.mud-tab-active) { color: var(--fc-text); background: rgba(0,0,0,.03); border-radius: 8px; }
-    .ex-tab-panel { padding: 0; }
+    .empf-section-card:hover { border-color: #c8d8f0; }
 
-    .etab-label { display: flex; align-items: center; gap: 6px; padding: 0 2px; white-space: nowrap; }
-
-    .etab-num {
-        width: 20px; height: 20px; border-radius: 6px; flex: 0 0 20px;
-        display: flex; align-items: center; justify-content: center;
-        background: #f0f3f8; color: #8899ae;
-        font-size: 9px; font-weight: 900;
-    }
-    .mud-tab-active .etab-num { background: var(--fc-blue-lt); color: var(--fc-blue); }
-
-    .etab-icon {
-        width: 24px; height: 24px;
-        display: flex; align-items: center; justify-content: center;
-        border-radius: 6px;
-    }
-    .etab-blue   { background: var(--fc-blue-lt);   color: var(--fc-blue); }
-    .etab-green  { background: var(--fc-green-lt);  color: var(--fc-green); }
-    .etab-amber  { background: var(--fc-amber-lt);  color: var(--fc-amber); }
-    .etab-purple { background: var(--fc-purple-lt); color: var(--fc-purple); }
-
-    .etab-err-dot {
-        width: 7px; height: 7px; border-radius: 50%;
-        background: var(--fc-red); flex: 0 0 7px;
-        animation: ex-pulse 1.5s ease infinite;
-    }
-    @@keyframes ex-pulse {
-        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.4); }
-        50%      { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
-    }
-
-    .etab-required-badge {
-        display: inline-flex; padding: 1px 6px; border-radius: 5px;
-        background: var(--fc-amber-lt); color: #9a6d08;
-        font-size: 8.5px; font-weight: 800; border: 1px solid #f0d898;
-    }
-
-    /* ================================================================
-       TAB SECTION
-    ================================================================ */
-    .tab-section { padding: 24px 28px 28px; }
-
-    .tab-section-head {
+    .empf-section-head {
         display: flex; align-items: flex-start; gap: 12px;
-        margin-bottom: 22px; padding-bottom: 18px;
-        border-bottom: 1px solid #edf1f7;
+        margin-bottom: 18px; padding-bottom: 14px;
+        border-bottom: 1px solid #e4edf8;
     }
 
-    .tab-section-icon {
-        width: 42px; height: 42px; flex: 0 0 42px;
-        display: flex; align-items: center; justify-content: center;
-        border-radius: 12px;
-    }
-    .tab-section-icon.blue   { background: var(--fc-blue-lt);   color: var(--fc-blue);   border: 1px solid #bdd4fc; }
-    .tab-section-icon.green  { background: var(--fc-green-lt);  color: var(--fc-green);  border: 1px solid #b0e0c5; }
-    .tab-section-icon.amber  { background: var(--fc-amber-lt);  color: var(--fc-amber);  border: 1px solid #f0d070; }
-    .tab-section-icon.purple { background: var(--fc-purple-lt); color: var(--fc-purple); border: 1px solid #d0bfef; }
+    .empf-section-icon { width: 42px; height: 42px; flex: 0 0 42px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+    .icon-blue   { background: var(--fc-blue-lt);  color: var(--fc-blue);  border: 1px solid #bdd4fc; }
+    .icon-green  { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .icon-amber  { background: var(--fc-amber-lt); color: var(--fc-amber); border: 1px solid #f0d070; }
 
-    .tab-section-title { font-size: 15px; font-weight: 800; color: #1c2b43; line-height: 1.2; }
-    .tab-section-sub   { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
+    .empf-section-title { font-size: 14.5px; font-weight: 800; color: #1c2b43; line-height: 1.2; }
+    .empf-section-sub   { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
 
-    /* ================================================================
-       FORM
-    ================================================================ */
-    .ex-form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
-    .form-field { display: flex; flex-direction: column; gap: 6px; }
-    .form-field-full { grid-column: 1 / -1; }
+    /* Form */
+    .empf-form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .empf-field { display: flex; flex-direction: column; gap: 6px; }
+    .empf-field-full { grid-column: 1 / -1; }
 
-    .field-label { font-size: 12px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 4px; }
-    .field-required { color: var(--fc-red); font-size: 14px; line-height: 1; }
+    .empf-label { font-size: 12px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 4px; }
+    .empf-required { color: var(--fc-red); font-size: 13px; }
 
-    .field-input {
+    .empf-input {
         height: 42px; width: 100%;
-        border: 1px solid #d8e2f0; border-radius: 9px;
-        background: #fafcff; color: var(--fc-text);
+        border: 1.5px solid #d8e2f0; border-radius: 9px;
+        background: #fff; color: var(--fc-text);
         font-family: inherit; font-size: 13px; padding: 0 12px;
         outline: none;
-        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+        transition: border-color .15s ease, box-shadow .15s ease;
     }
-    .field-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); background: #fff; }
-    .field-input.field-error { border-color: var(--fc-red); box-shadow: 0 0 0 3px rgba(224,48,72,.08); }
-    .field-input::placeholder { color: #b0bcc8; }
+    .empf-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .empf-input.input-error { border-color: var(--fc-red); box-shadow: 0 0 0 3px rgba(224,48,72,.08); }
+    .empf-input::placeholder { color: #b0bcc8; }
 
-    .field-textarea { height: auto; padding: 10px 12px; resize: vertical; min-height: 90px; }
-
-    .field-select-wrap { position: relative; display: flex; align-items: center; }
-    .field-select-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; z-index: 1; }
-    .field-select { padding-right: 36px; cursor: pointer; -webkit-appearance: none; appearance: none; }
-
-    .field-input-group { position: relative; display: flex; align-items: center; }
-    .field-prefix {
+    .empf-input-group { position: relative; display: flex; align-items: center; }
+    .empf-prefix {
         position: absolute; right: 12px;
         display: flex; align-items: center;
         color: #9aaabb; pointer-events: none; z-index: 1;
         font-size: 11px; font-weight: 700;
     }
-    .field-input.with-prefix { padding-right: 36px; }
+    .empf-input.with-prefix { padding-right: 36px; }
 
-    .field-hint { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--fc-muted); font-weight: 500; }
-    .field-err-msg { font-size: 10.5px; color: var(--fc-red); font-weight: 700; }
+    .empf-select-wrap { position: relative; }
+    .empf-sel-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: #9aaabb; pointer-events: none; z-index: 1; }
+    .empf-select { padding-right: 36px; cursor: pointer; -webkit-appearance: none; appearance: none; }
 
-    /* Total Display */
-    .ex-total-display {
-        height: 42px; display: flex; align-items: center; gap: 5px;
-        padding: 0 12px; border-radius: 9px;
-        background: var(--fc-green-lt); border: 1px solid #b0e0c5;
-    }
-    .ex-total-num {
-        font-family: "Inter", Arial, sans-serif;
-        font-size: 16px; font-weight: 900; color: var(--fc-green);
-    }
-    .ex-total-curr { font-size: 10px; color: #6eac80; font-weight: 600; }
+    .empf-hint { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--fc-muted); font-weight: 500; }
+    .empf-err-msg { font-size: 10.5px; color: var(--fc-red); font-weight: 700; }
 
-    /* ================================================================
-       PAYMENT METHOD CARD
-    ================================================================ */
-    .ex-method-card {
-        display: flex; align-items: center; gap: 14px;
-        padding: 14px 16px; border-radius: 12px;
-        margin-top: 16px; transition: all .2s ease;
-        animation: ex-banner-in .25s ease;
-    }
-    .method-cash    { background: var(--fc-green-lt); border: 1px solid #b0e0c5; }
-    .method-noncash { background: #fafbfe; border: 1px solid #e4eaf3; }
-
-    .method-card-icon { flex: 0 0 auto; }
-    .method-cash    .method-card-icon { color: var(--fc-green); }
-    .method-noncash .method-card-icon { color: var(--fc-muted); }
-
-    .method-card-text { display: flex; flex-direction: column; gap: 3px; }
-    .method-card-text strong { font-size: 13px; font-weight: 800; }
-    .method-cash    .method-card-text strong { color: #0d8a48; }
-    .method-noncash .method-card-text strong { color: #344258; }
-    .method-card-text span { font-size: 11.5px; color: var(--fc-muted); }
-
-    /* ================================================================
-       CUSTODY / ADMIN INFO
-    ================================================================ */
-    .ex-custody-hint {
-        display: flex; align-items: center; gap: 6px;
-        height: 42px; padding: 0 12px;
-        border-radius: 9px; background: #f5f7fa;
-        border: 1px solid #e4eaf3;
-        font-size: 11.5px; color: #9aaabb; font-weight: 600;
-    }
-
-    .ex-admin-info {
-        display: flex; align-items: flex-start; gap: 14px;
-        padding: 16px 18px; border-radius: 12px;
+    .empf-info-box {
+        display: flex; align-items: center; gap: 8px;
+        padding: 10px 13px; border-radius: 9px;
         background: var(--fc-blue-lt); border: 1px solid #bdd4fc;
+        color: var(--fc-blue); font-size: 11px; font-weight: 600;
+        margin-top: 14px;
     }
-    .admin-info-icon { flex: 0 0 auto; color: var(--fc-blue); }
-    .admin-info-text strong { display: block; font-size: 13px; font-weight: 800; color: var(--fc-blue); }
-    .admin-info-text p { margin: 4px 0 0; font-size: 11.5px; color: #3a6cc0; }
 
-    /* ================================================================
-       BOTTOM ACTIONS
-    ================================================================ */
-    .ex-bottom-actions {
+    /* ── Status Grid ── */
+    .empf-status-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+
+    .empf-status-card {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 16px; border-radius: 12px;
+        border: 2px solid #e4edf8; background: #fafcff;
+        cursor: pointer; text-align: right;
+        font-family: inherit;
+        transition: all .18s ease; position: relative;
+    }
+    .empf-status-card:hover:not(.status-selected) { border-color: #b0c4e0; transform: translateY(-1px); }
+
+    .status-card-icon { font-size: 24px; flex: 0 0 auto; }
+
+    .status-card-text { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+    .status-card-label { font-size: 13px; font-weight: 800; color: #1c2b43; }
+    .status-card-sub   { font-size: 10px; color: #9aaabb; font-weight: 500; }
+
+    .status-card-check {
+        position: absolute; top: 10px; left: 10px;
+        width: 22px; height: 22px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: currentColor; color: #fff;
+        transition: all .15s ease;
+    }
+
+    /* Status Colors */
+    .status-green.status-selected  { border-color: var(--fc-green); background: var(--fc-green-lt); box-shadow: 0 0 0 3px rgba(22,163,91,.10); }
+    .status-amber.status-selected  { border-color: var(--fc-amber); background: var(--fc-amber-lt); box-shadow: 0 0 0 3px rgba(224,154,16,.10); }
+    .status-red.status-selected    { border-color: var(--fc-red);   background: var(--fc-red-lt);   box-shadow: 0 0 0 3px rgba(224,48,72,.10); }
+    .status-gray.status-selected   { border-color: #9aaabb; background: #f0f3f8; box-shadow: 0 0 0 3px rgba(154,170,187,.15); }
+
+    .status-green.status-selected .status-card-label { color: var(--fc-green); }
+    .status-amber.status-selected .status-card-label { color: #9a6d08; }
+    .status-red.status-selected   .status-card-label { color: var(--fc-red); }
+    .status-gray.status-selected  .status-card-label { color: #5a6e88; }
+
+    .status-green.status-selected .status-card-check { background: var(--fc-green); color: #fff; }
+    .status-amber.status-selected .status-card-check { background: var(--fc-amber); color: #fff; }
+    .status-red.status-selected   .status-card-check { background: var(--fc-red);   color: #fff; }
+    .status-gray.status-selected  .status-card-check { background: #9aaabb; color: #fff; }
+
+    /* Warn Box */
+    .empf-warn-box {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 14px 16px; border-radius: 12px;
+        background: var(--fc-amber-lt); border: 1px solid #f0d898;
+    }
+    .empf-warn-box svg { flex: 0 0 auto; color: #d97706; margin-top: 2px; }
+    .empf-warn-box strong { display: block; font-size: 13px; font-weight: 800; color: #92400e; }
+    .empf-warn-box p { margin: 3px 0 0; font-size: 11.5px; color: #b45309; }
+
+    /* Bottom Actions */
+    .empf-bottom-actions {
         display: flex; align-items: center; justify-content: space-between;
         gap: 12px; padding: 14px 20px;
         background: var(--fc-card); border: 1px solid var(--fc-border);
         border-radius: var(--fc-radius); box-shadow: 0 2px 8px rgba(15,41,82,.04);
     }
-
-    .ex-bottom-back {
+    .empf-bottom-back {
         display: inline-flex; align-items: center; gap: 6px;
         height: 38px; padding: 0 16px;
         border: 1px solid var(--fc-border); border-radius: 9px;
@@ -1369,12 +907,12 @@
         font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
         transition: all .15s ease;
     }
-    .ex-bottom-back:hover { background: #f0f4fa; color: var(--fc-text); }
-    .ex-bottom-back svg { transform: rotate(180deg); }
+    .empf-bottom-back:hover { background: #f0f4fa; color: var(--fc-text); }
+    .empf-bottom-back svg { transform: rotate(180deg); }
 
-    .ex-bottom-right { display: flex; align-items: center; gap: 8px; }
+    .empf-bottom-right { display: flex; align-items: center; gap: 10px; }
 
-    .ex-next-btn {
+    .empf-next-btn {
         display: inline-flex; align-items: center; gap: 6px;
         height: 38px; padding: 0 14px;
         border: 1.5px solid var(--fc-blue); border-radius: 9px;
@@ -1382,199 +920,138 @@
         font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
         transition: all .15s ease;
     }
-    .ex-next-btn:hover { background: var(--fc-blue); color: #fff; }
-    .ex-next-btn svg { transform: rotate(180deg); }
+    .empf-next-btn:hover { background: var(--fc-blue); color: #fff; }
+    .empf-next-btn svg { transform: rotate(180deg); }
 
-    .ex-draft-bottom-btn {
-        display: inline-flex; align-items: center; gap: 6px;
-        height: 38px; padding: 0 14px;
-        border: 1px solid #e4eaf3; border-radius: 9px;
-        background: #f5f7fa; color: #6b7d95;
-        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
-        transition: all .15s ease;
-    }
-    .ex-draft-bottom-btn:hover:not(:disabled) { background: #edf1f7; color: var(--fc-text); }
-    .ex-draft-bottom-btn:disabled { opacity: .6; cursor: not-allowed; }
-
-    .ex-confirm-btn {
-        display: inline-flex; align-items: center; gap: 7px;
-        height: 40px; padding: 0 20px;
+    .empf-bottom-save {
+        display: inline-flex; align-items: center; gap: 8px;
+        height: 40px; padding: 0 22px;
         border: 0; border-radius: 10px;
-        background: linear-gradient(135deg, #22c55e, #16a34a);
+        background: linear-gradient(135deg, #1e6ef5, #1558d6);
         color: #fff; font-family: inherit;
         font-size: 13px; font-weight: 800; cursor: pointer;
-        box-shadow: 0 4px 14px rgba(22,163,74,.28);
+        box-shadow: 0 4px 14px rgba(30,110,245,.28);
         transition: all .15s ease;
     }
-    .ex-confirm-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(22,163,74,.36); }
-    .ex-confirm-btn:disabled { opacity: .6; cursor: not-allowed; }
+    .empf-bottom-save:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(30,110,245,.36); }
+    .empf-bottom-save:disabled { opacity: .6; cursor: not-allowed; }
 
-    /* Spinner */
-    .btn-spinner {
-        width: 15px; height: 15px;
-        border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
-        border-radius: 50%; animation: ex-spin .7s linear infinite;
-    }
+    .btn-spinner { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: empf-spin .7s linear infinite; }
     .btn-spinner.sm { width: 13px; height: 13px; }
 
-    /* ================================================================
-       RESPONSIVE
-    ================================================================ */
     @@media (max-width: 900px) {
-        .ex-form-grid { grid-template-columns: 1fr; }
-        .tab-section  { padding: 18px 16px 22px; }
-        .ex-treasury-strip { flex-direction: column; align-items: flex-start; gap: 10px; }
+        .empf-form-grid   { grid-template-columns: 1fr; }
+        .empf-status-grid { grid-template-columns: 1fr; }
+        .empf-tab-section { padding: 16px 14px 20px; }
     }
 
     @@media (max-width: 680px) {
-        .ex-body { padding: 10px 12px 24px; }
-        .ex-bottom-actions { flex-direction: column; }
-        .ex-bottom-back, .ex-confirm-btn { width: 100%; justify-content: center; }
-        .ex-bottom-right { width: 100%; flex-direction: column; }
-        .ex-next-btn, .ex-draft-bottom-btn { width: 100%; justify-content: center; }
-        .ex-treasury-checks { gap: 4px; }
-    }
-
-    @@media (max-width: 480px) {
-        .ex-treasury-strip { display: none; }
+        .empf-body { padding: 10px 12px 24px; }
+        .empf-bottom-actions { flex-direction: column; }
+        .empf-bottom-back, .empf-bottom-save { width: 100%; justify-content: center; }
+        .empf-bottom-right { width: 100%; flex-direction: column; }
+        .empf-next-btn { width: 100%; justify-content: center; }
     }
 
 </style>
 
 
 @code {
-    [Parameter] public long? Id { get; set; }
-    private long?  _id;
-    private string ExpenseNumber  = "";
-    private string _paymentStatus = "Unpaid";
-    private bool   _cancelled;
+    [Parameter] public int? Id { get; set; }
+    private int?   _id;
+    private string EmployeeCode = "";
     private int    _activeTab;
     private bool   _triedSave;
 
     private AuthUser? _user;
-    private bool CanCreate => _user?.Can("EXPENSE.CREATE") ?? false;
-    private bool CanEdit   => _user?.Can("EXPENSE.EDIT")   ?? false;
+    private bool CanCreate => _user?.Can("EMPLOYEE.CREATE") ?? false;
+    private bool CanEdit   => _user?.Can("EMPLOYEE.EDIT")   ?? false;
     private bool CanSave   => _id is null ? CanCreate : CanEdit;
 
     private bool    _loading; private bool _saving;
     private string? _msg;     private bool _ok = true;
 
-    private List<ExpType>    _types      = new();
-    private List<TaxOpt>     _taxRates   = new();
-    private List<MethodOpt>  _methods    = new();
-    private List<Opt>        _suppliers  = new();
-    private List<Opt>        _drivers    = new();
-    private List<OpOpt>      _operations = new();
-    private List<TripOpt>    _trips      = new();
-    private List<CustodyOpt> _custodies  = new();
+    private List<Opt> _depts  = new();
+    private List<Opt> _titles = new();
+    private List<Mgr> _all    = new();
 
-    private bool _isApproved;
     private Form _f = new();
 
-    /* ── Validation ── */
+    private IEnumerable<Mgr> Managers =>
+        _id is null ? _all : _all.Where(m => m.EmployeeId != _id.Value);
+
+    /* Validation */
     private bool HasTabError(int tab) => _triedSave && tab switch
     {
-        1 => _f.ExpenseTypeId <= 0 || _f.Amount <= 0,
+        1 => string.IsNullOrWhiteSpace(_f.FullNameAr),
         _ => false
     };
 
-    /* ── Treasury Status ── */
-    private bool _stApproved  => _isApproved;
-    private bool _stPaid      => _paymentStatus != "Unpaid";
-    private bool _stNoCustody => _f.CustodyId is null;
-    private bool _stCash      => CurrentMethod?.IsCashBased == true;
-    private bool _willTreasury => _stApproved && _stPaid && _stNoCustody && _stCash;
-
-    private ExpType?   CurrentType   => _types.FirstOrDefault(t => t.Id == _f.ExpenseTypeId);
-    private MethodOpt? CurrentMethod => _methods.FirstOrDefault(m => m.Id == _f.PaymentMethodId);
-
-    private bool IsOperationCost => CurrentType?.IsOperationCost ?? true;
-
-    private string TypeHint => CurrentType is null ? ""
-        : CurrentType.IsOperationCost
-            ? "مصروف تشغيلي — بيتحمل على عملية، ولازم يتربط بواحدة"
-            : "مصروف إداري — بيتحمل على الشركة، ومش محتاج ربط";
-
-    private string LinkHint => IsOperationCost
-        ? "مصروف تشغيلي — اربطه بالعملية أو الرحلة اللي اتصرف عليها"
-        : "مصروف إداري — الربط اختياري";
-
-    private decimal TotalWithTax
+    /* Hero Badge */
+    private static string StatusHeroBadge(string s) => s switch
     {
-        get
-        {
-            var rate = _taxRates.FirstOrDefault(t => t.Id == _f.TaxRateId)?.Value ?? 0m;
-            return _f.Amount + (_f.Amount * rate / 100m);
-        }
-    }
+        "Active"     => "badge-active",
+        "OnLeave"    => "badge-onleave",
+        "Suspended"  => "badge-suspended",
+        "Terminated" => "badge-terminated",
+        _            => "badge-edit"
+    };
 
-    private string TreasuryReason
+    private static string StatusName(string s) => s switch
     {
-        get
-        {
-            if (_f.CustodyId is not null) return "المصروف مربوط بعهدة — فلوسه اتصرفت وقت صرف العهدة، مش هيتحسب مرتين.";
-            if (!_stApproved) return "لسه ما اتعتمدش — اعتمده من صفحة المصروفات.";
-            if (!_stPaid)     return "لسه ما اتعلّمش مدفوع — علّمه مدفوع من صفحة المصروفات.";
-            if (!_stCash)     return _f.PaymentMethodId is null
-                ? "حدد طريقة الدفع الأول."
-                : $"«{(CurrentMethod?.Label ?? "")}» مش طريقة نقدية — الفلوس مش في الدرج.";
-            return "هيتسجل في الخزينة تلقائياً.";
-        }
-    }
+        "Active"     => "نشط",
+        "OnLeave"    => "في إجازة",
+        "Suspended"  => "موقوف",
+        "Terminated" => "منتهي الخدمة",
+        _            => s
+    };
 
-    /* ── DTOs ── */
+    /* DTOs */
     public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
-    public class TaxOpt    { public int Id { get; set; } public string Label { get; set; } = ""; public decimal Value { get; set; } }
-    public class MethodOpt { public int Id { get; set; } public string Label { get; set; } = ""; public bool IsCashBased { get; set; } }
-    public class ExpType   { public int Id { get; set; } public string Label { get; set; } = ""; public bool IsOperationCost { get; set; } public bool IsTaxDeductible { get; set; } }
-    public class OpOpt     { public long OperationId { get; set; } public string OperationNumber { get; set; } = ""; public string CustomerName { get; set; } = ""; }
-    public class TripOpt   { public long TripId { get; set; } public string TripNumber { get; set; } = ""; public string DriverName { get; set; } = ""; }
-    public class CustodyOpt { public long Id { get; set; } public string Label { get; set; } = ""; public int OwnerId { get; set; } public string OwnerType { get; set; } = ""; public long? TripId { get; set; } }
+
+    public class Mgr
+    {
+        public int    EmployeeId       { get; set; }
+        public string EmployeeCode     { get; set; } = "";
+        public string FullNameAr       { get; set; } = "";
+        public string EmploymentStatus { get; set; } = "";
+    }
 
     public class Form
     {
-        public int     ExpenseTypeId    { get; set; }
-        public string? ExpenseDate      { get; set; }
-        public string? Description      { get; set; }
-        public decimal Amount           { get; set; }
-        public long?   OperationId      { get; set; }
-        public long?   TripId           { get; set; }
-        public int?    DriverId         { get; set; }
-        public int?    SupplierId       { get; set; }
-        public long?   CustodyId        { get; set; }
-        public int?    TaxRateId        { get; set; }
-        public bool?   IsTaxDeductible  { get; set; }
-        public string? ReferenceNumber  { get; set; }
-        public string? Notes            { get; set; }
-        public int?    PaymentMethodId  { get; set; }
+        public string  FullNameAr        { get; set; } = "";
+        public string? FullNameEn        { get; set; }
+        public string? NationalId        { get; set; }
+        public string? Mobile            { get; set; }
+        public string? Email             { get; set; }
+        public string? Address           { get; set; }
+        public string? HireDate          { get; set; }
+        public int?    DepartmentId      { get; set; }
+        public int?    JobTitleId        { get; set; }
+        public int?    BranchId          { get; set; }
+        public int?    ManagerEmployeeId { get; set; }
+        public string  EmploymentStatus  { get; set; } = "Active";
     }
 
     public class Detail
     {
-        public long    ExpenseId        { get; set; }
-        public string  ExpenseNumber    { get; set; } = "";
-        public int     ExpenseTypeId    { get; set; }
-        public string? ExpenseDate      { get; set; }
-        public string? Description      { get; set; }
-        public decimal Amount           { get; set; }
-        public int?    TaxRateId        { get; set; }
-        public bool    IsTaxDeductible  { get; set; }
-        public long?   OperationId      { get; set; }
-        public long?   TripId           { get; set; }
-        public int?    DriverId         { get; set; }
-        public int?    SupplierId       { get; set; }
-        public long?   CustodyId        { get; set; }
-        public string? ReferenceNumber  { get; set; }
-        public string? Notes            { get; set; }
-        public string  PaymentStatus    { get; set; } = "";
-        public string  Status           { get; set; } = "";
-        public bool    IsApproved       { get; set; }
-        public decimal TaxRate          { get; set; }
-        public int?    PaymentMethodId  { get; set; }
-        public string? MethodName       { get; set; }
+        public int     EmployeeId        { get; set; }
+        public string  EmployeeCode      { get; set; } = "";
+        public string  FullNameAr        { get; set; } = "";
+        public string? FullNameEn        { get; set; }
+        public string? NationalId        { get; set; }
+        public string? Mobile            { get; set; }
+        public string? Email             { get; set; }
+        public string? Address           { get; set; }
+        public DateOnly? HireDate        { get; set; }
+        public int?    DepartmentId      { get; set; }
+        public int?    JobTitleId        { get; set; }
+        public int?    BranchId          { get; set; }
+        public int?    ManagerEmployeeId { get; set; }
+        public string  EmploymentStatus  { get; set; } = "";
     }
 
-    /* ── Init ── */
+    /* Init */
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
@@ -1584,103 +1061,48 @@
         _loading = true;
         try
         {
-            _types      = await SafeGetT<ExpType>("api/options/expense-types");
-            _taxRates   = await SafeGetT<TaxOpt>("api/options/tax-rates");
-            _methods    = await SafeGetT<MethodOpt>("api/options/payment-methods");
-            _suppliers  = await SafeGetT<Opt>("api/options/suppliers");
-            _drivers    = await SafeGetT<Opt>("api/options/drivers");
-            _operations = await SafeGetT<OpOpt>("api/operations?take=200");
-            _trips      = await SafeGetT<TripOpt>("api/trips?take=200");
+            _depts  = await SafeGetT<Opt>("api/options/departments");
+            _titles = await SafeGetT<Opt>("api/options/job-titles");
+            _all    = await SafeGetT<Mgr>("api/employees?take=300");
 
-            if (_id is not null) await LoadAsync(_id.Value);
-            else NewDefaults();
+            if (_id is not null)
+                await LoadAsync(_id.Value);
+            else
+                _f = new Form
+                {
+                    EmploymentStatus = "Active",
+                    HireDate         = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd")
+                };
         }
         catch (Exception ex) { _msg = "فشل التحميل: " + ex.Message; _ok = false; }
         finally { _loading = false; }
     }
 
-    private void NewDefaults()
+    private async Task LoadAsync(int id)
     {
+        var d = await Http.GetFromJsonAsync<Detail>($"api/employees/{id}");
+        if (d is null) { _msg = "الموظف غير موجود"; _ok = false; return; }
+
+        EmployeeCode = d.EmployeeCode;
         _f = new Form
         {
-            ExpenseTypeId = _types.FirstOrDefault()?.Id ?? 0,
-            ExpenseDate   = DateTime.Now.ToString("yyyy-MM-ddTHH:mm")
+            FullNameAr        = d.FullNameAr,
+            FullNameEn        = d.FullNameEn,
+            NationalId        = d.NationalId,
+            Mobile            = d.Mobile,
+            Email             = d.Email,
+            Address           = d.Address,
+            HireDate          = d.HireDate?.ToString("yyyy-MM-dd"),
+            DepartmentId      = d.DepartmentId,
+            JobTitleId        = d.JobTitleId,
+            BranchId          = d.BranchId,
+            ManagerEmployeeId = d.ManagerEmployeeId,
+            EmploymentStatus  = d.EmploymentStatus
         };
-        _f.IsTaxDeductible = CurrentType?.IsTaxDeductible;
     }
 
-    private async Task LoadAsync(long id)
-    {
-        var d = await Http.GetFromJsonAsync<Detail>($"api/expenses/{id}");
-        if (d is null) { _msg = "المصروف غير موجود"; _ok = false; return; }
-
-        ExpenseNumber  = d.ExpenseNumber;
-        _paymentStatus = d.PaymentStatus;
-        _isApproved    = d.IsApproved;
-        _cancelled     = d.Status == "Cancelled";
-
-        _f = new Form
-        {
-            ExpenseTypeId   = d.ExpenseTypeId,
-            ExpenseDate     = d.ExpenseDate,
-            Description     = d.Description,
-            Amount          = d.Amount,
-            OperationId     = d.OperationId,
-            TripId          = d.TripId,
-            DriverId        = d.DriverId,
-            SupplierId      = d.SupplierId,
-            CustodyId       = d.CustodyId,
-            TaxRateId       = d.TaxRateId,
-            IsTaxDeductible = d.IsTaxDeductible,
-            ReferenceNumber = d.ReferenceNumber,
-            Notes           = d.Notes,
-            PaymentMethodId = d.PaymentMethodId
-        };
-
-        await LoadCustodiesAsync();
-    }
-
-    /* ── Handlers ── */
-    private void OnTypeChanged(ChangeEventArgs e)
-    {
-        _f.ExpenseTypeId = int.TryParse(e.Value?.ToString(), out var n) ? n : 0;
-        var t = CurrentType;
-        if (t is not null && !t.IsOperationCost)
-        {
-            _f.OperationId = null;
-            _f.TripId      = null;
-            _f.CustodyId   = null;
-        }
-        _f.IsTaxDeductible = t?.IsTaxDeductible;
-    }
-
-    private void OnTripChanged(ChangeEventArgs e)
-    {
-        _f.TripId    = long.TryParse(e.Value?.ToString(), out var t) && t > 0 ? t : null;
-        _f.CustodyId = null;
-        _ = LoadCustodiesAsync();
-    }
-
-    private void OnCustodyChanged(ChangeEventArgs e)
-    {
-        var id = long.TryParse(e.Value?.ToString(), out var c) && c > 0 ? c : (long?)null;
-        _f.CustodyId = id;
-        if (id is null) return;
-        var cus = _custodies.FirstOrDefault(x => x.Id == id);
-        if (cus is null) return;
-        _f.TripId ??= cus.TripId;
-        if (cus.OwnerType == "Driver") _f.DriverId ??= cus.OwnerId;
-    }
-
-    private async Task LoadCustodiesAsync()
-    {
-        _custodies = _f.TripId is null
-            ? new()
-            : await SafeGetT<CustodyOpt>($"api/options/custodies?tripId={_f.TripId}");
-    }
-
-    /* ── Save ── */
-    private async Task SaveAsync(bool asDraft)
+    /* Save */
+    private async Task SaveAsync()
     {
         if (_saving) return;
         _triedSave = true;
@@ -1689,43 +1111,12 @@
 
         try
         {
-            if (_f.ExpenseTypeId <= 0)
-            { _ok = false; _msg = "اختار نوع المصروف"; _activeTab = 0; return; }
-
-            if (_f.Amount <= 0)
-            { _ok = false; _msg = "المبلغ لازم يكون أكتر من صفر"; _activeTab = 0; return; }
-
-            if (IsOperationCost &&
-                _f.OperationId is null && _f.TripId is null && _f.SupplierId is null)
-            {
-                _ok = false;
-                _msg = "المصروف التشغيلي لازم يتربط بعملية أو رحلة أو مورد";
-                _activeTab = 2;
-                return;
-            }
-
-            var payload = new
-            {
-                expenseTypeId   = _f.ExpenseTypeId,
-                expenseDate     = _f.ExpenseDate,
-                description     = _f.Description,
-                amount          = _f.Amount,
-                operationId     = _f.OperationId,
-                tripId          = _f.TripId,
-                driverId        = _f.DriverId,
-                supplierId      = _f.SupplierId,
-                custodyId       = _f.CustodyId,
-                taxRateId       = _f.TaxRateId,
-                isTaxDeductible = _f.IsTaxDeductible,
-                referenceNumber = _f.ReferenceNumber,
-                notes           = _f.Notes,
-                paymentMethodId = _f.PaymentMethodId,
-                asDraft         = asDraft
-            };
+            if (string.IsNullOrWhiteSpace(_f.FullNameAr))
+            { _msg = "الاسم بالعربي مطلوب"; _ok = false; _activeTab = 0; return; }
 
             var res = _id is null
-                ? await Http.PostAsJsonAsync("api/expenses", payload)
-                : await Http.PutAsJsonAsync($"api/expenses/{_id}", payload);
+                ? await Http.PostAsJsonAsync("api/employees", _f)
+                : await Http.PutAsJsonAsync($"api/employees/{_id}", _f);
 
             _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
             Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
@@ -1735,28 +1126,10 @@
         finally { _saving = false; }
     }
 
-    /* ── Helpers ── */
-    private void GoBack() => Nav.NavigateTo("/expenses");
+    private void OnHireDateChanged(ChangeEventArgs e) =>
+        _f.HireDate = e.Value?.ToString();
 
-    private static decimal ParseAmount(object? v) =>
-        decimal.TryParse(v?.ToString(), out var n) && n > 0 ? n : 0m;
-
-    private static string Money(decimal v) => v.ToString("N2");
-
-    private static string PayAr(string p) => p switch
-    {
-        "Unpaid"        => "غير مدفوع",
-        "PartiallyPaid" => "مدفوع جزئياً",
-        "Paid"          => "مدفوع",
-        _               => "غير مدفوع"
-    };
-
-    private static string PayStatusBadge(string p) => p switch
-    {
-        "Paid"          => "badge-paid",
-        "PartiallyPaid" => "badge-partial",
-        _               => "badge-unpaid"
-    };
+    private void GoBack() => Nav.NavigateTo("/employees");
 
     private async Task<List<T>> SafeGetT<T>(string url)
     {
@@ -1772,6 +1145,6 @@
             var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
             return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
         }
-        catch { return res.IsSuccessStatusCode ? "تم الحفظ" : "حصل خطأ — حاول تاني"; }
+        catch { return res.IsSuccessStatusCode ? "✅ تم الحفظ" : "حصل خطأ — حاول تاني"; }
     }
 }

@@ -6,265 +6,1310 @@
 @inject AuthService Auth
 @inject ISnackbar Snackbar
 
-<PageTitle>الخدمات — فاست كوم</PageTitle>
+<PageTitle>الخدمات والتعريفات — فاست كوم</PageTitle>
 
-<div class="fc-hero">
-    <div class="fc-hero-inner">
-        <div class="fc-page-head">
-            <div>
-                <div class="fc-crumb">البيانات الأساسية · الأسعار</div>
-                <h1 class="fc-hero-title">الخدمات</h1>
-                <p class="fc-hero-sub">نقل حاوية · تحميل · انتظار — السعر الافتراضي بيتطبق لو مافيش سعر خاص للعميل</p>
+@* ═══════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════ *@
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
+            <div class="doc-hero-row">
+                <div class="doc-hero-left">
+                    <div class="doc-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 8v8M8 12h8" stroke-linecap="round"/>
+                        </svg>
+                        <span>البيانات الأساسية · الأسعار</span>
+                    </div>
+                    <h1 class="fc-hero-title">دليل الخدمات والتعريفات</h1>
+                    <p class="fc-hero-sub">تحديد خدمات النقل والتحميل والانتظار وتكلفة تسعيرها الافتراضية</p>
+                </div>
+                <div class="doc-hero-right">
+                    <span class="doc-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                    @if (_items.Any(i => i.DefaultSellingPrice == 0 && i.IsActive))
+                    {
+                        <span class="doc-hero-chip doc-chip-warn">
+                            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                            </svg>
+                            سعر صفر: @_items.Count(i => i.DefaultSellingPrice == 0 && i.IsActive)
+                        </span>
+                    }
+                </div>
             </div>
-            <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="LoadAsync" Style="color:#9FB4CC" />
-                @if (CanManage)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="ResetForm">خدمة جديدة</MudButton>
-                }
-            </div>
-        </div>
-
-        <div class="fc-kpis-glass">
-            <div class="fc-kpi"><div class="fc-kpi-lb">الخدمات</div><div class="fc-kpi-num">@_items.Count</div></div>
-            <div class="fc-kpi"><div class="fc-kpi-lb">نشطة</div><div class="fc-kpi-num">@_items.Count(i => i.IsActive)</div></div>
-            <div class="fc-kpi"><div class="fc-kpi-lb">سعرها صفر</div>
-                <div class="fc-kpi-num">@_items.Count(i => i.DefaultSellingPrice == 0)</div></div>
+            @if (CanView)
+            {
+                <div class="doc-kpis-row">
+                    <div class="doc-kpi doc-kpi-blue">
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.List" Size="Size.Small" /></div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@_items.Count</div>
+                                <div class="doc-kpi-label">الخدمات المسجلة</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="doc-kpi doc-kpi-green">
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" /></div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@_items.Count(i => i.IsActive)</div>
+                                <div class="doc-kpi-label">خدمات نشطة</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="doc-kpi doc-kpi-red">
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.TrendingDown" Size="Size.Small" /></div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@_items.Count(i => i.DefaultSellingPrice == 0)</div>
+                                <div class="doc-kpi-label">سعرها صفر</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
         </div>
     </div>
 </div>
 
-<div class="fc-page">
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="doc-body">
     @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض البيانات الأساسية.</MudAlert>
+        <div class="doc-state-box">
+            <div class="state-icon-wrap perm">
+                <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليست لديك الصلاحية الكافية لعرض دليل الخدمات (MASTERDATA.VIEW)</p>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
-
-            @if (_items.Any(i => i.DefaultSellingPrice == 0 && i.IsActive))
-            {
-                <div class="fc-alert fc-alert-warn">
-                    <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
-                    <div class="fc-alert-body">
-                        <div class="fc-alert-title">فيه @_items.Count(i => i.DefaultSellingPrice == 0 && i.IsActive) خدمة سعرها صفر</div>
-                        <div>الاقتراح التلقائي في العمليات هيطلع <b>صفر</b> للخدمات دي.
-                            حطّ سعر افتراضي، أو اعمل سعر خاص للعميل من «قوائم الأسعار».</div>
+        <div class="fc-overlap">
+            <div class="doc-card">
+                @if (_items.Any(i => i.DefaultSellingPrice == 0 && i.IsActive))
+                {
+                    <div class="doc-banner banner-info" role="alert">
+                        <div class="banner-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <span>
+                            <strong>تنبيه:</strong> يوجد <strong>@_items.Count(i => i.DefaultSellingPrice == 0 && i.IsActive)</strong> خدمة نشطة بسعر صفر ستظهر في الفواتير بقيمة صفر.
+                        </span>
                     </div>
-                </div>
-            }
+                }
 
-            @if (CanManage)
-            {
-                <div class="fc-fsec">
-                    <div class="fc-fsec-head">
-                        <span class="fc-fsec-n">1</span>
-                        <div>
-                            <div class="fc-fsec-t">@(_editId is null ? "خدمة جديدة" : $"تعديل: {_f.NameAr}")</div>
-                            <div class="fc-fsec-d">الكود بالحروف الإنجليزية — زي TRANS40 أو WAIT</div>
-                        </div>
-                        <span class="fc-fsec-ic"><MudIcon Icon="@Icons.Material.Filled.List" Size="Size.Small" /></span>
-                    </div>
-
-                    @if (_msg is not null)
-                    {
-                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
-                                  Class="mb-4">@_msg</MudAlert>
-                    }
-
-                    <div class="fc-form-grid">
-                        <div class="fc-fld">
-                            <div class="fc-fld-lb">الكود<i>*</i></div>
-                            <input class="fc-sel fc-sel-lg" @bind="_f.ServiceCode" maxlength="30" dir="ltr"
-                                   disabled="@(_editId is not null && _f.UsageCount > 0)" />
-                            @if (_editId is not null && _f.UsageCount > 0)
-                            {
-                                <div class="fc-fld-hint">مقفل — مستخدم في @_f.UsageCount بند فاتورة</div>
-                            }
-                        </div>
-                        <div class="fc-fld">
-                            <div class="fc-fld-lb">الاسم بالعربي<i>*</i></div>
-                            <input class="fc-sel fc-sel-lg" @bind="_f.NameAr" maxlength="150" />
-                        </div>
-                        <div class="fc-fld">
-                            <div class="fc-fld-lb">الاسم بالإنجليزي</div>
-                            <input class="fc-sel fc-sel-lg" @bind="_f.NameEn" maxlength="150" />
-                        </div>
-                        <div class="fc-fld">
-                            <div class="fc-fld-lb">الوحدة<i>*</i></div>
-                            <select class="fc-sel fc-sel-lg" @bind="_f.Unit">
-                                @foreach (var u in Units) { <option value="@u">@UnitAr(u)</option> }
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="fc-panel-sub" style="margin:22px 0 12px">التسعير</div>
-                    <div class="fc-form-grid">
-                        <div class="fc-fld">
-                            <div class="fc-fld-lb">سعر البيع الافتراضي</div>
-                            <input type="number" min="0" step="0.01" class="fc-sel fc-sel-lg" value="@_f.DefaultSellingPrice"
-                                   @onchange="e => _f.DefaultSellingPrice = ParseDec(e.Value)" />
-                            <div class="fc-fld-hint">بيتطبق لو مافيش سعر خاص للعميل</div>
-                        </div>
-                        <div class="fc-fld">
-                            <div class="fc-fld-lb">التكلفة الافتراضية</div>
-                            <input type="number" min="0" step="0.01" class="fc-sel fc-sel-lg" value="@_f.DefaultCost"
-                                   @onchange="e => _f.DefaultCost = ParseDec(e.Value)" />
-                        </div>
-                        <div class="fc-fld">
-                            <div class="fc-fld-lb">الضريبة</div>
-                            <select class="fc-sel fc-sel-lg" value="@_f.TaxRateId" @onchange="OnTaxChanged">
-                                <option value="">— بدون —</option>
-                                @foreach (var t in _taxRates) { <option value="@t.Id">@t.Label</option> }
-                            </select>
-                        </div>
-                        <div class="fc-fld">
-                            <div class="fc-fld-lb">خاضعة للضريبة؟</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_f.IsTaxable">
-                                <option value="true">أيوه</option>
-                                <option value="false">لأ — معفاة</option>
-                            </select>
-                        </div>
-                        @if (_f.DefaultSellingPrice > 0)
+                <div class="doc-toolbar">
+                    <div class="doc-search-wrap">
+                        <svg class="doc-search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                        </svg>
+                        <input class="doc-search-input" placeholder="ابحث باسم الخدمة أو الكود..."
+                               @bind="_search" @bind:event="oninput" aria-label="البحث" />
+                        @if (!string.IsNullOrWhiteSpace(_search))
                         {
-                            <div class="fc-fld">
-                                <div class="fc-fld-lb">الهامش المتوقع</div>
-                                <div class="fc-sel fc-sel-lg" style="display:flex;align-items:center;font-weight:800">
-                                    @Money(_f.DefaultSellingPrice - _f.DefaultCost)
-                                </div>
-                                <div class="fc-fld-hint">سعر البيع − التكلفة</div>
-                            </div>
+                            <button class="doc-search-clear" @onclick="() => _search = string.Empty" aria-label="مسح">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                                </svg>
+                            </button>
                         }
                     </div>
-
-                    <div class="fc-panel-sub" style="margin:22px 0 12px">الفاتورة الإلكترونية (ETA)</div>
-                    <div class="fc-form-grid">
-                        <div class="fc-fld">
-                            <div class="fc-fld-lb">كود GS1</div>
-                            <input class="fc-sel fc-sel-lg" @bind="_f.Gs1Code" maxlength="50" dir="ltr" />
-                            <div class="fc-fld-hint">اختياري دلوقتي — مطلوب للتكامل مع منظومة الفاتورة الإلكترونية</div>
-                        </div>
-                        <div class="fc-fld">
-                            <div class="fc-fld-lb">كود EGS</div>
-                            <input class="fc-sel fc-sel-lg" @bind="_f.EgsCode" maxlength="50" dir="ltr" />
-                        </div>
-                        <div class="fc-fld">
-                            <div class="fc-fld-lb">الحالة</div>
-                            <div class="fc-active-toggle">
-                                <MudCheckBox T="bool" @bind-Value="_f.IsActive" Color="Color.Secondary" Label="نشطة" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
-                        @if (_editId is not null)
-                        {
-                            <MudButton Variant="Variant.Text" OnClick="ResetForm">إلغاء التعديل</MudButton>
-                        }
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
-                                   StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">حفظ</MudButton>
-                    </div>
-                </div>
-            }
-
-            <div class="fc-fsec" style="margin-top:26px">
-                <div class="fc-fsec-head">
-                    <span class="fc-fsec-n">2</span>
-                    <div>
-                        <div class="fc-fsec-t">الخدمات الموجودة</div>
-                        <div class="fc-fsec-d">@_items.Count خدمة · @_items.Count(i => i.IsActive) نشطة</div>
+                    <div class="doc-results-badge">
+                        <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <circle cx="8" cy="8" r="6"/><path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                        </svg>
+                        عرض <strong>@Filtered.Count()</strong> من <strong>@_items.Count</strong>
                     </div>
                 </div>
 
-                <div class="fc-table-wrap"><table class="fc-table">
-                    <thead><tr>
-                        <th>الكود</th><th>الخدمة</th><th>الوحدة</th>
-                        <th>سعر البيع</th><th>التكلفة</th><th>الضريبة</th>
-                        <th>بنود</th><th style="width:110px"></th>
-                    </tr></thead>
-                    <tbody>
-                        @foreach (var s in _items)
-                        {
-                            <tr>
-                                <td><span class="fc-role-chip">@s.ServiceCode</span></td>
-                                <td class="fc-cell-main">
-                                    @s.NameAr
-                                    @if (!s.IsActive)
-                                    {
-                                        <span class="fc-chip fc-chip-gray">معطّلة</span>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(s.NameEn))
-                                    {
-                                        <div class="fc-cell-sub">@s.NameEn</div>
-                                    }
-                                </td>
-                                <td class="fc-cell-sub">@UnitAr(s.Unit)</td>
-                                <td>
-                                    @if (s.DefaultSellingPrice == 0)
-                                    {
-                                        <span class="fc-chip fc-chip-warn">صفر</span>
-                                    }
-                                    else
-                                    {
-                                        <b>@Money(s.DefaultSellingPrice)</b>
-                                    }
-                                </td>
-                                <td>@Money(s.DefaultCost)</td>
-                                <td class="fc-cell-sub">
-                                    @(string.IsNullOrWhiteSpace(s.TaxRateName) ? (s.IsTaxable ? "—" : "معفاة") : s.TaxRateName)
-                                </td>
-                                <td>@s.UsageCount</td>
-                                <td>
+                @if (_loading)
+                {
+                    <div class="doc-loading">
+                        <div class="doc-spinner"></div>
+                        <span>جاري تحميل قائمة الخدمات...</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="doc-table-wrap">
+                        <table class="doc-table" aria-label="جدول الخدمات">
+                            <thead>
+                                <tr>
+                                    <th scope="col" class="th-start">الكود</th>
+                                    <th scope="col" class="th-start">اسم الخدمة</th>
+                                    <th scope="col">الوحدة</th>
+                                    <th scope="col">سعر البيع</th>
+                                    <th scope="col">التكلفة</th>
+                                    <th scope="col">الضريبة</th>
+                                    <th scope="col">بنود</th>
+                                    <th scope="col">الحالة</th>
                                     @if (CanManage)
                                     {
-                                        <div class="fc-row-actions">
-                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
-                                                           Color="Color.Primary" title="تعديل" OnClick="() => Edit(s)" />
-                                            @if (s.IsActive)
+                                        <th scope="col" style="width:130px">إجراءات</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var s in Filtered)
+                                {
+                                    <tr>
+                                        <td class="td-start"><span class="doc-type-badge">@s.ServiceCode</span></td>
+                                        <td class="td-start">
+                                            <div class="doc-file-info">
+                                                <span class="doc-file-title">@s.NameAr</span>
+                                                @if (!string.IsNullOrWhiteSpace(s.NameEn))
+                                                {
+                                                    <span class="doc-file-desc">@s.NameEn</span>
+                                                }
+                                            </div>
+                                        </td>
+                                        <td class="td-muted">@UnitAr(s.Unit)</td>
+                                        <td>
+                                            @if (s.DefaultSellingPrice == 0)
                                             {
-                                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Close"
-                                                               Color="Color.Error" title="تعطيل" OnClick="() => ToggleAsync(s, false)" />
+                                                <span class="doc-status-chip chip-expired">صفر</span>
                                             }
                                             else
                                             {
-                                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle"
-                                                               Color="Color.Success" title="تفعيل" OnClick="() => ToggleAsync(s, true)" />
+                                                <strong>@Money(s.DefaultSellingPrice)</strong><small class="td-muted"> ج.م</small>
                                             }
-                                        </div>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                        @if (_items.Count == 0)
-                        {
-                            <tr><td colspan="8"><div class="fc-empty">مافيش خدمات — ضيف أول خدمة</div></td></tr>
-                        }
-                    </tbody>
-                </table></div>
+                                        </td>
+                                        <td class="td-muted">@Money(s.DefaultCost)<small> ج.م</small></td>
+                                        <td class="td-muted">@(string.IsNullOrWhiteSpace(s.TaxRateName) ? (s.IsTaxable ? "—" : "معفاة") : s.TaxRateName)</td>
+                                        <td class="td-muted font-mono">@s.UsageCount</td>
+                                        <td>
+                                            <span class="doc-status-chip @(s.IsActive ? "chip-valid" : "chip-expired")">
+                                                <span class="chip-dot" aria-hidden="true"></span>
+                                                @(s.IsActive ? "نشطة" : "معطلة")
+                                            </span>
+                                        </td>
+                                        @if (CanManage)
+                                        {
+                                            <td>
+                                                <div class="doc-row-actions">
+                                                    <button class="doc-btn-download" @onclick="() => Edit(s)" title="تعديل">
+                                                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5">
+                                                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                        </svg>
+                                                        تعديل
+                                                    </button>
+                                                    <button class="doc-btn-del" @onclick="() => ToggleAsync(s, !s.IsActive)" title="@(s.IsActive ? "تعطيل" : "تفعيل")">
+                                                        @if (s.IsActive)
+                                                        {
+                                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                                <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/>
+                                                            </svg>
+                                                        }
+                                                        else
+                                                        {
+                                                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5">
+                                                                <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                            </svg>
+                                                        }
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                                @if (!Filtered.Any())
+                                {
+                                    <tr><td colspan="@(CanManage ? "9" : "8")"><div class="doc-empty-table">لا توجد خدمات مطابقة</div></td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
             </div>
-
-        </div></div>
+        </div>
     }
 </div>
 
+@* ═══════════════════════════════════════════
+   FAB
+═══════════════════════════════════════════ *@
+@if (CanManage && !_loading)
+{
+    <div class="fc-fab-container">
+        <div class="fc-fab-menu @(_fabOpen ? "is-open" : "")" role="menu">
+            <button type="button" class="fc-fab-item" role="menuitem" @onclick="OpenCreate">
+                <span class="fc-fab-icon"><MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" /></span>
+                <span class="fc-fab-label">خدمة جديدة</span>
+            </button>
+            <button type="button" class="fc-fab-item" role="menuitem" @onclick="Reload">
+                <span class="fc-fab-icon"><MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" /></span>
+                <span class="fc-fab-label">تحديث البيانات</span>
+            </button>
+        </div>
+        <button type="button" class="fc-fab-main fc-glow-gold @(_fabOpen ? "is-open" : "")" @onclick="ToggleFab" aria-label="التحكم">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" class="fc-fab-svg">
+                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+            </svg>
+        </button>
+    </div>
+}
+
+@* ═══════════════════════════════════════════
+   MODAL PROFESSIONAL
+═══════════════════════════════════════════ *@
+@if (_modalOpen && CanManage)
+{
+    <div class="svc-modal-backdrop" @onclick="Close" role="dialog" aria-modal="true">
+        <div class="svc-modal" @onclick:stopPropagation="true">
+
+            @* ── HEADER ── *@
+            <div class="svc-modal-head">
+                <div class="svc-head-icon @(_editId is null ? "svc-icon-create" : "svc-icon-edit")" aria-hidden="true">
+                    @if (_editId is null)
+                    {
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                    }
+                </div>
+                <div class="svc-head-text">
+                    <div class="svc-head-title">@(_editId is null ? "إضافة خدمة جديدة" : "تعديل بيانات الخدمة")</div>
+                    <div class="svc-head-sub">
+                        @if (_editId is null)
+                        {
+                            <span>تحديد بيانات الخدمة الجديدة ووحدة التشغيل والتسعير الافتراضي</span>
+                        }
+                        else
+                        {
+                            <span>تعديل: <strong>@_f.NameAr</strong> (@_f.ServiceCode)</span>
+                        }
+                    </div>
+                </div>
+                <button class="svc-head-close" @onclick="Close" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            @* ── BANNER ── *@
+            @if (_msg is not null)
+            {
+                <div class="svc-banner @(_ok ? "svc-banner-ok" : "svc-banner-err")" role="alert">
+                    <div class="svc-banner-ic" aria-hidden="true">
+                        @if (_ok)
+                        {
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                            </svg>
+                        }
+                    </div>
+                    <span class="svc-banner-msg">@_msg</span>
+                    <button class="svc-banner-x" @onclick="() => _msg = null">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+            }
+
+            @* ── BODY + TABS ── *@
+            <div class="svc-modal-body">
+                <MudTabs Elevation="0" Rounded="false" ApplyEffectsToContainer="true"
+                         PanelClass="svc-tab-panel" @bind-ActivePanelIndex="_activeTab" Class="svc-mud-tabs">
+
+                    @* ═══ TAB 1: التعريف ═══ *@
+                    <MudTabPanel>
+                        <TabContent>
+                            <div class="svc-tab-label">
+                                <div class="svc-tab-ic svc-tab-ic-blue">
+                                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                                    </svg>
+                                </div>
+                                <span>التعريف</span>
+                                @if (_triedSave && (string.IsNullOrWhiteSpace(_f.ServiceCode) || string.IsNullOrWhiteSpace(_f.NameAr)))
+                                {
+                                    <span class="svc-tab-err"></span>
+                                }
+                            </div>
+                        </TabContent>
+                        <ChildContent>
+                            <div class="svc-section">
+                                <div class="svc-section-head">
+                                    <div class="svc-section-ic blue">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                            <path d="M14 2v6h6" stroke-linecap="round"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="svc-section-title">البيانات التعريفية</div>
+                                        <div class="svc-section-sub">الكود والاسم ووحدة القياس الأساسية للخدمة</div>
+                                    </div>
+                                </div>
+
+                                <div class="svc-grid">
+                                    <div class="svc-field">
+                                        <label class="svc-label">الكود التعريفي <span class="svc-req">*</span></label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                                                </svg>
+                                            </span>
+                                            <input class="svc-input ltr with-prefix @(_triedSave && string.IsNullOrWhiteSpace(_f.ServiceCode) ? "svc-err" : "")"
+                                                   @bind="_f.ServiceCode" maxlength="30" dir="ltr"
+                                                   disabled="@(_editId is not null && _f.UsageCount > 0)"
+                                                   placeholder="مثال: TRANS40" />
+                                        </div>
+                                        @if (_editId is not null && _f.UsageCount > 0)
+                                        {
+                                            <div class="svc-hint warn">
+                                                <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <rect x="3" y="7" width="10" height="7" rx="1"/><path d="M5 7V5a3 3 0 016 0v2"/>
+                                                </svg>
+                                                مقفل — مستخدم في @_f.UsageCount بند فاتورة
+                                            </div>
+                                        }
+                                        @if (_triedSave && string.IsNullOrWhiteSpace(_f.ServiceCode))
+                                        {
+                                            <div class="svc-err-msg">كود الخدمة مطلوب</div>
+                                        }
+                                    </div>
+
+                                    <div class="svc-field">
+                                        <label class="svc-label">الاسم بالعربية <span class="svc-req">*</span></label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M4 7V4h16v3M9 20h6M12 4v16"/>
+                                                </svg>
+                                            </span>
+                                            <input class="svc-input with-prefix @(_triedSave && string.IsNullOrWhiteSpace(_f.NameAr) ? "svc-err" : "")"
+                                                   @bind="_f.NameAr" maxlength="150" placeholder="مثال: نقل حاوية 40 قدم" />
+                                        </div>
+                                        @if (_triedSave && string.IsNullOrWhiteSpace(_f.NameAr))
+                                        {
+                                            <div class="svc-err-msg">الاسم بالعربية مطلوب</div>
+                                        }
+                                    </div>
+
+                                    <div class="svc-field">
+                                        <label class="svc-label">الاسم بالإنجليزية</label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+                                                </svg>
+                                            </span>
+                                            <input class="svc-input ltr with-prefix" @bind="_f.NameEn" maxlength="150" dir="ltr" placeholder="e.g. 40ft Container Transport" />
+                                        </div>
+                                    </div>
+
+                                    <div class="svc-field">
+                                        <label class="svc-label">وحدة القياس <span class="svc-req">*</span></label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                                </svg>
+                                            </span>
+                                            <select class="svc-input svc-select with-prefix" @bind="_f.Unit">
+                                                @foreach (var u in Units) { <option value="@u">@UnitAr(u)</option> }
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="svc-field svc-full">
+                                        <div class="svc-toggle-box @(_f.IsActive ? "on" : "")">
+                                            <div class="svc-toggle-left">
+                                                <div class="svc-toggle-ic @(_f.IsActive ? "active" : "")">
+                                                    @if (_f.IsActive)
+                                                    {
+                                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                                                            <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        </svg>
+                                                    }
+                                                    else
+                                                    {
+                                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/>
+                                                        </svg>
+                                                    }
+                                                </div>
+                                                <div>
+                                                    <div class="svc-toggle-title">حالة الخدمة</div>
+                                                    <div class="svc-toggle-sub">@(_f.IsActive ? "الخدمة نشطة وتظهر في فواتير التشغيل" : "الخدمة معطلة ومخفية من الفواتير")</div>
+                                                </div>
+                                            </div>
+                                            <label class="svc-switch">
+                                                <input type="checkbox" @bind="_f.IsActive" />
+                                                <span class="svc-sw-track"><span class="svc-sw-dot"></span></span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </ChildContent>
+                    </MudTabPanel>
+
+                    @* ═══ TAB 2: التسعير ═══ *@
+                    <MudTabPanel>
+                        <TabContent>
+                            <div class="svc-tab-label">
+                                <div class="svc-tab-ic svc-tab-ic-green">
+                                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                                    </svg>
+                                </div>
+                                <span>التسعير</span>
+                            </div>
+                        </TabContent>
+                        <ChildContent>
+                            <div class="svc-section">
+                                <div class="svc-section-head">
+                                    <div class="svc-section-ic green">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 8v8M8 12h8" stroke-linecap="round"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="svc-section-title">أسعار البيع والتكلفة والضرائب</div>
+                                        <div class="svc-section-sub">التسعير الافتراضي المطبق عند عدم وجود قائمة أسعار خاصة بالعميل</div>
+                                    </div>
+                                </div>
+
+                                <div class="svc-grid">
+                                    <div class="svc-field">
+                                        <label class="svc-label">سعر البيع الافتراضي</label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix txt">ج.م</span>
+                                            <input type="number" min="0" step="0.01" class="svc-input ltr with-prefix"
+                                                   value="@_f.DefaultSellingPrice" @onchange="e => _f.DefaultSellingPrice = ParseDec(e.Value)" placeholder="0.00" />
+                                        </div>
+                                        <div class="svc-hint">يطبق تلقائياً عند عدم وجود سعر خاص</div>
+                                    </div>
+
+                                    <div class="svc-field">
+                                        <label class="svc-label">التكلفة الافتراضية</label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix txt">ج.م</span>
+                                            <input type="number" min="0" step="0.01" class="svc-input ltr with-prefix"
+                                                   value="@_f.DefaultCost" @onchange="e => _f.DefaultCost = ParseDec(e.Value)" placeholder="0.00" />
+                                        </div>
+                                    </div>
+
+                                    @if (_f.DefaultSellingPrice > 0 || _f.DefaultCost > 0)
+                                    {
+                                        <div class="svc-field svc-full">
+                                            <div class="svc-margin-box">
+                                                <div class="svc-margin-left">
+                                                    <div class="svc-margin-ic">
+                                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
+                                                        </svg>
+                                                    </div>
+                                                    <div>
+                                                        <div class="svc-margin-title">هامش الربح المتوقع</div>
+                                                        <div class="svc-margin-sub">الفرق بين سعر البيع والتكلفة الافتراضية</div>
+                                                    </div>
+                                                </div>
+                                                <div class="svc-margin-val @((_f.DefaultSellingPrice - _f.DefaultCost) >= 0 ? "pos" : "neg")">
+                                                    @Money(_f.DefaultSellingPrice - _f.DefaultCost) <small>ج.م</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+
+                                    <div class="svc-field">
+                                        <label class="svc-label">فئة الضريبة</label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/>
+                                                </svg>
+                                            </span>
+                                            <select class="svc-input svc-select with-prefix" value="@_f.TaxRateId" @onchange="OnTaxChanged">
+                                                <option value="">— بدون ضريبة —</option>
+                                                @foreach (var t in _taxRates) { <option value="@t.Id">@t.Label</option> }
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="svc-field">
+                                        <label class="svc-label">الخضوع للضريبة المضافة</label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                                </svg>
+                                            </span>
+                                            <select class="svc-input svc-select with-prefix" @bind="_f.IsTaxable">
+                                                <option value="true">خاضعة للضريبة</option>
+                                                <option value="false">معفاة كلياً</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </ChildContent>
+                    </MudTabPanel>
+
+                    @* ═══ TAB 3: ETA ═══ *@
+                    <MudTabPanel>
+                        <TabContent>
+                            <div class="svc-tab-label">
+                                <div class="svc-tab-ic svc-tab-ic-amber">
+                                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                        <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                                    </svg>
+                                </div>
+                                <span>ETA</span>
+                            </div>
+                        </TabContent>
+                        <ChildContent>
+                            <div class="svc-section">
+                                <div class="svc-section-head">
+                                    <div class="svc-section-ic amber">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="svc-section-title">رموز الفاتورة الإلكترونية</div>
+                                        <div class="svc-section-sub">أكواد GS1 و EGS للتكامل مع منظومة الفاتورة الإلكترونية المصرية</div>
+                                    </div>
+                                </div>
+
+                                <div class="svc-grid">
+                                    <div class="svc-field">
+                                        <label class="svc-label">رمز GS1 العالمي</label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix txt">GS1</span>
+                                            <input class="svc-input ltr with-prefix" @bind="_f.Gs1Code" maxlength="50" dir="ltr" placeholder="0000000000000" />
+                                        </div>
+                                        <div class="svc-hint">اختياري حالياً — مطلوب للتكامل مع ETA</div>
+                                    </div>
+
+                                    <div class="svc-field">
+                                        <label class="svc-label">رمز EGS المصري</label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix txt">EGS</span>
+                                            <input class="svc-input ltr with-prefix" @bind="_f.EgsCode" maxlength="50" dir="ltr" placeholder="EG-00000000-XXXXX" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </ChildContent>
+                    </MudTabPanel>
+
+                </MudTabs>
+            </div>
+
+            @* ── FOOTER ── *@
+            <div class="svc-modal-foot">
+                <div class="svc-foot-left">
+                    @if (_editId is not null)
+                    {
+                        <button class="svc-btn-reset" @onclick="ResetForm">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+                            </svg>
+                            إعادة تعيين
+                        </button>
+                    }
+                </div>
+                <div class="svc-foot-right">
+                    <button class="svc-btn-cancel" @onclick="Close">إلغاء</button>
+                    <button class="svc-btn-save" @onclick="SaveAsync" disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="svc-spinner"></span>
+                            <span>جاري الحفظ...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>@(_editId is null ? "إضافة الخدمة" : "حفظ التعديلات")</span>
+                        }
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+}
+<style>
+    /* ═══════════════════════════════════════════════════════
+       HERO & BODY (نفس التنسيق المعتاد)
+    ═══════════════════════════════════════════════════════ */
+    .hero-wrapper {
+        padding: 16px clamp(14px, 2.4vw, 34px) 0;
+        max-width: var(--fc-page-w);
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 1;
+    }
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important;
+        overflow: hidden;
+        box-shadow: 0 12px 32px rgba(13,38,84,.15), 0 4px 12px rgba(13,38,84,.08);
+        border: 1px solid rgba(255,255,255,.08);
+    }
+    .hero-wrapper .fc-hero.fc-hero-slim {
+        padding-top: 18px !important;
+        padding-bottom: 22px !important;
+    }
+    .fc-overlap { margin-top: 20px !important; position: relative; z-index: 2; }
+    .doc-body {
+        padding: 18px clamp(16px, 3vw, 40px) 100px;
+        max-width: var(--fc-page-w);
+        margin-inline: auto;
+        box-sizing: border-box;
+        width: 100%;
+        position: relative;
+        z-index: 2;
+    }
+    .doc-card {
+        background: #fff;
+        border: 1px solid #dde5f0;
+        border-radius: 18px;
+        box-shadow: 0 4px 24px rgba(15,41,82,.05);
+        overflow: hidden;
+    }
+    .doc-hero-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
+    .doc-hero-left { display: flex; flex-direction: column; gap: 2px; }
+    .doc-hero-crumb { display: flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,.55); margin-bottom: 2px; }
+    .fc-hero-sub { font-size: 10.5px; color: rgba(255,255,255,.55); font-weight: 600; }
+    .doc-hero-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .doc-hero-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 5px 11px; border-radius: 8px;
+        background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14);
+        color: rgba(255,255,255,.7); font-size: 10.5px; font-weight: 700;
+        font-family: "Inter",Arial,sans-serif; white-space: nowrap;
+    }
+    .doc-chip-warn {
+        background: rgba(239,68,68,.15) !important;
+        border-color: rgba(239,68,68,.35) !important;
+        color: #fca5a5 !important;
+    }
+    .doc-kpis-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-top: 12px; }
+    .doc-kpi {
+        background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
+        backdrop-filter: blur(12px); border-radius: 10px; padding: 10px 12px;
+    }
+    .doc-kpi-inner { display: flex; align-items: center; gap: 10px; }
+    .doc-kpi-icon {
+        width: 34px; height: 34px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .doc-kpi-blue .doc-kpi-icon { background: rgba(125,211,252,.15); color: #7dd3fc; }
+    .doc-kpi-red .doc-kpi-icon { background: rgba(252,165,165,.15); color: #fca5a5; }
+    .doc-kpi-green .doc-kpi-icon { background: rgba(110,231,183,.15); color: #6ee7b7; }
+    .doc-kpi-data { flex: 1; min-width: 0; }
+    .doc-kpi-num { font-family: "Inter",Arial,sans-serif; font-size: 18px; font-weight: 900; color: #fff; line-height: 1; }
+    .doc-kpi-label { font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,.6); margin-top: 3px; }
+    .doc-banner {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 14px 18px; font-size: 13px; font-weight: 600;
+        line-height: 1.6; border-bottom: 1px solid transparent;
+    }
+    .banner-info { background: #f4f8ff; color: #1a56db; border-bottom-color: #dbe8fc; }
+    .banner-icon { flex: 0 0 auto; margin-top: 2px; }
+    .doc-state-box {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: #fff; border: 1px solid #dde5f0;
+        border-radius: 14px; padding: 40px; text-align: center;
+    }
+    .state-icon-wrap {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .state-icon-wrap.perm { background: #fff0f2; color: #D64545; }
+    .doc-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; }
+    .doc-state-box p { margin: 0; font-size: 13px; color: #6B7A8F; }
+    .doc-toolbar {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(180deg,#fff,#fafbfd);
+        border-bottom: 1px solid #edf1f7; flex-wrap: wrap;
+    }
+    .doc-search-wrap {
+        position: relative; display: flex; align-items: center;
+        flex: 0 1 280px; min-width: 180px;
+    }
+    .doc-search-icon { position: absolute; right: 10px; color: #9aaabb; pointer-events: none; }
+    .doc-search-input {
+        width: 100%; height: 36px;
+        padding: 0 32px 0 10px;
+        border: 1px solid #d8e2f0; border-radius: 8px;
+        background: #fafcff; font-family: inherit; font-size: 12px; outline: none;
+    }
+    .doc-search-input:focus { border-color: #0B56DF; box-shadow: 0 0 0 3px rgba(11,86,223,.08); }
+    .doc-search-clear {
+        position: absolute; left: 8px;
+        display: flex; align-items: center; justify-content: center;
+        width: 20px; height: 20px; border-radius: 50%;
+        border: none; background: #edf1f7; color: #8899ae; cursor: pointer;
+    }
+    .doc-results-badge { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #8899ae; font-weight: 600; }
+    .doc-results-badge strong { color: #5a6e88; }
+    .doc-table-wrap { overflow-x: auto; }
+    .doc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .doc-table thead th {
+        padding: 11px 14px;
+        background: linear-gradient(180deg,#f7f9fc,#f0f3f8);
+        color: #4a5a74; font-size: 11px; font-weight: 800;
+        text-align: center; border-bottom: 2px solid #e4eaf3; white-space: nowrap;
+    }
+    .doc-table .th-start { text-align: right; }
+    .doc-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background .12s; }
+    .doc-table tbody tr:last-child { border-bottom: none; }
+    .doc-table tbody tr:hover { background: #fafcff; }
+    .doc-table tbody td { padding: 12px 14px; color: #526070; text-align: center; vertical-align: middle; }
+    .td-start { text-align: right !important; }
+    .td-muted { color: #8899ae; font-size: 11.5px; }
+    .doc-type-badge {
+        display: inline-flex; padding: 2.5px 8px; border-radius: 6px;
+        background: #f0f4fa; border: 1px solid #e0e8f4;
+        font-size: 10.5px; font-weight: 800; color: #344258;
+    }
+    .doc-file-info { display: flex; flex-direction: column; gap: 2px; }
+    .doc-file-title { font-size: 12.5px; font-weight: 700; color: #1A2332; }
+    .doc-file-desc { font-size: 10.5px; color: #8899ae; }
+    .doc-status-chip {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 3px 9px; border-radius: 6px;
+        font-size: 10px; font-weight: 800;
+    }
+    .chip-valid { background: #e9f8f0; color: #0e7a43; border: 1px solid #b0e0c5; }
+    .chip-expired { background: #fff0f2; color: #D64545; border: 1px solid #ffc8cf; }
+    .chip-dot { width: 5px; height: 5px; border-radius: 50%; }
+    .chip-valid .chip-dot { background: #1B9E5E; }
+    .chip-expired .chip-dot { background: #D64545; }
+    .doc-row-actions { display: flex; align-items: center; gap: 6px; justify-content: center; }
+    .doc-btn-download {
+        display: inline-flex; align-items: center; gap: 4px;
+        height: 28px; padding: 0 10px;
+        border: 1px solid #bdd4fc; border-radius: 6px;
+        background: #eaf1ff; color: #0B56DF;
+        font-family: inherit; font-size: 10.5px; font-weight: 800;
+        cursor: pointer; transition: all .12s;
+    }
+    .doc-btn-download:hover { background: #0B56DF; color: #fff; }
+    .doc-btn-del {
+        width: 28px; height: 28px; border-radius: 6px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; background: transparent;
+        color: #D64545; cursor: pointer; transition: all .12s;
+    }
+    .doc-btn-del:hover { background: #fff0f2; border-color: #ffc8cf; }
+    .doc-empty-table { padding: 40px; text-align: center; color: #9aaabb; font-size: 13px; font-weight: 700; }
+    .doc-loading {
+        display: flex; align-items: center; justify-content: center; gap: 10px;
+        min-height: 200px; color: #6B7A8F; font-size: 12.5px; font-weight: 700;
+    }
+    .doc-spinner {
+        width: 28px; height: 28px;
+        border: 2.5px solid #dde5f0; border-top-color: #0B56DF;
+        border-radius: 50%; animation: doc-spin .7s linear infinite;
+    }
+    @@keyframes doc-spin { to { transform: rotate(360deg); } }
+
+    /* ═══════════════════════════════════════════════════════
+       ⚡ FAB GOLD GLOW
+    ═══════════════════════════════════════════════════════ */
+    .fc-fab-main.fc-glow-gold {
+        position: relative;
+        background: linear-gradient(135deg, #0B56DF 0%, #083CA8 100%) !important;
+        border: 2px solid #FF8015 !important;
+        box-shadow: 0 4px 16px rgba(11,86,223,.4);
+        animation: fc-gold-pulse 2.2s infinite;
+    }
+    .fc-fab-main.fc-glow-gold::before {
+        content: "";
+        position: absolute; inset: -2px;
+        border-radius: 50%;
+        border: 2px solid #FF8015;
+        opacity: 0; pointer-events: none;
+        animation: fc-ring-expand 2.2s cubic-bezier(.24,0,.38,1) infinite;
+    }
+    @@keyframes fc-gold-pulse {
+        0%,100% { box-shadow: 0 0 0 0 rgba(255,128,21,.6), 0 8px 24px rgba(11,86,223,.4); }
+        50%     { box-shadow: 0 0 0 12px rgba(255,128,21,0), 0 12px 32px rgba(11,86,223,.55); }
+    }
+    @@keyframes fc-ring-expand {
+        0%   { transform: scale(1); opacity: .8; border-width: 3px; }
+        100% { transform: scale(1.6); opacity: 0; border-width: 1px; }
+    }
+    .fc-fab-main.fc-glow-gold.is-open {
+        background: linear-gradient(135deg, #D64545 0%, #991b1b 100%) !important;
+        border-color: #fca5a5 !important;
+        animation: none !important;
+    }
+    .fc-fab-main.fc-glow-gold.is-open::before { animation: none !important; }
+
+    /* ═══════════════════════════════════════════════════════
+       ⭐ PROFESSIONAL MODAL
+    ═══════════════════════════════════════════════════════ */
+    .svc-modal-backdrop {
+        position: fixed; inset: 0; z-index: 1300;
+        background: rgba(10, 27, 59, .62);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px;
+        animation: svc-fade .2s ease both;
+    }
+    @@keyframes svc-fade { from { opacity: 0; } to { opacity: 1; } }
+
+    .svc-modal {
+        width: 100%; max-width: 680px;
+        background: #fff;
+        border-radius: 20px;
+        box-shadow: 0 25px 60px rgba(10,27,59,.28), 0 8px 20px rgba(10,27,59,.12);
+        overflow: hidden;
+        animation: svc-pop .28s cubic-bezier(.22,.9,.36,1.1) both;
+        max-height: 92vh;
+        display: flex; flex-direction: column;
+    }
+    @@keyframes svc-pop {
+        from { opacity: 0; transform: translateY(20px) scale(.96); }
+        to   { opacity: 1; transform: none; }
+    }
+
+    /* ── Modal Header ── */
+    .svc-modal-head {
+        display: flex; align-items: center; gap: 14px;
+        padding: 20px 24px;
+        background: linear-gradient(135deg, #0A1B3B 0%, #16306B 100%);
+        color: #fff;
+        flex: 0 0 auto;
+        position: relative;
+        overflow: hidden;
+    }
+    .svc-modal-head::before {
+        content: "";
+        position: absolute;
+        top: -50px; right: -50px;
+        width: 200px; height: 200px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(255,128,21,.15) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    .svc-head-icon {
+        width: 46px; height: 46px; flex: 0 0 46px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 13px;
+        position: relative; z-index: 1;
+    }
+    .svc-icon-create {
+        background: rgba(27,158,94,.2); color: #6ee7b7;
+        border: 1px solid rgba(110,231,183,.3);
+    }
+    .svc-icon-edit {
+        background: rgba(255,128,21,.2); color: #FFD9B8;
+        border: 1px solid rgba(255,128,21,.3);
+    }
+    .svc-head-text { flex: 1; min-width: 0; position: relative; z-index: 1; }
+    .svc-head-title { font-size: 16px; font-weight: 800; color: #fff; line-height: 1.3; }
+    .svc-head-sub { font-size: 11.5px; color: rgba(255,255,255,.62); margin-top: 3px; }
+    .svc-head-sub strong { color: #FFD9B8; font-weight: 700; }
+    .svc-head-close {
+        width: 34px; height: 34px; flex: 0 0 34px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid rgba(255,255,255,.15); border-radius: 9px;
+        background: rgba(255,255,255,.06); color: rgba(255,255,255,.7);
+        cursor: pointer; transition: all .15s;
+        position: relative; z-index: 1;
+    }
+    .svc-head-close:hover { background: rgba(255,255,255,.14); color: #fff; transform: rotate(90deg); }
+
+    /* ── Banner ── */
+    .svc-banner {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 20px; flex: 0 0 auto;
+        font-size: 12.5px; font-weight: 600;
+    }
+    .svc-banner-ok  { background: #e9f8f0; color: #0e7a43; border-bottom: 1px solid #b5e8d0; }
+    .svc-banner-err { background: #fff0f2; color: #D64545; border-bottom: 1px solid #ffc8cf; }
+    .svc-banner-ic { flex: 0 0 auto; }
+    .svc-banner-msg { flex: 1; }
+    .svc-banner-x {
+        background: none; border: none; color: inherit;
+        opacity: .5; cursor: pointer; display: flex;
+    }
+    .svc-banner-x:hover { opacity: 1; }
+
+    /* ── Modal Body ── */
+    .svc-modal-body {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        padding: 0;
+    }
+
+    /* ── MudTabs Custom ── */
+    .svc-mud-tabs .mud-tabs-toolbar {
+        background: linear-gradient(180deg, #f8fafd, #f2f5fa) !important;
+        border-bottom: 2px solid #e4eaf3 !important;
+        padding: 0 16px !important;
+        min-height: 52px !important;
+    }
+    .svc-mud-tabs .mud-tab {
+        font-family: "Cairo","Tajawal","Inter",Arial,sans-serif !important;
+        font-size: 12px !important; font-weight: 700 !important;
+        color: #6B7A8F !important;
+        padding: 0 10px !important; min-width: unset !important;
+        text-transform: none !important; letter-spacing: 0 !important;
+        min-height: 52px !important;
+    }
+    .svc-mud-tabs .mud-tab.mud-tab-active {
+        color: #0B56DF !important; font-weight: 800 !important;
+    }
+    .svc-mud-tabs .mud-tab-slider {
+        background: #0B56DF !important; height: 3px !important;
+        border-radius: 3px 3px 0 0 !important;
+    }
+    .svc-mud-tabs .mud-tab:hover:not(.mud-tab-active) {
+        color: #1A2332 !important; background: rgba(11,86,223,.04) !important;
+        border-radius: 8px !important;
+    }
+    .svc-tab-panel { padding: 0 !important; }
+
+    .svc-tab-label {
+        display: flex; align-items: center; gap: 7px;
+        padding: 0 4px; white-space: nowrap; position: relative;
+    }
+    .svc-tab-ic {
+        width: 26px; height: 26px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 7px;
+    }
+    .svc-tab-ic-blue  { background: #eaf1ff; color: #0B56DF; }
+    .svc-tab-ic-green { background: #e9f8f0; color: #1B9E5E; }
+    .svc-tab-ic-amber { background: #fff8e6; color: #E8A317; }
+    .svc-tab-err {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: #D64545;
+        animation: svc-pulse 1.5s ease infinite;
+    }
+    @@keyframes svc-pulse {
+        0%,100% { box-shadow: 0 0 0 0 rgba(214,69,69,.4); }
+        50%     { box-shadow: 0 0 0 5px rgba(214,69,69,0); }
+    }
+
+    /* ── Section ── */
+    .svc-section { padding: 22px 24px 26px; }
+    .svc-section-head {
+        display: flex; align-items: flex-start; gap: 12px;
+        margin-bottom: 20px; padding-bottom: 16px;
+        border-bottom: 1px solid #edf1f7;
+    }
+    .svc-section-ic {
+        width: 40px; height: 40px; flex: 0 0 40px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 11px;
+    }
+    .svc-section-ic.blue  { background: #eaf1ff; color: #0B56DF; border: 1px solid #bdd4fc; }
+    .svc-section-ic.green { background: #e9f8f0; color: #1B9E5E; border: 1px solid #b0e0c5; }
+    .svc-section-ic.amber { background: #fff8e6; color: #E8A317; border: 1px solid #f0d898; }
+    .svc-section-title { font-size: 14.5px; font-weight: 800; color: #1A2332; line-height: 1.2; }
+    .svc-section-sub { font-size: 11px; font-weight: 500; color: #6B7A8F; margin-top: 3px; }
+
+    /* ── Form Grid & Fields ── */
+    .svc-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+    }
+    .svc-full { grid-column: 1 / -1; }
+    .svc-field { display: flex; flex-direction: column; gap: 5px; }
+    .svc-label {
+        font-size: 11.5px; font-weight: 800; color: #344258;
+        display: flex; align-items: center; gap: 4px;
+    }
+    .svc-req { color: #D64545; font-size: 13px; }
+
+    .svc-input-wrap { position: relative; display: flex; align-items: center; }
+    .svc-prefix {
+        position: absolute; right: 12px; z-index: 1;
+        display: flex; align-items: center; color: #9aaabb;
+        pointer-events: none;
+    }
+    .svc-prefix.txt {
+        font-size: 11px; font-weight: 800; color: #6B7A8F;
+        font-family: "Inter", sans-serif;
+    }
+
+    .svc-input {
+        width: 100%; height: 42px;
+        border: 1.5px solid #d8e2f0; border-radius: 10px;
+        background: #fafcff; color: #1A2332;
+        font-family: inherit; font-size: 13px;
+        padding: 0 12px; outline: none; box-sizing: border-box;
+        transition: border-color .15s, box-shadow .15s, background .15s;
+    }
+    .svc-input:focus {
+        border-color: #0B56DF;
+        box-shadow: 0 0 0 3px rgba(11,86,223,.1);
+        background: #fff;
+    }
+    .svc-input.svc-err {
+        border-color: #D64545;
+        box-shadow: 0 0 0 3px rgba(214,69,69,.08);
+        background: #fffafb;
+    }
+    .svc-input:disabled {
+        background: #f5f7fa; color: #8899ae; cursor: not-allowed;
+    }
+    .svc-input::placeholder { color: #b0bcc8; }
+    .svc-input.ltr { direction: ltr; text-align: left; }
+    .svc-input.with-prefix { padding-right: 40px; }
+
+    .svc-select {
+        cursor: pointer;
+        -webkit-appearance: none; appearance: none;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B7A8F' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: left 12px center;
+        background-size: 13px;
+        padding-left: 34px;
+    }
+
+    .svc-hint {
+        font-size: 10.5px; color: #8899ae; font-weight: 500;
+        display: flex; align-items: center; gap: 5px;
+    }
+    .svc-hint.warn { color: #E8A317; font-weight: 700; }
+    .svc-err-msg {
+        font-size: 10.5px; color: #D64545; font-weight: 700;
+        animation: svc-fade .2s ease;
+    }
+
+    /* ── Toggle Box ── */
+    .svc-toggle-box {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 16px; padding: 14px 16px;
+        border: 1.5px solid #dde5f0; border-radius: 12px;
+        background: #f8fafc;
+        transition: all .2s;
+    }
+    .svc-toggle-box.on {
+        border-color: #bdd4fc;
+        background: #f0f6ff;
+        box-shadow: 0 0 0 3px rgba(11,86,223,.06);
+    }
+    .svc-toggle-left { display: flex; align-items: center; gap: 12px; }
+    .svc-toggle-ic {
+        width: 40px; height: 40px; flex: 0 0 40px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 10px;
+        background: #edf1f7; color: #6B7A8F;
+        transition: all .2s;
+    }
+    .svc-toggle-ic.active {
+        background: #e9f8f0; color: #1B9E5E;
+    }
+    .svc-toggle-title { font-size: 13px; font-weight: 800; color: #1A2332; }
+    .svc-toggle-sub { font-size: 10.5px; color: #6B7A8F; margin-top: 2px; }
+
+    .svc-switch {
+        display: flex; align-items: center;
+        cursor: pointer; flex-shrink: 0;
+    }
+    .svc-switch input { display: none; }
+    .svc-sw-track {
+        position: relative;
+        width: 44px; height: 24px;
+        background: #d8e2f0; border-radius: 999px;
+        transition: background .2s;
+    }
+    .svc-switch input:checked + .svc-sw-track { background: #0B56DF; }
+    .svc-sw-dot {
+        position: absolute; left: 3px; top: 3px;
+        width: 18px; height: 18px; border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 2px 5px rgba(0,0,0,.2);
+        transition: left .2s;
+    }
+    .svc-switch input:checked + .svc-sw-track .svc-sw-dot { left: 23px; }
+
+    /* ── Margin Box (Profit Margin Display) ── */
+    .svc-margin-box {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 16px; padding: 14px 16px;
+        border: 1.5px solid #e9f8f0; border-radius: 12px;
+        background: linear-gradient(135deg, #f3faf5 0%, #e9f8f0 100%);
+    }
+    .svc-margin-left { display: flex; align-items: center; gap: 12px; }
+    .svc-margin-ic {
+        width: 40px; height: 40px; flex: 0 0 40px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 10px;
+        background: rgba(27,158,94,.15); color: #1B9E5E;
+        border: 1px solid rgba(27,158,94,.3);
+    }
+    .svc-margin-title { font-size: 13px; font-weight: 800; color: #1A2332; }
+    .svc-margin-sub { font-size: 10.5px; color: #6B7A8F; margin-top: 2px; }
+    .svc-margin-val {
+        font-family: "Inter", sans-serif;
+        font-size: 17px; font-weight: 900;
+        color: #1B9E5E;
+    }
+    .svc-margin-val.pos { color: #1B9E5E; }
+    .svc-margin-val.neg { color: #D64545; }
+    .svc-margin-val small { font-size: 11px; opacity: .7; margin-right: 3px; }
+
+    /* ── Modal Footer ── */
+    .svc-modal-foot {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px; padding: 14px 20px;
+        background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%);
+        border-top: 1px solid #edf1f7;
+        flex: 0 0 auto;
+    }
+    .svc-foot-left, .svc-foot-right {
+        display: flex; align-items: center; gap: 8px;
+    }
+    .svc-foot-left { flex: 0 0 auto; }
+    .svc-foot-right { margin-right: auto; }
+
+    .svc-btn-reset {
+        display: inline-flex; align-items: center; gap: 5px;
+        height: 38px; padding: 0 14px;
+        border: 1px solid #fde68a; border-radius: 9px;
+        background: #fffbeb; color: #92400e;
+        font-family: inherit; font-size: 11.5px; font-weight: 800;
+        cursor: pointer; transition: all .15s;
+    }
+    .svc-btn-reset:hover {
+        background: #fef3c7; border-color: #fbbf24;
+    }
+
+    .svc-btn-cancel {
+        height: 38px; padding: 0 16px;
+        border: 1.5px solid #d8e2f0; border-radius: 9px;
+        background: #fff; color: #6B7A8F;
+        font-family: inherit; font-size: 12px; font-weight: 700;
+        cursor: pointer; transition: all .15s;
+    }
+    .svc-btn-cancel:hover {
+        background: #f0f4fa; color: #1A2332; border-color: #c0ccd8;
+    }
+
+    .svc-btn-save {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 40px; padding: 0 22px;
+        border: none; border-radius: 10px;
+        background: linear-gradient(135deg, #0B56DF, #083CA8);
+        color: #fff;
+        font-family: inherit; font-size: 12.5px; font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(11,86,223,.28);
+        transition: all .18s;
+    }
+    .svc-btn-save:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 18px rgba(11,86,223,.4);
+    }
+    .svc-btn-save:disabled { opacity: .6; cursor: not-allowed; }
+
+    .svc-spinner {
+        width: 15px; height: 15px;
+        border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+        border-radius: 50%;
+        animation: doc-spin .7s linear infinite;
+    }
+
+    /* ── Responsive ── */
+    @@media (max-width: 900px) {
+        .doc-toolbar { flex-direction: column; align-items: stretch; gap: 10px; }
+        .doc-search-wrap { width: 100% !important; flex: 1 1 100%; }
+        .svc-grid { grid-template-columns: 1fr; }
+        .doc-kpis-row { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @@media (max-width: 680px) {
+        .hero-wrapper { padding: 12px 12px 0; }
+        .hero-wrapper .fc-hero { border-radius: 16px !important; }
+        .doc-hero-chip:first-child { display: none; }
+        .doc-body { padding: 14px 12px 90px; }
+        .doc-table { font-size: 11px; }
+        .fc-overlap { margin-top: 14px !important; }
+        .svc-modal { max-width: 100%; border-radius: 16px; }
+        .svc-modal-head { padding: 16px 18px; gap: 10px; }
+        .svc-head-icon { width: 40px; height: 40px; flex: 0 0 40px; }
+        .svc-head-title { font-size: 14px; }
+        .svc-head-sub { font-size: 10.5px; }
+        .svc-section { padding: 18px 16px 22px; }
+        .svc-modal-foot { flex-direction: column-reverse; align-items: stretch; }
+        .svc-foot-left, .svc-foot-right { width: 100%; justify-content: center; }
+        .svc-btn-cancel, .svc-btn-save, .svc-btn-reset { flex: 1; justify-content: center; }
+    }
+
+    @@media (max-width: 480px) {
+        .doc-kpis-row { grid-template-columns: 1fr 1fr; }
+        .svc-mud-tabs .mud-tab { font-size: 11px !important; padding: 0 6px !important; }
+        .svc-toggle-box { flex-direction: column; align-items: stretch; gap: 12px; }
+        .svc-margin-box { flex-direction: column; align-items: stretch; text-align: center; gap: 10px; }
+        .svc-margin-left { justify-content: center; }
+    }
+</style>
+
 @code {
     private AuthUser? _user;
-    private bool CanView => _user?.Can("MASTERDATA.VIEW") ?? false;
-    /* 🔴 الخدمات أسعار — فالصلاحية PRICING مش MASTERDATA */
+    private bool CanView   => _user?.Can("MASTERDATA.VIEW") ?? false;
     private bool CanManage => (_user?.Can("PRICING.CREATE") ?? false) || (_user?.Can("PRICING.EDIT") ?? false);
 
     private static readonly string[] Units = { "Trip", "Job", "Hour", "Day", "Unit", "Km", "Ton" };
 
     private List<Item> _items = new();
     private List<TaxOpt> _taxRates = new();
+    private bool _loading;
+    private string _search = "";
     private bool _saving;
-    private string? _msg; private bool _ok = true;
+    private string? _msg;
+    private bool _ok = true;
+    private bool _fabOpen;
+    private int _activeTab;
+    private bool _triedSave;
     private int? _editId;
+    private bool _modalOpen;
     private Form _f = new();
 
-    /// <summary>مطابق لـ <c>MasterDataController.ServiceItem</c> — 14 حقل.</summary>
     public class Item
     {
         public int ServiceId { get; set; }
@@ -283,7 +1328,6 @@
         public int UsageCount { get; set; }
     }
 
-    /// <summary>مطابق لـ <c>MasterDataController.ServiceUpsert</c> — 11 حقل.</summary>
     public class Form
     {
         public string ServiceCode { get; set; } = "";
@@ -297,10 +1341,28 @@
         public string? Gs1Code { get; set; }
         public string? EgsCode { get; set; }
         public bool IsActive { get; set; } = true;
-        public int UsageCount { get; set; }   /* للـ UI بس — قفل الكود */
+        public int UsageCount { get; set; }
     }
 
-    public class TaxOpt { public int Id { get; set; } public string Label { get; set; } = ""; }
+    public class TaxOpt
+    {
+        public int Id { get; set; }
+        public string Label { get; set; } = "";
+    }
+
+    private static string UnitAr(string u) => u switch
+    {
+        "Trip" => "رحلة", "Job" => "مهمة", "Hour" => "ساعة", "Day" => "يوم",
+        "Unit" => "وحدة", "Km" => "كيلومتر", "Ton" => "طن", _ => u
+    };
+
+    private static string Money(decimal v) => v.ToString("N2");
+
+    private IEnumerable<Item> Filtered => _items.Where(d =>
+        string.IsNullOrWhiteSpace(_search) ||
+        d.ServiceCode.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+        d.NameAr.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+        (d.NameEn ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
@@ -311,13 +1373,39 @@
         await LoadAsync();
     }
 
-    private async Task LoadAsync()
+    private async Task Reload()
     {
-        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/master/services") ?? new(); }
-        catch (Exception ex) { _ok = false; _msg = "فشل التحميل: " + ex.Message; }
+        _fabOpen = false;
+        await LoadAsync();
+        Snackbar.Add("تم تحديث البيانات", Severity.Success);
     }
 
-    private void ResetForm() { _editId = null; _f = new Form(); _msg = null; }
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/master/services") ?? new(); }
+        catch (Exception ex) { Snackbar.Add("فشل تحميل البيانات: " + ex.Message, Severity.Error); }
+        finally { _loading = false; }
+    }
+
+    private void ToggleFab() => _fabOpen = !_fabOpen;
+    private void CloseFab() => _fabOpen = false;
+
+    private void ResetForm()
+    {
+        _editId = null;
+        _f = new Form();
+        _msg = null;
+        _triedSave = false;
+        _activeTab = 0;
+    }
+
+    private void OpenCreate()
+    {
+        _fabOpen = false;
+        ResetForm();
+        _modalOpen = true;
+    }
 
     private void Edit(Item s)
     {
@@ -338,7 +1426,12 @@
             UsageCount          = s.UsageCount
         };
         _msg = null;
+        _modalOpen = true;
+        _triedSave = false;
+        _activeTab = 0;
     }
+
+    private void Close() { _modalOpen = false; }
 
     private void OnTaxChanged(ChangeEventArgs e) =>
         _f.TaxRateId = int.TryParse(e.Value?.ToString(), out var n) && n > 0 ? n : null;
@@ -346,24 +1439,39 @@
     private async Task SaveAsync()
     {
         if (_saving) return;
-        if (string.IsNullOrWhiteSpace(_f.ServiceCode)) { _ok = false; _msg = "كود الخدمة مطلوب"; return; }
-        if (string.IsNullOrWhiteSpace(_f.NameAr))      { _ok = false; _msg = "الاسم بالعربي مطلوب"; return; }
+        _triedSave = true;
 
-        _saving = true; _msg = null;
+        if (string.IsNullOrWhiteSpace(_f.ServiceCode))
+        {
+            _ok = false;
+            _msg = "يرجى كتابة الكود التعريفي للخدمة";
+            _activeTab = 0;
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_f.NameAr))
+        {
+            _ok = false;
+            _msg = "يرجى كتابة اسم الخدمة باللغة العربية";
+            _activeTab = 0;
+            return;
+        }
+
+        _saving = true;
+        _msg = null;
         try
         {
             var payload = new
             {
-                serviceCode         = _f.ServiceCode,
-                nameAr              = _f.NameAr,
-                nameEn              = _f.NameEn,
+                serviceCode         = _f.ServiceCode.Trim(),
+                nameAr              = _f.NameAr.Trim(),
+                nameEn              = _f.NameEn?.Trim(),
                 unit                = _f.Unit,
                 defaultSellingPrice = _f.DefaultSellingPrice,
                 defaultCost         = _f.DefaultCost,
                 taxRateId           = _f.TaxRateId,
                 isTaxable           = _f.IsTaxable,
-                gs1Code             = _f.Gs1Code,
-                egsCode             = _f.EgsCode,
+                gs1Code             = _f.Gs1Code?.Trim(),
+                egsCode             = _f.EgsCode?.Trim(),
                 isActive            = _f.IsActive
             };
 
@@ -371,11 +1479,20 @@
                 ? await Http.PostAsJsonAsync("api/master/services", payload)
                 : await Http.PutAsJsonAsync($"api/master/services/{_editId}", payload);
 
-            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
-            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
-            if (res.IsSuccessStatusCode) { ResetForm(); await LoadAsync(); }
+            _msg = await MsgOf(res);
+            _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(_msg, Severity.Success);
+                Close();
+                await LoadAsync();
+            }
         }
-        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        catch (Exception ex)
+        {
+            _ok = false;
+            _msg = "فشل في حفظ البيانات: " + ex.Message;
+        }
         finally { _saving = false; }
     }
 
@@ -386,20 +1503,17 @@
             var url = $"api/master/services/{s.ServiceId}/" + (activate ? "activate" : "deactivate");
             var res = await Http.PostAsync(url, null);
             var msg = await MsgOf(res);
-            _ok = res.IsSuccessStatusCode; _msg = msg;
             Snackbar.Add(msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
             if (res.IsSuccessStatusCode) await LoadAsync();
         }
-        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        catch (Exception ex)
+        {
+            Snackbar.Add("فشل: " + ex.Message, Severity.Error);
+        }
     }
 
-    private static decimal ParseDec(object? v) => decimal.TryParse(v?.ToString(), out var n) && n >= 0 ? n : 0m;
-    private static string Money(decimal v) => v.ToString("N2");
-    private static string UnitAr(string u) => u switch
-    {
-        "Trip" => "رحلة", "Job" => "مهمة", "Hour" => "ساعة", "Day" => "يوم",
-        "Unit" => "وحدة", "Km" => "كيلومتر", "Ton" => "طن", _ => u
-    };
+    private static decimal ParseDec(object? v) =>
+        decimal.TryParse(v?.ToString(), out var n) && n >= 0 ? n : 0m;
 
     private static async Task<string> MsgOf(HttpResponseMessage res)
     {
@@ -409,6 +1523,9 @@
             var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
             return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
         }
-        catch { return res.IsSuccessStatusCode ? "✅ تم" : "حصل خطأ — حاول تاني"; }
+        catch
+        {
+            return res.IsSuccessStatusCode ? "تمت العملية بنجاح" : "حصل خطأ غير متوقع";
+        }
     }
 }

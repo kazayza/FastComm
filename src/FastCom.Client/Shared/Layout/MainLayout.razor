@@ -9,7 +9,6 @@
 
 <MudLayout>
 
-    @* ── الـ Header ───────────────────────────────────────────────────── *@
     <MudAppBar Elevation="1" Fixed="true" Dense="false">
 
         <MudIconButton Icon="@Icons.Material.Filled.Menu"
@@ -17,73 +16,136 @@
                        Edge="Edge.Start"
                        OnClick="@(() => _drawerOpen = !_drawerOpen)" />
 
-        @* الشعار + اسم الشركة (من جدول CompanyProfile) *@
-        <div class="brand-block">
+        @* 🏢 الشعار + اسم الشركة — قابل للضغط ويرجع للرئيسية *@
+        <a class="brand-block brand-link" href="/" title="العودة للرئيسية">
             <img src="img/logo-icon.png" class="brand-mark" alt="FastCom" />
             <div class="brand-text">
                 <span class="brand-name">@_company.DisplayName</span>
                 <span class="brand-sub">نظام إدارة نقل الحاويات</span>
             </div>
+        </a>
+
+        @* 🔍 البحث العام — بارتفاع متناسق مع الهيدر *@
+        <div class="header-search-slot">
+            <GlobalSearch />
         </div>
-
-        @* 🔍 البحث العام *@
-        <GlobalSearch />
-
-        @* 🔔 الإشعارات *@
-        <NotificationBell />
 
         <MudSpacer />
 
-        @* حالة الاتصال بقاعدة البيانات *@
-        <MudTooltip Text='@(_dbOk ? "متصل بقاعدة البيانات" : "غير متصل — راجع الإعدادات")'>
-            <MudChip T="string"
-                     Size="Size.Small"
-                     Color="@(_dbOk ? Color.Success : Color.Error)"
-                     Variant="Variant.Outlined"
-                     Icon="@(_dbOk ? Icons.Material.Filled.CloudDone : Icons.Material.Filled.CloudOff)">
-                @(_dbOk ? "متصل" : "غير متصل")
-            </MudChip>
-        </MudTooltip>
+        @* ══════════════════════════════════════════════════
+           المجموعة اليسرى: الإشعارات + حالة DB + المستخدم
+        ══════════════════════════════════════════════════ *@
+        <div class="header-actions-group">
 
-        @* 🔐 Step 3.3: اسم المستخدم + تسجيل الخروج *@
-        <AuthorizeView>
-            <Authorized>
-                <MudMenu AnchorOrigin="Origin.BottomLeft"
-                         TransformOrigin="Origin.TopLeft"
-                         Dense="true">
-                    <ActivatorContent>
-                        <MudButton Color="Color.Inherit"
-                                   StartIcon="@Icons.Material.Filled.PersonOutline"
-                                   EndIcon="@Icons.Material.Filled.Info">
-                            @_user?.DisplayName
-                        </MudButton>
-                    </ActivatorContent>
-                    <ChildContent>
-                        <MudMenuItem Disabled="true">
-                            <span class="muted">الأدوار: @(string.Join(" · ", _user?.Roles ?? new()))</span>
-                        </MudMenuItem>
-                        <MudDivider />
-                        <MudMenuItem OnClick="LogoutAsync">
-                            <span>تسجيل الخروج</span>
-                        </MudMenuItem>
-                    </ChildContent>
-                </MudMenu>
-            </Authorized>
-            <NotAuthorized>
-                <MudButton Color="Color.Inherit"
-                           StartIcon="@Icons.Material.Filled.PersonOutline"
-                           Href="/login">
-                    دخول
-                </MudButton>
-            </NotAuthorized>
-        </AuthorizeView>
+            @* 🔔 الإشعارات — الـ Component الأصلي *@
+            <div class="header-bell-slot">
+                <NotificationBell />
+            </div>
+
+            @* حالة الاتصال بقاعدة البيانات *@
+            <MudTooltip Text='@(_dbOk ? "متصل بقاعدة البيانات" : "غير متصل — راجع الإعدادات")'>
+                <div class="header-db-status @(_dbOk ? "db-ok" : "db-fail")">
+                    <MudIcon Icon="@(_dbOk ? Icons.Material.Filled.CloudDone : Icons.Material.Filled.CloudOff)"
+                             Size="Size.Small" />
+                    <span class="db-status-label">@(_dbOk ? "متصل" : "غير متصل")</span>
+                </div>
+            </MudTooltip>
+
+            @* 👤 قائمة المستخدم الاحترافية *@
+            <AuthorizeView>
+                <Authorized>
+                    <MudMenu AnchorOrigin="Origin.BottomLeft"
+                             TransformOrigin="Origin.TopLeft"
+                             Dense="true"
+                             PopoverClass="user-menu-popover">
+                        <ActivatorContent>
+                            <div class="header-user-btn" tabindex="0" role="button">
+                                <div class="user-avatar">
+                                    @(_user?.DisplayName?.Length > 0
+                                        ? _user.DisplayName[0].ToString().ToUpper()
+                                        : "?")
+                                </div>
+                                <div class="user-info">
+                                    <span class="user-name">@_user?.DisplayName</span>
+                                    <span class="user-role">
+                                        @(_user?.Roles?.FirstOrDefault() ?? "مستخدم")
+                                    </span>
+                                </div>
+                                <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown"
+                                         Size="Size.Small"
+                                         Class="user-chevron" />
+                            </div>
+                        </ActivatorContent>
+                        <ChildContent>
+                            <div class="user-menu-header">
+                                <div class="user-menu-avatar">
+                                    @(_user?.DisplayName?.Length > 0
+                                        ? _user.DisplayName[0].ToString().ToUpper()
+                                        : "?")
+                                </div>
+                                <div class="user-menu-info">
+                                    <div class="user-menu-name">@_user?.DisplayName</div>
+                                    @if (!string.IsNullOrWhiteSpace(_user?.Email))
+                                    {
+                                        <div class="user-menu-email">@_user.Email</div>
+                                    }
+                                </div>
+                            </div>
+
+                            <MudDivider />
+
+                            @if (_user?.Roles?.Any() == true)
+                            {
+                                <div class="user-menu-roles">
+                                    <div class="user-menu-roles-label">الأدوار الممنوحة</div>
+                                    <div class="user-menu-roles-list">
+                                        @foreach (var role in _user.Roles)
+                                        {
+                                            <span class="user-role-chip">@role</span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            <MudDivider />
+
+                            <MudMenuItem Icon="@Icons.Material.Filled.Person"
+                                         OnClick="@(() => Nav.NavigateTo("/profile"))">
+                                الملف الشخصي
+                            </MudMenuItem>
+                            <MudMenuItem Icon="@Icons.Material.Filled.Lock"
+                                         OnClick="@(() => Nav.NavigateTo("/change-password"))">
+                                تغيير كلمة المرور
+                            </MudMenuItem>
+                            <MudMenuItem Icon="@Icons.Material.Filled.Settings"
+                                         OnClick="@(() => Nav.NavigateTo("/settings"))">
+                                الإعدادات
+                            </MudMenuItem>
+
+                            <MudDivider />
+
+                            <MudMenuItem OnClick="LogoutAsync" Class="user-menu-logout">
+                                <div class="logout-item">
+                                    <MudIcon Icon="@Icons.Material.Filled.Logout" Size="Size.Small" />
+                                    <span>تسجيل الخروج</span>
+                                </div>
+                            </MudMenuItem>
+                        </ChildContent>
+                    </MudMenu>
+                </Authorized>
+                <NotAuthorized>
+                    <MudButton Color="Color.Inherit"
+                               StartIcon="@Icons.Material.Filled.PersonOutline"
+                               Href="/login">
+                        دخول
+                    </MudButton>
+                </NotAuthorized>
+            </AuthorizeView>
+
+        </div>
 
     </MudAppBar>
 
-    @* ── الـ Sidebar ──────────────────────────────────────────────────── *@
-    @* 🔴 DrawerVariant.Responsive مش Mini:
-       Mini بيفضل شريط رفيع (56px) أيقونات بس حتى وهو "مفتوح"
-       → القائمة كانت بتبان فاضية. Responsive بيفتح بالعرض الكامل. *@
     <MudDrawer @bind-Open="_drawerOpen"
                Elevation="2"
                Variant="@DrawerVariant.Responsive"
@@ -91,11 +153,9 @@
         <NavMenu />
     </MudDrawer>
 
-    @* ── المحتوى ──────────────────────────────────────────────────────── *@
     <MudMainContent Class="fastcom-main">
         @Body
 
-        @* ── الـ Footer ─────────────────────────────────────────────── *@
         <footer class="fastcom-footer">
             <div>
                 <strong>@_company.DisplayName</strong>
@@ -116,6 +176,264 @@
 
 </MudLayout>
 
+<style>
+    /* ════════════════════════════════════════════════════════
+       🏢 Brand Block
+    ════════════════════════════════════════════════════════ */
+    .brand-link {
+        text-decoration: none !important;
+        color: inherit !important;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 4px 8px;
+        border-radius: 8px;
+        transition: background 0.15s ease;
+        cursor: pointer;
+    }
+    .brand-link:hover { background: rgba(255, 255, 255, 0.08); }
+    .brand-link:focus-visible {
+        outline: 2px solid rgba(255, 255, 255, 0.4);
+        outline-offset: 2px;
+    }
+
+    /* ════════════════════════════════════════════════════════
+       🔍 Search Slot
+    ════════════════════════════════════════════════════════ */
+    .header-search-slot {
+        display: flex;
+        align-items: center;
+        height: 40px;
+        margin: 0 16px;
+        flex: 0 1 420px;
+        min-width: 220px;
+    }
+
+    .header-search-slot > *,
+    .header-search-slot .mud-input-control,
+    .header-search-slot .mud-input,
+    .header-search-slot input {
+        height: 40px !important;
+        min-height: 40px !important;
+        max-height: 40px !important;
+        width: 100%;
+    }
+
+    .header-search-slot .mud-input-outlined-border {
+        border-radius: 10px !important;
+    }
+
+    /* ════════════════════════════════════════════════════════
+       ⚡ Header Actions Group
+    ════════════════════════════════════════════════════════ */
+    .header-actions-group {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: 100%;
+    }
+
+    /* 🔔 Bell Slot — بيحتوي NotificationBell الأصلي */
+    .header-bell-slot {
+        display: flex;
+        align-items: center;
+        height: 40px;
+    }
+
+    /* ════════════════════════════════════════════════════════
+       🌐 DB Status
+    ════════════════════════════════════════════════════════ */
+    .header-db-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 32px;
+        padding: 0 10px;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 700;
+        font-family: "Cairo", "Tajawal", "Inter", sans-serif;
+        transition: all 0.15s ease;
+        cursor: default;
+    }
+    .db-ok {
+        background: rgba(22, 163, 91, 0.12);
+        color: #16a35b;
+        border: 1px solid rgba(22, 163, 91, 0.28);
+    }
+    .db-fail {
+        background: rgba(224, 48, 72, 0.12);
+        color: #e03048;
+        border: 1px solid rgba(224, 48, 72, 0.28);
+        animation: db-fail-pulse 2s ease-in-out infinite;
+    }
+    @@keyframes db-fail-pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(224, 48, 72, 0.3); }
+        50%      { box-shadow: 0 0 0 4px rgba(224, 48, 72, 0); }
+    }
+    .db-status-label { line-height: 1; }
+
+    @@media (max-width: 900px) {
+        .db-status-label { display: none; }
+        .header-db-status { padding: 0 8px; }
+    }
+
+    /* ════════════════════════════════════════════════════════
+       👤 User Button
+    ════════════════════════════════════════════════════════ */
+    .header-user-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        height: 40px;
+        padding: 0 10px 0 8px;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background 0.15s ease;
+        user-select: none;
+    }
+    .header-user-btn:hover { background: rgba(255, 255, 255, 0.1); }
+    .header-user-btn:focus-visible {
+        outline: 2px solid rgba(255, 255, 255, 0.4);
+        outline-offset: 2px;
+    }
+
+    .user-avatar {
+        width: 32px; height: 32px; flex: 0 0 32px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #fbbf24, #f59e0b);
+        color: #78350f;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 13px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        border: 2px solid rgba(255, 255, 255, 0.25);
+    }
+
+    .user-info {
+        display: flex; flex-direction: column;
+        align-items: flex-start;
+        line-height: 1.1;
+    }
+    .user-name {
+        font-size: 12.5px; font-weight: 800; color: #fff;
+        white-space: nowrap; max-width: 140px;
+        overflow: hidden; text-overflow: ellipsis;
+    }
+    .user-role {
+        font-size: 10px; font-weight: 600;
+        color: rgba(255, 255, 255, 0.65);
+        white-space: nowrap; max-width: 140px;
+        overflow: hidden; text-overflow: ellipsis;
+    }
+    .user-chevron {
+        color: rgba(255, 255, 255, 0.55);
+        transition: transform 0.2s ease;
+    }
+    .header-user-btn:hover .user-chevron { color: #fff; }
+
+    @@media (max-width: 680px) {
+        .user-info, .user-chevron { display: none; }
+        .header-user-btn { padding: 4px; }
+    }
+
+    /* ════════════════════════════════════════════════════════
+       📋 User Menu Popover
+    ════════════════════════════════════════════════════════ */
+    .user-menu-popover {
+        min-width: 280px !important;
+        border-radius: 14px !important;
+        overflow: hidden !important;
+        box-shadow:
+            0 12px 32px rgba(15, 41, 82, 0.18),
+            0 4px 12px rgba(15, 41, 82, 0.10) !important;
+    }
+
+    .user-menu-header {
+        display: flex; align-items: center; gap: 12px;
+        padding: 16px 18px;
+        background: linear-gradient(135deg, #0d2654 0%, #1a3a6b 100%);
+        color: #fff;
+    }
+    .user-menu-avatar {
+        width: 44px; height: 44px; flex: 0 0 44px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #fbbf24, #f59e0b);
+        color: #78350f;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+        border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+    .user-menu-info { flex: 1; min-width: 0; }
+    .user-menu-name {
+        font-size: 14px; font-weight: 800; color: #fff;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .user-menu-email {
+        font-size: 11px; color: rgba(255, 255, 255, 0.7);
+        margin-top: 2px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        direction: ltr; text-align: right;
+    }
+
+    .user-menu-roles { padding: 12px 18px; }
+    .user-menu-roles-label {
+        font-size: 10.5px; font-weight: 800; color: #6b7d95;
+        margin-bottom: 6px;
+        text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .user-menu-roles-list {
+        display: flex; flex-wrap: wrap; gap: 5px;
+    }
+    .user-role-chip {
+        display: inline-flex; align-items: center;
+        padding: 3px 9px; border-radius: 6px;
+        background: linear-gradient(135deg, #eaf1ff, #dbe8fc);
+        border: 1px solid #bdd4fc;
+        color: #1e6ef5;
+        font-size: 10px; font-weight: 800;
+    }
+
+    .user-menu-popover .mud-list-item {
+        padding: 10px 18px !important;
+        font-size: 12.5px !important;
+        font-weight: 700 !important;
+        color: #1c2c44 !important;
+        transition: background 0.12s ease !important;
+    }
+    .user-menu-popover .mud-list-item:hover {
+        background: #f5f8ff !important;
+        color: #1e6ef5 !important;
+    }
+    .user-menu-popover .mud-list-item .mud-icon-root { color: #6b7d95; }
+    .user-menu-popover .mud-list-item:hover .mud-icon-root { color: #1e6ef5; }
+
+    .user-menu-logout { color: #e03048 !important; }
+    .logout-item {
+        display: flex; align-items: center; gap: 8px;
+        color: #e03048; font-weight: 800;
+    }
+    .user-menu-logout:hover {
+        background: #fff0f2 !important;
+        color: #e03048 !important;
+    }
+    .user-menu-logout:hover .logout-item { color: #c0182e; }
+
+    /* ════════════════════════════════════════════════════════
+       📱 Responsive
+    ════════════════════════════════════════════════════════ */
+    @@media (max-width: 768px) {
+        .brand-text { display: none; }
+        .header-search-slot { flex: 1 1 auto; margin: 0 8px; }
+    }
+    @@media (max-width: 480px) {
+        .header-search-slot { display: none; }
+        .header-actions-group { gap: 6px; }
+    }
+</style>
+
 @code {
     private bool _drawerOpen = true;
     private bool _dbOk;
@@ -125,11 +443,8 @@
     protected override async Task OnInitializedAsync()
     {
         _company = await Company.GetAsync();
-
-        // 🔴 حالة الاتصال الحقيقية من /api/health (Database = "connected" | "ERROR")
         var health = await Health.GetAsync();
         _dbOk = health?.Database == "connected";
-
         _user = await Auth.GetUserAsync();
         Auth.OnStateChanged += OnAuthChanged;
     }

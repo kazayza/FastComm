@@ -6,376 +6,1510 @@
 @inject AuthService Auth
 @inject ISnackbar Snackbar
 
-<PageTitle>قوائم الأسعار — فاست كوم</PageTitle>
+<PageTitle>قوائم الأسعار والتعريفات — فاست كوم</PageTitle>
 
-<div class="fc-hero">
-    <div class="fc-hero-inner">
-        <div class="fc-page-head">
-            <div>
-                <div class="fc-crumb">البيانات الأساسية · الأسعار</div>
-                <h1 class="fc-hero-title">قوائم الأسعار</h1>
-                <p class="fc-hero-sub">أسعار خاصة بالعميل — القاعدة الأخص هي اللي بتتطبق تلقائيًا</p>
-            </div>
-            <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="LoadListsAsync" Style="color:#9FB4CC" />
-                @if (CanCreate)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="NewList">قائمة جديدة</MudButton>
-                }
-            </div>
-        </div>
+@* ═══════════════════════════════════════════
+   HERO — الـ .fc-hero الأصلي ككارت بحواف دائرية 20px وظل عميق
+═══════════════════════════════════════════ *@
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
 
-        <div class="fc-kpis-glass">
-            <div class="fc-kpi"><div class="fc-kpi-lb">القوائم</div><div class="fc-kpi-num">@_lists.Count</div></div>
-            <div class="fc-kpi"><div class="fc-kpi-lb">القواعد</div><div class="fc-kpi-num">@_lists.Sum(l => l.RuleCount)</div></div>
-            <div class="fc-kpi"><div class="fc-kpi-lb">سارية دلوقتي</div>
-                <div class="fc-kpi-num">@_lists.Count(IsLive)</div></div>
+            <div class="doc-hero-row">
+                <div class="doc-hero-left">
+                    <div class="doc-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 8v8M8 12h8" stroke-linecap="round"/>
+                        </svg>
+                        <span>البيانات الأساسية · الأسعار</span>
+                    </div>
+                    <h1 class="fc-hero-title">قوائم ومصفوفات الأسعار</h1>
+                    <p class="fc-hero-sub">تخصيص أسعار خاصة بالعملاء والجهات — يطبق النظام تلقائياً القاعدة الأكثر دقة وتخصيصاً</p>
+                </div>
+
+                <div class="doc-hero-right">
+                    <span class="doc-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                    <span class="doc-hero-chip doc-chip-warn">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01" stroke-linecap="round"/>
+                        </svg>
+                        القوائم الفعالة: @_lists.Count(IsLive)
+                    </span>
+                </div>
+            </div>
+
+            @if (CanView)
+            {
+                <div class="doc-kpis-row">
+                    <div class="doc-kpi doc-kpi-blue">
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.Assessment" Size="Size.Small" /></div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@_lists.Count</div>
+                                <div class="doc-kpi-label">قوائم الأسعار</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="doc-kpi doc-kpi-green">
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.LockOpen" Size="Size.Small" /></div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@_lists.Sum(l => l.RuleCount)</div>
+                                <div class="doc-kpi-label">قواعد التسعير النشطة</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="doc-kpi doc-kpi-gold">
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.HourglassTop" Size="Size.Small" /></div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@_lists.Count(IsLive)</div>
+                                <div class="doc-kpi-label">قوائم سارية حالياً</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
         </div>
     </div>
 </div>
 
-<div class="fc-page">
+@* ═══════════════════════════════════════════
+   BODY — مصفوفة تشغيلية مقسمة لعمودين (Split Layout)
+═══════════════════════════════════════════ *@
+<div class="doc-body">
     @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض الأسعار.</MudAlert>
+        <div class="doc-state-box">
+            <div class="state-icon-wrap perm">
+                <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليست لديك الصلاحية الكافية لعرض واستعراض لوحة أسعار وتعميرات العملاء (PRICING.VIEW)</p>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
+        <div class="fc-overlap">
+            <div class="prl-layout">
 
-            <div class="fc-alert fc-alert-info">
-                <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Info" /></div>
-                <div class="fc-alert-body">
-                    <div class="fc-alert-title">القاعدة الأخص هي اللي تكسب</div>
-                    <div>لو فيه أكتر من قاعدة منطبقة، النظام بيختار <b>اللي فيها أبعاد أكتر</b>
-                        (ميناء + وجهة + نوع حاوية + نوع رحلة). البعد الفاضي معناه «أي قيمة».
-                        وبعدين الأولوية (الرقم الأصغر أعلى).</div>
+                @* ── العمود الأيمن: قوائم الأسعار (Pricelists) ── *@
+                <div class="prl-sidebar-card">
+                    <div class="prl-sidebar-head">
+                        <div class="prl-sidebar-title">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6" stroke-linecap="round"/>
+                            </svg>
+                            قوائم الأسعار المعرفة
+                        </div>
+                        <span class="prl-sidebar-badge">@_lists.Count</span>
+                    </div>
+
+                    <div class="prl-sidebar-list">
+                        @if (!_lists.Any())
+                        {
+                            <div class="prl-sidebar-empty">لا توجد قوائم أسعار مسجلة</div>
+                        }
+                        else
+                        {
+                            @foreach (var l in _lists)
+                            {
+                                <button type="button" class="prl-item-row @(RowCls(l))" @onclick="() => SelectList(l)">
+                                    <div class="prl-item-indicator" aria-hidden="true"></div>
+                                    <div class="prl-item-details">
+                                        <div class="prl-item-title-row">
+                                            <span class="prl-item-title">@l.NameAr</span>
+                                            <span class="prl-item-badge">@l.RuleCount قاعدة</span>
+                                        </div>
+                                        <div class="prl-item-meta">
+                                            <span class="prl-item-code">@l.PriceListCode</span>
+                                            <span class="prl-item-date-badge @(IsLive(l) ? "valid" : "expired")">
+                                                <span class="chip-dot"></span>
+                                                @(IsLive(l) ? "سارية" : "غير سارية")
+                                            </span>
+                                        </div>
+                                    </div>
+                                    @if (CanEdit)
+                                    {
+                                        <button type="button" class="prl-item-edit-btn" @onclick="() => EditList(l)" @onclick:stopPropagation="true" title="تعديل القائمة">
+                                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                            </svg>
+                                        </button>
+                                    }
+                                </button>
+                            }
+                        }
+                    </div>
                 </div>
+
+                @* ── العمود الأيسر: قواعد مصفوفة السعر للقائمة المختارة ── *@
+                <div class="prl-main-card">
+                    @if (_sel is null)
+                    {
+                        <div class="prl-main-empty">
+                            <div class="prl-main-empty-icon">
+                                <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 8v8M8 12h8" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <h3>يرجى اختيار قائمة أسعار من العمود الأيمن</h3>
+                            <p>لتتمكن من استعراض مصفوفة الصلاحيات والقواعد السعرية المحددة للعملاء والخدمات اللوجستية.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @* ترويسة مصفوفة القواعد *@
+                        <div class="prl-main-head">
+                            <div class="prl-main-head-info">
+                                <span class="prl-main-head-tag">مصفوفة التسعير</span>
+                                <h2 class="prl-main-head-title">قواعد القائمة: @_selName</h2>
+                            </div>
+                            <div class="prl-main-head-meta">
+                                <span class="prl-main-badge-count">@_rules.Count قاعدة تسعير مفعّلة</span>
+                            </div>
+                        </div>
+
+                        @* تنبيه أولوية القواعد *@
+                        <div class="doc-banner banner-info" role="alert" style="border-bottom: 1px solid #edf1f7;">
+                            <div class="banner-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <span>
+                                <strong>تنبيه مصفوفة الأولويات:</strong> يتم تطبيق قاعدة التسعير الأكثر تخصصاً وتحديداً للعملية (التي تشتمل على ميناء، وجهة، نوع الحاوية، نوع الرحلة) وإذا تساوت القواعد يتم ترجيح القاعدة ذات قيمة الأولوية الأقل رقمياً (مثال: أولوية 1 تسبق 100).
+                            </span>
+                        </div>
+
+                        @* جدول قواعد التسعير *@
+                        <div class="doc-table-wrap">
+                            <table class="doc-table" aria-label="جدول قواعد الأسعار">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="th-start">العميل المستهدف</th>
+                                        <th scope="col" class="th-start">الخدمة اللوجستية</th>
+                                        <th scope="col" class="th-start">الأبعاد الجغرافية والتشغيلية</th>
+                                        <th scope="col">سعر البيع</th>
+                                        <th scope="col">التكلفة المتوقعة</th>
+                                        <th scope="col">صلاحية القاعدة</th>
+                                        <th scope="col">الأولوية</th>
+                                        @if (CanEdit)
+                                        {
+                                            <th scope="col" style="width: 120px">إجراءات</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var r in _rules)
+                                    {
+                                        <tr class="@(!r.IsActive ? "row-inactive" : "")">
+                                            <td class="td-start"><strong>@r.CustomerName</strong></td>
+                                            <td class="td-start"><span class="doc-type-badge">@r.ServiceName</span></td>
+                                            <td class="td-start td-muted text-xs">@Dims(r)</td>
+                                            <td class="td-money"><strong>@Money(r.UnitPrice)</strong><small> ج.م</small></td>
+                                            <td class="td-money td-muted">
+                                                @(r.CostPrice is null ? "—" : Money(r.CostPrice.Value) + " ج.م")
+                                            </td>
+                                            <td class="td-muted text-xs">
+                                                <span>@r.ValidFrom.ToString("yyyy-MM-dd")</span>
+                                                @if (r.ValidTo is not null)
+                                                {
+                                                    <span class="td-date-sep"> ← @r.ValidTo.Value.ToString("yyyy-MM-dd")</span>
+                                                }
+                                            </td>
+                                            <td class="font-mono">
+                                                <span class="prl-priority-badge">@r.Priority</span>
+                                                @if (!r.IsActive)
+                                                {
+                                                    <span class="doc-status-chip chip-expired" style="margin-right: 4px;">موقوفة</span>
+                                                }
+                                            </td>
+                                            @if (CanEdit)
+                                            {
+                                                <td>
+                                                    <div class="doc-row-actions">
+                                                        <button class="doc-btn-download" @onclick="() => EditRule(r)" title="تعديل القاعدة">
+                                                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5">
+                                                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                            </svg>
+                                                        </button>
+                                                        @if (CanDelete)
+                                                        {
+                                                            <button class="doc-btn-del" @onclick="() => DeleteRuleAsync(r)" title="حذف القاعدة">
+                                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                                    <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                                                                </svg>
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                </td>
+                                            }
+                                        </tr>
+                                    }
+                                    @if (!_rules.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="@(CanEdit ? "8" : "7")">
+                                                <div class="doc-empty-table">لا توجد قواعد تسعير مسجلة لهذه القائمة</div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+
+            </div>
+        </div>
+    }
+</div>
+
+@* ═══════════════════════════════════════════
+   MODAL 1 — إنشاء / تعديل قائمة أسعار (وعاء القواعد)
+═══════════════════════════════════════════ *@
+@if (_listOpen && CanCreate)
+{
+    <div class="cust-modal-backdrop" @onclick="() => _listOpen = false" role="dialog" aria-modal="true">
+        <div class="cust-modal cust-modal-sm" @onclick:stopPropagation="true">
+
+            <div class="modal-head">
+                <div class="modal-head-icon icon-blue" aria-hidden="true">
+                    @if (_listEditId is null)
+                    {
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                        </svg>
+                    }
+                </div>
+                <div>
+                    <div class="modal-title">@(_listEditId is null ? "قائمة أسعار جديدة" : "تعديل بيانات القائمة")</div>
+                    <div class="modal-sub">القائمة تمثل وعاءً تصنيفياً يتم ربط مصفوفة القواعد السعرية بداخله</div>
+                </div>
+                <button class="modal-close-btn" @onclick="() => _listOpen = false" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <div class="modal-form-grid">
+                    <div class="modal-form-field modal-field-full">
+                        <label class="modal-field-label">كود القائمة <span class="field-required">*</span></label>
+                        <input class="modal-field-input" @bind="_lf.PriceListCode" maxlength="30" dir="ltr" placeholder="ROLE_CODE" />
+                    </div>
+                    <div class="modal-form-field modal-field-full">
+                        <label class="modal-field-label">الاسم بالعربية <span class="field-required">*</span></label>
+                        <input class="modal-field-input" @bind="_lf.NameAr" maxlength="150" placeholder="مثال: أسعار شركة كذا" />
+                    </div>
+                    <div class="modal-form-field modal-field-full">
+                        <label class="modal-field-label">الاسم بالإنجليزية</label>
+                        <input class="modal-field-input" @bind="_lf.NameEn" maxlength="150" placeholder="Price list English name" dir="ltr" />
+                    </div>
+                    <div class="modal-form-field">
+                        <label class="modal-field-label">سارية من <span class="field-required">*</span></label>
+                        <input type="date" class="modal-field-input" value="@_lf.ValidFrom" @onchange="e => _lf.ValidFrom = e.Value?.ToString()" />
+                    </div>
+                    <div class="modal-form-field">
+                        <label class="modal-field-label">سارية لغاية</label>
+                        <input type="date" class="modal-field-input" value="@_lf.ValidTo" @onchange="e => _lf.ValidTo = e.Value?.ToString()" />
+                        <div class="modal-field-hint">اتركه فارغاً لتظل مفتوحة الصلاحية</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-foot">
+                <button class="modal-cancel-btn" @onclick="() => _listOpen = false">إلغاء</button>
+                <button class="modal-save-btn" @onclick="SaveListAsync" disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <span class="btn-spinner sm"></span>
+                        <span>جاري الحفظ...</span>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                            <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>حفظ البيانات</span>
+                    }
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+@* ═══════════════════════════════════════════
+   MODAL 2 — إنشاء / تعديل قاعدة تسعير بـ MudTabs المخصصة
+═══════════════════════════════════════════ *@
+@if (_ruleOpen && CanCreate && _sel is not null)
+{
+    <div class="cust-modal-backdrop" @onclick="() => _ruleOpen = false" role="dialog" aria-modal="true">
+        <div class="cust-modal" @onclick:stopPropagation="true">
+
+            <div class="modal-head">
+                <div class="modal-head-icon icon-blue" aria-hidden="true">
+                    @if (_ruleEditId is null)
+                    {
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                        </svg>
+                    }
+                </div>
+                <div>
+                    <div class="modal-title">@(_ruleEditId is null ? "قاعدة سعر جديدة" : "تعديل قاعدة التسعير")</div>
+                    <div class="modal-sub">في القائمة: @_selName</div>
+                </div>
+                <button class="modal-close-btn" @onclick="() => _ruleOpen = false" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
             </div>
 
             @if (_msg is not null)
             {
-                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
-                          Class="mb-4">@_msg</MudAlert>
+                <div class="modal-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                    <span>@_msg</span>
+                    <button class="banner-close" @onclick="() => _msg = null">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
             }
 
-            @* ══════════ 1. القوائم ══════════ *@
-            <div class="fc-fsec">
-                <div class="fc-fsec-head">
-                    <span class="fc-fsec-n">1</span>
-                    <div>
-                        <div class="fc-fsec-t">قوائم الأسعار</div>
-                        <div class="fc-fsec-d">اختار قائمة عشان تشوف قواعدها وتضيف فيها</div>
-                    </div>
-                    <span class="fc-fsec-ic"><MudIcon Icon="@Icons.Material.Filled.Assessment" Size="Size.Small" /></span>
-                </div>
+            <div class="modal-body">
+                <MudTabs Elevation="0" Rounded="false" ApplyEffectsToContainer="true"
+                         PanelClass="saf-tab-panel" @bind-ActivePanelIndex="_activeTab" Class="saf-mud-tabs">
 
-                <div class="fc-table-wrap"><table class="fc-table">
-                    <thead><tr>
-                        <th>الكود</th><th>الاسم</th><th>سارية من</th><th>لغاية</th>
-                        <th>قواعد</th><th style="width:170px"></th>
-                    </tr></thead>
-                    <tbody>
-                        @foreach (var l in _lists)
-                        {
-                            <tr class="@RowCls(l)">
-                                <td><span class="fc-role-chip">@l.PriceListCode</span></td>
-                                <td class="fc-cell-main">
-                                    @l.NameAr
-                                    @if (!string.IsNullOrWhiteSpace(l.NameEn))
+                    @* ── Tab 1: الأطراف والأسعار ── *@
+                    <MudTabPanel>
+                        <TabContent>
+                            <div class="ctab-label">
+                                <div class="ctab-icon ctab-icon-blue">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                                    </svg>
+                                </div>
+                                <span>الأسعار والتسعير</span>
+                                @if (_triedSave && (_rf.CustomerId <= 0 || _rf.ServiceId <= 0))
+                                {
+                                    <span class="ctab-err-dot"></span>
+                                }
+                            </div>
+                        </TabContent>
+                        <ChildContent>
+                            <div class="tab-section">
+                                <div class="tab-section-head">
+                                    <div class="tab-section-icon blue">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="tab-section-title">الأطراف والأسعار المطبقة</div>
+                                        <div class="tab-section-sub">تحديد العميل، الخدمة، وسعر البيع مع احتساب الهامش التلقائي</div>
+                                    </div>
+                                </div>
+
+                                <div class="saf-form-grid">
+                                    <div class="form-field">
+                                        <label class="field-label">العميل المستهدف <span class="field-required">*</span></label>
+                                        <select class="field-input @(_rf.CustomerId <= 0 && _triedSave ? "field-error" : "")" @bind="_rf.CustomerId">
+                                            <option value="0">— اختر العميل —</option>
+                                            @foreach (var c in _customers) { <option value="@c.Id">@c.Label</option> }
+                                        </select>
+                                    </div>
+
+                                    <div class="form-field">
+                                        <label class="field-label">الخدمة اللوجستية <span class="field-required">*</span></label>
+                                        <select class="field-input @(_rf.ServiceId <= 0 && _triedSave ? "field-error" : "")" @bind="_rf.ServiceId">
+                                            <option value="0">— اختر الخدمة —</option>
+                                            @foreach (var s in _services) { <option value="@s.Id">@s.Label</option> }
+                                        </select>
+                                    </div>
+
+                                    <div class="form-field">
+                                        <label class="field-label">سعر البيع المعتمد <span class="field-required">*</span></label>
+                                        <div class="field-input-group">
+                                            <span class="field-prefix" aria-hidden="true">ج.م</span>
+                                            <input type="number" min="0" step="0.01" class="field-input with-prefix" value="@_rf.UnitPrice" @onchange="e => _rf.UnitPrice = Dec(e.Value)" />
+                                        </div>
+                                    </div>
+
+                                    <div class="form-field">
+                                        <label class="field-label">سعر التكلفة المقدرة</label>
+                                        <div class="field-input-group">
+                                            <span class="field-prefix" aria-hidden="true">ج.م</span>
+                                            <input type="number" min="0" step="0.01" class="field-input with-prefix" value="@_rf.CostPrice" @onchange="e => _rf.CostPrice = Dec(e.Value)" />
+                                        </div>
+                                    </div>
+
+                                    @if (_rf.UnitPrice > 0 || (_rf.CostPrice ?? 0) > 0)
                                     {
-                                        <div class="fc-cell-sub">@l.NameEn</div>
+                                        <div class="form-field saf-full">
+                                            <div class="saf-toggle-box" style="background:#f8fafc">
+                                                <div class="saf-toggle-content">
+                                                    <div class="saf-toggle-icon" style="background:#e6f9ee; color:#16a35b">
+                                                        <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" />
+                                                    </div>
+                                                    <div class="saf-toggle-text">
+                                                        <div class="saf-toggle-title">هامش الربح المتوقع للقاعدة</div>
+                                                        <div class="saf-toggle-sub">سعر البيع مطروحاً منه سعر التكلفة المدخلة</div>
+                                                    </div>
+                                                </div>
+                                                <span class="saf-sw-text @((_rf.UnitPrice - (_rf.CostPrice ?? 0)) >= 0 ? "text-green" : "text-red")" style="font-size:16px; font-weight:900">
+                                                    @Money(_rf.UnitPrice - (_rf.CostPrice ?? 0)) ج.م
+                                                </span>
+                                            </div>
+                                        </div>
                                     }
-                                </td>
-                                <td>@l.ValidFrom.ToString("yyyy-MM-dd")</td>
-                                <td>
-                                    @if (l.ValidTo is null)
-                                    {
-                                        <span class="fc-chip fc-chip-ok">مفتوحة</span>
-                                    }
-                                    else
-                                    {
-                                        @l.ValidTo.Value.ToString("yyyy-MM-dd")
-                                    }
-                                </td>
-                                <td>@l.RuleCount</td>
-                                <td>
-                                    <div class="fc-row-actions">
-                                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
-                                                   OnClick="() => SelectList(l)">القواعد</MudButton>
-                                        @if (CanEdit)
+
+                                    <div class="form-field">
+                                        <label class="field-label">الضريبة المطبقة</label>
+                                        <select class="field-input" value="@_rf.TaxRateId" @onchange="e => _rf.TaxRateId = Nul(e.Value)">
+                                            <option value="">— بدون ضريبة مضافة —</option>
+                                            @foreach (var t in _taxRates) { <option value="@t.Id">@t.Label</option> }
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </ChildContent>
+                    </MudTabPanel>
+
+                    @* ── Tab 2: الأبعاد الجغرافية والتشغيلية ── *@
+                    <MudTabPanel>
+                        <TabContent>
+                            <div class="ctab-label">
+                                <div class="ctab-icon ctab-icon-green">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+                                    </svg>
+                                   </div>
+                                <span>الأبعاد والتشغيل</span>
+                            </div>
+                        </TabContent>
+                        <ChildContent>
+                            <div class="tab-section">
+                                <div class="tab-section-head">
+                                    <div class="tab-section-icon green">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="tab-section-title">الأبعاد التشغيلية المحددة</div>
+                                        <div class="tab-section-sub">تحديد الميناء، الوجهات، نوع الحاوية، ونوع الرحلة لتخصيص القاعدة السعرية</div>
+                                    </div>
+                                </div>
+
+                                <div class="saf-form-grid">
+                                    <div class="form-field">
+                                        <label class="field-label">ميناء الشحن</label>
+                                        <select class="field-input" value="@_rf.PortId" @onchange="e => _rf.PortId = Nul(e.Value)">
+                                            <option value="">أي ميناء شحن</option>
+                                            @foreach (var p in _ports) { <option value="@p.Id">@p.Label</option> }
+                                        </select>
+                                    </div>
+
+                                    <div class="form-field">
+                                        <label class="field-label">وجهة الشحن والوصول</label>
+                                        <select class="field-input" value="@_rf.DestinationId" @onchange="e => _rf.DestinationId = Nul(e.Value)">
+                                            <option value="">أي وجهة شحن</option>
+                                            @foreach (var d in _dests) { <option value="@d.Id">@d.Label</option> }
+                                        </select>
+                                    </div>
+
+                                    <div class="form-field">
+                                        <label class="field-label">ميناء التعتيق والتفريغ</label>
+                                        <select class="field-input" value="@_rf.TahteeqPortId" @onchange="e => _rf.TahteeqPortId = Nul(e.Value)">
+                                            <option value="">أي ميناء تعتيق</option>
+                                            @foreach (var p in _ports) { <option value="@p.Id">@p.Label</option> }
+                                        </select>
+                                    </div>
+
+                                    <div class="form-field">
+                                        <label class="field-label">طراز وحجم الحاوية</label>
+                                        <select class="field-input" value="@_rf.ContainerTypeId" @onchange="e => _rf.ContainerTypeId = Nul(e.Value)">
+                                            <option value="">أي طراز/حجم</option>
+                                            @foreach (var c in _ctypes) { <option value="@c.Id">@c.Label</option> }
+                                        </select>
+                                    </div>
+
+                                    <div class="form-field">
+                                        <label class="field-label">تصنيف ونوع الرحلة</label>
+                                        <select class="field-input" value="@_rf.TripTypeId" @onchange="e => _rf.TripTypeId = Nul(e.Value)">
+                                            <option value="">أي نوع رحلة</option>
+                                            @foreach (var t in _ttypes) { <option value="@t.Id">@t.Label</option> }
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </ChildContent>
+                    </MudTabPanel>
+
+                    @* ── Tab 3: الصلاحية والمعاملات ── *@
+                    <MudTabPanel>
+                        <TabContent>
+                            <div class="ctab-label">
+                                <div class="ctab-icon ctab-icon-amber">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                                    </svg>
+                                </div>
+                                <span>الصلاحية والمعاملات</span>
+                                @if (_triedSave && string.IsNullOrWhiteSpace(_rf.ValidFrom))
+                                {
+                                    <span class="ctab-err-dot"></span>
+                                }
+                            </div>
+                        </TabContent>
+                        <ChildContent>
+                            <div class="tab-section">
+                                <div class="tab-section-head">
+                                    <div class="tab-section-icon amber">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="tab-section-title">فترة الصلاحية وأولوية القاعدة</div>
+                                        <div class="tab-section-sub">تحديد المدى الزمني للفاعلية والقيمة الرقمية للأولوية وحالة التفعيل</div>
+                                    </div>
+                                </div>
+
+                                <div class="saf-form-grid">
+                                    <div class="form-field">
+                                        <label class="field-label">سارية من تاريخ <span class="field-required">*</span></label>
+                                        <input type="date" class="field-input @(string.IsNullOrWhiteSpace(_rf.ValidFrom) && _triedSave ? "field-error" : "")" value="@_rf.ValidFrom" @onchange="e => _rf.ValidFrom = e.Value?.ToString()" />
+                                        @if (string.IsNullOrWhiteSpace(_rf.ValidFrom) && _triedSave)
                                         {
-                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
-                                                           Color="Color.Primary" title="تعديل" OnClick="() => EditList(l)" />
+                                            <div class="field-err-msg">تاريخ الفاعلية مطلوب</div>
                                         }
                                     </div>
-                                </td>
-                            </tr>
-                        }
-                        @if (_lists.Count == 0)
-                        {
-                            <tr><td colspan="6"><div class="fc-empty">مافيش قوائم — اعمل أول قائمة</div></td></tr>
-                        }
-                    </tbody>
-                </table></div>
+
+                                    <div class="form-field">
+                                        <label class="field-label">سارية لغاية تاريخ</label>
+                                        <input type="date" class="field-input" value="@_rf.ValidTo" @onchange="e => _rf.ValidTo = e.Value?.ToString()" />
+                                    </div>
+
+                                    <div class="form-field">
+                                        <label class="field-label">قيمة معامل الأولوية</label>
+                                        <input type="number" min="1" max="9999" class="field-input" value="@_rf.Priority" @onchange="e => _rf.Priority = (int)Lng(e.Value)" />
+                                        <div class="field-hint">القيمة الرقمية الأقل تعني أولوية تطبيق تسبق القيم الأعلى</div>
+                                    </div>
+
+                                    <div class="form-field saf-full">
+                                        <div class="saf-toggle-box @(_rf.IsActive ? "toggle-active" : "")">
+                                            <div class="saf-toggle-content">
+                                                <div class="saf-toggle-icon @(_rf.IsActive ? "icon-active" : "")">
+                                                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
+                                                        <circle cx="12" cy="12" r="10"/><path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                                                    </svg>
+                                                </div>
+                                                <div class="saf-toggle-text">
+                                                    <div class="saf-toggle-title">تفعيل قاعدة التسعير</div>
+                                                    <div class="saf-toggle-sub">القواعد الفعالة والنشطة فقط هي التي تدخل في معادلة التقييم التلقائي</div>
+                                                </div>
+                                            </div>
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" @bind="_rf.IsActive" role="switch" aria-checked="@_rf.IsActive" />
+                                                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-field saf-full">
+                                        <label class="field-label">ملاحظات وبيان القاعدة السعرية</label>
+                                        <input class="field-input" @bind="_rf.Notes" maxlength="500" placeholder="أدخل أي ملاحظات تشغيلية خاصة بهذه القاعدة..." />
+                                    </div>
+                                </div>
+                            </div>
+                        </ChildContent>
+                    </MudTabPanel>
+
+                </MudTabs>
             </div>
 
-            @* ══════════ 2. قواعد القائمة المختارة ══════════ *@
+            <div class="modal-foot">
+                <button class="modal-cancel-btn" @onclick="() => _ruleOpen = false">إلغاء</button>
+                <button class="modal-save-btn" @onclick="SaveRuleAsync" disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <span class="btn-spinner sm"></span>
+                        <span>جاري الحفظ...</span>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                            <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>حفظ القاعدة السعرية</span>
+                    }
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+@* ═══════════════════════════════════════════
+   ⚡ GLOW FAB — التزام كامل بالـ Markup لـ app.css ومحاذاة RTL والـ z-index
+═══════════════════════════════════════════ *@
+@if (CanCreate && !_loading)
+{
+    @if (_fabOpen)
+    {
+        <div class="fc-fab-scrim" @onclick="CloseFab"></div>
+    }
+
+    <div class="fc-fab-container">
+        <div class="fc-fab-menu @(_fabOpen ? "is-open" : "")" role="menu">
+            <button type="button" class="fc-fab-item" role="menuitem" @onclick="NewList">
+                <span class="fc-fab-icon"><MudIcon Icon="@Icons.Material.Filled.LibraryAdd" Size="Size.Small" /></span>
+                <span class="fc-fab-label">قائمة أسعار جديدة</span>
+            </button>
             @if (_sel is not null)
             {
-                <div class="fc-fsec" style="margin-top:26px">
-                    <div class="fc-fsec-head">
-                        <span class="fc-fsec-n">2</span>
-                        <div>
-                            <div class="fc-fsec-t">قواعد: @_selName</div>
-                            <div class="fc-fsec-d">مرتبة من الأخص للأعم — الأولى هي اللي بتتطبق</div>
-                        </div>
-                        @if (CanCreate)
-                        {
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Secondary"
-                                       StartIcon="@Icons.Material.Filled.Add" OnClick="NewRule">قاعدة جديدة</MudButton>
-                        }
-                    </div>
-
-                    <div class="fc-table-wrap"><table class="fc-table">
-                        <thead><tr>
-                            <th>العميل</th><th>الخدمة</th><th>الأبعاد</th>
-                            <th>السعر</th><th>التكلفة</th><th>الصلاحية</th>
-                            <th>أولوية</th><th style="width:90px"></th>
-                        </tr></thead>
-                        <tbody>
-                            @foreach (var r in _rules)
-                            {
-                                <tr>
-                                    <td class="fc-cell-main">@r.CustomerName</td>
-                                    <td>@r.ServiceName</td>
-                                    <td class="fc-cell-sub">@Dims(r)</td>
-                                    <td><b>@Money(r.UnitPrice)</b></td>
-                                    <td>@(r.CostPrice is null ? "—" : Money(r.CostPrice.Value))</td>
-                                    <td class="fc-cell-sub">
-                                        @r.ValidFrom.ToString("yyyy-MM-dd")
-                                        @if (r.ValidTo is not null)
-                                        {
-                                            <text> → @r.ValidTo.Value.ToString("yyyy-MM-dd")</text>
-                                        }
-                                    </td>
-                                    <td>
-                                        @r.Priority
-                                        @if (!r.IsActive)
-                                        {
-                                            <span class="fc-chip fc-chip-gray">موقوفة</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        @if (CanEdit)
-                                        {
-                                            <div class="fc-row-actions">
-                                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
-                                                               Color="Color.Primary" title="تعديل" OnClick="() => EditRule(r)" />
-                                                @if (CanDelete)
-                                                {
-                                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
-                                                                   Color="Color.Error" title="حذف" OnClick="() => DeleteRuleAsync(r)" />
-                                                }
-                                            </div>
-                                        }
-                                    </td>
-                                </tr>
-                            }
-                            @if (_rules.Count == 0)
-                            {
-                                <tr><td colspan="8"><div class="fc-empty">مافيش قواعد في القائمة دي</div></td></tr>
-                            }
-                        </tbody>
-                    </table></div>
-                </div>
+                <button type="button" class="fc-fab-item" role="menuitem" @onclick="NewRule">
+                    <span class="fc-fab-icon"><MudIcon Icon="@Icons.Material.Filled.AddCard" Size="Size.Small" /></span>
+                    <span class="fc-fab-label">قاعدة سعر جديدة</span>
+                </button>
             }
+            <button type="button" class="fc-fab-item" role="menuitem" @onclick="LoadListsAsync">
+                <span class="fc-fab-icon"><MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" /></span>
+                <span class="fc-fab-label">تحديث البيانات</span>
+            </button>
+        </div>
 
-        </div></div>
+        @* زر الـ FAB المطور مع وميض ذهبي وهالة دائرية دائمين وجاذبين للبصر *@
+        <div class="fc-glow-gold-wrapper">
+            <span class="glow-ring glow-ring-1" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-2" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-3" aria-hidden="true"></span>
+            <span class="glow-halo" aria-hidden="true"></span>
+
+            <button type="button" class="fc-fab-main fc-glow-gold @(_fabOpen ? "is-open" : "")" @onclick="ToggleFab" aria-label="التحكم" aria-expanded="@(_fabOpen ? "true" : "false")">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" class="fc-fab-svg">
+                    <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+}
+
+<style>
+    /* ════════════════════════════════════════════════════════
+       🏢 HERO & BODY AND BASIC WRAPPER (RTL fluid 2026)
+    ════════════════════════════════════════════════════════ */
+    .hero-wrapper {
+        padding: 16px clamp(14px, 2.4vw, 34px) 0;
+        max-width: var(--fc-page-w);
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 1;
     }
-</div>
 
-@* ═══════════ مودال: قائمة أسعار ═══════════ *@
-@if (_listOpen && CanCreate)
-{
-    <div class="fc-modal-backdrop" @onclick="() => _listOpen = false">
-        <div class="fc-modal fc-modal-sm" @onclick:stopPropagation="true">
-            <div class="fc-modal-head">
-                <div>
-                    <div class="fc-modal-title">@(_listEditId is null ? "قائمة أسعار جديدة" : "تعديل قائمة")</div>
-                    <div class="fc-modal-sub">القائمة نفسها مجرد وعاء — الأسعار في القواعد</div>
-                </div>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _listOpen = false" />
-            </div>
-            <div class="fc-modal-body">
-                <div class="fc-form-grid">
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">الكود<i>*</i></div>
-                        <input class="fc-sel fc-sel-lg" @bind="_lf.PriceListCode" maxlength="30" dir="ltr" />
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">الاسم بالعربي<i>*</i></div>
-                        <input class="fc-sel fc-sel-lg" @bind="_lf.NameAr" maxlength="150" />
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">الاسم بالإنجليزي</div>
-                        <input class="fc-sel fc-sel-lg" @bind="_lf.NameEn" maxlength="150" />
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">سارية من<i>*</i></div>
-                        <input type="date" class="fc-sel fc-sel-lg" value="@_lf.ValidFrom"
-                               @onchange="e => _lf.ValidFrom = e.Value?.ToString()" />
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">سارية لغاية</div>
-                        <input type="date" class="fc-sel fc-sel-lg" value="@_lf.ValidTo"
-                               @onchange="e => _lf.ValidTo = e.Value?.ToString()" />
-                        <div class="fc-fld-hint">فاضي = مفتوحة</div>
-                    </div>
-                </div>
-            </div>
-            <div class="fc-modal-foot">
-                <MudButton Variant="Variant.Text" OnClick="() => _listOpen = false">إلغاء</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
-                           StartIcon="@Icons.Material.Filled.Save" OnClick="SaveListAsync">حفظ</MudButton>
-            </div>
-        </div>
-    </div>
-}
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important;
+        overflow: hidden;
+        box-shadow:
+            0 12px 32px rgba(13, 38, 84, 0.15),
+            0 4px 12px rgba(13, 38, 84, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
 
-@* ═══════════ مودال: قاعدة سعر ═══════════ *@
-@if (_ruleOpen && CanCreate && _sel is not null)
-{
-    <div class="fc-modal-backdrop" @onclick="() => _ruleOpen = false">
-        <div class="fc-modal" @onclick:stopPropagation="true">
-            <div class="fc-modal-head">
-                <div>
-                    <div class="fc-modal-title">@(_ruleEditId is null ? "قاعدة سعر جديدة" : "تعديل قاعدة")</div>
-                    <div class="fc-modal-sub">في قائمة: @_selName</div>
-                </div>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _ruleOpen = false" />
-            </div>
-            <div class="fc-modal-body">
+    .hero-wrapper .fc-hero.fc-hero-slim {
+        padding-top: 18px !important;
+        padding-bottom: 22px !important;
+    }
 
-                @if (_msg is not null)
-                {
-                    <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
-                              Class="mb-4">@_msg</MudAlert>
-                }
+    .fc-hero-title-slim {
+        font-size: clamp(18px, 2vw, 24px) !important;
+        margin: 0 !important;
+    }
 
-                <div class="fc-panel-sub">لمين وعلى إيه</div>
-                <div class="fc-form-grid">
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">العميل<i>*</i></div>
-                        <select class="fc-sel fc-sel-lg" @bind="_rf.CustomerId">
-                            <option value="0">— اختار —</option>
-                            @foreach (var c in _customers) { <option value="@c.Id">@c.Label</option> }
-                        </select>
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">الخدمة<i>*</i></div>
-                        <select class="fc-sel fc-sel-lg" @bind="_rf.ServiceId">
-                            <option value="0">— اختار —</option>
-                            @foreach (var s in _services) { <option value="@s.Id">@s.Label</option> }
-                        </select>
-                    </div>
-                </div>
+    .doc-hero-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+    }
 
-                <div class="fc-panel-sub" style="margin:18px 0 10px">الأبعاد (فاضي = أي قيمة)</div>
-                <div class="fc-form-grid">
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">الميناء</div>
-                        <select class="fc-sel fc-sel-lg" value="@_rf.PortId" @onchange="e => _rf.PortId = Nul(e.Value)">
-                            <option value="">أي ميناء</option>
-                            @foreach (var p in _ports) { <option value="@p.Id">@p.Label</option> }
-                        </select>
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">الوجهة</div>
-                        <select class="fc-sel fc-sel-lg" value="@_rf.DestinationId" @onchange="e => _rf.DestinationId = Nul(e.Value)">
-                            <option value="">أي وجهة</option>
-                            @foreach (var d in _dests) { <option value="@d.Id">@d.Label</option> }
-                        </select>
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">التعتيق (الميناء النهائي)</div>
-                        <select class="fc-sel fc-sel-lg" value="@_rf.TahteeqPortId" @onchange="e => _rf.TahteeqPortId = Nul(e.Value)">
-                            <option value="">أي ميناء تعتيق</option>
-                            @foreach (var p in _ports) { <option value="@p.Id">@p.Label</option> }
-                        </select>
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">نوع الحاوية</div>
-                        <select class="fc-sel fc-sel-lg" value="@_rf.ContainerTypeId" @onchange="e => _rf.ContainerTypeId = Nul(e.Value)">
-                            <option value="">أي نوع</option>
-                            @foreach (var c in _ctypes) { <option value="@c.Id">@c.Label</option> }
-                        </select>
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">نوع الرحلة</div>
-                        <select class="fc-sel fc-sel-lg" value="@_rf.TripTypeId" @onchange="e => _rf.TripTypeId = Nul(e.Value)">
-                            <option value="">أي نوع</option>
-                            @foreach (var t in _ttypes) { <option value="@t.Id">@t.Label</option> }
-                        </select>
-                    </div>
-                </div>
+    .doc-hero-left {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
 
-                <div class="fc-panel-sub" style="margin:18px 0 10px">السعر والصلاحية</div>
-                <div class="fc-form-grid">
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">سعر البيع<i>*</i></div>
-                        <input type="number" min="0" step="0.01" class="fc-sel fc-sel-lg" value="@_rf.UnitPrice"
-                               @onchange="e => _rf.UnitPrice = Dec(e.Value)" />
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">التكلفة</div>
-                        <input type="number" min="0" step="0.01" class="fc-sel fc-sel-lg" value="@_rf.CostPrice"
-                               @onchange="e => _rf.CostPrice = Dec(e.Value)" />
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">الضريبة</div>
-                        <select class="fc-sel fc-sel-lg" value="@_rf.TaxRateId" @onchange="e => _rf.TaxRateId = Nul(e.Value)">
-                            <option value="">— بدون —</option>
-                            @foreach (var t in _taxRates) { <option value="@t.Id">@t.Label</option> }
-                        </select>
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">الأولوية</div>
-                        <input type="number" min="1" max="9999" class="fc-sel fc-sel-lg" value="@_rf.Priority"
-                               @onchange="e => _rf.Priority = (int)Lng(e.Value)" />
-                        <div class="fc-fld-hint">الرقم الأصغر أعلى</div>
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">ساري من<i>*</i></div>
-                        <input type="date" class="fc-sel fc-sel-lg" value="@_rf.ValidFrom"
-                               @onchange="e => _rf.ValidFrom = e.Value?.ToString()" />
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">ساري لغاية</div>
-                        <input type="date" class="fc-sel fc-sel-lg" value="@_rf.ValidTo"
-                               @onchange="e => _rf.ValidTo = e.Value?.ToString()" />
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">الحالة</div>
-                        <div class="fc-active-toggle">
-                            <MudCheckBox T="bool" @bind-Value="_rf.IsActive" Color="Color.Secondary" Label="نشطة" />
-                        </div>
-                    </div>
-                    <div class="fc-fld fc-field-full">
-                        <div class="fc-fld-lb">ملاحظات</div>
-                        <input class="fc-sel fc-sel-lg" @bind="_rf.Notes" maxlength="500" />
-                    </div>
-                </div>
-            </div>
-            <div class="fc-modal-foot">
-                <MudButton Variant="Variant.Text" OnClick="() => _ruleOpen = false">إلغاء</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
-                           StartIcon="@Icons.Material.Filled.Save" OnClick="SaveRuleAsync">حفظ</MudButton>
-            </div>
-        </div>
-    </div>
-}
+    .doc-hero-crumb {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 10.5px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.55);
+        margin-bottom: 2px;
+    }
+
+    .doc-hero-sub {
+        font-size: 10.5px;
+        color: rgba(255, 255, 255, 0.55);
+        font-weight: 600;
+    }
+
+    .doc-hero-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+
+    .doc-hero-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 11px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 10.5px;
+        font-weight: 700;
+        font-family: "Inter", Arial, sans-serif;
+        white-space: nowrap;
+    }
+
+    .doc-chip-warn {
+        background: rgba(239, 68, 68, 0.15) !important;
+        border-color: rgba(239, 68, 68, 0.35) !important;
+        color: #fca5a5 !important;
+    }
+
+    /* KPIs Row */
+    .doc-kpis-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .doc-kpi {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(12px);
+        border-radius: 10px;
+        padding: 10px 12px;
+    }
+
+    .doc-kpi-inner { display: flex; align-items: center; gap: 10px; }
+
+    .doc-kpi-icon {
+        width: 34px; height: 34px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .doc-kpi-blue .doc-kpi-icon  { background: rgba(125, 211, 252, 0.15); color: #7dd3fc; }
+    .doc-kpi-red .doc-kpi-icon   { background: rgba(252, 165, 165, 0.15); color: #fca5a5; }
+    .doc-kpi-gold .doc-kpi-icon  { background: rgba(252, 211, 77, 0.15);  color: #fcd34d; }
+    .doc-kpi-green .doc-kpi-icon { background: rgba(110, 231, 183, 0.15); color: #6ee7b7; }
+
+    .doc-kpi-data { flex: 1; min-width: 0; }
+    .doc-kpi-num { font-family: "Inter", Arial, sans-serif; font-size: 18px; font-weight: 900; color: #fff; line-height: 1; }
+    .doc-kpi-label { font-size: 10.5px; font-weight: 700; color: rgba(255, 255, 255, 0.6); margin-top: 3px; }
+
+    /* ── الـ Overlap لحماية الهيرو والتأكد من عدم تغطية المحتوى ── */
+    .fc-overlap {
+        margin-top: 20px !important;
+        position: relative;
+        z-index: 2;
+    }
+
+    /* ── Body Main Card ── */
+    .doc-body {
+        padding: 18px clamp(16px, 3vw, 40px) 100px;
+        max-width: var(--fc-page-w);
+        margin-inline: auto;
+        box-sizing: border-box;
+        width: 100%;
+        position: relative;
+        z-index: 2;
+    }
+
+    .doc-card {
+        background: #fff;
+        border: 1px solid #dde5f0;
+        border-radius: 18px;
+        box-shadow: 0 4px 24px rgba(15, 41, 82, 0.05);
+        overflow: hidden;
+    }
+
+    /* Banners */
+    .doc-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 18px;
+        border-radius: 0;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.6;
+        border-bottom: 1px solid transparent;
+    }
+    .banner-info {
+        background: #f4f8ff;
+        color: #1a56db;
+        border-bottom-color: #dbe8fc;
+    }
+    .banner-success { background: #e9f8f0; color: #0e7a43; border-bottom-color: #b5e8d0; }
+    .banner-error   { background: #fff0f2; color: var(--fc-error); border-bottom-color: #ffc8cf; }
+    .banner-icon { flex: 0 0 auto; margin-top: 2px; }
+    .banner-close {
+        margin-right: auto; background: none; border: none;
+        color: inherit; opacity: 0.6; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        width: 24px; height: 24px; border-radius: 5px;
+    }
+    .banner-close:hover { opacity: 1; }
+
+    /* State Box */
+    .doc-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: #fff; border: 1px solid #dde5f0;
+        border-radius: 14px; padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .state-icon-wrap {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .state-icon-wrap.perm { background: #fff0f2; color: var(--fc-red); }
+    .doc-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .doc-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    /* Toolbar & Filters */
+    .doc-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+        flex-wrap: wrap;
+    }
+
+    .doc-search-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        flex: 0 1 280px;
+        min-width: 180px;
+    }
+    .doc-search-icon {
+        position: absolute;
+        right: 10px;
+        color: #9aaabb;
+        pointer-events: none;
+    }
+    .doc-search-input {
+        width: 100%;
+        height: 36px;
+        padding: 0 32px 0 10px;
+        border: 1px solid #d8e2f0;
+        border-radius: 8px;
+        background: #fafcff;
+        color: var(--fc-text);
+        font-family: inherit;
+        font-size: 12px;
+        outline: none;
+        transition: border-color .15s ease;
+    }
+    .doc-search-input:focus {
+        border-color: var(--fc-blue);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.08);
+    }
+    .doc-search-input::placeholder { color: #b0bcc8; }
+    .doc-search-clear {
+        position: absolute; left: 8px;
+        display: flex; align-items: center; justify-content: center;
+        width: 20px; height: 20px; border-radius: 50%;
+        border: none; background: #edf1f7; color: #8899ae;
+        cursor: pointer;
+    }
+
+    .doc-results-badge {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        color: #8899ae;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .doc-results-badge strong { color: #5a6e88; }
+
+    /* Table Styling */
+    .doc-table-wrap { overflow-x: auto; }
+    .doc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .doc-table tbody tr {
+        border-bottom: 1px solid #f0f3f8; transition: background .12s ease;
+    }
+    .doc-table tbody tr:last-child { border-bottom: none; }
+    .doc-table tbody tr:hover { background: #fafcff; }
+    .doc-table tbody td {
+        padding: 12px 14px; color: #526070; text-align: center; vertical-align: middle;
+    }
+    .td-start { text-align: right !important; }
+    .td-muted { color: #8899ae; font-size: 11.5px; }
+
+    .doc-type-badge {
+        display: inline-flex; align-items: center;
+        padding: 2.5px 8px; border-radius: 6px;
+        background: #f0f4fa; border: 1px solid #e0e8f4;
+        font-size: 10.5px; font-weight: 800; color: #344258;
+    }
+
+    .doc-file-info { display: flex; flex-direction: column; gap: 2px; }
+    .doc-file-title { font-size: 12.5px; font-weight: 700; color: #1c2b44; }
+    .doc-file-desc { font-size: 10.5px; color: #8899ae; }
+
+    /* Indicator Status Chips */
+    .doc-status-chip {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 3px 9px; border-radius: 6px;
+        font-size: 10px; font-weight: 800; font-family: "Inter", sans-serif;
+    }
+    .chip-valid   { background: #e9f8f0; color: #0e7a43; border: 1px solid #b0e0c5; }
+    .chip-expired { background: #fff0f2; color: var(--fc-error); border: 1px solid #ffc8cf; }
+    .chip-dot { width: 5px; height: 5px; border-radius: 50%; }
+    .chip-valid .chip-dot   { background: #16a35b; }
+    .chip-expired .chip-dot { background: #e03048; }
+
+    /* Actions */
+    .doc-row-actions { display: flex; align-items: center; gap: 6px; justify-content: center; }
+
+    .doc-btn-download {
+        display: inline-flex; align-items: center; gap: 4px;
+        height: 28px; padding: 0 10px;
+        border: 1px solid #bdd4fc; border-radius: 6px;
+        background: #eaf1ff; color: var(--fc-blue);
+        font-family: inherit; font-size: 10.5px; font-weight: 800;
+        cursor: pointer; transition: all 0.12s ease;
+    }
+    .doc-btn-download:hover { background: var(--fc-blue); color: #fff; }
+
+    .doc-btn-del {
+        width: 28px; height: 28px; border-radius: 6px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; background: transparent;
+        color: var(--fc-error); cursor: pointer; transition: all 0.12s ease;
+    }
+    .doc-btn-del:hover { background: #fff0f2; border-color: #ffc8cf; }
+
+    .doc-btn-confirm-del {
+        height: 28px; padding: 0 8px; border-radius: 6px;
+        border: none; background: var(--fc-error); color: #fff;
+        font-size: 10px; font-weight: 800; cursor: pointer;
+        animation: pulse-del 1s ease infinite;
+    }
+    @@keyframes pulse-del {
+        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.35); }
+        50%     { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
+    }
+
+    .doc-empty-table { padding: 40px; text-align: center; color: #9aaabb; font-size: 13px; font-weight: 700; }
+    .doc-loading { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 200px; color: #6b7d95; font-size: 12.5px; font-weight: 700; }
+    .doc-spinner { width: 28px; height: 28px; border: 2.5px solid #dde5f0; border-top-color: var(--fc-blue); border-radius: 50%; animation: doc-spin .7s linear infinite; }
+    @@keyframes doc-spin { to { transform: rotate(360deg); } }
+
+    /* ── PRICELISTS & RULES SPLIT LAYOUT (prl-*) ── */
+    .prl-layout {
+        display: grid;
+        grid-template-columns: 310px minmax(0, 1fr);
+        gap: 18px;
+        align-items: start;
+        position: relative;
+        z-index: 2;
+    }
+
+    .prl-sidebar-card {
+        background: #fff;
+        border: 1px solid #dde5f0;
+        border-radius: var(--fc-radius, 14px);
+        box-shadow: 0 4px 24px rgba(15, 41, 82, 0.05);
+        overflow: hidden;
+        position: sticky;
+        top: 80px;
+    }
+
+    .prl-sidebar-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 14px 16px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .prl-sidebar-title {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        font-weight: 800;
+        color: var(--fc-text);
+    }
+
+    .prl-sidebar-badge {
+        min-width: 22px;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        padding: 0 5px;
+        background: var(--fc-blue-lt);
+        color: var(--fc-blue);
+        font-size: 10px;
+        font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .prl-sidebar-list {
+        display: flex;
+        flex-direction: column;
+        padding: 8px;
+        gap: 4px;
+        max-height: 65vh;
+        overflow-y: auto;
+    }
+
+    .prl-sidebar-empty {
+        padding: 30px;
+        text-align: center;
+        color: #9aaabb;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    /* Pricelist Item Card */
+    .prl-item-row {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: 11px;
+        border: 1px solid transparent;
+        background: transparent;
+        cursor: pointer;
+        text-align: right;
+        font-family: inherit;
+        transition: all 0.15s ease;
+        position: relative;
+    }
+
+    .prl-item-row:hover {
+        background: #f5f7fc;
+        border-color: #e4eaf3;
+    }
+
+    .prl-item-row.fc-row-sel {
+        background: var(--fc-blue-lt) !important;
+        border-color: #bdd4fc !important;
+        box-shadow: 0 2px 10px rgba(30,110,245,.08);
+    }
+
+    .prl-item-indicator {
+        position: absolute;
+        right: 0; top: 12px; bottom: 12px;
+        width: 3.5px;
+        border-radius: 0 4px 4px 0;
+        background: transparent;
+        transition: background 0.15s ease;
+    }
+    .prl-item-row.fc-row-sel .prl-item-indicator {
+        background: var(--fc-blue);
+    }
+
+    .prl-item-details {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    .prl-item-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .prl-item-title {
+        font-size: 13px;
+        font-weight: 800;
+        color: #1c2b44;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .prl-item-row.fc-row-sel .prl-item-title {
+        color: var(--fc-blue);
+    }
+
+    .prl-item-badge {
+        font-size: 9.5px;
+        font-weight: 800;
+        padding: 2px 7px;
+        border-radius: 5px;
+        background: #f0f4fa;
+        color: #5a6e88;
+        font-family: "Inter", sans-serif;
+    }
+    .prl-item-row.fc-row-sel .prl-item-badge {
+        background: #fff;
+        color: var(--fc-blue);
+        border: 1px solid #bdd4fc;
+    }
+
+    .prl-item-meta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .prl-item-code {
+        font-size: 10px;
+        font-weight: 700;
+        color: #8899ae;
+        font-family: "Inter", Arial, sans-serif;
+    }
+    .prl-item-row.fc-row-sel .prl-item-code {
+        color: #6b9bd2;
+    }
+
+    .prl-item-date-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 9px;
+        font-weight: 800;
+    }
+    .prl-item-date-badge.valid { background: #e9f8f0; color: #16a35b; border: 1px solid #b0e0c5; }
+    .prl-item-date-badge.expired { background: #fff0f2; color: #e03048; border: 1px solid #ffc8cf; }
+    .prl-item-date-badge .chip-dot { width: 4.5px; height: 4.5px; border-radius: 50%; }
+    .prl-item-date-badge.valid .chip-dot { background: #16a35b; }
+    .prl-item-date-badge.expired .chip-dot { background: #e03048; }
+
+    .prl-item-edit-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--fc-muted);
+        cursor: pointer;
+        transition: all 0.12s ease;
+        flex-shrink: 0;
+    }
+    .prl-item-edit-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+        color: var(--fc-blue);
+        border-color: #bdd4fc;
+    }
+    .prl-item-row.fc-row-sel .prl-item-edit-btn {
+        color: var(--fc-blue);
+    }
+    .prl-item-row.fc-row-sel .prl-item-edit-btn:hover {
+        background: #fff;
+    }
+
+    /* ── Main Rules Panel ── */
+    .prl-main-card {
+        background: #fff;
+        border: 1px solid #dde5f0;
+        border-radius: var(--fc-radius, 14px);
+        box-shadow: 0 4px 24px rgba(15, 41, 82, 0.05);
+        overflow: hidden;
+    }
+
+    .prl-main-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        min-height: 340px;
+        text-align: center;
+        padding: 40px;
+    }
+
+    .prl-main-empty-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f0f4fa;
+        color: #b0c4d8;
+    }
+    .prl-main-empty h3 { font-size: 15.5px; font-weight: 800; color: #1c2b44; margin: 0; }
+    .prl-main-empty p { font-size: 12px; color: #6B7A8F; margin: 0; max-width: 340px; line-height: 1.6; }
+
+    .prl-main-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 16px 20px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+        flex-wrap: wrap;
+    }
+
+    .prl-main-head-info {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+    .prl-main-head-tag {
+        font-size: 10px;
+        font-weight: 800;
+        color: var(--fc-blue);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .prl-main-head-title {
+        font-size: 14.5px;
+        font-weight: 900;
+        color: #1c2b43;
+        margin: 0;
+    }
+
+    .prl-main-badge-count {
+        font-size: 11px;
+        font-weight: 800;
+        color: var(--fc-blue);
+        background: var(--fc-blue-lt);
+        padding: 3px 10px;
+        border-radius: 6px;
+        border: 1px solid #bdd4fc;
+    }
+
+    .td-date-sep { color: #8899ae; font-family: "Cairo", sans-serif; font-weight: 600; margin: 0 2px; }
+    .prl-priority-badge {
+        font-family: "Inter", sans-serif;
+        font-size: 10.5px; font-weight: 800;
+        color: #1c2b44; background: #f0f3f8;
+        padding: 1.5px 6px; border-radius: 5px;
+    }
+
+    /* ── Warning & Info Alerts ── */
+    .ptl-inline-alert {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 12px 16px; border-radius: 10px;
+        background: #fff0f2; border: 1px solid #ffc8cf;
+    }
+    .ptl-alert-icon { flex: 0 0 auto; color: var(--fc-red); margin-top: 2px; }
+    .ptl-alert-body { font-size: 11.5px; color: #c02040; line-height: 1.6; }
+    .ptl-alert-body strong { display: block; font-size: 12.5px; font-weight: 800; color: #b02040; }
+
+    /* ── الـ Overlap لحماية الهيرو والتأكد من عدم تغطية المحتوى ── */
+    .fc-overlap {
+        margin-top: 20px !important;
+        position: relative;
+        z-index: 2;
+    }
+
+    /* ════════════════════════════════════════════════════════
+       ⚡ GLOW FAB — التزام كامل بالـ Markup لـ app.css ومحاذاة RTL والـ z-index
+    ════════════════════════════════════════════════════════ */
+    .fc-fab-scrim {
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 1290 !important; /* Below container */
+        background: rgba(10, 29, 50, 0.4) !important;
+        backdrop-filter: blur(4px) !important;
+        -webkit-backdrop-filter: blur(4px) !important;
+    }
+
+    .fc-fab-container {
+        position: fixed !important;
+        bottom: 24px !important;
+        left: 24px !important;
+        right: auto !important; /* Ensure LTR/RTL doesn't push it to right */
+        top: auto !important; /* Break vertical center alignment */
+        z-index: 1300 !important; /* Above scrim */
+        display: flex !important;
+        flex-direction: column-reverse !important;
+        align-items: flex-start !important;
+        gap: 12px !important;
+    }
+
+    .fc-glow-gold-wrapper {
+        position: relative;
+        width: 64px;
+        height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .glow-halo {
+        position: absolute;
+        inset: -6px;
+        border-radius: 50%;
+        background: radial-gradient(
+            circle,
+            rgba(251, 191, 36, 0.55) 0%,
+            rgba(245, 158, 11, 0.35) 40%,
+            rgba(245, 158, 11, 0) 75%
+        );
+        filter: blur(12px);
+        animation: glow-breath 2.5s ease-in-out infinite;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    @@keyframes glow-breath {
+        0%, 100% { opacity: 0.7; transform: scale(1); }
+        50% { opacity: 1; transform: scale(1.15); }
+    }
+
+    .glow-ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 2.5px solid #fbbf24;
+        pointer-events: none;
+        opacity: 0;
+        z-index: 2;
+    }
+
+    .glow-ring-1 { animation: glow-expand 2.4s ease-out infinite; animation-delay: 0s; }
+    .glow-ring-2 { animation: glow-expand 2.4s ease-out infinite; animation-delay: 0.8s; }
+    .glow-ring-3 { animation: glow-expand 2.4s ease-out infinite; animation-delay: 1.6s; }
+
+    @@keyframes glow-expand {
+        0% { opacity: 0.8; transform: scale(1); border-width: 3px; }
+        60% { opacity: 0.4; }
+        100% { opacity: 0; transform: scale(2); border-width: 1px; }
+    }
+
+    .fc-fab-main.fc-glow-gold {
+        position: relative;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        border: 2.5px solid #fbbf24 !important;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        background: linear-gradient(135deg, var(--fc-blue) 0%, var(--fc-navy) 100%) !important;
+        color: #fff;
+        box-shadow:
+            0 8px 24px rgba(30, 110, 245, 0.5),
+            0 4px 12px rgba(251, 191, 36, 0.35),
+            inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        transition: transform 0.25s cubic-bezier(0.34, 1.3, 0.64, 1);
+        z-index: 3;
+    }
+
+    .fc-fab-main.fc-glow-gold:hover {
+        transform: scale(1.08);
+    }
+
+    .fc-fab-main.fc-glow-gold:active {
+        transform: scale(0.94);
+    }
+
+    .fc-fab-main.fc-glow-gold.is-open {
+        background: linear-gradient(135deg, var(--fc-error) 0%, #991b1b) !important;
+        border-color: #fca5a5 !important;
+        box-shadow:
+            0 8px 24px rgba(214, 69, 69, 0.5),
+            0 4px 12px rgba(252, 165, 165, 0.35) !important;
+    }
+
+    /* ── Responsive ── */
+    @@media (max-width: 1200px) {
+        .prl-layout { grid-template-columns: 1fr; }
+        .prl-sidebar-card { position: static; }
+        .prl-sidebar-list { max-height: 280px; }
+    }
+    @@media (max-width: 1024px) {
+        .doc-kpis-row { grid-template-columns: repeat(2, 1fr); }
+    }
+    @@media (max-width: 900px) {
+        .doc-toolbar { flex-direction: column; align-items: stretch; gap: 10px; }
+        .doc-select, .doc-search-wrap { width: 100% !important; flex: 1 1 100%; }
+        .saf-form-grid { grid-template-columns: 1fr; }
+    }
+    @@media (max-width: 680px) {
+        .hero-wrapper { padding: 12px 12px 0; }
+        .hero-wrapper .fc-hero { border-radius: 16px !important; }
+        .doc-hero-chip:first-child { display: none; }
+        .doc-body { padding: 14px 12px 90px; }
+        .doc-table { font-size: 11px; }
+        .fc-overlap { margin-top: 14px !important; }
+    }
+    @@media (max-width: 480px) {
+        .doc-kpis-row { grid-template-columns: 1fr 1fr; }
+        .saf-mud-tabs .mud-tab { font-size: 11px !important; padding: 0 8px !important; }
+    }
+    @@media (prefers-reduced-motion: reduce) {
+        .glow-halo, .glow-ring { animation: none; }
+        .glow-halo { opacity: 0.5; }
+    }
+</style>
 
 @code {
     private AuthUser? _user;
@@ -398,11 +1532,14 @@
     private long? _ruleEditId;
     private ListForm _lf = new();
     private RuleForm _rf = new();
+    private bool _fabOpen;
+    private int _activeTab;
+    private bool _triedSave;
+    private bool _loading;
 
     public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
     public class TaxOpt { public int Id { get; set; } public string Label { get; set; } = ""; }
 
-    /// <summary>مطابق لـ <c>PriceListsController.ListItem</c> — 7 حقول.</summary>
     public class Lst
     {
         public int PriceListId { get; set; }
@@ -414,7 +1551,6 @@
         public int RuleCount { get; set; }
     }
 
-    /// <summary>مطابق لـ <c>PriceListsController.RuleItem</c> — 24 حقل.</summary>
     public class Rule
     {
         public long CustomerPriceRuleId { get; set; }
@@ -455,7 +1591,6 @@
         public string? ValidTo { get; set; }
     }
 
-    /// <summary>مطابق لـ <c>PriceListsController.RuleUpsert</c> — 14 حقل.</summary>
     public class RuleForm
     {
         public int CustomerId { get; set; }
@@ -494,9 +1629,11 @@
 
     private async Task LoadListsAsync()
     {
+        _loading = true;
         try { _lists = await Http.GetFromJsonAsync<List<Lst>>("api/master/pricelists") ?? new(); }
-        catch (Exception ex) { _ok = false; _msg = "فشل التحميل: " + ex.Message; }
+        catch (Exception ex) { _ok = false; _msg = "فشل تحميل البيانات: " + ex.Message; }
         if (_sel is not null) await LoadRulesAsync(_sel.Value);
+        _loading = false;
     }
 
     private async Task SelectList(Lst l)
@@ -517,10 +1654,10 @@
         catch { return new(); }
     }
 
-    // ═══════════ القوائم ═══════════
-
+    /* ── Pricelists ── */
     private void NewList()
     {
+        _fabOpen = false;
         _listEditId = null;
         _lf = new ListForm { ValidFrom = DateTime.Now.ToString("yyyy-MM-dd") };
         _msg = null; _listOpen = true;
@@ -541,16 +1678,16 @@
     private async Task SaveListAsync()
     {
         if (_saving) return;
-        if (string.IsNullOrWhiteSpace(_lf.PriceListCode)) { _ok = false; _msg = "الكود مطلوب"; return; }
-        if (string.IsNullOrWhiteSpace(_lf.NameAr))        { _ok = false; _msg = "الاسم مطلوب"; return; }
-        if (string.IsNullOrWhiteSpace(_lf.ValidFrom))     { _ok = false; _msg = "تاريخ «ساري من» مطلوب"; return; }
+        if (string.IsNullOrWhiteSpace(_lf.PriceListCode)) { _ok = false; _msg = "كود القائمة مطلوب للتشغيل"; return; }
+        if (string.IsNullOrWhiteSpace(_lf.NameAr))        { _ok = false; _msg = "الاسم العربي مطلوب لتأسيس القائمة"; return; }
+        if (string.IsNullOrWhiteSpace(_lf.ValidFrom))     { _ok = false; _msg = "يرجى تحديد تاريخ بداية السريان"; return; }
 
         _saving = true; _msg = null;
         try
         {
             var payload = new
             {
-                priceListCode = _lf.PriceListCode, nameAr = _lf.NameAr, nameEn = _lf.NameEn,
+                priceListCode = _lf.PriceListCode.Trim(), nameAr = _lf.NameAr.Trim(), nameEn = _lf.NameEn?.Trim(),
                 validFrom = _lf.ValidFrom, validTo = _lf.ValidTo
             };
             var res = _listEditId is null
@@ -561,17 +1698,18 @@
             Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
             if (res.IsSuccessStatusCode) { _listOpen = false; await LoadListsAsync(); }
         }
-        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        catch (Exception ex) { _ok = false; _msg = "فشل في حفظ القائمة: " + ex.Message; }
         finally { _saving = false; }
     }
 
-    // ═══════════ القواعد ═══════════
-
+    /* ── Price Rules ── */
     private void NewRule()
     {
+        _fabOpen = false;
         _ruleEditId = null;
         _rf = new RuleForm { ValidFrom = DateTime.Now.ToString("yyyy-MM-dd") };
         _msg = null; _ruleOpen = true;
+        _triedSave = false; _activeTab = 0;
     }
 
     private void EditRule(Rule r)
@@ -596,14 +1734,29 @@
             Notes           = r.Notes
         };
         _msg = null; _ruleOpen = true;
+        _triedSave = false; _activeTab = 0;
     }
 
     private async Task SaveRuleAsync()
     {
         if (_saving || _sel is null) return;
-        if (_rf.CustomerId <= 0) { _ok = false; _msg = "اختار العميل"; return; }
-        if (_rf.ServiceId <= 0)  { _ok = false; _msg = "اختار الخدمة"; return; }
-        if (string.IsNullOrWhiteSpace(_rf.ValidFrom)) { _ok = false; _msg = "تاريخ «ساري من» مطلوب"; return; }
+        _triedSave = true;
+
+        if (_rf.CustomerId <= 0)
+        {
+            _ok = false; _msg = "يرجى تحديد العميل أولاً";
+            _activeTab = 0; return;
+        }
+        if (_rf.ServiceId <= 0)
+        {
+            _ok = false; _msg = "يرجى تحديد الخدمة المطلوبة";
+            _activeTab = 0; return;
+        }
+        if (string.IsNullOrWhiteSpace(_rf.ValidFrom))
+        {
+            _ok = false; _msg = "تاريخ بداية سريان القاعدة مطلوب";
+            _activeTab = 2; return;
+        }
 
         _saving = true; _msg = null;
         try
@@ -615,7 +1768,7 @@
                 containerTypeId = _rf.ContainerTypeId, tripTypeId = _rf.TripTypeId,
                 unitPrice = _rf.UnitPrice, costPrice = _rf.CostPrice, taxRateId = _rf.TaxRateId,
                 validFrom = _rf.ValidFrom, validTo = _rf.ValidTo,
-                priority = _rf.Priority, isActive = _rf.IsActive, notes = _rf.Notes
+                priority = _rf.Priority, isActive = _rf.IsActive, notes = _rf.Notes?.Trim()
             };
             var res = _ruleEditId is null
                 ? await Http.PostAsJsonAsync($"api/master/pricelists/{_sel}/rules", payload)
@@ -630,7 +1783,7 @@
                 await LoadListsAsync();
             }
         }
-        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        catch (Exception ex) { _ok = false; _msg = "فشل حفظ القاعدة: " + ex.Message; }
         finally { _saving = false; }
     }
 
@@ -643,13 +1796,10 @@
             Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
             if (res.IsSuccessStatusCode) { await LoadRulesAsync(_sel ?? 0); await LoadListsAsync(); }
         }
-        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        catch (Exception ex) { _ok = false; _msg = "فشل الحذف: " + ex.Message; }
     }
 
-    // ═══════════ helpers ═══════════
-
-    /* 🔴 أي `"` جوه attribute = RZ1010 (حتى مع الأقواس السكانر بيحذّر)
-          — فالـ class من helper. */
+    /* ── Helpers ── */
     private string RowCls(Lst l) => _sel == l.PriceListId ? "fc-row-sel" : "";
 
     private static bool IsLive(Lst l)
@@ -665,7 +1815,7 @@
         if (!string.IsNullOrWhiteSpace(r.DestinationName))   d.Add(r.DestinationName!);
         if (!string.IsNullOrWhiteSpace(r.ContainerTypeName)) d.Add(r.ContainerTypeName!);
         if (!string.IsNullOrWhiteSpace(r.TripTypeName))      d.Add(r.TripTypeName!);
-        return d.Count == 0 ? "عام (أي حالة)" : string.Join(" · ", d);
+        return d.Count == 0 ? "قاعدة عامة (أي بعد تشغيلي)" : string.Join(" · ", d);
     }
 
     private static int? Nul(object? v) => int.TryParse(v?.ToString(), out var n) && n > 0 ? n : null;
@@ -681,6 +1831,10 @@
             var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
             return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
         }
-        catch { return res.IsSuccessStatusCode ? "✅ تم" : "حصل خطأ — حاول تاني"; }
+        catch { return res.IsSuccessStatusCode ? "تمت العملية بنجاح" : "حصل خطأ غير متوقع"; }
     }
+
+    private void ToggleFab() => _fabOpen = !_fabOpen;
+    private void CloseFab() => _fabOpen = false;
+    private void OnFabKeyDown(KeyboardEventArgs e) { if (e.Key == "Escape") _fabOpen = false; }
 }

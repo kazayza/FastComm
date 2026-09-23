@@ -9,280 +9,1075 @@
 
 <PageTitle>سجل المراجعة — فاست كوم</PageTitle>
 
-<div class="fc-hero">
-    <div class="fc-hero-inner">
-        <div class="fc-page-head">
-            <div>
-                <div class="fc-crumb">الإدارة</div>
-                <h1 class="fc-hero-title">سجل المراجعة</h1>
-                <p class="fc-hero-sub">مين عمل إيه وإمتى — الدخول والتعديلات وتغيير الصلاحيات</p>
-            </div>
-            <div class="fc-head-actions">
-                <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="_busy"
-                           StartIcon="@Icons.Material.Filled.Download" OnClick="ExportFull">تصدير الكل</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Warning" Disabled="_busy"
-                           StartIcon="@Icons.Material.Filled.Archive" OnClick="OpenArchive">أرشفة</MudButton>
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="LoadAsync" Style="color:#9FB4CC" />
-            </div>
-        </div>
+@* ═══════════════════════════════════════════
+   HERO — كارت مستقل بحواف دائرية وارتفاع مضغوط بالألوان الرسمية
+═══════════════════════════════════════════ *@
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
 
-        <div class="fc-kpis-glass">
-            <div class="fc-kpi"><div class="fc-kpi-lb">إجمالي السجلات</div><div class="fc-kpi-num">@_total.ToString("N0")</div></div>
-            <div class="fc-kpi"><div class="fc-kpi-lb">في الصفحة دي</div><div class="fc-kpi-num">@_items.Count</div></div>
-            <div class="fc-kpi"><div class="fc-kpi-lb">الصفحة</div><div class="fc-kpi-num">@_page / @Pages</div></div>
+            <div class="aud-hero-row">
+                <div class="aud-hero-left">
+                    <div class="aud-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                        <span>الإدارة · الأمن</span>
+                    </div>
+                    <h1 class="fc-hero-title fc-hero-title-slim">سجل المراجعة والأمان</h1>
+                    <span class="aud-hero-sub">مراقبة وتتبع العمليات، حركات الدخول، وتعديل البيانات التشغيلية والمالية</span>
+                </div>
+
+                <div class="aud-hero-right">
+                    <span class="aud-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                    <span class="aud-hero-chip aud-chip-highlight">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01" stroke-linecap="round"/>
+                        </svg>
+                        صفحة @_page من @Pages
+                    </span>
+                </div>
+            </div>
+
+            <div class="aud-kpis-row">
+                <div class="aud-kpi aud-kpi-blue">
+                    <div class="aud-kpi-inner">
+                        <div class="aud-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.Storage" Size="Size.Small" /></div>
+                        <div class="aud-kpi-data">
+                            <div class="aud-kpi-num">@_total.ToString("N0")</div>
+                            <div class="aud-kpi-label">إجمالي السجلات</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="aud-kpi aud-kpi-gold">
+                    <div class="aud-kpi-inner">
+                        <div class="aud-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.Layers" Size="Size.Small" /></div>
+                        <div class="aud-kpi-data">
+                            <div class="aud-kpi-num">@_items.Count</div>
+                            <div class="aud-kpi-label">سجلات الصفحة الحالية</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="aud-kpi aud-kpi-green">
+                    <div class="aud-kpi-inner">
+                        <div class="aud-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.FactCheck" Size="Size.Small" /></div>
+                        <div class="aud-kpi-data">
+                            <div class="aud-kpi-num">@_page</div>
+                            <div class="aud-kpi-label">الصفحة الحالية</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 </div>
 
-<div class="fc-page">
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="aud-body">
     @if (!Can)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض سجل المراجعة.</MudAlert>
+        <div class="aud-state-box">
+            <div class="state-icon-wrap perm">
+                <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليست لديك الصلاحية الكافية لعرض سجل المراجعة (AUDIT.VIEW)</p>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
+        <div class="aud-card">
 
-            <div class="fc-alert fc-alert-info">
-                <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Info" /></div>
-                <div class="fc-alert-body">
-                    <div class="fc-alert-title">السجل بيتسجّل تلقائيًا</div>
-                    <div>حاليًا بيسجّل <b>الدخول ومحاولات الدخول الفاشلة</b>.
-                        باقي الحركات (تعديل مستخدم · تغيير صلاحيات · اعتماد فاتورة)
-                        هتتضاف تدريجيًا عن طريق <b>IAuditService</b>.</div>
+            @* ── تنبيه معلومات السجل ── *@
+            <div class="aud-banner banner-info" role="alert">
+                <div class="banner-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                    </svg>
                 </div>
+                <span>
+                    <strong>تسجيل العمليات يتم تلقائياً:</strong> يتم رصد حركات الدخول ومحاولات الدخول الفاشلة والعمليات المالية والتشغيلية وتغيير الصلاحيات عبر نظام التتبع الآلي.
+                </span>
             </div>
 
+            @* ── رسائل الخطأ والنجاح ── *@
             @if (_msg is not null)
             {
-                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
-                          Class="mb-4">@_msg</MudAlert>
+                <div class="aud-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                    <div class="banner-icon" aria-hidden="true">
+                        @if (_ok)
+                        {
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                                <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                            </svg>
+                        }
+                    </div>
+                    <span>@_msg</span>
+                    <button class="banner-close" @onclick="() => _msg = null">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
             }
 
-            <div class="fc-fsec">
-                <div class="fc-fsec-head">
-                    <span class="fc-fsec-n">1</span>
-                    <div>
-                        <div class="fc-fsec-t">السجلات</div>
-                        <div class="fc-fsec-d">الأحدث فوق</div>
-                    </div>
-                    <span class="fc-fsec-ic"><MudIcon Icon="@Icons.Material.Filled.FactCheck" Size="Size.Small" /></span>
-                </div>
-
-                <div class="fc-filters">
-                    <select class="fc-sel" value="@_fAction" @onchange="OnActionChanged">
+            @* ── شريط الفلاتر والبحث ── *@
+            <div class="aud-toolbar">
+                <div class="aud-filters">
+                    <select class="aud-select" value="@_fAction" @onchange="OnActionChanged" title="الحركة">
                         <option value="">كل الحركات</option>
                         @foreach (var a in _actions) { <option value="@a">@ActionAr(a)</option> }
                     </select>
-                    <select class="fc-sel" value="@_fEntity" @onchange="OnEntityChanged">
+
+                    <select class="aud-select" value="@_fEntity" @onchange="OnEntityChanged" title="الكيان">
                         <option value="">كل الكيانات</option>
                         @foreach (var e in _entities) { <option value="@e">@e</option> }
                     </select>
-                    <input type="date" class="fc-sel" value="@_fFrom" @onchange="e => _fFrom = e.Value?.ToString()" title="من" />
-                    <input type="date" class="fc-sel" value="@_fTo" @onchange="e => _fTo = e.Value?.ToString()" title="لغاية" />
-                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
-                               OnClick="ApplyAsync">تطبيق</MudButton>
+
+                    <div class="aud-date-input-group">
+                        <span class="aud-date-label">من</span>
+                        <input type="date" class="aud-date-input" value="@_fFrom" @onchange="e => _fFrom = e.Value?.ToString()" />
+                    </div>
+
+                    <div class="aud-date-input-group">
+                        <span class="aud-date-label">إلى</span>
+                        <input type="date" class="aud-date-input" value="@_fTo" @onchange="e => _fTo = e.Value?.ToString()" />
+                    </div>
+
+                    <button class="aud-btn-apply" @onclick="ApplyAsync">تطبيق</button>
+
                     @if (HasFilter)
                     {
-                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="ClearAsync">مسح الفلاتر</MudButton>
+                        <button class="aud-btn-clear" @onclick="ClearAsync">إزالة الفلاتر</button>
                     }
                 </div>
+            </div>
 
-                <div class="fc-table-wrap"><table class="fc-table">
-                    <thead><tr>
-                        <th>الوقت</th><th>المستخدم</th><th>الحركة</th>
-                        <th>الكيان</th><th>الوصف</th><th>IP</th><th style="width:60px"></th>
-                    </tr></thead>
+            @* ── جدول البيانات ── *@
+            <div class="aud-table-wrap">
+                <table class="aud-table" aria-label="جدول سجل المراجعة">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="th-start">الوقت والتاريخ</th>
+                            <th scope="col">المستخدم</th>
+                            <th scope="col">الحركة</th>
+                            <th scope="col">الكيان والملف</th>
+                            <th scope="col" class="th-start">الوصف التفصيلي</th>
+                            <th scope="col">عنوان IP</th>
+                            <th scope="col" style="width: 80px">إجراءات</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         @foreach (var a in _items)
                         {
                             <tr>
-                                <td class="fc-cell-sub">@a.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm:ss")</td>
-                                <td class="fc-cell-main">@(a.UserName ?? "—")</td>
-                                <td><span class="fc-chip @ActCls(a.Action)">@ActionAr(a.Action)</span></td>
-                                <td class="fc-cell-sub">
+                                <td class="td-muted td-start">@a.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                <td><strong>@(a.UserName ?? "—")</strong></td>
+                                <td><span class="aud-chip @ActCls(a.Action)">@ActionAr(a.Action)</span></td>
+                                <td class="td-muted">
                                     @a.EntityType
                                     @if (!string.IsNullOrWhiteSpace(a.EntityId))
                                     {
-                                        <text> #@a.EntityId</text>
+                                        <span class="aud-id-tag">#@a.EntityId</span>
                                     }
                                 </td>
-                                <td>@(a.Description ?? "—")</td>
-                                <td class="fc-cell-sub">@(a.IpAddress ?? "—")</td>
+                                <td class="td-start">@(a.Description ?? "—")</td>
+                                <td class="td-muted font-mono" dir="ltr">@(a.IpAddress ?? "—")</td>
                                 <td>
-                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Search"
-                                                   Color="Color.Primary" title="التفاصيل" OnClick="() => ShowDetail(a)" />
+                                    <button class="aud-action-view" @onclick="() => ShowDetail(a)" title="عرض التفاصيل">
+                                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                                        </svg>
+                                    </button>
                                 </td>
                             </tr>
                         }
                         @if (_items.Count == 0)
                         {
-                            <tr><td colspan="7">
-                                <div class="fc-empty">مافيش سجلات — السجل لسه جديد، هيتملأ مع الاستخدام</div>
-                            </td></tr>
+                            <tr>
+                                <td colspan="7">
+                                    <div class="aud-empty-table">لا توجد سجلات مطابقة للبحث حالياً</div>
+                                </td>
+                            </tr>
                         }
                     </tbody>
-                </table></div>
-
-                @* ── ترقيم الصفحات ── *@
-                @if (Pages > 1)
-                {
-                    @* 🔴 مثلثات CSS بدل أيقونات — مافيش اعتماد على اسم Material icon *@
-                    <div class="fc-pager">
-                        <button type="button" class="fc-pager-btn" disabled="@(_page <= 1)"
-                                @onclick="() => GoPage(_page - 1)">
-                            <span class="fc-tri fc-tri-prev"></span>
-                        </button>
-                        <span class="fc-cell-sub">صفحة @_page من @Pages</span>
-                        <button type="button" class="fc-pager-btn" disabled="@(_page >= Pages)"
-                                @onclick="() => GoPage(_page + 1)">
-                            <span class="fc-tri fc-tri-next"></span>
-                        </button>
-                    </div>
-                }
+                </table>
             </div>
 
-        </div></div>
-    }
-</div>
+            @* ── ترقيم الصفحات (Pagination) ── *@
+            @if (Pages > 1)
+            {
+                <div class="aud-pager">
+                    <button type="button" class="aud-pager-btn" disabled="@(_page <= 1)" @onclick="() => GoPage(_page - 1)">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                    <span class="aud-pager-info">صفحة <strong>@_page</strong> من <strong>@Pages</strong></span>
+                    <button type="button" class="aud-pager-btn" disabled="@(_page >= Pages)" @onclick="() => GoPage(_page + 1)">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
+            }
 
-@* ═══════════ مودال: التفاصيل ═══════════ *@
+        </div> @* Closes .aud-card *@
+    } @* Closes @else *@
+</div> @* Closes .aud-body *@
+
+@* ═══════════════════════════════════════════
+   ⚡ GLOW FAB — الوميض الذهبي الدائم متعدد الإجراءات
+═══════════════════════════════════════════ *@
+@if (Can && !_loading)
+{
+    <div class="glow-fab-wrap @(_fabOpen ? "is-open" : "")">
+
+        <div class="glow-fab-menu" role="menu" aria-label="الإجراءات السريعة">
+            @* زر التصدير *@
+            <button type="button" class="glow-fab-item" role="menuitem" @onclick="ExportFull" disabled="@_busy">
+                <span class="glow-fab-item-ic">
+                    <MudIcon Icon="@Icons.Material.Filled.Download" Size="Size.Small" />
+                </span>
+                <span class="glow-fab-item-lb">تصدير كامل السجل</span>
+            </button>
+            @* زر الأرشفة *@
+            <button type="button" class="glow-fab-item" role="menuitem" @onclick="OpenArchive" disabled="@_busy">
+                <span class="glow-fab-item-ic">
+                    <MudIcon Icon="@Icons.Material.Filled.Archive" Size="Size.Small" />
+                </span>
+                <span class="glow-fab-item-lb">أرشفة وتنظيف</span>
+            </button>
+            @* زر التحديث *@
+            <button type="button" class="glow-fab-item" role="menuitem" @onclick="LoadAsync">
+                <span class="glow-fab-item-ic">
+                    <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" />
+                </span>
+                <span class="glow-fab-item-lb">تحديث البيانات</span>
+            </button>
+        </div>
+
+        @* زر الوميض *@
+        <div class="glow-fab-container">
+            <span class="glow-ring glow-ring-1" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-2" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-3" aria-hidden="true"></span>
+            <span class="glow-halo" aria-hidden="true"></span>
+
+            <button type="button" class="glow-fab-btn" @onclick="ToggleFab" @onkeydown="OnFabKeyDown" aria-label="التحكم" aria-expanded="@(_fabOpen ? "true" : "false")">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.8" class="glow-fab-icon" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+
+    </div>
+}
+
+@* ═══════════════════════════════════════════
+   MODAL — تفاصيل الحركة السجلية
+═══════════════════════════════════════════ *@
 @if (_d is not null)
 {
-    <div class="fc-modal-backdrop" @onclick="() => _d = null">
-        <div class="fc-modal" @onclick:stopPropagation="true">
-            <div class="fc-modal-head">
-                <div>
-                    <div class="fc-modal-title">@ActionAr(_d.Action) — @_d.EntityType</div>
-                    <div class="fc-modal-sub">@_d.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</div>
+    <div class="aud-modal-backdrop" @onclick="() => _d = null" role="dialog" aria-modal="true">
+        <div class="aud-modal" @onclick:stopPropagation="true">
+            <div class="aud-modal-head">
+                <div class="aud-modal-head-icon blue" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                    </svg>
                 </div>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _d = null" />
+                <div>
+                    <div class="aud-modal-title">@ActionAr(_d.Action) — @_d.EntityType</div>
+                    <div class="aud-modal-sub">@_d.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</div>
+                </div>
+                <button class="aud-modal-close" @onclick="() => _d = null" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
             </div>
-            <div class="fc-modal-body">
-                <div class="fc-form-grid">
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">المستخدم</div>
-                        <div class="fc-sel fc-sel-lg" style="display:flex;align-items:center">
-                            @(_d.UserName ?? "—") @if (_d.UserId is not null) { <span class="fc-cell-sub">(#@_d.UserId)</span> }
+            
+            <div class="aud-modal-body">
+                <div class="aud-details-grid">
+                    <div class="aud-fld">
+                        <span class="aud-fld-lbl">المستخدِم المسؤول</span>
+                        <div class="aud-fld-val">
+                            @(_d.UserName ?? "—") @if (_d.UserId is not null) { <span class="aud-fld-sub">(#@_d.UserId)</span> }
                         </div>
                     </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">الكيان</div>
-                        <div class="fc-sel fc-sel-lg" style="display:flex;align-items:center">
-                            @_d.EntityType @if (!string.IsNullOrWhiteSpace(_d.EntityId)) { <text>#@_d.EntityId</text> }
+                    <div class="aud-fld">
+                        <span class="aud-fld-lbl">الملف المستهدف (الكيان)</span>
+                        <div class="aud-fld-val">
+                            @_d.EntityType @if (!string.IsNullOrWhiteSpace(_d.EntityId)) { <span class="aud-fld-sub">#@_d.EntityId</span> }
                         </div>
                     </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">IP</div>
-                        <div class="fc-sel fc-sel-lg" style="display:flex;align-items:center" dir="ltr">
-                            @(_d.IpAddress ?? "—")
-                        </div>
+                    <div class="aud-fld">
+                        <span class="aud-fld-lbl">عنوان الشبكة IP</span>
+                        <div class="aud-fld-val font-mono" dir="ltr">@(_d.IpAddress ?? "—")</div>
                     </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">المتصفح</div>
-                        <div class="fc-sel fc-sel-lg" style="display:flex;align-items:center;font-size:11px">
-                            @(string.IsNullOrWhiteSpace(_d.UserAgent) ? "—" : Short(_d.UserAgent))
+                    <div class="aud-fld">
+                        <span class="aud-fld-lbl">متصفح وبوابة الدخول (UserAgent)</span>
+                        <div class="aud-fld-val font-mono text-xs">
+                            @(string.IsNullOrWhiteSpace(_d.UserAgent) ? "—" : _d.UserAgent)
                         </div>
                     </div>
                     @if (!string.IsNullOrWhiteSpace(_d.Description))
                     {
-                        <div class="fc-fld fc-field-full">
-                            <div class="fc-fld-lb">الوصف</div>
-                            <div class="fc-sel fc-sel-lg" style="display:flex;align-items:center">@_d.Description</div>
+                        <div class="aud-fld aud-fld-full">
+                            <span class="aud-fld-lbl">الوصف والإيضاح</span>
+                            <div class="aud-fld-val">@_d.Description</div>
                         </div>
                     }
                     @if (!string.IsNullOrWhiteSpace(_d.OldValues))
                     {
-                        <div class="fc-fld fc-field-full">
-                            <div class="fc-fld-lb">قبل</div>
-                            <div class="fc-code-box">@_d.OldValues</div>
+                        <div class="aud-fld aud-fld-full">
+                            <span class="aud-fld-lbl">البيانات السابقة قبل التعديل</span>
+                            <div class="aud-code-box" dir="ltr">@_d.OldValues</div>
                         </div>
                     }
                     @if (!string.IsNullOrWhiteSpace(_d.NewValues))
                     {
-                        <div class="fc-fld fc-field-full">
-                            <div class="fc-fld-lb">بعد</div>
-                            <div class="fc-code-box">@_d.NewValues</div>
+                        <div class="aud-fld aud-fld-full">
+                            <span class="aud-fld-lbl">البيانات الجديدة المحدثة</span>
+                            <div class="aud-code-box" dir="ltr">@_d.NewValues</div>
                         </div>
                     }
                 </div>
             </div>
-            <div class="fc-modal-foot">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => _d = null">إغلاق</MudButton>
+
+            <div class="aud-modal-foot">
+                <button class="aud-modal-cancel" @onclick="() => _d = null">إغلاق</button>
             </div>
         </div>
     </div>
 }
 
-@* ═══════════ مودال: الأرشفة ═══════════ *@
+@* ═══════════════════════════════════════════
+   MODAL — الأرشفة والتنظيف
+═══════════════════════════════════════════ *@
 @if (_showArchive)
 {
-    <div class="fc-modal-backdrop" @onclick="CloseArchive">
-        <div class="fc-modal" @onclick:stopPropagation="true">
-            <div class="fc-modal-head">
-                <h3><MudIcon Icon="@Icons.Material.Filled.Archive" /> أرشفة سجل المراجعة</h3>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseArchive" />
+    <div class="aud-modal-backdrop" @onclick="CloseArchive" role="dialog" aria-modal="true">
+        <div class="aud-modal" @onclick:stopPropagation="true">
+            <div class="aud-modal-head">
+                <div class="aud-modal-head-icon warning" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 8v13H3V8M1 3h22v5H1V3zM10 12h4" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="aud-modal-title">أرشفة وتنظيف سجل المراجعة</div>
+                    <div class="aud-modal-sub">تنظيف قاعدة البيانات وحفظ الملفات المؤرشفة</div>
+                </div>
+                <button class="aud-modal-close" @onclick="CloseArchive" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
             </div>
-            <div class="fc-modal-body">
+
+            <div class="aud-modal-body">
                 @if (_ap is null)
                 {
-                    <div class="fc-loading"><MudProgressCircular Indeterminate="true" Size="Size.Small" /> جارٍ الفحص…</div>
+                    <div class="aud-modal-loading">
+                        <div class="nl-spinner"></div>
+                        <span>جاري فحص وتحديد السجلات القديمة...</span>
+                    </div>
                 }
                 else if (_ap.Count == 0)
                 {
-                    <div class="fc-empty"><div>لايوجد سجلات أقدم من @_ap.RetentionMonths شهور </div></div>
+                    <div class="aud-empty-archive">
+                        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                        </svg>
+                        <h4>قاعدة البيانات نظيفة تماماً</h4>
+                        <p>لا توجد أي سجلات أقدم من فترة الاستبقاء المحددة بقيمة (@_ap.RetentionMonths أشهر).</p>
+                    </div>
                 }
                 else
                 {
-                    <div class="fc-alert fc-alert-warn">
-                        <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
-                        <div class="fc-alert-body">
-                            <div class="fc-alert-title">هيتصدّر ملف Excel وبعدين يتحذف من الجدول</div>
-                            <div>العملية دي <b>ما تتراجعش</b>. احتفظ بالملف في مكان آمن.</div>
+                    <div class="aud-inline-alert" role="alert">
+                        <div class="aud-alert-icon text-amber">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="aud-alert-body text-amber">
+                            <strong>تحذير أرشفة وإزالة نهائية!</strong>
+                            <p>سيتم تصدير وحفظ السجلات كملف مستند Excel، وبعدها سيتم مسح وحذف @_ap.Count.ToString("N0") سجل نهائياً من قاعدة البيانات. هذه العملية لا يمكن التراجع عنها مطلقاً.</p>
                         </div>
                     </div>
 
-                    <div class="fc-stats" style="margin-top:14px">
-                        <div class="fc-stat">
-                            <div class="fc-stat-head">
-                                <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.History" /></div>
-                                <div class="fc-stat-lb">سجلات هتتأرشف</div>
-                            </div>
-                            <div class="fc-stat-num">@_ap.Count.ToString("N0")</div>
-                            <div class="fc-stat-sub">أقدم من @_ap.Cutoff</div>
+                    <div class="aud-archive-stats">
+                        <div class="aud-astat">
+                            <span class="aud-astat-lbl">سجلات للأرشفة</span>
+                            <span class="aud-astat-num">@_ap.Count.ToString("N0")</span>
+                            <span class="aud-astat-sub">أقدم من @_ap.Cutoff</span>
                         </div>
-                        <div class="fc-stat">
-                            <div class="fc-stat-head">
-                                <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.Storage" /></div>
-                                <div class="fc-stat-lb">حجم تقريبي</div>
-                            </div>
-                            <div class="fc-stat-num">@FmtSize(_ap.EstBytes)</div>
-                            <div class="fc-stat-sub">هتتوفر في قاعدة البيانات</div>
+                        <div class="aud-astat">
+                            <span class="aud-astat-lbl">المساحة المستردة</span>
+                            <span class="aud-astat-num">@FmtSize(_ap.EstBytes)</span>
+                            <span class="aud-astat-sub">تقريبياً بالنظام</span>
                         </div>
-                        <div class="fc-stat">
-                            <div class="fc-stat-head">
-                                <div class="fc-stat-ic"><MudIcon Icon="@Icons.Material.Filled.CalendarToday" /></div>
-                                <div class="fc-stat-lb">أقدم سجل</div>
-                            </div>
-                            <div class="fc-stat-num" style="font-size:1rem">@(_ap.Oldest ?? "—")</div>
-                            <div class="fc-stat-sub">أحدث: @(_ap.Newest ?? "—")</div>
+                        <div class="aud-astat">
+                            <span class="aud-astat-lbl">المدى الزمني</span>
+                            <span class="aud-astat-num text-sm">@(_ap.Oldest ?? "—")</span>
+                            <span class="aud-astat-sub">أحدث: @(_ap.Newest ?? "—")</span>
                         </div>
                     </div>
                 }
             </div>
-            <div class="fc-modal-foot">
-                <MudButton Variant="Variant.Text" OnClick="CloseArchive">إلغاء</MudButton>
+
+            <div class="aud-modal-foot">
+                <button class="aud-modal-cancel" @onclick="CloseArchive">إلغاء</button>
                 @if (_ap is not null && _ap.Count > 0)
                 {
-                    <MudButton Variant="Variant.Filled" Color="Color.Warning" Disabled="_busy"
-                               StartIcon="@Icons.Material.Filled.Archive" OnClick="RunArchive">
-                        صدّر واحذف @_ap.Count.ToString("N0") سجل
-                    </MudButton>
+                    <button class="aud-modal-confirm-archive" @onclick="RunArchive" disabled="@_busy">
+                        @if (_busy)
+                        {
+                            <span class="btn-spinner sm"></span>
+                            <span>جاري الأرشفة...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>تصدير وحذف @_ap.Count.ToString("N0") سجل</span>
+                        }
+                    </button>
                 }
             </div>
         </div>
     </div>
 }
+
+<style>
+    /* ════════════════════════════════════════════════════════
+       HERO WRAPPER
+    ════════════════════════════════════════════════════════ */
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px;
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 1;
+    }
+
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important;
+        overflow: hidden;
+        box-shadow:
+            0 12px 32px rgba(13, 38, 84, 0.15),
+            0 4px 12px rgba(13, 38, 84, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .hero-wrapper .fc-hero.fc-hero-slim {
+        padding-top: 18px !important;
+        padding-bottom: 22px !important;
+    }
+
+    .fc-hero-title-slim {
+        font-size: clamp(18px, 2vw, 24px) !important;
+        margin: 0 !important;
+    }
+
+    .aud-hero-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+    }
+
+    .aud-hero-left {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .aud-hero-crumb {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 10.5px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.55);
+        margin-bottom: 2px;
+    }
+
+    .aud-hero-sub {
+        font-size: 10.5px;
+        color: rgba(255, 255, 255, 0.55);
+        font-weight: 600;
+    }
+
+    .aud-hero-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+
+    .aud-hero-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 11px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 10.5px;
+        font-weight: 700;
+        font-family: "Inter", Arial, sans-serif;
+        white-space: nowrap;
+    }
+
+    .aud-chip-highlight {
+        background: rgba(251, 191, 36, 0.15) !important;
+        border-color: rgba(251, 191, 36, 0.35) !important;
+        color: #fcd34d !important;
+    }
+
+    /* KPIs Row */
+    .aud-kpis-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .aud-kpi {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(12px);
+        border-radius: 10px;
+        padding: 10px 12px;
+    }
+
+    .aud-kpi-inner { display: flex; align-items: center; gap: 10px; }
+
+    .aud-kpi-icon {
+        width: 34px; height: 34px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .aud-kpi-blue .aud-kpi-icon  { background: rgba(125, 211, 252, 0.15); color: #7dd3fc; }
+    .aud-kpi-gold .aud-kpi-icon  { background: rgba(252, 211, 77, 0.15);  color: #fcd34d; }
+    .aud-kpi-green .aud-kpi-icon { background: rgba(110, 231, 183, 0.15); color: #6ee7b7; }
+
+    .aud-kpi-data { flex: 1; min-width: 0; }
+    .aud-kpi-num { font-family: "Inter", Arial, sans-serif; font-size: 18px; font-weight: 900; color: #fff; line-height: 1; }
+    .aud-kpi-label { font-size: 10.5px; font-weight: 700; color: rgba(255, 255, 255, 0.6); margin-top: 3px; }
+
+    /* ════════════════════════════════════════════════════════
+       BODY MAIN CARD
+    ════════════════════════════════════════════════════════ */
+    .aud-body {
+        padding: 18px clamp(16px, 3vw, 40px) 100px;
+        max-width: 1440px;
+        margin-inline: auto;
+        box-sizing: border-box;
+        width: 100%;
+        position: relative;
+        z-index: 2;
+    }
+
+    .aud-card {
+        background: #fff;
+        border: 1px solid #dde5f0;
+        border-radius: 18px;
+        box-shadow: 0 4px 24px rgba(15, 41, 82, 0.05);
+        overflow: hidden;
+    }
+
+    /* ── Banners (Emoji-Free) ── */
+    .aud-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 18px;
+        border-radius: 0;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.6;
+        border-bottom: 1px solid transparent;
+    }
+    .banner-info {
+        background: #f4f8ff;
+        color: #1a56db;
+        border-bottom-color: #dbe8fc;
+    }
+    .banner-success { background: #e9f8f0; color: #0e7a43; border-bottom-color: #b5e8d0; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); border-bottom-color: #ffc8cf; }
+    .banner-icon { flex: 0 0 auto; margin-top: 2px; }
+    .banner-close {
+        margin-right: auto; background: none; border: none;
+        color: inherit; opacity: 0.6; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        width: 24px; height: 24px; border-radius: 5px;
+    }
+    .banner-close:hover { opacity: 1; }
+
+    /* ── State Box ── */
+    .aud-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: #fff; border: 1px solid #dde5f0;
+        border-radius: 14px; padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .state-icon-wrap {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .state-icon-wrap.perm { background: #fff0f2; color: var(--fc-red); }
+    .aud-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: #1c2b44; }
+    .aud-state-box p  { margin: 0; font-size: 13px; color: #6b7d95; }
+
+    /* ── Toolbar & Filters ── */
+    .aud-toolbar {
+        padding: 14px 18px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .aud-filters {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .aud-select, .aud-date-input {
+        height: 38px;
+        border: 1px solid #d8e2f0;
+        border-radius: 9px;
+        background: #fafcff;
+        color: #1c2c44;
+        font-family: inherit;
+        font-size: 12.5px;
+        padding: 0 10px;
+        outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+        box-sizing: border-box;
+    }
+    .aud-select:focus, .aud-date-input:focus {
+        border-color: var(--fc-blue);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.08);
+    }
+
+    select.aud-select {
+        cursor: pointer;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7d95' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: left 10px center;
+        background-size: 12px;
+        padding-left: 32px;
+    }
+
+    .aud-date-input-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .aud-date-label {
+        font-size: 11.5px;
+        font-weight: 800;
+        color: #6b7d95;
+    }
+
+    .aud-btn-apply {
+        height: 38px;
+        padding: 0 18px;
+        border: none;
+        border-radius: 9px;
+        background: var(--fc-blue, #1e6ef5);
+        color: #fff;
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(30,110,245,0.22);
+        transition: all 0.15s ease;
+    }
+    .aud-btn-apply:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 10px rgba(30,110,245,0.3);
+    }
+
+    .aud-btn-clear {
+        height: 38px;
+        padding: 0 14px;
+        border: 1px solid #d8e2f0;
+        border-radius: 9px;
+        background: #fff;
+        color: #6b7d95;
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .aud-btn-clear:hover {
+        background: #f0f4fa;
+        color: #1c2c44;
+    }
+
+    /* ── Table & Chips ── */
+    .aud-table-wrap { overflow-x: auto; }
+    .aud-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .aud-table thead th {
+        padding: 11px 14px;
+        background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 11px; font-weight: 800;
+        text-align: center; border-bottom: 2px solid #e4eaf3;
+        white-space: nowrap;
+    }
+    .aud-table .th-start { text-align: right; }
+    .aud-table tbody tr {
+        border-bottom: 1px solid #f0f3f8; transition: background .12s ease;
+    }
+    .aud-table tbody tr:last-child { border-bottom: none; }
+    .aud-table tbody tr:hover { background: #fafcff; }
+    .aud-table tbody td {
+        padding: 12px 14px; color: #526070; text-align: center; vertical-align: middle;
+    }
+    .td-start { text-align: right !important; }
+    .td-muted { color: #8899ae; font-size: 11.5px; }
+
+    .aud-id-tag {
+        display: inline-block; padding: 1px 6px; border-radius: 5px;
+        background: #f0f3f8; color: #5c7080; font-size: 10px; font-weight: 800;
+        font-family: "Inter", sans-serif;
+    }
+
+    /* Chips */
+    .aud-chip {
+        display: inline-flex; align-items: center;
+        padding: 2.5px 8px; border-radius: 6px;
+        font-size: 10px; font-weight: 800;
+    }
+    .fc-chip-ok   { background: #e9f8f0; color: #0e7a43; border: 1px solid #b0e0c5; }
+    .fc-chip-bad  { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8cf; }
+    .fc-chip-warn { background: #fff8e6; color: #b87d08; border: 1px solid #fce8bd; }
+    .fc-chip-blue { background: #eaf1ff; color: var(--fc-blue); border: 1px solid #bdd4fc; }
+    .fc-chip-gold { background: #fdf5e2; color: #9a5008; border: 1px solid #f9d8a5; }
+    .fc-chip-gray { background: #f0f3f8; color: #6b7d95; border: 1px solid #dde5f0; }
+
+    .aud-action-view {
+        width: 30px; height: 30px; border-radius: 7px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; cursor: pointer;
+        color: var(--fc-blue); background: transparent;
+        transition: all 0.15s ease;
+    }
+    .aud-action-view:hover { background: #eaf1ff; border-color: #bdd4fc; }
+
+    .aud-empty-table {
+        padding: 40px; text-align: center;
+        color: #9aaabb; font-size: 13px; font-weight: 700;
+    }
+
+    /* ── Pager ── */
+    .aud-pager {
+        display: flex; align-items: center; justify-content: center;
+        gap: 12px; padding: 14px 20px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-top: 1px solid #edf1f7;
+    }
+    .aud-pager-btn {
+        width: 32px; height: 32px; border-radius: 8px;
+        border: 1px solid #d8e2f0; background: #fff;
+        color: #6b7d95; display: flex; align-items: center; justify-content: center;
+        cursor: pointer; transition: all 0.15s ease;
+    }
+    .aud-pager-btn:hover:not(:disabled) {
+        border-color: var(--fc-blue); color: var(--fc-blue); background: #f4f8ff;
+    }
+    .aud-pager-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .aud-pager-info { font-size: 12px; color: #6b7d95; }
+    .aud-pager-info strong { color: #1c2b43; }
+
+    /* ════════════════════════════════════════════════════════
+       📋 MODALS — تفاصيل السجل & الأرشفة (Emoji-Free)
+    ════════════════════════════════════════════════════════ */
+    .aud-modal-backdrop {
+        position: fixed; inset: 0; z-index: 1000;
+        background: rgba(10,20,40,.55); backdrop-filter: blur(4px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px; animation: glow-fadein .18s ease both;
+    }
+
+    .aud-modal {
+        width: 100%; max-width: 680px;
+        background: #fff; border: 1px solid rgba(0,0,0,.08);
+        border-radius: 18px;
+        box-shadow: 0 8px 30px rgba(10,20,50,.15), 0 30px 80px rgba(10,20,50,.20);
+        overflow: hidden;
+        animation: aud-modal-in .25s cubic-bezier(.34,1.3,.64,1);
+        max-height: 90vh; display: flex; flex-direction: column;
+    }
+    @@keyframes aud-modal-in {
+        from { opacity: 0; transform: scale(.95) translateY(8px); }
+        to   { opacity: 1; transform: none; }
+    }
+
+    .aud-modal-head {
+        display: flex; align-items: center; gap: 12px;
+        padding: 18px 20px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+        flex: 0 0 auto;
+    }
+    .aud-modal-head-icon {
+        width: 42px; height: 42px; flex: 0 0 42px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 11px;
+    }
+    .aud-modal-head-icon.blue { background: #eaf1ff; color: var(--fc-blue); border: 1px solid #bdd4fc; }
+    .aud-modal-head-icon.warning { background: #fff8e6; color: #b87d08; border: 1px solid #fce8bd; }
+
+    .aud-modal-title { font-size: 14.5px; font-weight: 800; color: #1c2b43; }
+    .aud-modal-sub   { font-size: 10.5px; color: var(--fc-muted); margin-top: 2px; }
+
+    .aud-modal-close {
+        margin-right: auto; width: 32px; height: 32px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid #e4eaf2; border-radius: 8px;
+        background: none; color: #9aaabb; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .aud-modal-close:hover { background: #f0f4fa; color: var(--fc-text); border-color: #c0ccd8; }
+
+    .aud-modal-body { padding: 20px; overflow-y: auto; flex: 1 1 auto; }
+
+    /* Details Grid */
+    .aud-details-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    .aud-fld-full { grid-column: 1 / -1; }
+    .aud-fld { display: flex; flex-direction: column; gap: 5px; }
+    .aud-fld-lbl { font-size: 11.5px; font-weight: 800; color: #6b7d95; }
+    .aud-fld-val {
+        min-height: 38px; width: 100%; display: flex; align-items: center;
+        border: 1px solid #d8e2f0; border-radius: 8px;
+        background: #fafcff; color: #1c2c44; font-size: 12.5px; padding: 0 12px;
+        box-sizing: border-box;
+    }
+    .aud-fld-sub { font-size: 10px; color: #8899ae; margin-right: 4px; }
+
+    .aud-code-box {
+        background: #1e293b; color: #38bdf8; font-family: "Courier New", Courier, monospace;
+        font-size: 11.5px; padding: 12px 14px; border-radius: 8px;
+        line-height: 1.6; max-height: 180px; overflow-y: auto;
+        border: 1px solid #0f172a; white-space: pre-wrap; word-break: break-all;
+    }
+
+    .aud-modal-foot {
+        display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+        padding: 14px 20px;
+        background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%);
+        border-top: 1px solid #edf1f7;
+        flex: 0 0 auto;
+    }
+
+    .aud-modal-cancel {
+        height: 38px; padding: 0 18px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: #fff; color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .aud-modal-cancel:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    /* ── الأرشفة والتحذيرات ── */
+    .aud-modal-loading {
+        display: flex; align-items: center; justify-content: center; gap: 10px;
+        min-height: 140px; color: #6b7d95; font-size: 12px;
+    }
+    .aud-empty-archive {
+        text-align: center; padding: 30px 20px; color: #6b7d95;
+    }
+    .aud-empty-archive svg { color: #16a35b; margin-bottom: 10px; }
+    .aud-empty-archive h4 { font-size: 14px; font-weight: 800; color: #1c2b44; margin: 0 0 6px; }
+    .aud-empty-archive p { font-size: 11.5px; margin: 0; }
+
+    .aud-inline-alert {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 12px 16px; border-radius: 10px;
+        background: #fff0f2; border: 1px solid #ffc8cf;
+    }
+    .aud-inline-alert .aud-alert-body strong { display: block; font-size: 12.5px; font-weight: 800; color: #b02040; }
+    .aud-inline-alert .aud-alert-body p { margin: 4px 0 0; font-size: 11.5px; color: #c02040; line-height: 1.6; }
+
+    .aud-archive-stats {
+        display: grid; grid-template-columns: repeat(3, 1fr);
+        gap: 10px; margin-top: 14px;
+    }
+    .aud-astat {
+        padding: 12px; border-radius: 10px;
+        background: #f8fafc; border: 1px solid #e4eaf3;
+        text-align: center; display: flex; flex-direction: column; gap: 3px;
+    }
+    .aud-astat-lbl { font-size: 9.5px; font-weight: 800; color: #8899ae; }
+    .aud-astat-num { font-family: "Inter", Arial, sans-serif; font-size: 16px; font-weight: 900; color: #1c2b44; }
+    .aud-astat-sub { font-size: 9px; color: #9aaabb; }
+
+    .aud-modal-confirm-archive {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 18px;
+        border: 0; border-radius: 9px;
+        background: linear-gradient(135deg, #fbbf24, #d97706);
+        color: #fff; font-family: inherit;
+        font-size: 12px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 3px 10px rgba(217,119,6,.28);
+        transition: all .15s ease;
+    }
+    .aud-modal-confirm-archive:hover:not(:disabled) { transform: translateY(-1px); }
+    .aud-modal-confirm-archive:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* ════════════════════════════════════════════════════════
+       ⚡ GLOW FAB
+    ════════════════════════════════════════════════════════ */
+    .glow-fab-scrim {
+        position: fixed; inset: 0; z-index: 1298;
+        background: rgba(10, 20, 40, 0.4); backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        animation: glow-fadein 0.2s ease both;
+    }
+
+    .glow-fab-wrap {
+        position: fixed; left: 28px; bottom: 28px; z-index: 1299;
+        display: flex; flex-direction: column; align-items: flex-start;
+        gap: 14px;
+    }
+
+    .glow-fab-container { position: relative; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; }
+
+    .glow-halo {
+        position: absolute; inset: -6px; border-radius: 50%;
+        background: radial-gradient(circle, rgba(251, 191, 36, 0.55) 0%, rgba(245, 158, 11, 0.35) 40%, rgba(245, 158, 11, 0) 75%);
+        filter: blur(12px); animation: glow-breath 2.5s ease-in-out infinite; pointer-events: none; z-index: 1;
+    }
+
+    @@keyframes glow-breath { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.15); } }
+
+    .glow-ring { position: absolute; inset: 0; border-radius: 50%; border: 2.5px solid #fbbf24; pointer-events: none; opacity: 0; z-index: 2; }
+    .glow-ring-1 { animation: glow-expand 2.4s ease-out infinite; animation-delay: 0s; }
+    .glow-ring-2 { animation: glow-expand 2.4s ease-out infinite; animation-delay: 0.8s; }
+    .glow-ring-3 { animation: glow-expand 2.4s ease-out infinite; animation-delay: 1.6s; }
+
+    @@keyframes glow-expand {
+        0% { opacity: 0.8; transform: scale(1); border-width: 3px; }
+        60% { opacity: 0.4; }
+        100% { opacity: 0; transform: scale(2); border-width: 1px; }
+    }
+
+    .glow-fab-btn {
+        position: relative; width: 60px; height: 60px; border-radius: 50%; border: 2.5px solid #fbbf24; padding: 0;
+        display: flex; align-items: center; justify-content: center; cursor: pointer;
+        background: linear-gradient(135deg, #1e6ef5 0%, #0d47a1 100%); color: #fff;
+        box-shadow: 0 8px 24px rgba(30, 110, 245, 0.5), 0 4px 12px rgba(251, 191, 36, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        transition: transform 0.25s cubic-bezier(0.34, 1.3, 0.64, 1); z-index: 3;
+    }
+    .glow-fab-btn:hover { transform: scale(1.08); }
+    .glow-fab-btn:active { transform: scale(0.94); }
+    .glow-fab-btn:focus-visible { outline: none; }
+
+    .glow-fab-icon { transition: transform 0.3s cubic-bezier(0.34, 1.3, 0.64, 1); }
+    .glow-fab-wrap.is-open .glow-fab-icon { transform: rotate(135deg); }
+
+    .glow-fab-wrap.is-open .glow-fab-btn {
+        background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); border-color: #fca5a5;
+        box-shadow: 0 8px 24px rgba(220, 38, 38, 0.5), 0 4px 12px rgba(252, 165, 165, 0.35);
+    }
+    .glow-fab-wrap.is-open .glow-halo { background: radial-gradient(circle, rgba(252, 165, 165, 0.55) 0%, rgba(220, 38, 38, 0.35) 40%, rgba(220, 38, 38, 0) 75%); }
+    .glow-fab-wrap.is-open .glow-ring { border-color: #fca5a5; }
+
+    .glow-fab-menu {
+        display: flex; flex-direction: column; gap: 8px; opacity: 0; pointer-events: none;
+        transform: translateY(15px) scale(0.9); transform-origin: bottom left;
+        transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.34, 1.3, 0.64, 1);
+    }
+    .glow-fab-wrap.is-open .glow-fab-menu { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }
+
+    .glow-fab-item {
+        display: inline-flex; align-items: center; gap: 10px; min-width: 190px; padding: 10px 14px;
+        background: #fff; border: 1px solid #e4eaf2; border-radius: 12px;
+        box-shadow: 0 6px 20px rgba(15, 41, 82, 0.14), 0 2px 6px rgba(15, 41, 82, 0.08);
+        font-family: inherit; font-size: 12.5px; font-weight: 800; color: #1c2b43; cursor: pointer;
+        transition: all 0.18s ease; white-space: nowrap;
+    }
+    .glow-fab-item:hover { border-color: #1e6ef5; transform: translateX(-4px); box-shadow: 0 8px 24px rgba(30, 110, 245, 0.22), 0 3px 8px rgba(15, 41, 82, 0.12); }
+    .glow-fab-item:disabled { opacity: 0.6; cursor: not-allowed; }
+    .glow-fab-item-ic { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #eaf1ff, #dbe8fc); color: #1e6ef5; flex-shrink: 0; }
+    .glow-fab-item-lb { flex: 1; text-align: right; }
+
+    .glow-fab-wrap.is-open .glow-fab-item:nth-child(1) { transition-delay: 0.04s; }
+    .glow-fab-wrap.is-open .glow-fab-item:nth-child(2) { transition-delay: 0.08s; }
+    .glow-fab-wrap.is-open .glow-fab-item:nth-child(3) { transition-delay: 0.12s; }
+
+    /* ── Responsive ── */
+    @@media (max-width: 1024px) {
+        .aud-kpis-row { grid-template-columns: repeat(2, 1fr); }
+    }
+    @@media (max-width: 900px) {
+        .aud-filters { flex-direction: column; align-items: stretch; gap: 8px; }
+        .aud-select, .aud-date-input, .aud-btn-apply, .aud-btn-clear, .aud-date-input-group { width: 100% !important; }
+        .aud-date-input-group { justify-content: space-between; }
+    }
+    @@media (max-width: 680px) {
+        .hero-wrapper { padding: 12px 12px 0; }
+        .hero-wrapper .fc-hero { border-radius: 16px !important; }
+        .aud-hero-chip:first-child { display: none; }
+        .aud-body { padding: 14px 12px 90px; }
+        .aud-table { font-size: 11px; }
+        .aud-details-grid { grid-template-columns: 1fr; }
+        .aud-archive-stats { grid-template-columns: 1fr; }
+        .glow-fab-wrap { left: 18px; bottom: 18px; }
+        .glow-fab-container { width: 58px; height: 58px; }
+        .glow-fab-btn { width: 54px; height: 54px; }
+        .glow-fab-item { min-width: 165px; font-size: 12px; }
+    }
+    @@media (max-width: 480px) {
+        .aud-kpis-row { grid-template-columns: 1fr 1fr; }
+    }
+    @@media (prefers-reduced-motion: reduce) {
+        .glow-halo, .glow-ring { animation: none; }
+        .glow-halo { opacity: 0.5; }
+    }
+</style>
 
 @code {
     private AuthUser? _user;
@@ -296,12 +1091,13 @@
     private string? _fAction, _fEntity, _fFrom, _fTo;
     private string? _msg; private bool _ok = true;
     private Detail? _d;
+    private bool _fabOpen;
+    private bool _loading;
 
     private int Pages => _total <= 0 ? 1 : (int)Math.Ceiling(_total / (double)PageSize);
     private bool HasFilter => !string.IsNullOrWhiteSpace(_fAction) || !string.IsNullOrWhiteSpace(_fEntity)
                               || !string.IsNullOrWhiteSpace(_fFrom) || !string.IsNullOrWhiteSpace(_fTo);
 
-    /// <summary>مطابق لـ <c>AuditController.Item</c> — 9 حقول.</summary>
     public class Item
     {
         public long AuditLogId { get; set; }
@@ -315,7 +1111,6 @@
         public DateTime CreatedAt { get; set; }
     }
 
-    /// <summary>مطابق لـ <c>AuditController.Detail</c> — 12 حقل.</summary>
     public class Detail
     {
         public long AuditLogId { get; set; }
@@ -355,6 +1150,7 @@
 
     private async Task LoadAsync()
     {
+        _loading = true;
         try
         {
             var qs = $"page={_page}&size={PageSize}";
@@ -363,28 +1159,27 @@
             if (!string.IsNullOrWhiteSpace(_fFrom))   qs += $"&from={_fFrom}";
             if (!string.IsNullOrWhiteSpace(_fTo))     qs += $"&to={_fTo}";
 
-            /* 🔴 مانستخدمش GetFromJsonAsync على طول — لو السيرفر رجّع HTML
-                  (زي index.html من MapFallbackToFile) الرسالة بتطلع incomprehensible. */
             var res = await Http.GetAsync("api/audit?" + qs);
             var body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
             {
                 _ok = false;
-                _msg = $"❌ السيرفر رجّع {(int)res.StatusCode} — {Diag(body)}";
+                _msg = $"فشل في تحميل السجلات: كود الخطأ {(int)res.StatusCode} — {Diag(body)}";
                 return;
             }
             if (string.IsNullOrWhiteSpace(body) || body.TrimStart().StartsWith("<"))
             {
                 _ok = false;
-                _msg = "❌ السيرفر رجّع صفحة HTML مش بيانات — " + Diag(body);
+                _msg = "فشل في تحميل البيانات: السيرفر لم يرجع مستند JSON صحيح — " + Diag(body);
                 return;
             }
 
             var p = System.Text.Json.JsonSerializer.Deserialize<PageRes>(body, JsonOpts);
             if (p is not null) { _items = p.Items; _total = p.Total; _page = p.Page; }
         }
-        catch (Exception ex) { _ok = false; _msg = "فشل التحميل: " + ex.Message; }
+        catch (Exception ex) { _ok = false; _msg = "فشل تحميل البيانات: " + ex.Message; }
+        finally { _loading = false; }
     }
 
     private static readonly System.Text.Json.JsonSerializerOptions JsonOpts = new()
@@ -392,18 +1187,12 @@
         PropertyNameCaseInsensitive = true
     };
 
-    /// <summary>
-    /// 🔴 بيشخّص السبب — لأن `MapFallbackToFile("index.html")` بيرجّع HTML
-    /// لأي route مش موجود، فالرسالة الأصلية بتطلع «'&lt;' is an invalid start of a value».
-    /// </summary>
     private static string Diag(string body)
     {
         var t = body.TrimStart();
         if (t.StartsWith("<!DOCTYPE", StringComparison.OrdinalIgnoreCase) || t.StartsWith("<html", StringComparison.OrdinalIgnoreCase))
-            return "**الإندبوينت `api/audit` مش موجود على السيرفر.** " +
-                   "اتأكد إن `Controllers/Admin/AuditController.cs` متنسوخ في مشروع " +
-                   "`FastCom.Server` وإنك عملت **rebuild للسيرفر** (مش Client بس).";
-        if (t.StartsWith("<")) return "السيرفر رجّع HTML مش JSON — غالبًا استثناء. بص على console السيرفر.";
+            return "المسار غير متوفر حالياً على الخادم. يرجى مراجعة لوحة تحكم السيرفر أو بناء الخادم مجدداً.";
+        if (t.StartsWith("<")) return "الخادم أرجع مستند استثناء غير معروف. يرجى مراجعة سجل الاستثناءات.";
         return t.Length > 300 ? t.Substring(0, 300) + "…" : t;
     }
 
@@ -436,10 +1225,8 @@
     private async Task ShowDetail(Item a)
     {
         try { _d = await Http.GetFromJsonAsync<Detail>($"api/audit/{a.AuditLogId}"); }
-        catch { Snackbar.Add("فشل فتح التفاصيل", Severity.Error); }
+        catch { Snackbar.Add("فشل فتح تفاصيل السجل المختار", Severity.Error); }
     }
-
-    /* 🔴 أي `"` جوه attribute = RZ1010 — فالـ class من helper */
 
     private static string ActCls(string a) => a switch
     {
@@ -467,8 +1254,12 @@
 
     private static string Short(string s) => s.Length <= 70 ? s : s.Substring(0, 70) + "…";
 
-    /* ══════════ 🆕 الأرشفة — تصدير ثم حذف ══════════ */
+    /* ── FAB States ── */
+    private void ToggleFab() => _fabOpen = !_fabOpen;
+    private void CloseFab() => _fabOpen = false;
+    private void OnFabKeyDown(KeyboardEventArgs e) { if (e.Key == "Escape") _fabOpen = false; }
 
+    /* ── الأرشفة والتصدير ── */
     private bool _showArchive, _busy;
     private ArchivePreview? _ap;
 
@@ -482,7 +1273,6 @@
         public long     EstBytes        { get; set; }
     }
 
-    /* 🔴 Razor بيفسر `<` في الـ switch pattern على إنه HTML tag (RZ9980) — فـ if/else */
     private static string FmtSize(long b)
     {
         if (b < 1024)       return $"{b} بايت";
@@ -493,15 +1283,16 @@
 
     private async Task ExportFull()
     {
+        _fabOpen = false;
         _busy = true;
         try
         {
             var bytes = await Http.GetByteArrayAsync("api/audit/export");
-            if (bytes is null || bytes.Length == 0) throw new Exception("السيرفر مرجّعش ملف");
+            if (bytes is null || bytes.Length == 0) throw new Exception("السيرفر لم يرجع ملف التصدير بنجاح");
             await JS.InvokeAsync<bool>("fastcom.downloadBase64", Convert.ToBase64String(bytes),
                 $"fastcom-audit-full-{DateTime.Now:yyyyMMdd-HHmm}.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            Snackbar.Add("✅ اتصدّر السجل كامل", Severity.Success);
+            Snackbar.Add("تم تصدير سجل المراجعة بالكامل بنجاح", Severity.Success);
         }
         catch (Exception ex) { Snackbar.Add("فشل التصدير: " + ex.Message, Severity.Error); }
         finally { _busy = false; }
@@ -509,9 +1300,10 @@
 
     private async Task OpenArchive()
     {
+        _fabOpen = false;
         _showArchive = true; _ap = null;
         try { _ap = await Http.GetFromJsonAsync<ArchivePreview>("api/audit/archive-preview"); }
-        catch { Snackbar.Add("فشل فحص السجلات القديمة", Severity.Error); _showArchive = false; }
+        catch { Snackbar.Add("فشل فحص السجلات المؤرشفة والقديمة", Severity.Error); _showArchive = false; }
     }
 
     private void CloseArchive() { _showArchive = false; }
@@ -521,7 +1313,6 @@
         _busy = true;
         try
         {
-            /* 🔴 POST بيرجّع ملف — فمانستخدمش PostAsJsonAsync + ReadAsJson */
             var res = await Http.PostAsync("api/audit/archive", null);
             var bytes = await res.Content.ReadAsByteArrayAsync();
 
@@ -530,18 +1321,18 @@
                 var msg = System.Text.Encoding.UTF8.GetString(bytes);
                 throw new Exception(Diag(msg));
             }
-            if (bytes.Length == 0) throw new Exception("السيرفر مرجّعش ملف الأرشيف");
+            if (bytes.Length == 0) throw new Exception("السيرفر لم يرجع ملف الأرشيف بنجاح");
 
             await JS.InvokeAsync<bool>("fastcom.downloadBase64", Convert.ToBase64String(bytes),
                 $"fastcom-audit-archive-{DateTime.Now:yyyyMMdd-HHmm}.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
-            Snackbar.Add($"✅ اتأرشفت {_ap?.Count:N0} سجل واتحذفت من الجدول", Severity.Success);
+            Snackbar.Add($"تم أرشفة وحذف {_ap?.Count:N0} سجل بنجاح من قاعدة البيانات", Severity.Success);
             _showArchive = false;
             _page = 1;
             await LoadAsync();
         }
-        catch (Exception ex) { Snackbar.Add("فشلت الأرشفة: " + ex.Message, Severity.Error); }
+        catch (Exception ex) { Snackbar.Add("فشلت الأرشفة والمسح: " + ex.Message, Severity.Error); }
         finally { _busy = false; }
     }
 }

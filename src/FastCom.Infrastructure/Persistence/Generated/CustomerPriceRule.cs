@@ -97,6 +97,6 @@ public partial class CustomerPriceRule
     public virtual TripType? TripType { get; set; }
 
     [ForeignKey("TahteeqPortId")]
-    [InverseProperty("CustomerPriceRules")]
+    [InverseProperty("TahteeqCustomerPriceRules")]
     public virtual Port? TahteeqPort { get; set; }
 }

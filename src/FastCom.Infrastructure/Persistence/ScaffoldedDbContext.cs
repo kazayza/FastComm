@@ -194,7 +194,7 @@ public partial class FastComDbContext
 
             entity.HasOne(d => d.TripType).WithMany(p => p.Bookings).HasConstraintName("FK_Bookings_TripTypes");
 
-            entity.HasOne(d => d.TahteeqPort).WithMany(p => p.Bookings).HasConstraintName("FK_Bookings_TahteeqPorts");
+            entity.HasOne(d => d.TahteeqPort).WithMany(p => p.TahteeqBookings).HasConstraintName("FK_Bookings_TahteeqPorts");
 
             entity.HasOne(d => d.EndCustomer).WithMany(p => p.EndCustomerBookings).HasConstraintName("FK_Bookings_EndCustomers");
         });
@@ -403,7 +403,7 @@ public partial class FastComDbContext
 
             entity.HasOne(d => d.TripType).WithMany(p => p.CustomerPriceRules).HasConstraintName("FK_CPR_TripTypes");
 
-            entity.HasOne(d => d.TahteeqPort).WithMany(p => p.CustomerPriceRules).HasConstraintName("FK_CPR_TahteeqPorts");
+            entity.HasOne(d => d.TahteeqPort).WithMany(p => p.TahteeqCustomerPriceRules).HasConstraintName("FK_CPR_TahteeqPorts");
         });
 
         modelBuilder.Entity<Department>(entity =>
@@ -663,7 +663,7 @@ public partial class FastComDbContext
 
             entity.HasOne(d => d.TripType).WithMany(p => p.Operations).HasConstraintName("FK_Operations_TripTypes");
 
-            entity.HasOne(d => d.TahteeqPort).WithMany(p => p.Operations).HasConstraintName("FK_Operations_TahteeqPorts");
+            entity.HasOne(d => d.TahteeqPort).WithMany(p => p.TahteeqOperations).HasConstraintName("FK_Operations_TahteeqPorts");
         });
 
         modelBuilder.Entity<OperationContainer>(entity =>
@@ -937,7 +937,7 @@ public partial class FastComDbContext
 
             entity.HasOne(d => d.Destination).WithMany(p => p.Trips).HasConstraintName("FK_Trips_Destinations");
 
-            entity.HasOne(d => d.TahteeqPort).WithMany(p => p.Trips).HasConstraintName("FK_Trips_TahteeqPorts");
+            entity.HasOne(d => d.TahteeqPort).WithMany(p => p.TahteeqTrips).HasConstraintName("FK_Trips_TahteeqPorts");
         });
 
         modelBuilder.Entity<TripCostAllocation>(entity =>

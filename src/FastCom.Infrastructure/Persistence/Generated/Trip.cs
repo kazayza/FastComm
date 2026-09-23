@@ -112,7 +112,7 @@ public partial class Trip
     public virtual Destination? Destination { get; set; }
 
     [ForeignKey("TahteeqPortId")]
-    [InverseProperty("Trips")]
+    [InverseProperty("TahteeqTrips")]
     public virtual Port? TahteeqPort { get; set; }
 
     [ForeignKey("VehicleId")]

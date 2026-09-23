@@ -40,6 +40,18 @@ public partial class Port
     [InverseProperty("Port")]
     public virtual ICollection<Booking> Bookings { get; set; } = new List<Booking>();
 
+    [InverseProperty("TahteeqPort")]
+    public virtual ICollection<Booking> TahteeqBookings { get; set; } = new List<Booking>();
+
+    [InverseProperty("TahteeqPort")]
+    public virtual ICollection<CustomerPriceRule> TahteeqCustomerPriceRules { get; set; } = new List<CustomerPriceRule>();
+
+    [InverseProperty("TahteeqPort")]
+    public virtual ICollection<Operation> TahteeqOperations { get; set; } = new List<Operation>();
+
+    [InverseProperty("TahteeqPort")]
+    public virtual ICollection<Trip> TahteeqTrips { get; set; } = new List<Trip>();
+
     [InverseProperty("Port")]
     public virtual ICollection<ContainerMovement> ContainerMovements { get; set; } = new List<ContainerMovement>();
 
