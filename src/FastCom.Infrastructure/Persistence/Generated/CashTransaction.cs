@@ -36,6 +36,9 @@ public partial class CashTransaction
 
     public long? CustodyId { get; set; }
 
+    /* الدفعة ممكن تكون على العربية مباشرة — كشف حساب العربية */
+    public int? VehicleId { get; set; }
+
     public Guid? TransferGroupId { get; set; }
 
     public int? CounterpartCashBoxId { get; set; }
@@ -111,6 +114,10 @@ public partial class CashTransaction
     [ForeignKey("SupplierId")]
     [InverseProperty("CashTransactions")]
     public virtual Supplier? Supplier { get; set; }
+
+    [ForeignKey("VehicleId")]
+    [InverseProperty("CashTransactions")]
+    public virtual Vehicle? Vehicle { get; set; }
 
     [InverseProperty("CashTransaction")]
     public virtual ICollection<SupplierPayment> SupplierPayments { get; set; } = new List<SupplierPayment>();

@@ -44,19 +44,28 @@ public class BookingsController : ControllerBase
 
     public record BookingLineDto(int ContainerTypeId, int RequestedQty, decimal? WeightKg, string? Notes);
 
+    public record ContainerDetailDto(long? ContainerId, string? ContainerNumber, string? SealNumber,
+        string? ShippingLine, string? BLNumber, string? BookingReference, decimal? WeightKg, string? Notes);
+
     public record BookingUpsert(
         int CustomerId, string? RequestedDate, int? ServiceId, int? PortId, int? DestinationId,
         int? TahteeqPortId, int? EndCustomerId, int? TripTypeId, string? CustomerReference, int? ContactId, string? Notes,
-        List<BookingLineDto>? Lines);
+        List<BookingLineDto>? Lines, List<ContainerDetailDto>? ContainerDetails);
 
     public record ListItem(
         long BookingId, string BookingNumber, string CustomerName, string? ServiceName,
         string? PortName, string? DestinationName, string? CustomerReference,
         DateOnly? RequestedDate, int ContainersQty, string Status, DateTime CreatedAt);
 
+    public record ContainerDetailItem(
+        long BookingContainerDetailId, long? ContainerId, string? ContainerNumber,
+        string? SealNumber, string? ShippingLine, string? BLNumber, string? BookingReference,
+        decimal? WeightKg, string Status, string? Notes);
+
     public record LineItem(
         long BookingContainerLineId, int LineNo, int ContainerTypeId, string ContainerTypeName,
-        int RequestedQty, int AssignedQty, decimal? WeightKg, string Status, string? Notes);
+        int RequestedQty, int AssignedQty, decimal? WeightKg, string Status, string? Notes,
+        List<ContainerDetailItem>? ContainerDetails);
 
     public record Detail(
         long BookingId, string BookingNumber, int CustomerId, string CustomerName,
@@ -125,8 +134,29 @@ public class BookingsController : ControllerBase
             .OrderBy(l => l.LineNo)
             .Select(l => new LineItem(
                 l.BookingContainerLineId, l.LineNo, l.ContainerTypeId, l.ContainerType.NameAr,
-                l.RequestedQty, l.AssignedQty, l.WeightKg, l.Status, l.Notes))
+                l.RequestedQty, l.AssignedQty, l.WeightKg, l.Status, l.Notes, null))
             .ToListAsync(ct);
+
+        /* 🔴 الحاويات الفعلية */
+        var lineIds = lines.Select(l => l.BookingContainerLineId).ToList();
+        var details = await _db.BookingContainerDetails.AsNoTracking()
+            .Where(d => lineIds.Contains(d.BookingContainerLineId))
+            .OrderBy(d => d.BookingContainerDetailId)
+            .Select(d => new { d.BookingContainerLineId, d.BookingContainerDetailId, d.ContainerId,
+                d.ContainerNumberText, d.SealNumber, d.ShippingLine, BLNumber = d.Blnumber, d.BookingReference,
+                d.WeightKg, d.Status, d.Notes })
+            .ToListAsync(ct);
+
+        /* نربط الحاويات بالسطور */
+        var linesWithDetails = lines.Select(l => l with
+        {
+            ContainerDetails = details.Where(d => d.BookingContainerLineId == l.BookingContainerLineId)
+                .Select(d => new ContainerDetailItem(
+                    d.BookingContainerDetailId, d.ContainerId, d.ContainerNumberText,
+                    d.SealNumber, d.ShippingLine, d.BLNumber, d.BookingReference,
+                    d.WeightKg, d.Status, d.Notes))
+                .ToList()
+        }).ToList();
 
         var names = await LookupNamesAsync(b, ct);
 
@@ -137,7 +167,7 @@ public class BookingsController : ControllerBase
             b.TahteeqPortId, names.TahteeqPort, b.EndCustomerId, names.EndCustomer, b.TripTypeId, names.TripType, b.CustomerReference, b.ContactId,
             b.Notes, b.Status, b.CreatedAt);
 
-        return Ok(new DetailResponse(detail, lines));
+        return Ok(new DetailResponse(detail, linesWithDetails));
     }
 
     private async Task<(string? Service, string? Port, string? Destination, string? TahteeqPort, string? EndCustomer, string? TripType)>
@@ -203,6 +233,7 @@ public class BookingsController : ControllerBase
             await _db.SaveChangesAsync(ct);
 
             AddLines(b.BookingId, req.Lines!, CurrentUserId());
+            AddContainerDetails(b.BookingId, req.ContainerDetails, CurrentUserId());
             await _db.SaveChangesAsync(ct);
 
             await _db.Database.CommitTransactionAsync(ct);
@@ -280,6 +311,7 @@ public class BookingsController : ControllerBase
                 _db.BookingContainerLines.RemoveRange(oldLines);
 
                 AddLines(id, req.Lines, CurrentUserId());
+                AddContainerDetails(id, req.ContainerDetails, CurrentUserId());
             }
 
             await _db.SaveChangesAsync(ct);
@@ -295,14 +327,14 @@ public class BookingsController : ControllerBase
         return Ok(new { message = "✅ اتحفظ التعديل" });
     }
 
-    private void AddLines(long bookingId, List<BookingLineDto> lines, int userId)
+    private void AddLines(long bookingId, List<BookingLineDto> lines, int userId, List<ContainerDetailDto>? details = null)
     {
         var no = 0;
         foreach (var l in lines)
         {
             if (l.RequestedQty < 1) continue;
             no++;
-            _db.BookingContainerLines.Add(new BookingContainerLine
+            var line = new BookingContainerLine
             {
                 BookingId       = bookingId,
                 LineNo          = no,
@@ -313,6 +345,30 @@ public class BookingsController : ControllerBase
                 Status          = "Pending",
                 Notes           = B(l.Notes),
                 CreatedBy       = userId
+            };
+            _db.BookingContainerLines.Add(line);
+        }
+    }
+
+    private void AddContainerDetails(long bookingId, List<ContainerDetailDto>? details, int userId)
+    {
+        if (details is null || details.Count == 0) return;
+        foreach (var d in details)
+        {
+            if (string.IsNullOrWhiteSpace(d.ContainerNumber) && d.ContainerId is null) continue;
+            _db.BookingContainerDetails.Add(new BookingContainerDetail
+            {
+                BookingContainerLineId = 0, // هيتحدد بعد ما السطور تتحفظ
+                ContainerId            = d.ContainerId,
+                ContainerNumberText    = B(d.ContainerNumber),
+                SealNumber             = B(d.SealNumber),
+                ShippingLine           = B(d.ShippingLine),
+                Blnumber               = B(d.BLNumber),
+                BookingReference       = B(d.BookingReference),
+                WeightKg               = d.WeightKg is > 0 ? d.WeightKg : null,
+                Status                 = "Pending",
+                Notes                  = B(d.Notes),
+                CreatedBy              = userId
             });
         }
     }

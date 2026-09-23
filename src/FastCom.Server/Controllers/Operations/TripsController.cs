@@ -47,7 +47,7 @@ public class TripsController : ControllerBase
     public record TripOpDto(long OperationId, int SequenceNo, string? PickupAt, string? DeliveryAt, string? Notes);
 
     public record TripUpsert(int DriverId, int VehicleId, int? TrailerId, int? TripTypeId,
-        string? PlannedStartAt, string? Notes, List<TripOpDto>? Operations);
+        string? PlannedStartAt, string? Notes, decimal? FreightAmount, List<TripOpDto>? Operations);
 
     public record ListItem(long TripId, string TripNumber, string DriverName, string VehiclePlate,
         string? TrailerPlate, int OperationsCount, decimal DirectCost, decimal AllocatedCost,
@@ -64,6 +64,7 @@ public class TripsController : ControllerBase
         int VehicleId, string VehiclePlate, int? TrailerId, string? TrailerPlate,
         int? TripTypeId, string? PlannedStartAt, string? ActualStartAt, string? ActualEndAt,
         decimal? StartOdometer, decimal? EndOdometer, decimal? TotalDistanceKm,
+        decimal? FreightAmount,
         string? Notes, string Status, decimal DirectCost,
         /* 🔴 `DirectCost` = **كل** مصروفات الرحلة. `DistributableCost` = اللي بيتوزّع بس
            (المصروفات العامة اللي `OperationId` بتاعها فاضي).
@@ -178,6 +179,7 @@ public class TripsController : ControllerBase
             t.ActualStartAt?.ToString("yyyy-MM-ddTHH:mm"),
             t.ActualEndAt?.ToString("yyyy-MM-ddTHH:mm"),
             t.StartOdometer, t.EndOdometer, t.TotalDistanceKm,
+            t.FreightAmount,
             t.Notes, t.Status, directCost, distributableCost);
 
         return Ok(new DetailResponse(detail, ops, allocs));
@@ -231,6 +233,7 @@ public class TripsController : ControllerBase
             TrailerId     = req.TrailerId,
             TripTypeId    = req.TripTypeId,
             PlannedStartAt = Dt(req.PlannedStartAt),
+            FreightAmount  = req.FreightAmount is > 0 ? req.FreightAmount : null,
             Notes         = B(req.Notes),
             Status        = "Planned",
             CreatedBy     = CurrentUserId()
@@ -284,6 +287,7 @@ public class TripsController : ControllerBase
         t.TrailerId     = req.TrailerId;
         t.TripTypeId    = req.TripTypeId;
         t.PlannedStartAt = Dt(req.PlannedStartAt);
+        t.FreightAmount  = req.FreightAmount is > 0 ? req.FreightAmount : null;
         t.Notes         = B(req.Notes);
         t.UpdatedAt     = DateTime.UtcNow;
         t.UpdatedBy     = CurrentUserId();

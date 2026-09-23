@@ -25,6 +25,9 @@ public partial class Expense
 
     public int? DriverId { get; set; }
 
+    /* المصروف ممكن يكون على العربية مباشرة (غيار زيت/كاوتش) من غير رحلة */
+    public int? VehicleId { get; set; }
+
     public int? SupplierId { get; set; }
 
     public int ExpenseTypeId { get; set; }
@@ -118,6 +121,10 @@ public partial class Expense
     [ForeignKey("TaxRateId")]
     [InverseProperty("Expenses")]
     public virtual TaxRate? TaxRateNavigation { get; set; }
+
+    [ForeignKey("VehicleId")]
+    [InverseProperty("Expenses")]
+    public virtual Vehicle? Vehicle { get; set; }
 
     [ForeignKey("TripId")]
     [InverseProperty("Expenses")]

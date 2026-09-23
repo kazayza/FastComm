@@ -55,9 +55,10 @@ public class MasterDataController : ControllerBase
 
         /* عدد الرحلات على كل نوع — عشان يعرف يعدّل ولا لأ */
         var counts = await _db.Trips.AsNoTracking().Where(t => !t.IsDeleted)
-            .GroupBy(t => t.TripTypeId).Select(g => new { Id = g.Key, N = g.Count() })
+            .Where(t => t.TripTypeId.HasValue)
+            .GroupBy(t => t.TripTypeId!.Value).Select(g => new { Id = g.Key, N = g.Count() })
             .ToListAsync(ct);
-        var map = counts.ToDictionary(x => (int)x.Id, x => x.N);
+        var map = counts.ToDictionary(x => x.Id, x => x.N);
 
         return Ok(rows.Select(r => r with
         {

@@ -48,18 +48,18 @@ public class ExpensesController : ControllerBase
     // ═══════════════ DTOs ═══════════════
 
     public record ExpenseUpsert(int ExpenseTypeId, string? ExpenseDate, string? Description,
-        decimal Amount, long? OperationId, long? TripId, int? DriverId, int? SupplierId,
+        decimal Amount, long? OperationId, long? TripId, int? DriverId, int? VehicleId, int? SupplierId,
         long? CustodyId, int? TaxRateId, bool? IsTaxDeductible, string? ReferenceNumber, string? Notes, bool AsDraft,
         int? PaymentMethodId = null);
 
     public record ListItem(long ExpenseId, string ExpenseNumber, string TypeName,
         string? Description, DateTime ExpenseDate, decimal Amount, decimal TaxRate,
-        string? OperationNumber, string? TripNumber, string? SupplierName, string? DriverName, string? CustodyNumber,
+        string? OperationNumber, string? TripNumber, string? VehiclePlate, string? SupplierName, string? DriverName, string? CustodyNumber,
         string PaymentStatus, string Status, bool IsApproved);
 
     public record Detail(long ExpenseId, string ExpenseNumber, int ExpenseTypeId,
         string? ExpenseDate, string? Description, decimal Amount, int? TaxRateId,
-        bool IsTaxDeductible, long? OperationId, long? TripId, int? DriverId, int? SupplierId, long? CustodyId,
+        bool IsTaxDeductible, long? OperationId, long? TripId, int? DriverId, int? VehicleId, int? SupplierId, long? CustodyId,
         string? ReferenceNumber, string? Notes, string PaymentStatus, string Status,
         bool IsApproved, decimal TaxRate, int? PaymentMethodId, string? MethodName);
 
@@ -98,6 +98,7 @@ public class ExpensesController : ControllerBase
                 e.ExpenseDate, e.Amount, e.TaxRate,
                 e.Operation != null ? e.Operation.OperationNumber : null,
                 e.Trip != null ? e.Trip.TripNumber : null,
+                e.Vehicle != null ? e.Vehicle.PlateNumber : null,
                 e.Supplier != null ? e.Supplier.NameAr : null,
                 e.Driver != null ? e.Driver.FullName : null,
                 e.Custody != null ? e.Custody.CustodyNumber : null,
@@ -124,7 +125,7 @@ public class ExpensesController : ControllerBase
 
         return Ok(new Detail(e.ExpenseId, e.ExpenseNumber, e.ExpenseTypeId,
             e.ExpenseDate.ToString("yyyy-MM-ddTHH:mm"), e.Description, e.Amount,
-            e.TaxRateId, e.IsTaxDeductible, e.OperationId, e.TripId, e.DriverId, e.SupplierId, e.CustodyId, e.ReferenceNumber, e.Notes, e.PaymentStatus, e.Status, e.IsApproved, e.TaxRate,
+            e.TaxRateId, e.IsTaxDeductible, e.OperationId, e.TripId, e.DriverId, e.VehicleId, e.SupplierId, e.CustodyId, e.ReferenceNumber, e.Notes, e.PaymentStatus, e.Status, e.IsApproved, e.TaxRate,
             e.PaymentMethodId, methodName));
     }
 
@@ -151,6 +152,7 @@ public class ExpensesController : ControllerBase
             TripId          = req.TripId,
             CustodyId       = req.CustodyId,
             DriverId        = req.DriverId,
+            VehicleId       = req.VehicleId,
             SupplierId      = req.SupplierId,
             ExpenseTypeId   = req.ExpenseTypeId,
             ExpenseDate     = Dt(req.ExpenseDate),
@@ -251,6 +253,7 @@ public class ExpensesController : ControllerBase
         e.TripId          = req.TripId;
         e.CustodyId       = req.CustodyId;
         e.DriverId        = req.DriverId;
+        e.VehicleId       = req.VehicleId;
         e.SupplierId      = req.SupplierId;
         e.TaxRateId       = req.TaxRateId;
         e.IsTaxDeductible = req.IsTaxDeductible ?? type.IsTaxDeductible;

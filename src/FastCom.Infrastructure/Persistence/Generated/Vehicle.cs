@@ -75,5 +75,11 @@ public partial class Vehicle
     public virtual ICollection<Trip> Trips { get; set; } = new List<Trip>();
 
     [InverseProperty("Vehicle")]
+    public virtual ICollection<Expense> Expenses { get; set; } = new List<Expense>();
+
+    [InverseProperty("Vehicle")]
+    public virtual ICollection<CashTransaction> CashTransactions { get; set; } = new List<CashTransaction>();
+
+    [InverseProperty("Vehicle")]
     public virtual ICollection<VehicleMaintenance> VehicleMaintenances { get; set; } = new List<VehicleMaintenance>();
 }

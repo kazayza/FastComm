@@ -49,6 +49,10 @@ public partial class Trip
     [Column(TypeName = "decimal(18, 1)")]
     public decimal? TotalDistanceKm { get; set; }
 
+    /* النولون المتفق عليه للرحلة — بيستخدم في كشف حساب العربية */
+    [Column(TypeName = "decimal(19, 4)")]
+    public decimal? FreightAmount { get; set; }
+
     [StringLength(30)]
     public string Status { get; set; } = null!;
 

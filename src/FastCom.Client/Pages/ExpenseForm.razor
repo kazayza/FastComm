@@ -215,7 +215,12 @@
                     }
                 </div>
                 <span>@_msg</span>
-                <button class="banner-close" @onclick="() => _msg = null">✕</button>
+                <button class="banner-close" @onclick="() => _msg = null" aria-label="إغلاق التنبيه">
+                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                             stroke="currentColor" stroke-width="2.4" aria-hidden="true">
+                            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                        </svg>
+                    </button>
             </div>
         }
 
@@ -244,7 +249,7 @@
             <div class="treasury-card-text">
                 <strong>
                     @(_willTreasury
-                        ? "المصروف ده هيتسجل في الخزينة ✅"
+                        ? "المصروف ده هيتسجل في الخزينة"
                         : "المصروف ده مش هيدخل الخزينة")
                 </strong>
                 <span>@TreasuryReason</span>
@@ -528,7 +533,7 @@
                                             <circle cx="8" cy="8" r="6"/>
                                             <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
                                         </svg>
-                                        النقدي بيدخل الخزينة تلقائياً · الشيك والتحويل لأ
+                                        النقدي بيدخل الخزينة تلقائياً · التحويل والبطاقة لأ
                                     </div>
                                 </div>
 
@@ -582,7 +587,7 @@
                                         <strong>@CurrentMethod.Label</strong>
                                         <span>
                                             @(CurrentMethod.IsCashBased
-                                                ? "طريقة نقدية ✅ — المصروف هيدخل الخزينة لو باقي الشروط اتحققت"
+                                                ? "طريقة نقدية — المصروف هيدخل الخزينة لو باقي الشروط اتحققت"
                                                 : "طريقة غير نقدية — المصروف مش هيدخل الخزينة حتى لو اتأكد")
                                         </span>
                                     </div>
@@ -854,6 +859,30 @@
                                             }
                                         </select>
                                     </div>
+                                </div>
+
+                                @* العربية *@
+                                <div class="form-field">
+                                    <label class="field-label">العربية</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M1 3h15v13H1z"/>
+                                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                                        </svg>
+                                        <select class="field-input field-select" @bind="_f.VehicleId">
+                                            <option value="">—</option>
+                                            @foreach (var v in _vehicles)
+                                            {
+                                                <option value="@v.Id">@v.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <span class="field-hint">لو المصروف على العربية مباشرة (غيار زيت/كاوتش) — من غير رحلة</span>
                                 </div>
 
                                 @* ملاحظات *@
@@ -1459,6 +1488,7 @@
     private List<MethodOpt>  _methods    = new();
     private List<Opt>        _suppliers  = new();
     private List<Opt>        _drivers    = new();
+    private List<Opt>        _vehicles   = new();
     private List<OpOpt>      _operations = new();
     private List<TripOpt>    _trips      = new();
     private List<CustodyOpt> _custodies  = new();
@@ -1535,6 +1565,7 @@
         public long?   OperationId      { get; set; }
         public long?   TripId           { get; set; }
         public int?    DriverId         { get; set; }
+        public int?    VehicleId        { get; set; }
         public int?    SupplierId       { get; set; }
         public long?   CustodyId        { get; set; }
         public int?    TaxRateId        { get; set; }
@@ -1557,6 +1588,7 @@
         public long?   OperationId      { get; set; }
         public long?   TripId           { get; set; }
         public int?    DriverId         { get; set; }
+        public int?    VehicleId        { get; set; }
         public int?    SupplierId       { get; set; }
         public long?   CustodyId        { get; set; }
         public string? ReferenceNumber  { get; set; }
@@ -1584,6 +1616,7 @@
             _methods    = await SafeGetT<MethodOpt>("api/options/payment-methods");
             _suppliers  = await SafeGetT<Opt>("api/options/suppliers");
             _drivers    = await SafeGetT<Opt>("api/options/drivers");
+            _vehicles   = await SafeGetT<Opt>("api/options/vehicles");
             _operations = await SafeGetT<OpOpt>("api/operations?take=200");
             _trips      = await SafeGetT<TripOpt>("api/trips?take=200");
 
@@ -1623,6 +1656,7 @@
             OperationId     = d.OperationId,
             TripId          = d.TripId,
             DriverId        = d.DriverId,
+            VehicleId       = d.VehicleId,
             SupplierId      = d.SupplierId,
             CustodyId       = d.CustodyId,
             TaxRateId       = d.TaxRateId,
@@ -1708,6 +1742,7 @@
                 operationId     = _f.OperationId,
                 tripId          = _f.TripId,
                 driverId        = _f.DriverId,
+                vehicleId       = _f.VehicleId,
                 supplierId      = _f.SupplierId,
                 custodyId       = _f.CustodyId,
                 taxRateId       = _f.TaxRateId,
@@ -1767,6 +1802,6 @@
             var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
             return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
         }
-        catch { return res.IsSuccessStatusCode ? "✅ تم الحفظ" : "حصل خطأ — حاول تاني"; }
+        catch { return res.IsSuccessStatusCode ? "تم الحفظ" : "حصل خطأ — حاول تاني"; }
     }
 }
