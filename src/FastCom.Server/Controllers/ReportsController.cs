@@ -238,7 +238,7 @@ public class ReportsController : ControllerBase
         var expAll = await _db.Expenses.AsNoTracking()
             .Where(e => !e.IsDeleted && e.Status != "Cancelled"
                         && e.ExpenseDate >= f && e.ExpenseDate <= t)
-            .Select(e => new { e.ExpenseTypeId, e.ExpenseDate, e.Amount, e.IsApproved })
+            .Select(e => new { e.ExpenseTypeId, e.ExpenseDate, e.Amount, e.IsApproved, e.VehicleId })
             .ToListAsync(ct);
 
         var custIds = inv.Select(x => x.CustomerId)
@@ -281,7 +281,8 @@ public class ReportsController : ControllerBase
             .Select(g => new ExpenseRow(
                 typeName.TryGetValue(g.Key, out var n) ? n : "—",
                 g.Count(), g.Sum(x => x.Amount),
-                g.Where(x => x.IsApproved).Sum(x => x.Amount)))
+                g.Where(x => x.IsApproved).Sum(x => x.Amount),
+                g.Where(x => x.VehicleId.HasValue).Sum(x => x.Amount)))
             .OrderByDescending(x => x.Total)
             .ToList();
 
@@ -597,12 +598,27 @@ public class ReportsController : ControllerBase
             .OrderByDescending(x => x.Profit)
             .ToList();
 
+        // ── التعتيق ──
+        var thIds = ops.Where(x => x.TahteeqPortId is not null).Select(x => x.TahteeqPortId!.Value).Distinct().ToList();
+        var thNames = thIds.Count == 0
+            ? new Dictionary<int, string>()
+            : (await _db.Ports.AsNoTracking().Where(x => thIds.Contains(x.PortId))
+                    .Select(x => new { x.PortId, x.NameAr }).ToListAsync(ct))
+                .ToDictionary(x => x.PortId, x => x.NameAr);
+
+        var tahteeqs = ops.Where(x => x.TahteeqPortId is not null)
+            .GroupBy(x => x.TahteeqPortId!.Value)
+            .Select(g => GroupRow(thNames.TryGetValue(g.Key, out var n) ? n : "—", g))
+            .OrderByDescending(x => x.Profit)
+            .ToList();
+
         var noPort = ops.Count(x => x.PortId is null);
         return Ok(new
         {
             range   = new { from = fs, to = ts },
             ports,
             destinations = dests,
+            tahteeqs,
             noPort
         });
     }
@@ -712,7 +728,7 @@ public class ReportsController : ControllerBase
 
     /// <summary>عملية + إيرادها + تكلفتها — أساس تقارير الربحية.</summary>
     private sealed record OpProfit(long OperationId, int? PortId, int? DestinationId,
-        int? ServiceId, decimal Revenue, decimal Cost);
+        int? TahteeqPortId, int? ServiceId, decimal Revenue, decimal Cost);
 
     private async Task<List<OpProfit>> LoadOpProfitAsync(DateTime f, DateTime t, CancellationToken ct)
     {
@@ -720,7 +736,7 @@ public class ReportsController : ControllerBase
             .Where(o => !o.IsDeleted && o.CreatedAt >= f && o.CreatedAt <= t)
             .OrderByDescending(o => o.OperationId)
             .Take(MaxRows)
-            .Select(o => new { o.OperationId, o.PortId, o.DestinationId, o.ServiceId, o.RevenueNet })
+            .Select(o => new { o.OperationId, o.PortId, o.DestinationId, o.TahteeqPortId, o.ServiceId, o.RevenueNet })
             .ToListAsync(ct);
 
         if (ops.Count == 0) return new List<OpProfit>();
@@ -742,7 +758,7 @@ public class ReportsController : ControllerBase
         var alByOp  = alloc.GroupBy(x => x.OperationId).ToDictionary(g => g.Key, g => g.Sum(x => x.AllocatedAmount));
 
         return ops.Select(o => new OpProfit(
-            o.OperationId, o.PortId, o.DestinationId, o.ServiceId,
+            o.OperationId, o.PortId, o.DestinationId, o.TahteeqPortId, o.ServiceId,
             o.RevenueNet,
             (expByOp.TryGetValue(o.OperationId, out var e) ? e : 0m) +
             (alByOp.TryGetValue(o.OperationId, out var a) ? a : 0m)))
@@ -1685,7 +1701,8 @@ public class ReportsController : ControllerBase
     public record MonthRow(string Month, string MonthName, decimal Invoiced,
         decimal Collected, decimal Expenses, decimal Net);
 
-    public record ExpenseRow(string TypeName, int Count, decimal Total, decimal Approved);
+    public record ExpenseRow(string TypeName, int Count, decimal Total, decimal Approved,
+        decimal VehicleTotal = 0m);
 
     public record CustomerRow(int CustomerId, string CustomerName,
         decimal Invoiced, decimal Paid, decimal Balance);
@@ -1699,4 +1716,153 @@ public class ReportsController : ControllerBase
 
     public record FleetTotals(int Trips, int Completed, decimal TotalKm,
         decimal MaintCost, int Custodies, decimal CustodyOut);
+
+    /* ═══════════════ المرحلة 7 — العهد + حساب العربية ═══════════════ */
+
+    public record CustodySummaryRow(string OwnerName, string OwnerType,
+        int CustodyCount, decimal Issued, decimal Spent, decimal Returned, decimal Remaining);
+
+    public record CustodyDetailRow(long CustodyId, string CustodyNumber, string OwnerName,
+        string OwnerType, string? TripNumber, string Status, DateTime CustodyDate,
+        decimal Issued, decimal Spent, decimal Returned, decimal Remaining);
+
+    public record CustodyReportOut(List<CustodySummaryRow> Summary, List<CustodyDetailRow> Details);
+
+    /// <summary>
+    /// تقرير العهد — ملخص لكل سائق/أمين عهدة + تفاصيل كل عهدة.
+    /// </summary>
+    [HttpGet("custodies")]
+    public async Task<IActionResult> Custodies(string? from, string? to,
+        [FromQuery] string? ownerType, [FromQuery] int? ownerId, CancellationToken ct)
+    {
+        if (!await Can("REPORT.FINANCIAL", ct)) return Forbid();
+
+        var (f, t, _, _) = Range(from, to);
+
+        var q = _db.DriverCustodies.AsNoTracking()
+            .Where(c => !c.IsDeleted && c.CreatedAt >= f && c.CreatedAt <= t);
+
+        if (ownerType is "Driver" or "Employee") q = q.Where(c => c.OwnerType == ownerType);
+        if (ownerId is not null)                 q = q.Where(c => c.OwnerId == ownerId);
+
+        var rows = await q
+            .OrderByDescending(c => c.CustodyId)
+            .Take(MaxRows)
+            .Select(c => new
+            {
+                c.CustodyId,
+                c.CustodyNumber,
+                c.OwnerType,
+                c.OwnerId,
+                c.Status,
+                c.CreatedAt,
+                c.AmountIssued,
+                c.AmountSpent,
+                c.AmountReturned,
+                TripNumber = c.Trip != null ? c.Trip.TripNumber : null
+            })
+            .ToListAsync(ct);
+
+        /* أسماء الملاك */
+        var driverIds = rows.Where(r => r.OwnerType == "Driver").Select(r => r.OwnerId).Distinct().ToList();
+        var empIds    = rows.Where(r => r.OwnerType == "Employee").Select(r => r.OwnerId).Distinct().ToList();
+
+        var driverNames = driverIds.Count == 0 ? new Dictionary<int, string>()
+            : (await _db.Drivers.AsNoTracking().Where(d => driverIds.Contains(d.DriverId))
+                .Select(d => new { d.DriverId, d.FullName }).ToListAsync(ct))
+              .ToDictionary(x => x.DriverId, x => x.FullName);
+
+        var empNames = empIds.Count == 0 ? new Dictionary<int, string>()
+            : (await _db.Employees.AsNoTracking().Where(e => empIds.Contains(e.EmployeeId))
+                .Select(e => new { e.EmployeeId, FullName = e.FullNameAr }).ToListAsync(ct))
+              .ToDictionary(x => x.EmployeeId, x => x.FullName);
+
+        string NameOf(string type, int id) => type == "Driver"
+            ? (driverNames.TryGetValue(id, out var dn) ? dn : "—")
+            : (empNames.TryGetValue(id, out var en) ? en : "—");
+
+        var details = rows.Select(r => new CustodyDetailRow(
+            r.CustodyId, r.CustodyNumber, NameOf(r.OwnerType, r.OwnerId), r.OwnerType,
+            r.TripNumber, r.Status, r.CreatedAt,
+            r.AmountIssued, r.AmountSpent, r.AmountReturned,
+            r.AmountIssued - r.AmountSpent - r.AmountReturned))
+            .ToList();
+
+        var summary = rows
+            .GroupBy(r => (r.OwnerType, r.OwnerId))
+            .Select(g => new CustodySummaryRow(
+                NameOf(g.Key.OwnerType, g.Key.OwnerId), g.Key.OwnerType,
+                g.Count(), g.Sum(x => x.AmountIssued), g.Sum(x => x.AmountSpent),
+                g.Sum(x => x.AmountReturned),
+                g.Sum(x => x.AmountIssued) - g.Sum(x => x.AmountSpent) - g.Sum(x => x.AmountReturned)))
+            .OrderByDescending(x => x.Remaining)
+            .ToList();
+
+        return Ok(new CustodyReportOut(summary, details));
+    }
+
+    public record VehicleAccountRow(int VehicleId, string PlateNumber,
+        decimal Freight, decimal Custody, decimal Expenses, decimal Payments, decimal Net);
+
+    /// <summary>
+    /// تقرير حساب العربية — ملخص لكل عربية في الفترة.
+    /// </summary>
+    [HttpGet("vehicle-accounts")]
+    public async Task<IActionResult> VehicleAccounts(string? from, string? to, CancellationToken ct)
+    {
+        if (!await Can("REPORT.FLEET", ct)) return Forbid();
+
+        var (f, t, _, _) = Range(from, to);
+
+        var vehicles = await _db.Vehicles.AsNoTracking()
+            .Where(v => !v.IsDeleted)
+            .OrderBy(v => v.PlateNumber)
+            .Select(v => new { v.VehicleId, v.PlateNumber })
+            .ToListAsync(ct);
+
+        var vehIds = vehicles.Select(v => v.VehicleId).ToList();
+
+        var freight = (await _db.Trips.AsNoTracking()
+            .Where(x => !x.IsDeleted && vehIds.Contains(x.VehicleId) &&
+                        x.ActualEndAt != null && x.ActualEndAt >= f && x.ActualEndAt <= t)
+            .GroupBy(x => x.VehicleId)
+            .Select(g => new { VehicleId = g.Key, Total = g.Sum(x => (decimal?)x.FreightAmount) })
+            .ToListAsync(ct)).ToDictionary(x => x.VehicleId, x => x.Total ?? 0);
+
+        var custody = (await _db.DriverCustodies.AsNoTracking()
+            .Where(c => !c.IsDeleted && c.OwnerType == "Driver" &&
+                        c.Trip != null && vehIds.Contains(c.Trip.VehicleId) &&
+                        c.Trip.ActualEndAt != null && c.Trip.ActualEndAt >= f && c.Trip.ActualEndAt <= t)
+            .GroupBy(c => c.Trip!.VehicleId)
+            .Select(g => new { VehicleId = g.Key, Total = g.Sum(x => (decimal?)x.AmountIssued) })
+            .ToListAsync(ct)).ToDictionary(x => x.VehicleId, x => x.Total ?? 0);
+
+        var expenses = (await _db.Expenses.AsNoTracking()
+            .Where(e => !e.IsDeleted && e.VehicleId != null && vehIds.Contains(e.VehicleId.Value) &&
+                        e.ExpenseDate >= f && e.ExpenseDate <= t && e.Status != "Cancelled")
+            .GroupBy(e => e.VehicleId!.Value)
+            .Select(g => new { VehicleId = g.Key, Total = g.Sum(x => (decimal?)x.Amount) })
+            .ToListAsync(ct)).ToDictionary(x => x.VehicleId, x => x.Total ?? 0);
+
+        var payments = (await _db.CashTransactions.AsNoTracking()
+            .Where(x => !x.IsDeleted && x.VehicleId != null && vehIds.Contains(x.VehicleId.Value) &&
+                        x.Status == "Posted" && x.TransactionDate >= f && x.TransactionDate <= t)
+            .GroupBy(x => x.VehicleId!.Value)
+            .Select(g => new { VehicleId = g.Key, Total = g.Sum(x => (decimal?)x.Amount) })
+            .ToListAsync(ct)).ToDictionary(x => x.VehicleId, x => x.Total ?? 0);
+
+        var rows = vehicles.Select(v =>
+        {
+            var fr = freight.TryGetValue(v.VehicleId, out var a) ? a : 0m;
+            var cu = custody.TryGetValue(v.VehicleId, out var b) ? b : 0m;
+            var ex = expenses.TryGetValue(v.VehicleId, out var c) ? c : 0m;
+            var pa = payments.TryGetValue(v.VehicleId, out var d) ? d : 0m;
+            return new VehicleAccountRow(v.VehicleId, v.PlateNumber, fr, cu, ex, pa, fr - cu - ex - pa);
+        })
+        .Where(r => r.Freight != 0 || r.Custody != 0 || r.Expenses != 0 || r.Payments != 0)
+        .OrderByDescending(r => r.Net)
+        .ToList();
+
+        return Ok(rows);
+    }
 }

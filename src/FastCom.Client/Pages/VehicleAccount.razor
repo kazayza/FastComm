@@ -1,0 +1,410 @@
+@page "/vehicle-account"
+@page "/vehicles/{VehicleId:int}/account"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>كشف حساب العربية — فاست كوم</PageTitle>
+
+@* ═══════════════════════════════════════════
+   HERO — كارت مستقل بحواف دائرية
+═══════════════════════════════════════════ *@
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
+
+            <div class="va-hero-row">
+                <div class="va-hero-left">
+                    <div class="va-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+                        </svg>
+                        <span>الأسطول · كشف الحساب</span>
+                    </div>
+                    <h1 class="fc-hero-title fc-hero-title-slim">كشف حساب @_stmt?.PlateNumber</h1>
+                    <span class="va-hero-sub">من @(_from == default ? "—" : _from.ToString("dd/MM/yyyy")) إلى @(_to == default ? "—" : _to.AddDays(-1).ToString("dd/MM/yyyy"))</span>
+                </div>
+
+                <div class="va-hero-right">
+                    <span class="va-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @_monthLabel
+                    </span>
+                </div>
+            </div>
+
+            <div class="va-kpis-row">
+                <div class="va-kpi va-kpi-blue">
+                    <div class="va-kpi-inner">
+                        <div class="va-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.AccountBalance" Size="Size.Small" /></div>
+                        <div class="va-kpi-data">
+                            <div class="va-kpi-num">@Money(_stmt?.Opening ?? 0)</div>
+                            <div class="va-kpi-label">رصيد مُرحّل</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="va-kpi va-kpi-green">
+                    <div class="va-kpi-inner">
+                        <div class="va-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Small" /></div>
+                        <div class="va-kpi-data">
+                            <div class="va-kpi-num">@Money(_stmt?.TotalDebit ?? 0)</div>
+                            <div class="va-kpi-label">نولون</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="va-kpi va-kpi-red">
+                    <div class="va-kpi-inner">
+                        <div class="va-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.TrendingDown" Size="Size.Small" /></div>
+                        <div class="va-kpi-data">
+                            <div class="va-kpi-num">@Money(_stmt?.TotalCredit ?? 0)</div>
+                            <div class="va-kpi-label">خصومات</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="va-kpi va-kpi-gold">
+                    <div class="va-kpi-inner">
+                        <div class="va-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Small" /></div>
+                        <div class="va-kpi-data">
+                            <div class="va-kpi-num">@Money(_stmt?.Closing ?? 0)</div>
+                            <div class="va-kpi-label">رصيد آخر الشهر</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="fc-overlap">
+    <div class="fc-card">
+
+        @* ── Toolbar ── *@
+        <div class="fc-toolbar">
+            <div class="fc-filters">
+                <select class="fc-sel" @bind="_selectedVehicleId" @bind:after="LoadAsync">
+                    <option value="0">— اختر سيارة —</option>
+                    @foreach (var v in _vehicles)
+                    {
+                        <option value="@v.VehicleId">@v.PlateNumber — @v.VehicleType</option>
+                    }
+                </select>
+                <select class="fc-sel" @bind="_month" @bind:after="LoadAsync">
+                    @foreach (var m in _months)
+                    {
+                        <option value="@m.ToString("yyyy-MM")">@m.ToString("MMMM yyyy")</option>
+                    }
+                </select>
+            </div>
+            <div class="fc-head-actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="LoadAsync" />
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print" OnClick="Print">طباعة</MudButton>
+            </div>
+        </div>
+
+        @* ── الجدول ── *@
+        @if (_loading)
+        {
+            <div class="fc-empty"><MudProgressCircular Indeterminate="true" /> جارٍ التحميل...</div>
+        }
+        else if (_stmt is null || _stmt.Lines.Count == 0)
+        {
+            <div class="fc-empty">لايوجد حركات في هذه الفترة</div>
+        }
+        else
+        {
+            <div class="fc-table-wrap">
+                <table class="fc-table">
+                    <thead>
+                        <tr>
+                            <th>التاريخ</th>
+                            <th>النوع</th>
+                            <th>المرجع</th>
+                            <th>البيان</th>
+                            <th class="num">مدين</th>
+                            <th class="num">دائن</th>
+                            <th class="num">الرصيد</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in _stmt.Lines)
+                        {
+                            <tr>
+                                <td>@l.Date.ToString("dd/MM/yyyy")</td>
+                                <td><span class="va-kind va-kind-@l.Kind.ToLower()">@KindAr(l.Kind)</span></td>
+                                <td>@l.Ref</td>
+                                <td>@l.Description</td>
+                                <td class="num">@(l.Debit > 0 ? Money(l.Debit) : "—")</td>
+                                <td class="num">@(l.Credit > 0 ? Money(l.Credit) : "—")</td>
+                                <td class="num"><strong>@Money(l.Balance)</strong></td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="4"><strong>الإجمالي</strong></td>
+                            <td class="num"><strong>@Money(_stmt.TotalDebit)</strong></td>
+                            <td class="num"><strong>@Money(_stmt.TotalCredit)</strong></td>
+                            <td class="num"><strong>@Money(_stmt.Closing)</strong></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        }
+
+    </div>
+</div>
+
+@* FAB — تسجيل دفعة *@
+<div class="glow-fab-wrap @(_fabOpen ? "is-open" : "")">
+    <div class="glow-fab-menu" role="menu">
+        <button type="button" class="glow-fab-item" role="menuitem" @onclick="OpenPayment">
+            <span class="glow-fab-item-ic"><MudIcon Icon="@Icons.Material.Filled.Payments" Size="Size.Small" /></span>
+            <span class="glow-fab-item-lb">تسجيل دفعة</span>
+        </button>
+        <button type="button" class="glow-fab-item" role="menuitem" @onclick="LoadAsync">
+            <span class="glow-fab-item-ic"><MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" /></span>
+            <span class="glow-fab-item-lb">تحديث</span>
+        </button>
+    </div>
+    <div class="glow-fab-container">
+        <div class="glow-halo"></div>
+        <div class="glow-ring glow-ring-1"></div>
+        <div class="glow-ring glow-ring-2"></div>
+        <div class="glow-ring glow-ring-3"></div>
+        <button type="button" class="glow-fab-btn" @onclick="() => _fabOpen = !_fabOpen" aria-label="إجراءات">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.8" class="glow-fab-icon" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+            </svg>
+        </button>
+    </div>
+</div>
+@if (_fabOpen)
+{
+    <div class="glow-fab-scrim" @onclick="() => _fabOpen = false"></div>
+}
+
+@* ── Modal: تسجيل دفعة ── *@
+@if (_payOpen)
+{
+    <div class="fc-modal-backdrop" @onclick="() => _payOpen = false">
+        <div class="fc-modal fc-modal-sm" @onclick:stopPropagation="true">
+            <div class="fc-modal-head">
+                <div>
+                    <div class="fc-modal-title">تسجيل دفعة</div>
+                    <div class="fc-modal-sub">على العربية @_stmt?.PlateNumber</div>
+                </div>
+            </div>
+            <div class="fc-modal-body">
+                <div class="form-field">
+                    <label class="field-label">المبلغ *</label>
+                    <input type="number" step="0.01" min="0" class="field-input" @bind="_payAmount" />
+                </div>
+                <div class="form-field">
+                    <label class="field-label">البيان</label>
+                    <input type="text" class="field-input" @bind="_payDesc" placeholder="مثال: دفعة شهر 3" />
+                </div>
+            </div>
+            <div class="fc-modal-foot">
+                <MudButton Variant="Variant.Text" OnClick="() => _payOpen = false">إلغاء</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SavePayment" Disabled="@_saving">
+                    @(_saving ? "جارٍ الحفظ..." : "حفظ")
+                </MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int VehicleId { get; set; }
+
+    private StatementOut? _stmt;
+    private List<VehicleOpt> _vehicles = new();
+    private int _selectedVehicleId;
+    private bool _loading = true;
+    private bool _fabOpen;
+    private bool _payOpen;
+    private bool _saving;
+    private decimal _payAmount;
+    private string? _payDesc;
+
+    private DateTime _from;
+    private DateTime _to;
+    private string _month = "";
+    private string _monthLabel = "";
+    private List<DateTime> _months = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = DateTime.Today;
+        _months = Enumerable.Range(0, 12).Select(i => today.AddMonths(-i)).ToList();
+        _month = today.ToString("yyyy-MM");
+
+        try { _vehicles = await Http.GetFromJsonAsync<List<VehicleOpt>>("api/vehicle-accounts/vehicles") ?? new(); }
+        catch { _vehicles = new(); }
+
+        _selectedVehicleId = VehicleId > 0 ? VehicleId : (_vehicles.FirstOrDefault()?.VehicleId ?? 0);
+        if (_selectedVehicleId > 0) await LoadAsync();
+        else _loading = false;
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_selectedVehicleId <= 0) { _stmt = null; _loading = false; return; }
+        _loading = true;
+        _from = DateTime.ParseExact(_month + "-01", "yyyy-MM-dd", null);
+        _to = _from.AddMonths(1);
+        _monthLabel = _from.ToString("MMMM yyyy");
+
+        try
+        {
+            _stmt = await Http.GetFromJsonAsync<StatementOut>(
+                $"api/vehicle-accounts/{_selectedVehicleId}/statement?from={_from:yyyy-MM-dd}&to={_to:yyyy-MM-dd}");
+        }
+        catch { _stmt = null; }
+        finally { _loading = false; }
+    }
+
+    private void OpenPayment()
+    {
+        _fabOpen = false;
+        _payAmount = 0;
+        _payDesc = null;
+        _payOpen = true;
+    }
+
+    private async Task SavePayment()
+    {
+        if (_payAmount <= 0) { Snackbar.Add("المبلغ لازم يكون أكتر من صفر", Severity.Warning); return; }
+        _saving = true;
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/vehicle-accounts/payment", new
+            {
+                vehicleId = _selectedVehicleId,
+                txDate = (string?)null,
+                amount = _payAmount,
+                paymentMethodId = (int?)null,
+                description = _payDesc
+            });
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add("اتسجلت الدفعة", Severity.Success);
+                _payOpen = false;
+                await LoadAsync();
+            }
+            else
+            {
+                var err = await res.Content.ReadAsStringAsync();
+                Snackbar.Add(err, Severity.Error);
+            }
+        }
+        catch { Snackbar.Add("حصل خطأ", Severity.Error); }
+        finally { _saving = false; }
+    }
+
+    private void Print() => Nav.NavigateTo($"/vehicles/{VehicleId}/account?print=1", true);
+
+    private static string KindAr(string k) => k switch
+    {
+        "Freight" => "نولون",
+        "Custody" => "عهدة",
+        "Expense" => "مصروف",
+        "Payment" => "دفعة",
+        _ => k
+    };
+
+    private static string Money(decimal v) => v.ToString("N2");
+
+    public class StatementOut
+    {
+        public string PlateNumber { get; set; } = "";
+        public decimal Opening { get; set; }
+        public List<Line> Lines { get; set; } = new();
+        public decimal TotalDebit { get; set; }
+        public decimal TotalCredit { get; set; }
+        public decimal Closing { get; set; }
+    }
+
+    public class Line
+    {
+        public DateTime Date { get; set; }
+        public string Kind { get; set; } = "";
+        public string Ref { get; set; } = "";
+        public string? Description { get; set; }
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+        public decimal Balance { get; set; }
+    }
+
+    public class VehicleOpt
+    {
+        public int VehicleId { get; set; }
+        public string PlateNumber { get; set; } = "";
+        public string VehicleType { get; set; } = "";
+        public string Status { get; set; } = "";
+    }
+}
+
+<style>
+    .hero-wrapper { padding: 16px clamp(16px, 3vw, 40px) 0; max-width: 1440px; margin: 0 auto; width: 100%; box-sizing: border-box; position: relative; z-index: 1; }
+    .hero-wrapper .fc-hero { border-radius: 20px !important; overflow: hidden; box-shadow: 0 12px 32px rgba(13,38,84,.15), 0 4px 12px rgba(13,38,84,.08); border: 1px solid rgba(255,255,255,.08); }
+    .hero-wrapper .fc-hero.fc-hero-slim { padding-top: 18px !important; padding-bottom: 22px !important; }
+    .fc-hero-title-slim { font-size: clamp(18px, 2vw, 24px) !important; margin: 0 !important; }
+
+    .va-hero-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
+    .va-hero-left { display: flex; flex-direction: column; gap: 4px; }
+    .va-hero-crumb { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #9FB4CC; font-weight: 600; }
+    .va-hero-sub { font-size: 12px; color: #9FB4CC; }
+    .va-hero-right { display: flex; gap: 8px; flex-wrap: wrap; }
+    .va-hero-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 8px; background: rgba(255,255,255,.08); font-size: 11px; color: #9FB4CC; font-weight: 600; }
+
+    .va-kpis-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+    .va-kpi { flex: 1 1 160px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); border-radius: 14px; padding: 12px; }
+    .va-kpi-inner { display: flex; align-items: center; gap: 10px; }
+    .va-kpi-icon { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+    .va-kpi-blue .va-kpi-icon { background: rgba(30,110,245,.18); color: #7EB6FF; }
+    .va-kpi-green .va-kpi-icon { background: rgba(34,197,94,.18); color: #86EFAC; }
+    .va-kpi-red .va-kpi-icon { background: rgba(239,68,68,.18); color: #FCA5A5; }
+    .va-kpi-gold .va-kpi-icon { background: rgba(251,191,36,.18); color: #FDE68A; }
+    .va-kpi-num { font-size: 18px; font-weight: 800; color: #fff; }
+    .va-kpi-label { font-size: 10.5px; color: #9FB4CC; }
+
+    .va-kind { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 10.5px; font-weight: 700; }
+    .va-kind-freight { background: #DBEAFE; color: #1E40AF; }
+    .va-kind-custody { background: #FEF3C7; color: #92400E; }
+    .va-kind-expense { background: #FEE2E2; color: #991B1B; }
+    .va-kind-payment { background: #D1FAE5; color: #065F46; }
+
+    .glow-fab-scrim { position: fixed; inset: 0; z-index: 1298; background: rgba(10,20,40,.4); backdrop-filter: blur(4px); animation: glow-fadein .2s ease both; }
+    .glow-fab-wrap { position: fixed; left: 28px; bottom: 28px; z-index: 1299; display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+    .glow-fab-container { position: relative; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; }
+    .glow-halo { position: absolute; inset: -6px; border-radius: 50%; background: radial-gradient(circle, rgba(251,191,36,.55) 0%, rgba(245,158,11,.35) 40%, rgba(245,158,11,0) 75%); filter: blur(12px); animation: glow-breath 2.5s ease-in-out infinite; pointer-events: none; z-index: 1; }
+    @@keyframes glow-breath { 0%,100% { opacity:.7; transform:scale(1); } 50% { opacity:1; transform:scale(1.15); } }
+    .glow-ring { position: absolute; inset: 0; border-radius: 50%; border: 2.5px solid #fbbf24; pointer-events: none; opacity: 0; z-index: 2; }
+    .glow-ring-1 { animation: glow-expand 2.4s ease-out infinite; }
+    .glow-ring-2 { animation: glow-expand 2.4s ease-out infinite; animation-delay: .8s; }
+    .glow-ring-3 { animation: glow-expand 2.4s ease-out infinite; animation-delay: 1.6s; }
+    @@keyframes glow-expand { 0% { opacity:.8; transform:scale(1); border-width:3px; } 60% { opacity:.4; } 100% { opacity:0; transform:scale(2); border-width:1px; } }
+    .glow-fab-btn { position: relative; width: 60px; height: 60px; border-radius: 50%; border: 2.5px solid #fbbf24; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; background: linear-gradient(135deg, #1e6ef5 0%, #0d47a1 100%); color: #fff; box-shadow: 0 8px 24px rgba(30,110,245,.5), 0 4px 12px rgba(251,191,36,.35), inset 0 1px 0 rgba(255,255,255,.3); transition: transform .25s cubic-bezier(.34,1.3,.64,1); z-index: 3; }
+    .glow-fab-btn:hover { transform: scale(1.08); }
+    .glow-fab-icon { transition: transform .3s cubic-bezier(.34,1.3,.64,1); }
+    .glow-fab-wrap.is-open .glow-fab-icon { transform: rotate(135deg); }
+    .glow-fab-menu { display: flex; flex-direction: column; gap: 8px; opacity: 0; pointer-events: none; transform: translateY(15px) scale(.9); transform-origin: bottom left; transition: opacity .2s ease, transform .24s cubic-bezier(.34,1.3,.64,1); }
+    .glow-fab-wrap.is-open .glow-fab-menu { opacity: 1; pointer-events: auto; transform: none; }
+    .glow-fab-item { display: inline-flex; align-items: center; gap: 10px; min-width: 170px; padding: 9px 12px; background: #fff; border: 1px solid #e6ecf5; border-radius: 13px; box-shadow: 0 6px 18px rgba(13,38,84,.14); font-family: inherit; font-size: 12.5px; font-weight: 800; color: #16243c; cursor: pointer; transition: border-color .16s ease, transform .16s ease; }
+    .glow-fab-item:hover { border-color: #E8A317; transform: translateX(-3px); }
+    .glow-fab-item-ic { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; background: #eef3fb; color: #24589e; }
+    .glow-fab-item-lb { white-space: nowrap; }
+    @@keyframes glow-fadein { from { opacity:0; } to { opacity:1; } }
+</style>

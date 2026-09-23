@@ -177,8 +177,8 @@
                     <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
                 </svg>
             </div>
-            <div class="rpt-no-access-title">مافيش صلاحية تقارير</div>
-            <div class="rpt-no-access-sub">كلّم مدير النظام للحصول على الصلاحيات المطلوبة</div>
+            <div class="rpt-no-access-title">ليس لديك صلاحية التقارير</div>
+            <div class="rpt-no-access-sub">برجاء التواصل مع مدير النظام</div>
         </div>
     }
     else
@@ -325,6 +325,36 @@
                         @if ((_sag?.Count ?? 0) > 0)
                         {
                             <span class="rpt-tab-badge">@(_sag?.Count ?? 0)</span>
+                        }
+                    </button>
+                }
+
+                @if (CanFin)
+                {
+                    <button type="button"
+                            class="rpt-tab @(_tab == 10 ? "tab-active" : "")"
+                            @onclick="@(() => _tab = 10)"
+                            role="tab" aria-selected="@(_tab == 10)">
+                        <span class="rpt-tab-icon" aria-hidden="true"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Small" /></span>
+                        <span>العهد</span>
+                        @if ((_custRpt?.Details?.Count ?? 0) > 0)
+                        {
+                            <span class="rpt-tab-badge">@(_custRpt?.Details?.Count ?? 0)</span>
+                        }
+                    </button>
+                }
+
+                @if (CanFleet)
+                {
+                    <button type="button"
+                            class="rpt-tab @(_tab == 11 ? "tab-active" : "")"
+                            @onclick="@(() => _tab = 11)"
+                            role="tab" aria-selected="@(_tab == 11)">
+                        <span class="rpt-tab-icon" aria-hidden="true"><MudIcon Icon="@Icons.Material.Filled.DirectionsCar" Size="Size.Small" /></span>
+                        <span>حساب العربية</span>
+                        @if ((_vehAcc?.Count ?? 0) > 0)
+                        {
+                            <span class="rpt-tab-badge">@(_vehAcc?.Count ?? 0)</span>
                         }
                     </button>
                 }
@@ -1016,8 +1046,8 @@
                         @if (_ovd.Count == 0)
                         {
                             <div class="rpt-good-state">
-                                <span></span>
-                                <span>لايوجد فواتير متأخرة</span>
+                                <span>🎉</span>
+                                <span>مافيش فواتير متأخرة</span>
                             </div>
                         }
                         else
@@ -1171,6 +1201,45 @@
                                     <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
                                 </svg>
                                 فيه <strong>@_noPort</strong> عملية من غير ميناء محدّد — مش داخلة في الجدول
+                            </div>
+                        }
+
+                        @if (_tahteeqs is not null && _tahteeqs.Count > 0)
+                        {
+                            <div class="rpt-panel">
+                                <div class="rpt-section-head">
+                                    <div class="rpt-section-title">التعتيق</div>
+                                    <div class="rpt-section-sub">مرتبة من الأعلى ربحاً</div>
+                                </div>
+                                <div class="rpt-table-wrap">
+                                    <table class="rpt-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="th-start">نقطة التعتيق</th>
+                                                <th class="th-num">عمليات</th>
+                                                <th class="th-num">الإيراد</th>
+                                                <th class="th-num">التكلفة</th>
+                                                <th class="th-num">الربح</th>
+                                                <th class="th-num">الهامش</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var r in _tahteeqs)
+                                            {
+                                                <tr>
+                                                    <td class="td-start"><strong>@r.Name</strong></td>
+                                                    <td class="td-num">@r.Operations</td>
+                                                    <td class="td-num">@Money(r.Revenue)</td>
+                                                    <td class="td-num val-neg">@Money(r.Cost)</td>
+                                                    <td class="td-num @SignCls(r.Profit)"><strong>@Money(r.Profit)</strong></td>
+                                                    <td class="td-num">
+                                                        <span class="rpt-chip @ChgChip(r.MarginPct)">@Pct(r.MarginPct)</span>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         }
                     }
@@ -1341,8 +1410,8 @@
                         @if (!_sag.Any())
                         {
                             <div class="rpt-good-state">
-                                <span></span>
-                                <span>لايوجد ديون مفتوحة على الموردين</span>
+                                <span>🎉</span>
+                                <span>مافيش ديون مفتوحة على الموردين</span>
                             </div>
                         }
                         else
@@ -1626,6 +1695,147 @@
                         }
                     }
 
+                    @* ── تبويب 10: العهد ── *@
+                    @if (_tab == 10 && CanFin && _custRpt is not null)
+                    {
+                        <div class="rpt-panel">
+                            <div class="rpt-section-head">
+                                <div class="rpt-section-title">ملخص العهد لكل سائق / أمين عهدة</div>
+                                <div class="rpt-section-sub">أخد كام · صرف كام · رد كام · فاضل معاه</div>
+                            </div>
+                            @if ((_custRpt.Summary?.Count ?? 0) == 0)
+                            {
+                                <div class="rpt-empty-mini">مافيش عهد في الفترة دي</div>
+                            }
+                            else
+                            {
+                                <div class="rpt-table-wrap">
+                                    <table class="rpt-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="th-start">الاسم</th>
+                                                <th class="th-start">النوع</th>
+                                                <th class="th-num">عهد</th>
+                                                <th class="th-num">أخد</th>
+                                                <th class="th-num">صرف</th>
+                                                <th class="th-num">رد</th>
+                                                <th class="th-num">فاضل معاه</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var r in _custRpt.Summary ?? new())
+                                            {
+                                                <tr>
+                                                    <td class="td-start"><strong>@r.OwnerName</strong></td>
+                                                    <td class="td-start td-muted">@(r.OwnerType == "Driver" ? "سائق" : "موظف")</td>
+                                                    <td class="td-num">@r.CustodyCount</td>
+                                                    <td class="td-num">@Money(r.Issued)</td>
+                                                    <td class="td-num">@Money(r.Spent)</td>
+                                                    <td class="td-num">@Money(r.Returned)</td>
+                                                    <td class="td-num @SignCls(r.Remaining)"><strong>@Money(r.Remaining)</strong></td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="rpt-panel">
+                            <div class="rpt-section-head">
+                                <div class="rpt-section-title">تفاصيل العهد</div>
+                                <div class="rpt-section-sub">كل عهدة برقمها ورحلتها</div>
+                            </div>
+                            @if ((_custRpt.Details?.Count ?? 0) == 0)
+                            {
+                                <div class="rpt-empty-mini">مافيش تفاصيل</div>
+                            }
+                            else
+                            {
+                                <div class="rpt-table-wrap">
+                                    <table class="rpt-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="th-start">رقم العهدة</th>
+                                                <th class="th-start">المالك</th>
+                                                <th class="th-start">الرحلة</th>
+                                                <th class="th-start">الحالة</th>
+                                                <th class="th-num">أخد</th>
+                                                <th class="th-num">صرف</th>
+                                                <th class="th-num">رد</th>
+                                                <th class="th-num">فاضل</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var r in _custRpt.Details ?? new())
+                                            {
+                                                <tr>
+                                                    <td class="td-start"><strong>@r.CustodyNumber</strong></td>
+                                                    <td class="td-start">@r.OwnerName</td>
+                                                    <td class="td-start td-muted">@(r.TripNumber ?? "—")</td>
+                                                    <td class="td-start">@CustStatusAr(r.Status)</td>
+                                                    <td class="td-num">@Money(r.Issued)</td>
+                                                    <td class="td-num">@Money(r.Spent)</td>
+                                                    <td class="td-num">@Money(r.Returned)</td>
+                                                    <td class="td-num @SignCls(r.Remaining)"><strong>@Money(r.Remaining)</strong></td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @* ── تبويب 11: حساب العربية ── *@
+                    @if (_tab == 11 && CanFleet && _vehAcc is not null)
+                    {
+                        <div class="rpt-panel">
+                            <div class="rpt-section-head">
+                                <div class="rpt-section-title">حساب العربية — ملخص الفترة</div>
+                                <div class="rpt-section-sub">نولون − عهدة − مصاريف − دفعات = الصافي</div>
+                            </div>
+                            @if (_vehAcc.Count == 0)
+                            {
+                                <div class="rpt-empty-mini">مافيش حركة على أي عربية في الفترة دي</div>
+                            }
+                            else
+                            {
+                                <div class="rpt-table-wrap">
+                                    <table class="rpt-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="th-start">العربية</th>
+                                                <th class="th-num">نولون</th>
+                                                <th class="th-num">عهدة السائق</th>
+                                                <th class="th-num">مصاريف</th>
+                                                <th class="th-num">دفعات</th>
+                                                <th class="th-num">الصافي</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var r in _vehAcc)
+                                            {
+                                                <tr>
+                                                    <td class="td-start"><strong>@r.PlateNumber</strong></td>
+                                                    <td class="td-num">@Money(r.Freight)</td>
+                                                    <td class="td-num">@Money(r.Custody)</td>
+                                                    <td class="td-num">@Money(r.Expenses)</td>
+                                                    <td class="td-num">@Money(r.Payments)</td>
+                                                    <td class="td-num @SignCls(r.Net)"><strong>@Money(r.Net)</strong></td>
+                                                    <td class="td-num">
+                                                        <a class="rpt-link" href="/vehicles/@r.VehicleId/account">كشف الحساب</a>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        </div>
+                    }
+
                 </div>
             }
 
@@ -1636,6 +1846,9 @@
 
 
 <style>
+
+    .rpt-link { color: #1e6ef5; font-weight: 700; text-decoration: none; font-size: 11.5px; }
+    .rpt-link:hover { text-decoration: underline; }
 
     :root {
         --fc-blue:      #1e6ef5;
@@ -2171,7 +2384,7 @@
     private static readonly List<PnlCostRow>  NoPnlCost  = new();
 
     private static readonly (int Kind, string Label)[] Quicks =
-        { (0, "الشهر الحالى"), (1, "3 شهور"), (2, "السنة الحاليه") };
+        { (0, "الشهر ده"), (1, "3 شهور"), (2, "السنة دي") };
 
     private int RowsCount => _tab switch
     {
@@ -2279,21 +2492,45 @@
             if (CanOps)
             {
                 var po = await Http.GetFromJsonAsync<PortsRes>($"api/reports/ports?{q}");
-                _ports = po?.Ports; _dests = po?.Destinations; _noPort = po?.NoPort ?? 0;
+                _ports = po?.Ports; _dests = po?.Destinations; _tahteeqs = po?.Tahteeqs; _noPort = po?.NoPort ?? 0;
 
                 var sv = await Http.GetFromJsonAsync<SvcsRes>($"api/reports/services?{q}");
                 _svcs = sv?.Rows; _noSvc = sv?.NoService ?? 0;
+            }
+            if (CanFin)
+            {
+                try { _custRpt = await Http.GetFromJsonAsync<CustodyReportRes>($"api/reports/custodies?{q}"); }
+                catch { _custRpt = null; }
+            }
+            if (CanFleet)
+            {
+                try { _vehAcc = await Http.GetFromJsonAsync<List<VehAccRow>>($"api/reports/vehicle-accounts?{q}"); }
+                catch { _vehAcc = null; }
             }
         }
         catch (Exception ex) { _err = ex.Message; }
         finally { _loading = false; StateHasChanged(); }
     }
 
+    private List<ProfitRow>? _tahteeqs;
+    private CustodyReportRes? _custRpt;
+    private List<VehAccRow>? _vehAcc;
+
+    private static string CustStatusAr(string st) => st switch
+    {
+        "Open"      => "مفتوحة",
+        "Submitted" => "مقدمة للتسوية",
+        "Approved"  => "معتمدة",
+        "Closed"    => "مقفولة",
+        _           => st
+    };
+
     private string CurrentReport => _tab switch
     {
         0 => "operations", 1 => "financial", 3 => "pnl",
         4 => "overdue",    5 => "ports",     6 => "services",
         7 => "cashflow",   8 => "supplier-aging", 9 => "cashflow-actual",
+        10 => "custodies", 11 => "vehicle-accounts",
         _ => "fleet"
     };
 
@@ -2462,7 +2699,11 @@
     public class CmpRes { public List<CompareRow>? Rows { get; set; } }
     public class CompareRow { public string Label { get; set; } = ""; public decimal Current { get; set; } public decimal Previous { get; set; } public decimal Delta { get; set; } public decimal ChangePct { get; set; } }
     public class OvdRes { public string? AsOf { get; set; } public decimal Total { get; set; } public int Count { get; set; } public List<OverdueRow>? Rows { get; set; } }
-    public class PortsRes { public List<ProfitRow>? Ports { get; set; } public List<ProfitRow>? Destinations { get; set; } public int NoPort { get; set; } }
+    public class PortsRes { public List<ProfitRow>? Ports { get; set; } public List<ProfitRow>? Destinations { get; set; } public List<ProfitRow>? Tahteeqs { get; set; } public int NoPort { get; set; } }
+    public class CustodyReportRes { public List<CustodySumRow>? Summary { get; set; } public List<CustodyDetRow>? Details { get; set; } }
+    public class CustodySumRow { public string OwnerName { get; set; } = ""; public string OwnerType { get; set; } = ""; public int CustodyCount { get; set; } public decimal Issued { get; set; } public decimal Spent { get; set; } public decimal Returned { get; set; } public decimal Remaining { get; set; } }
+    public class CustodyDetRow { public long CustodyId { get; set; } public string CustodyNumber { get; set; } = ""; public string OwnerName { get; set; } = ""; public string OwnerType { get; set; } = ""; public string? TripNumber { get; set; } public string Status { get; set; } = ""; public DateTime CustodyDate { get; set; } public decimal Issued { get; set; } public decimal Spent { get; set; } public decimal Returned { get; set; } public decimal Remaining { get; set; } }
+    public class VehAccRow { public int VehicleId { get; set; } public string PlateNumber { get; set; } = ""; public decimal Freight { get; set; } public decimal Custody { get; set; } public decimal Expenses { get; set; } public decimal Payments { get; set; } public decimal Net { get; set; } }
     public class SvcsRes { public List<ProfitRow>? Rows { get; set; } public int NoService { get; set; } }
     public class ProfitRow { public string Name { get; set; } = ""; public int Operations { get; set; } public decimal Revenue { get; set; } public decimal Cost { get; set; } public decimal Profit { get; set; } public decimal MarginPct { get; set; } }
     public class CfRes { public string? AsOf { get; set; } public decimal Total { get; set; } public int Count { get; set; } public List<CashWeek>? Rows { get; set; } }
