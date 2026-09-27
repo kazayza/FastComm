@@ -7,117 +7,743 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
-<PageTitle>الحاويات — فاست كوم</PageTitle>
+<PageTitle>إدارة الحاويات التشغيلية — فاست كوم</PageTitle>
 
-<div class="fc-hero">
-    <div class="fc-hero-inner">
-        <div class="fc-page-head">
-            <div>
-                <div class="fc-crumb">البيانات الأساسية · الأسطول</div>
-                <h1 class="fc-hero-title">الحاويات</h1>
-                <p class="fc-hero-sub">أرقام الحاويات الفعلية — النوع والملكية والوزن وأين الحاوية دلوقتي</p>
+@* ═══════════════════════════════════════════
+   HERO SECTION
+═══════════════════════════════════════════ *@
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
+
+            <div class="flt-hero-row">
+                <div class="flt-hero-left">
+                    <div class="flt-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
+                        <span>البيانات الأساسية · الأسطول التشغيلي</span>
+                    </div>
+                    <h1 class="fc-hero-title fc-hero-title-slim">دليل وإدارة الحاويات</h1>
+                    <span class="flt-hero-sub">متابعة الحاويات الفعلية — تحديد النوع والمواصفات الفنية، جهات الملكية، والموقع الجغرافي الحالي للحاوية</span>
+                </div>
+
+                <div class="flt-hero-right">
+                    <button type="button" class="flt-hero-refresh" @onclick="Reload" title="تحديث البيانات">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 4v6h-6"/>
+                            <path d="M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                        </svg>
+                    </button>
+                    @if (CanManage)
+                    {
+                        <button type="button" class="flt-hero-add" @onclick="GoNew" title="تسجيل حاوية جديدة">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                            تسجيل حاوية جديدة
+                        </button>
+                    }
+                    <span class="flt-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                </div>
             </div>
-            <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
-                @if (CanManage)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="GoNew">حاوية جديدة</MudButton>
-                }
-            </div>
+
+            @* ── KPI Connected Glass Strip (Tied with Filters) ── *@
+            @if (CanView && !_loading)
+            {
+                <div class="flt-kpis-strip">
+
+                    <div class="flt-kpi-item @(_tab == "all" ? "kpi-active" : "")" @onclick='() => SetTab("all")' role="button" tabindex="0" title="عرض إجمالي الحاويات">
+                        <div class="flt-kpi-icon kpi-blue">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                                <line x1="8" y1="21" x2="16" y2="21"/>
+                                <line x1="12" y1="17" x2="12" y2="21"/>
+                            </svg>
+                        </div>
+                        <div class="flt-kpi-text">
+                            <div class="flt-kpi-label">إجمالي الحاويات</div>
+                            <div class="flt-kpi-val">@_items.Count</div>
+                        </div>
+                    </div>
+
+                    <div class="flt-kpi-div" aria-hidden="true"></div>
+
+                    <div class="flt-kpi-item @(_tab == "Available" ? "kpi-active" : "")" @onclick='() => SetTab("Available")' role="button" tabindex="0" title="تصفية الحاويات المتاحة">
+                        <div class="flt-kpi-icon kpi-green">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                                <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="flt-kpi-text">
+                            <div class="flt-kpi-label">حاويات جاهزة ومتاحة</div>
+                            <div class="flt-kpi-val val-green">@_items.Count(c => c.CurrentStatus == "Available")</div>
+                        </div>
+                    </div>
+
+                    <div class="flt-kpi-div" aria-hidden="true"></div>
+
+                    <div class="flt-kpi-item @(_tab == "InTransit" ? "kpi-active" : "")" @onclick='() => SetTab("InTransit")' role="button" tabindex="0" title="تصفية الحاويات التي في الطريق">
+                        <div class="flt-kpi-icon kpi-amber">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                <circle cx="5.5" cy="18.5" r="2.5"/>
+                                <circle cx="18.5" cy="18.5" r="2.5"/>
+                            </svg>
+                        </div>
+                        <div class="flt-kpi-text">
+                            <div class="flt-kpi-label">حاويات قيد النقل</div>
+                            <div class="flt-kpi-val val-amber">@_items.Count(c => c.CurrentStatus == "InTransit")</div>
+                        </div>
+                    </div>
+
+                    <div class="flt-kpi-div" aria-hidden="true"></div>
+
+                    <div class="flt-kpi-item">
+                        <div class="flt-kpi-icon kpi-red">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                        </div>
+                        <div class="flt-kpi-text">
+                            <div class="flt-kpi-label">الحاويات المبرّدة (Reefer)</div>
+                            <div class="flt-kpi-val val-red">@_items.Count(c => c.IsReefer)</div>
+                        </div>
+                    </div>
+
+                </div>
+            }
+
         </div>
-        @if (CanView)
-        {
-            <div class="fc-kpis fc-kpis-glass">
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.List" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي الحاويات</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(c => c.CurrentStatus == "Available")</div><div class="fc-kpi-lb">متاحة</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.AirportShuttle" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(c => c.CurrentStatus == "InTransit")</div><div class="fc-kpi-lb">في الطريق</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Construction" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(c => c.IsReefer)</div><div class="fc-kpi-lb">حاويات مبردة</div></div></div>
-            </div>
-        }
     </div>
 </div>
 
-<div class="fc-page">
+
+@* ═══════════════════════════════════════════
+   BODY SECTION
+═══════════════════════════════════════════ *@
+<div class="flt-body">
+
     @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض الحاويات.</MudAlert>
+        <div class="flt-state-box">
+            <div class="flt-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليست لديك الصلاحية الأمنية الكافية لعرض بيانات وجداول الحاويات.</p>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
-            <div class="fc-toolbar">
-                <div class="fc-filters">
-                    @foreach (var t in Tabs)
+        <div class="flt-card">
+
+            @* ── Toolbar ── *@
+            <div class="flt-toolbar">
+
+                <div class="flt-search-wrap">
+                    <svg class="flt-search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                    </svg>
+                    <input class="flt-search-input"
+                           placeholder="البحث برقم الحاوية أو جهة الملكية..."
+                           @bind="_search" @bind:event="oninput"
+                           aria-label="البحث في الحاويات" />
+                    @if (!string.IsNullOrWhiteSpace(_search))
                     {
-                        <button class='fc-filter @(_tab == t.Key ? "on" : "")' @onclick="() => SetTab(t.Key)">@t.Value</button>
+                        <button type="button" class="flt-search-clear" @onclick="() => _search = string.Empty" title="مسح البحث">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
                     }
                 </div>
-                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
-                              Placeholder="ابحث برقم الحاوية أو المالك..." Variant="Variant.Outlined" Dense="true"
-                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                              Class="fc-search-box" Immediate="true" />
-                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+
+                <div class="flt-results-badge">
+                    <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <circle cx="8" cy="8" r="6"/>
+                        <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                    </svg>
+                    عرض <strong>@Filtered.Count()</strong> من إجمالي <strong>@_items.Count</strong> حاوية
+                </div>
+
             </div>
 
+
+            @* ── Status Filtering Tabs ── *@
+            <div class="flt-tab-bar">
+                <div class="flt-tabs" role="group" aria-label="تصفية الحاويات حسب الحالة">
+                    @foreach (var t in Tabs)
+                    {
+                        var count = t.Key == "all"
+                            ? _items.Count
+                            : _items.Count(x => x.CurrentStatus == t.Key);
+
+                        <button type="button" class='flt-tab @(_tab == t.Key ? "active" : "")' @onclick="() => SetTab(t.Key)">
+                            @t.Value
+                            <span class="flt-tab-count">@count</span>
+                        </button>
+                    }
+                </div>
+            </div>
+
+
+            @* ── Table Content ── *@
             @if (_loading)
             {
-                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+                <div class="flt-loading">
+                    <div class="flt-spinner" aria-label="جاري التحميل"></div>
+                    <span>جاري تحميل سجلات الأسطول الجارية...</span>
+                </div>
+            }
+            else if (!Filtered.Any())
+            {
+                @* ── الموديل الجديد والفاخر لحالة عدم وجود نتائج ── *@
+                <div class="flt-empty-state-box">
+                    <div class="flt-empty-glow" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
+                    </div>
+                    <h3 class="flt-empty-title">لا توجد نتائج مطابقة للتصفية الحالية</h3>
+                    <p class="flt-empty-sub">حاول تغيير الحالة النشطة من شريط التبويبات بالأعلى، أو قم بمسح نص البحث الجاري للبدء من جديد.</p>
+                    @if (!string.IsNullOrWhiteSpace(_search) || _tab != "all")
+                    {
+                        <button type="button" class="flt-empty-reset-btn" @onclick="ResetFilters">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2">
+                                <path d="M23 4v6h-6M1 20v-6h6"/>
+                                <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                            </svg>
+                            إعادة تعيين الفلاتر والبحث
+                        </button>
+                    }
+                </div>
             }
             else
             {
-                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
-                    <thead><tr>
-                        <th>رقم الحاوية</th><th>النوع</th><th>المقاس</th><th>الملكية</th>
-                        <th>الوزن</th><th>الحالة</th>
-                        @if (CanManage) { <th style="width:120px; text-align:left">إجراءات</th> }
-                    </tr></thead>
-                    <tbody>
-                        @foreach (var c in Filtered)
-                        {
+                <div class="flt-table-wrap">
+                    <table class="flt-table" aria-label="سجلات الحاويات والعهدة">
+                        <thead>
                             <tr>
-                                <td><span class="fc-role-chip">@c.ContainerNumber</span></td>
-                                <td><div class="fc-cell-main">@c.TypeName</div></td>
-                                <td class="fc-cell-sub">@c.SizeFeet قدم
-                                    @if (c.IsReefer) { <span class="fc-chip fc-chip-blue"><i></i>مبردة</span> }</td>
-                                <td class="fc-cell-sub">@OwnerAr(c.OwnerType)
-                                    @if (c.OwnerName is not null) { <div class="fc-cell-sub">@c.OwnerName</div> }</td>
-                                <td class="fc-cell-sub">@(c.WeightKg?.ToString("0.##") ?? "—") كجم</td>
-                                <td><span class="fc-chip @ChipClass(c.CurrentStatus)"><i></i>@StatusAr(c.CurrentStatus)</span></td>
-                                @if (CanManage)
-                                {
-                                    <td><div class="fc-row-actions">
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
-                                                       Color="Color.Primary" OnClick="() => GoEdit(c)" />
-                                        @if (_confirmId == c.ContainerId)
-                                        {
-                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
-                                                       OnClick="() => Delete(c)">متأكد؟</MudButton>
-                                        }
-                                        else
-                                        {
-                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
-                                                           Color="Color.Error" OnClick="() => _confirmId = c.ContainerId" />
-                                        }
-                                    </div></td>
-                                }
+                                <th class="th-start">رقم الحاوية</th>
+                                <th>نوع الحاوية</th>
+                                <th>الأبعاد والمقاس</th>
+                                <th>التبعية والملكية</th>
+                                <th>الوزن الأقصى</th>
+                                <th>الوضع الحالي</th>
+                                @if (CanManage) { <th style="width:110px">إجراءات</th> }
                             </tr>
-                        }
-                        @if (!Filtered.Any())
-                        {
-                            <tr><td colspan="7"><div class="fc-empty"><div>لايوجد حاويات في الفلتر ده</div></div></td></tr>
-                        }
-                    </tbody>
-                </table></div>
+                        </thead>
+                        <tbody>
+                            @foreach (var c in Filtered)
+                            {
+                                <tr>
+                                    <td class="td-start">
+                                        <div class="flt-item-cell">
+                                            <div class="flt-avatar @ContainerAvatarClass(c.CurrentStatus)" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                                                    <line x1="8" y1="21" x2="16" y2="21"/>
+                                                </svg>
+                                            </div>
+                                            <div class="flt-item-info">
+                                                <div class="flt-code-plate">
+                                                    <span class="flt-code-chip">@c.ContainerNumber</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <span class="flt-type-tag text-dark">@c.TypeName</span>
+                                    </td>
+
+                                    <td>
+                                        <div class="flt-type-cell">
+                                            <span class="flt-type-tag">@c.SizeFeet قدم</span>
+                                            @if (c.IsReefer)
+                                            {
+                                                <span class="flt-reefer-badge" title="حاوية مبردة فريش">
+                                                    <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                                                    </svg>
+                                                    مبردة
+                                                </span>
+                                            }
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <div class="flt-type-cell" style="align-items: flex-start;">
+                                            <span class="flt-ownership-badge @(c.OwnerType == "Company" ? "ownership-company" : "ownership-external")">
+                                                @OwnerAr(c.OwnerType)
+                                            </span>
+                                            @if (!string.IsNullOrEmpty(c.OwnerName))
+                                            {
+                                                <div class="flt-brand-sub mt-1">@c.OwnerName</div>
+                                            }
+                                        </div>
+                                    </td>
+
+                                    <td class="td-muted font-mono">
+                                        @(c.WeightKg.HasValue ? $"{c.WeightKg:N0} كجم" : "—")
+                                    </td>
+
+                                    <td>
+                                        <span class="flt-status-chip @StatusChipClass(c.CurrentStatus)">
+                                            <span class="flt-status-dot @StatusDotClass(c.CurrentStatus)" aria-hidden="true"></span>
+                                            @StatusAr(c.CurrentStatus)
+                                        </span>
+                                    </td>
+
+                                    @if (CanManage)
+                                    {
+                                        <td>
+                                            <div class="flt-actions">
+                                                <button type="button" class="flt-act-btn act-edit" @onclick="() => GoEdit(c)" title="تعديل بيانات الحاوية">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                    </svg>
+                                                </button>
+                                                @if (_confirmId == c.ContainerId)
+                                                {
+                                                    <button type="button" class="flt-confirm-del" @onclick="() => Delete(c)">تأكيد الحذف؟</button>
+                                                }
+                                                else
+                                                {
+                                                    <button type="button" class="flt-act-btn act-del" @onclick="() => _confirmId = c.ContainerId" title="حذف الحاوية من السجلات">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </td>
+                                    }
+
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
-        </div></div>
+
+        </div>
     }
 
 </div>
+
+
+@* ── GLOW FAB (موضع ثابت وأداء دقيق في أسفل اليسار) ── *@
+@if (CanManage && !_loading)
+{
+    <div class="glow-fab-wrap @(_fabOpen ? "is-open" : "")">
+
+        <div class="glow-fab-menu" role="menu" aria-label="الإجراءات السريعة">
+            <button type="button" class="glow-fab-item" role="menuitem" @onclick="GoNew">
+                <span class="glow-fab-item-ic">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                    </svg>
+                </span>
+                <span>تسجيل حاوية جديدة</span>
+            </button>
+            <button type="button" class="glow-fab-item" role="menuitem" @onclick="Reload">
+                <span class="glow-fab-item-ic">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M23 4v6h-6"/>
+                        <path d="M1 20v-6h6"/>
+                        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                    </svg>
+                </span>
+                <span>تحديث قائمة السجلات</span>
+            </button>
+        </div>
+
+        <div class="glow-fab-container">
+            <span class="glow-ring glow-ring-1" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-2" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-3" aria-hidden="true"></span>
+            <span class="glow-halo" aria-hidden="true"></span>
+
+            <button type="button" class="glow-fab-btn" @onclick="ToggleFab" aria-label="لوحة التحكم" aria-expanded="@(_fabOpen ? "true" : "false")">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.8" class="glow-fab-icon" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+
+    </div>
+}
+
+@if (_fabOpen)
+{
+    <div class="glow-fab-scrim" @onclick="ToggleFab" aria-hidden="true"></div>
+}
+
+
+@* ═══════════════════════════════════════════
+   CSS STYLES
+═══════════════════════════════════════════ *@
+<style>
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ── Hero ── */
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px; margin: 0 auto; width: 100%;
+        box-sizing: border-box; position: relative; z-index: 1;
+    }
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important; overflow: hidden;
+        box-shadow: 0 12px 32px rgba(13,38,84,.15), 0 4px 12px rgba(13,38,84,.08);
+        border: 1px solid rgba(255,255,255,.08);
+    }
+    .hero-wrapper .fc-hero.fc-hero-slim { padding-top: 18px !important; padding-bottom: 22px !important; }
+
+    .flt-hero-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+    .flt-hero-left { flex: 1; min-width: 200px; }
+    .flt-hero-crumb { display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; color: rgba(255,255,255,.55); margin-bottom: 2px; }
+    .flt-hero-sub { font-size: 13px; color: rgba(255,255,255,.55); font-weight: 600; }
+    .flt-hero-right { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .flt-hero-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 8px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); color: rgba(255,255,255,.7); font-size: 10.5px; font-weight: 700; white-space: nowrap; }
+
+    .flt-hero-refresh {
+        width: 36px; height: 36px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid rgba(255,255,255,.2); background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.75); cursor: pointer; transition: background .15s;
+    }
+    .flt-hero-refresh:hover { background: rgba(255, 255, 255, 0.14); }
+
+    .flt-hero-add {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 16px; border-radius: 9px;
+        border: none; background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: #fff; font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; box-shadow: 0 4px 14px rgba(22,163,74,.35);
+        transition: all .15s ease;
+    }
+    .flt-hero-add:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(22,163,74,.4); }
+
+    /* ── KPIs Glass Strip ── */
+    .flt-kpis-strip {
+        display: flex; align-items: stretch;
+        background: rgba(0,0,0,.15); border: 1px solid rgba(255,255,255,.10);
+        border-radius: 12px; overflow: hidden; backdrop-filter: blur(8px); margin-top: 14px;
+    }
+    .flt-kpi-item {
+        flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+        cursor: pointer; transition: background .15s ease;
+    }
+    .flt-kpi-item:hover { background: rgba(255,255,255,.06); }
+    .flt-kpi-item.kpi-active { background: rgba(30,110,245,.28); border-radius: 8px; }
+    .flt-kpi-div { width: 1px; background: rgba(255,255,255,.10); align-self: stretch; }
+    .flt-kpi-icon {
+        width: 36px; height: 36px; flex: 0 0 36px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .kpi-blue  { background: rgba(30,110,245,.2); color: #93c5fd; }
+    .kpi-amber { background: rgba(234,179,8,.2);  color: #fde68a; }
+    .kpi-red   { background: rgba(239,68,68,.2);  color: #fca5a5; }
+    .kpi-green { background: rgba(34,197,94,.2);  color: #86efac; }
+
+    .flt-kpi-label { font-size: 9.5px; color: rgba(255,255,255,.5); font-weight: 600; }
+    .flt-kpi-val { font-size: 15px; font-weight: 900; color: #fff; margin-top: 2px; }
+    .val-green { color: #86efac !important; }
+    .val-red   { color: #fca5a5 !important; }
+    .val-amber { color: #fde68a !important; }
+
+    /* ── Body ── */
+    .flt-body {
+        background: var(--fc-bg); min-height: calc(100vh - 180px);
+        padding: 18px clamp(16px, 3vw, 40px) 96px;
+        max-width: 1440px; width: 100%; margin: 0 auto;
+        box-sizing: border-box; position: relative; z-index: 2;
+        display: flex; flex-direction: column; gap: 14px;
+    }
+
+    .flt-state-box {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px; background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center; box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .flt-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .flt-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+    .flt-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .flt-state-box p { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    .flt-card { background: var(--fc-card); border: 1px solid var(--fc-border); border-radius: var(--fc-radius); box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06); overflow: hidden; }
+
+    /* ── Toolbar ── */
+    .flt-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; background: linear-gradient(180deg, #fff 0%, #fafbfd 100%); border-bottom: 1px solid #edf1f7; flex-wrap: wrap; }
+    .flt-search-wrap { position: relative; display: flex; align-items: center; flex: 1; min-width: 200px; max-width: 380px; }
+    .flt-search-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; }
+    .flt-search-input {
+        width: 100%; height: 42px; padding: 0 36px 0 12px; border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text); font-family: inherit; font-size: 13px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .flt-search-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .flt-search-input::placeholder { color: #b0bcc8; }
+    .flt-search-clear { position: absolute; left: 10px; display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; border: none; background: #edf1f7; color: #8899ae; cursor: pointer; }
+    .flt-search-clear:hover { background: #dde3ed; }
+    .flt-results-badge { display: flex; align-items: center; gap: 5px; margin-right: auto; font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap; }
+    .flt-results-badge strong { color: #5a6e88; }
+
+    /* ── Tabs ── */
+    .flt-tab-bar { padding: 10px 18px; background: #f9fafd; border-bottom: 1px solid #edf1f7; overflow-x: auto; }
+    .flt-tabs { display: flex; gap: 4px; padding: 3px; border-radius: 10px; background: #f0f3f8; width: fit-content; }
+    .flt-tab {
+        display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border: none; border-radius: 7px;
+        background: transparent; color: #6b7d95; font-family: inherit; font-size: 11.5px; font-weight: 700;
+        cursor: pointer; white-space: nowrap; transition: all .15s ease;
+    }
+    .flt-tab:hover:not(.active) { color: var(--fc-text); background: rgba(255,255,255,.6); }
+    .flt-tab.active { background: var(--fc-card); color: var(--fc-blue); box-shadow: 0 1px 4px rgba(15,41,82,.10); font-weight: 800; }
+    .flt-tab-count { min-width: 20px; height: 18px; border-radius: 4px; padding: 0 5px; display: flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 900; background: var(--fc-blue-lt); color: var(--fc-blue); margin-inline-start: 4px; }
+    .flt-tab:not(.active) .flt-tab-count { background: #e4eaf3; color: #8899ae; }
+
+    /* ── Table Layout ── */
+    .flt-table-wrap { overflow-x: auto; }
+    .flt-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .flt-table thead th {
+        padding: 12px 14px; background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 10.5px; font-weight: 800; text-align: center;
+        border-bottom: 2px solid #e4eaf3; white-space: nowrap;
+    }
+    .flt-table .th-start { text-align: right; }
+    .flt-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background .12s ease; }
+    .flt-table tbody tr:last-child { border-bottom: none; }
+    .flt-table tbody tr:hover { background: #fafcff; }
+    .flt-table tbody td { padding: 11px 12px; color: #526070; text-align: center; vertical-align: middle; }
+    .td-start { text-align: right !important; }
+    .td-muted { color: #8899ae; font-size: 11px; }
+
+    .flt-item-cell { display: flex; align-items: center; gap: 10px; }
+    .flt-avatar { width: 38px; height: 38px; flex: 0 0 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center; color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.10); }
+    
+    .av-available   { background: linear-gradient(135deg, #0d8a48, #16a35b); }
+    .av-intransit   { background: linear-gradient(135deg, #1558d6, #1e6ef5); }
+    .av-atport      { background: linear-gradient(135deg, #7c4dbd, #9333ea); }
+    .av-atdepot     { background: linear-gradient(135deg, #0284c7, #0369a1); }
+    .av-delivered   { background: linear-gradient(135deg, #b87d08, #e09a10); }
+    .av-returned    { background: linear-gradient(135deg, #b02040, #e03048); }
+
+    .flt-item-info { min-width: 0; }
+    .flt-code-plate { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .flt-code-chip { display: inline-flex; padding: 2px 8px; border-radius: 6px; background: #f0f4fa; border: 1px solid #e0e8f4; font-size: 10.5px; font-weight: 800; color: var(--fc-blue); font-family: "Inter", Arial, sans-serif; }
+
+    .flt-type-tag { display: inline-flex; padding: 3px 10px; border-radius: 6px; background: var(--fc-blue-lt); color: var(--fc-blue); font-size: 11px; font-weight: 800; border: 1px solid #bdd4fc; }
+    .flt-brand-sub { font-size: 10.5px; color: #8899ae; font-weight: 600; }
+    .flt-type-cell { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+
+    .flt-reefer-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 2.5px 8px; border-radius: 5px;
+        background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;
+        font-size: 9.5px; font-weight: 800;
+    }
+
+    .flt-ownership-badge {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 800;
+    }
+    .ownership-company { background: #eaf1ff; color: var(--fc-blue); border: 1px solid #bdd4fc; }
+    .ownership-external { background: #fff8e6; color: #9a6d08; border: 1px solid #f0d898; }
+
+    .flt-status-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 7px; font-size: 10.5px; font-weight: 800; }
+    .flt-status-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
+    
+    .chip-available   { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .chip-intransit   { background: var(--fc-blue-lt); color: var(--fc-blue); border: 1px solid #c0d4fb; }
+    .chip-atport      { background: #f3e8ff; color: #6b21a8; border: 1px solid #e9d5ff; }
+    .chip-atdepot     { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+    .chip-delivered   { background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898; }
+    .chip-returned    { background: var(--fc-red-lt); color: var(--fc-red); border: 1px solid #ffc8cf; }
+
+    .dot-available    { background: var(--fc-green); }
+    .dot-intransit    { background: var(--fc-blue); }
+    .dot-atport       { background: #8b5cf6; }
+    .dot-atdepot      { background: #0ea5e9; }
+    .dot-delivered    { background: var(--fc-amber); }
+    .dot-returned     { background: var(--fc-red); }
+
+    .flt-actions { display: flex; align-items: center; gap: 3px; justify-content: center; }
+    .flt-act-btn { width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; border: 1px solid transparent; cursor: pointer; transition: all .15s ease; background: transparent; }
+    .act-edit { color: var(--fc-blue); }
+    .act-del  { color: var(--fc-red); }
+    .act-edit:hover { background: var(--fc-blue-lt); border-color: #c0d4fb; }
+    .act-del:hover  { background: var(--fc-red-lt); border-color: #ffc8cf; }
+
+    .flt-confirm-del { height: 28px; padding: 0 10px; border: none; border-radius: 6px; background: linear-gradient(135deg, #e03048, #c0182e); color: #fff; font-family: inherit; font-size: 10px; font-weight: 800; cursor: pointer; animation: flt-pulse-del 1s ease infinite; white-space: nowrap; }
+    @@keyframes flt-pulse-del { 0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.35); } 50% { box-shadow: 0 0 0 5px rgba(224,48,72,0); } }
+
+    /* ── NEW Empty State Premium Box ── */
+    .flt-empty-state-box {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 48px 32px;
+        text-align: center;
+        background: linear-gradient(180deg, #fafcff 0%, #f4f7fb 100%);
+        border: 2px dashed #c3d4f5;
+        border-radius: 16px;
+        margin: 24px;
+        box-sizing: border-box;
+        animation: sp-banner-in .25s ease;
+    }
+    .flt-empty-glow {
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(30, 110, 245, 0.15) 0%, rgba(30, 110, 245, 0.03) 70%);
+        border: 1px solid rgba(30, 110, 245, 0.15);
+        color: var(--fc-blue);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 16px;
+        box-shadow: 0 8px 24px rgba(30, 110, 245, 0.08);
+        position: relative;
+    }
+    .flt-empty-glow::after {
+        content: '';
+        position: absolute;
+        inset: -4px;
+        border-radius: 50%;
+        border: 1px dashed rgba(30, 110, 245, 0.2);
+    }
+    .flt-empty-title {
+        font-size: 15px;
+        font-weight: 800;
+        color: var(--fc-text);
+        margin: 0 0 8px 0;
+    }
+    .flt-empty-sub {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--fc-muted);
+        max-width: 440px;
+        margin: 0 0 16px 0;
+        line-height: 1.6;
+    }
+    .flt-empty-reset-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: 38px;
+        padding: 0 16px;
+        border-radius: 9px;
+        border: 1.5px solid var(--fc-blue);
+        background: var(--fc-blue-lt);
+        color: var(--fc-blue);
+        font-family: inherit;
+        font-size: 11.5px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: all .15s ease;
+        box-shadow: 0 4px 12px rgba(30, 110, 245, 0.08);
+    }
+    .flt-empty-reset-btn:hover {
+        background: var(--fc-blue);
+        color: #fff;
+        box-shadow: 0 6px 16px rgba(30, 110, 245, 0.2);
+        transform: translateY(-1px);
+    }
+
+    /* ── Precise Scoped FAB ── */
+    .glow-fab-wrap { position: fixed; left: 28px; bottom: 28px; z-index: 1299; width: 60px; height: 60px; }
+    .glow-fab-container { position: relative; z-index: 2; width: 60px; height: 60px; }
+    .glow-fab-btn {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        width: 58px; height: 58px; border-radius: 50%;
+        background: linear-gradient(135deg, #1e6ef5, #0d47a1);
+        border: 2.5px solid #fbbf24; color: #fff; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 16px rgba(30, 110, 245, .4); transition: transform .2s; z-index: 2;
+    }
+    .glow-fab-btn:hover { transform: translate(-50%, -50%) scale(1.05); }
+    .glow-fab-icon { transition: transform .3s; }
+    .glow-fab-wrap.is-open .glow-fab-icon { transform: rotate(130deg); }
+
+    .glow-halo, .glow-ring { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
+    .glow-halo { width: 58px; height: 58px; background: radial-gradient(circle, rgba(30, 110, 245, .3) 0%, transparent 70%); animation: glow-breath 2s ease-in-out infinite; }
+    .glow-ring { width: 58px; height: 58px; border: 2px solid rgba(30, 110, 245, .4); animation: glow-expand 2s ease-out infinite; }
+    .glow-ring-2 { animation-delay: .3s; }
+    .glow-ring-3 { animation-delay: .6s; }
+    @@keyframes glow-breath { 0%, 100% { opacity: .5; transform: translate(-50%, -50%) scale(1); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } }
+    @@keyframes glow-expand { 0% { opacity: .8; transform: translate(-50%, -50%) scale(1); border-width: 3px; } 100% { opacity: 0; transform: scale(2.2); border-width: 1px; } }
+
+    .glow-fab-menu { position: absolute; bottom: 74px; left: 0; z-index: 3; display: flex; flex-direction: column; gap: 8px; opacity: 0; pointer-events: none; transform: translateY(10px); transition: opacity .2s, transform .2s; }
+    .glow-fab-wrap.is-open .glow-fab-menu { opacity: 1; pointer-events: auto; transform: translateY(0); }
+    .glow-fab-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 12px; background: #fff; border: 1px solid #dde5f0; box-shadow: 0 4px 12px rgba(0, 0, 0, .1); cursor: pointer; font-size: 13px; color: #1c2c44; white-space: nowrap; }
+    .glow-fab-item:hover { background: #f4f7fb; border-color: var(--fc-blue); }
+    .glow-fab-item-ic { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: #eaf1ff; color: var(--fc-blue); }
+    .glow-fab-scrim { position: fixed; inset: 0; background: rgba(9, 18, 35, .45); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 1298; }
+
+    /* ── Responsive ── */
+    @@media (max-width: 992px) {
+        .flt-kpis-strip { flex-wrap: wrap; }
+        .flt-kpi-item { flex: 0 0 50%; }
+        .flt-kpi-div:nth-child(4) { display: none; }
+    }
+    @@media (max-width: 900px) {
+        .flt-toolbar { flex-direction: column; align-items: stretch; gap: 10px; }
+        .flt-search-wrap { width: 100% !important; max-width: 100%; }
+    }
+    @@media (max-width: 768px) {
+        .flt-hero-row { flex-direction: column; align-items: flex-start; }
+        .flt-hero-right { width: 100%; justify-content: flex-start; }
+        .flt-kpi-item { flex: 0 0 100%; }
+        .flt-kpi-div { display: none; }
+    }
+    @@media (max-width: 680px) {
+        .flt-body { padding: 12px 12px 90px; }
+        .flt-table { font-size: 11px; }
+        .glow-fab-wrap { left: 16px; bottom: 16px; }
+    }
+    @@media (max-width: 480px) {
+        .flt-tabs { flex-wrap: wrap; }
+        .flt-tab { padding: 0 8px; font-size: 10px; }
+        .flt-kpis-strip { display: none; }
+    }
+</style>
 
 @code {
     private AuthUser? _user;
@@ -126,14 +752,21 @@
 
     private static readonly Dictionary<string, string> Tabs = new()
     {
-        ["all"] = "الكل", ["Available"] = "متاحة", ["InTransit"] = "في الطريق",
-        ["AtPort"] = "في الميناء", ["AtDepot"] = "في المخزن",
-        ["Delivered"] = "تم التسليم", ["Returned"] = "مرتجعة"
+        ["all"] = "الكل", 
+        ["Available"] = "متاحة", 
+        ["InTransit"] = "في الطريق",
+        ["AtPort"] = "في الميناء", 
+        ["AtDepot"] = "في المخزن",
+        ["Delivered"] = "تم التسليم", 
+        ["Returned"] = "مرتجعة"
     };
 
     private List<Item> _items = new();
-    private bool _loading; private string _search = ""; private string _tab = "all";
+    private bool _loading; 
+    private string _search = ""; 
+    private string _tab = "all";
     private long? _confirmId;
+    private bool _fabOpen;
 
     public class Item
     {
@@ -148,34 +781,75 @@
         public string CurrentStatus { get; set; } = "";
     }
 
-
     private static string StatusAr(string s) => s switch
     {
-        "Available" => "متاحة", "InTransit" => "في الطريق", "AtPort" => "في الميناء",
-        "AtDepot" => "في المخزن", "Delivered" => "تم التسليم", "Returned" => "مرتجعة", _ => s
+        "Available" => "متاحة للتشغيل", 
+        "InTransit" => "في الطريق", 
+        "AtPort" => "في الميناء",
+        "AtDepot" => "في المخزن", 
+        "Delivered" => "تم التسليم", 
+        "Returned" => "مرتجعة", 
+        _ => s
     };
 
     private static string OwnerAr(string o) => o switch
     {
-        "ShippingLine" => "خط ملاحي", "Customer" => "العميل",
-        "Leased" => "مستأجرة", "Company" => "الشركة", _ => o
+        "ShippingLine" => "خط ملاحي", 
+        "Customer" => "عميل خارجي",
+        "Leased" => "مستأجرة", 
+        "Company" => "ملكية داخلية", 
+        _ => o
     };
 
-    private static string ChipClass(string s) => s switch
+    private static string StatusChipClass(string s) => s switch
     {
-        "Available" => "fc-chip-gray", "InTransit" => "fc-chip-purple",
-        "AtPort" => "fc-chip-blue", "AtDepot" => "fc-chip-blue",
-        "Delivered" => "fc-chip-gold", "Returned" => "fc-chip-bad", _ => "fc-chip-gray"
+        "Available" => "chip-available", 
+        "InTransit" => "chip-intransit",
+        "AtPort" => "chip-atport", 
+        "AtDepot" => "chip-atdepot",
+        "Delivered" => "chip-delivered", 
+        "Returned" => "chip-returned", 
+        _ => "chip-available"
     };
 
-    private static decimal? ParseDec(object? v) =>
-        decimal.TryParse(v?.ToString(), out var n) && n > 0 ? n : null;
+    private static string StatusDotClass(string s) => s switch
+    {
+        "Available" => "dot-available", 
+        "InTransit" => "dot-intransit",
+        "AtPort" => "dot-atport", 
+        "AtDepot" => "dot-atdepot",
+        "Delivered" => "dot-delivered", 
+        "Returned" => "dot-returned", 
+        _ => "dot-available"
+    };
+
+    private static string ContainerAvatarClass(string s) => s switch
+    {
+        "Available" => "av-available", 
+        "InTransit" => "av-intransit",
+        "AtPort" => "av-atport", 
+        "AtDepot" => "av-atdepot",
+        "Delivered" => "av-delivered", 
+        "Returned" => "av-returned", 
+        _ => "av-available"
+    };
+
+    private static string NormalizeArabic(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        string[] diacritics = new[] { "َ", "ُ", "ِ", "ّ", "ً", "ٌ", "ٍ", "ْ", "ـ" };
+        foreach (var d in diacritics) s = s.Replace(d, "");
+        return s
+            .Replace('أ', 'ا').Replace('إ', 'ا').Replace('آ', 'ا').Replace('ٱ', 'ا').Replace('ء', 'ا')
+            .Replace('ة', 'ه').Replace('ى', 'ي').Replace('ؤ', 'و').Replace('ئ', 'ي')
+            .Replace("  ", " ").ToLowerInvariant().Trim();
+    }
 
     private IEnumerable<Item> Filtered => _items.Where(c =>
         (_tab == "all" || c.CurrentStatus == _tab) &&
         (string.IsNullOrWhiteSpace(_search) ||
-         c.ContainerNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-         (c.OwnerName ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase)));
+         NormalizeArabic(c.ContainerNumber).Contains(NormalizeArabic(_search)) ||
+         NormalizeArabic(c.OwnerName ?? "").Contains(NormalizeArabic(_search))));
 
     protected override async Task OnInitializedAsync()
     {
@@ -183,19 +857,28 @@
         if (CanView) await LoadAsync();
     }
 
-    /* 🔴 الفورم بقى شاشة مستقلة — `/containers/new` */
     private void GoNew() => Nav.NavigateTo("/containers/new");
     private void GoEdit(Item c) => Nav.NavigateTo($"/containers/new/{c.ContainerId}");
 
     private async Task Reload() { await LoadAsync(); }
 
     private void SetTab(string t) { _tab = t; _confirmId = null; }
+    private void ToggleFab() => _fabOpen = !_fabOpen;
+
+    /* ── دالة إعادة ضبط الفلاتر والبحث الجاري للـ Empty State ── */
+    private void ResetFilters()
+    {
+        _search = "";
+        _tab = "all";
+        _confirmId = null;
+        StateHasChanged();
+    }
 
     private async Task LoadAsync()
     {
         _loading = true;
         try { _items = await Http.GetFromJsonAsync<List<Item>>("api/containers") ?? new(); }
-        catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
+        catch (Exception ex) { Snackbar.Add("تعذر تحميل الحاويات: " + ex.Message, Severity.Error); }
         finally { _loading = false; }
     }
 
@@ -208,7 +891,7 @@
             _confirmId = null;
             if (res.IsSuccessStatusCode) await LoadAsync();
         }
-        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        catch (Exception ex) { Snackbar.Add("فشل الإلغاء: " + ex.Message, Severity.Error); }
     }
 
     private static async Task<string> MsgOf(HttpResponseMessage res)
@@ -219,6 +902,6 @@
             var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
             return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
         }
-        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+        catch { return res.IsSuccessStatusCode ? "تم بنجاح" : $"حدث خطأ {(int)res.StatusCode}"; }
     }
 }

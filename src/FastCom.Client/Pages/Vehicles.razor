@@ -6,257 +6,1587 @@
 @inject AuthService Auth
 @inject ISnackbar Snackbar
 
-<PageTitle>الأسطول — فاست كوم</PageTitle>
+<PageTitle>أسطول المركبات والمقطورات — فاست كوم</PageTitle>
 
-<div class="fc-hero">
-    <div class="fc-hero-inner">
-        <div class="fc-page-head">
-            <div>
-                <div class="fc-crumb">البيانات الأساسية · الأسطول</div>
-                <h1 class="fc-hero-title">الأسطول</h1>
-                <p class="fc-hero-sub">العربيات والمقطورات — الحالة والرخص والتأمين</p>
-            </div>
-            <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
-                @if (CanCreate)
-                {
-                    @if (_tab == "v")
+@* ═══════════════════════════════════════════
+   HERO SECTION
+═══════════════════════════════════════════ *@
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
+
+            <div class="flt-hero-row">
+                <div class="flt-hero-left">
+                    <div class="flt-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="1" y="3" width="15" height="13" rx="2"/>
+                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                        </svg>
+                        <span>البيانات الأساسية · الأسطول التشغيلي</span>
+                    </div>
+                    <h1 class="fc-hero-title fc-hero-title-slim">أسطول المركبات والمقطورات</h1>
+                    <span class="flt-hero-sub">إدارة كاملة لأسطول العربيات والمقطورات — متابعة التراخيص، التأمينات، والحالة التشغيلية الحية</span>
+                </div>
+
+                <div class="flt-hero-right">
+                    <button type="button" class="flt-hero-refresh" @onclick="Reload" title="تحديث البيانات">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 4v6h-6"/>
+                            <path d="M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                        </svg>
+                    </button>
+                    @if (CanCreate)
                     {
-                        <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Add" OnClick="NewVehicle">عربية جديدة</MudButton>
+                        <button type="button" class="flt-hero-add" @onclick='() => { if (_tab == "v") NewVehicle(); else NewTrailer(); }'>
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                            @(_tab == "v" ? "إضافة مركبة" : "إضافة مقطورة")
+                        </button>
                     }
-                    else
-                    {
-                        <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Add" OnClick="NewTrailer">مقطورة جديدة</MudButton>
-                    }
-                }
+                    <span class="flt-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                </div>
             </div>
-        </div>
-        <div class="fc-kpis fc-kpis-glass">
-            <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.DirectionsCar" /></div>
-                <div><div class="fc-kpi-num">@_vehicles.Count</div><div class="fc-kpi-lb">عربيات</div></div></div>
-            <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
-                <div><div class="fc-kpi-num">@_vehicles.Count(v => v.Status == "Available")</div><div class="fc-kpi-lb">متاحة</div></div></div>
-            <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.AirportShuttle" /></div>
-                <div><div class="fc-kpi-num">@_trailers.Count</div><div class="fc-kpi-lb">مقطورات</div></div></div>
-            <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Construction" /></div>
-                <div><div class="fc-kpi-num">@_vehicles.Count(v => v.Status == "Maintenance")</div><div class="fc-kpi-lb">في الصيانة</div></div></div>
+
+            @* ── KPI Cards (Rounded Glass Grid & Click Filter) ── *@
+            @if (CanView && !_loading)
+            {
+                <div class="flt-kpis-strip">
+
+                    <div class="flt-kpi-item @(_kpiFilter == "" ? "kpi-active" : "")" @onclick='() => SetKpiFilter("")' role="button" tabindex="0" title="عرض إجمالي المركبات">
+                        <div class="flt-kpi-icon kpi-blue">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                <path d="M16 8h4l3 3v5h-7V8z"/>
+                                <circle cx="5.5" cy="18.5" r="2.5"/>
+                                <circle cx="18.5" cy="18.5" r="2.5"/>
+                            </svg>
+                        </div>
+                        <div class="flt-kpi-text">
+                            <div class="flt-kpi-label">إجمالي المركبات</div>
+                            <div class="flt-kpi-val">@_vehicles.Count</div>
+                        </div>
+                    </div>
+
+                    <div class="flt-kpi-div" aria-hidden="true"></div>
+
+                    <div class="flt-kpi-item @(_kpiFilter == "Available" ? "kpi-active" : "")" @onclick='() => SetKpiFilter("Available")' role="button" tabindex="0" title="تصفية المركبات المتاحة للتشغيل">
+                        <div class="flt-kpi-icon kpi-green">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                                <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="flt-kpi-text">
+                            <div class="flt-kpi-label">متاحة للتشغيل</div>
+                            <div class="flt-kpi-val val-green">@_vehicles.Count(v => v.Status == "Available")</div>
+                        </div>
+                    </div>
+
+                    <div class="flt-kpi-div" aria-hidden="true"></div>
+
+                    <div class="flt-kpi-item">
+                        <div class="flt-kpi-icon kpi-amber">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                                <line x1="4" y1="22" x2="4" y2="15"/>
+                            </svg>
+                        </div>
+                        <div class="flt-kpi-text">
+                            <div class="flt-kpi-label">إجمالي المقطورات</div>
+                            <div class="flt-kpi-val val-amber">@_trailers.Count</div>
+                        </div>
+                    </div>
+
+                    <div class="flt-kpi-div" aria-hidden="true"></div>
+
+                    <div class="flt-kpi-item @(_kpiFilter == "Maintenance" ? "kpi-active" : "")" @onclick='() => SetKpiFilter("Maintenance")' role="button" tabindex="0" title="تصفية المركبات في الصيانة">
+                        <div class="flt-kpi-icon kpi-red">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
+                            </svg>
+                        </div>
+                        <div class="flt-kpi-text">
+                            <div class="flt-kpi-label">تحت الصيانة</div>
+                            <div class="flt-kpi-val val-red">@_vehicles.Count(v => v.Status == "Maintenance")</div>
+                        </div>
+                    </div>
+
+                </div>
+            }
+
         </div>
     </div>
 </div>
 
-<div class="fc-page">
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="flt-body">
+
     @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية FLEET.VIEW.</MudAlert>
+        <div class="flt-state-box">
+            <div class="flt-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليست لديك الصلاحية الأمنية الكافية لعرض بيانات أسطول المركبات والمقطورات.</p>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
-            <div class="fc-toolbar">
-                <div class="fc-filters">
-                    <button class='fc-filter @(_tab == "v" ? "on" : "")' @onclick='() => _tab = "v"'>العربيات</button>
-                    <button class='fc-filter @(_tab == "t" ? "on" : "")' @onclick='() => _tab = "t"'>المقطورات</button>
+        <div class="flt-card">
+
+            @* ── Toolbar ── *@
+            <div class="flt-toolbar">
+
+                <div class="flt-search-wrap">
+                    <svg class="flt-search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                    </svg>
+                    <input class="flt-search-input"
+                           placeholder="بحث برقم اللوحة أو الكود التعريفي..."
+                           @bind="_search" @bind:event="oninput"
+                           aria-label="البحث في الأسطول" />
+                    @if (!string.IsNullOrWhiteSpace(_search))
+                    {
+                        <button type="button" class="flt-search-clear" @onclick="() => _search = string.Empty" title="مسح البحث">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    }
                 </div>
-                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
-                              Placeholder="ابحث باللوحة أو الكود..." Variant="Variant.Outlined" Margin="Margin.Dense"
-                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                              Class="fc-search-box" Immediate="true" />
+
+                <div class="flt-results-badge">
+                    <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <circle cx="8" cy="8" r="6"/>
+                        <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                    </svg>
+                    @if (_tab == "v")
+                    {
+                        <span>عرض <strong>@VehiclesFiltered.Count()</strong> من <strong>@_vehicles.Count</strong> مركبة</span>
+                    }
+                    else
+                    {
+                        <span>عرض <strong>@TrailersFiltered.Count()</strong> من <strong>@_trailers.Count</strong> مقطورة</span>
+                    }
+                </div>
+
             </div>
 
+
+            @* ── Type Tabs ── *@
+            <div class="flt-tab-bar">
+                <div class="flt-tabs" role="group">
+                    <button type="button" class='flt-tab @(_tab == "v" ? "active" : "")' @onclick='() => { _tab = "v"; _confirmV = null; _confirmT = null; }'>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="1" y="3" width="15" height="13" rx="2"/>
+                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                        </svg>
+                        المركبات
+                        <span class="flt-tab-count">@_vehicles.Count</span>
+                    </button>
+                    <button type="button" class='flt-tab @(_tab == "t" ? "active" : "")' @onclick='() => { _tab = "t"; _confirmV = null; _confirmT = null; }'>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                            <line x1="4" y1="22" x2="4" y2="15"/>
+                        </svg>
+                        المقطورات
+                        <span class="flt-tab-count">@_trailers.Count</span>
+                    </button>
+                </div>
+            </div>
+
+
+            @* ── Content Table ── *@
             @if (_loading)
             {
-                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+                <div class="flt-loading">
+                    <div class="flt-spinner" aria-label="جاري التحميل"></div>
+                    <span>جاري تحميل بيانات الأسطول التشغيلي...</span>
+                </div>
             }
             else if (_tab == "v")
             {
-                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
-                    <thead><tr><th>الكود</th><th>اللوحة</th><th>النوع</th><th>الملكية</th><th>حمولة</th><th>الحالة</th>
-                        @if (CanEdit) { <th style="width:120px; text-align:left">إجراءات</th> }</tr></thead>
-                    <tbody>
-                        @foreach (var v in VehiclesFiltered)
-                        {
-                            <tr>
-                                <td><span class="fc-role-chip">@v.VehicleCode</span></td>
-                                <td><div class="fc-cell-main">@v.PlateNumber</div></td>
-                                <td class="fc-cell-sub">@v.VehicleType @(v.Brand is null ? "" : "· " + v.Brand)</td>
-                                <td>@(v.OwnershipType == "Company" ? "شركة" : "خارجي")</td>
-                                <td class="fc-cell-sub">@(v.CapacityTon?.ToString("0.##") ?? "—") طن</td>
-                                <td>@StatusAr(v.Status)</td>
-                                @if (CanEdit)
+                @if (!VehiclesFiltered.Any())
+                {
+                    <div class="flt-empty">
+                        <div class="flt-empty-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.4">
+                                <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                <path d="M16 8h4l3 3v5h-7V8z"/>
+                                <circle cx="5.5" cy="18.5" r="2.5"/>
+                                <circle cx="18.5" cy="18.5" r="2.5"/>
+                            </svg>
+                        </div>
+                        <div class="flt-empty-title">لا توجد مركبات مسجلة</div>
+                        <div class="flt-empty-sub">ابدأ بتسجيل أول مركبة في الأسطول التشغيلي</div>
+                    </div>
+                }
+                else
+                {
+                    <div class="flt-table-wrap">
+                        <table class="flt-table" aria-label="قائمة المركبات">
+                            <thead>
+                                <tr>
+                                    <th class="th-start">بيانات المركبة</th>
+                                    <th>النوع والماركة</th>
+                                    <th>الملكية</th>
+                                    <th>الحمولة</th>
+                                    <th>الرخصة والتأمين</th>
+                                    <th>الحالة</th>
+                                    @if (CanEdit) { <th style="width:110px">إجراءات</th> }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var v in VehiclesFiltered)
                                 {
-                                    <td><div class="fc-row-actions">
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="() => EditVehicle(v)" />
-                                        @if (_confirmV == v.VehicleId)
+                                    <tr>
+                                        <td class="td-start">
+                                            <div class="flt-item-cell">
+                                                <div class="flt-avatar @VehicleAvatarClass(v.Status)" aria-hidden="true">
+                                                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                                        <path d="M16 8h4l3 3v5h-7V8z"/>
+                                                        <circle cx="5.5" cy="18.5" r="2.5"/>
+                                                        <circle cx="18.5" cy="18.5" r="2.5"/>
+                                                    </svg>
+                                                </div>
+                                                <div class="flt-item-info">
+                                                    <div class="flt-code-plate">
+                                                        <span class="flt-code-chip">@v.VehicleCode</span>
+                                                    </div>
+                                                    <div class="flt-plate-num">@v.PlateNumber</div>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            <div class="flt-type-cell">
+                                                <span class="flt-type-tag">@v.VehicleType</span>
+                                                @if (!string.IsNullOrWhiteSpace(v.Brand))
+                                                {
+                                                    <div class="flt-brand-sub">@v.Brand</div>
+                                                }
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            <span class="flt-ownership-badge @(v.OwnershipType == "Company" ? "ownership-company" : "ownership-external")">
+                                                @if (v.OwnershipType == "Company")
+                                                {
+                                                    <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                                    </svg>
+                                                    <span>شركة</span>
+                                                }
+                                                else
+                                                {
+                                                    <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                                        <circle cx="12" cy="7" r="4"/>
+                                                    </svg>
+                                                    <span>خارجي</span>
+                                                }
+                                            </span>
+                                        </td>
+
+                                        <td class="td-muted">
+                                            @(v.CapacityTon.HasValue ? $"{v.CapacityTon:0.##} طن" : "—")
+                                        </td>
+
+                                        <td>
+                                            <div class="flt-doc-cell">
+                                                @if (v.LicenseExpiryDate.HasValue)
+                                                {
+                                                    var days = (v.LicenseExpiryDate.Value.ToDateTime(TimeOnly.MinValue) - DateTime.Now).TotalDays;
+                                                    <span class="flt-doc-badge @(days < 0 ? "doc-expired" : days < 30 ? "doc-warning" : "doc-valid")">
+                                                        رخصة: @v.LicenseExpiryDate.Value.ToString("yyyy-MM-dd")
+                                                    </span>
+                                                }
+                                                @if (v.InsuranceExpiryDate.HasValue)
+                                                {
+                                                    var days = (v.InsuranceExpiryDate.Value.ToDateTime(TimeOnly.MinValue) - DateTime.Now).TotalDays;
+                                                    <span class="flt-doc-badge @(days < 0 ? "doc-expired" : days < 30 ? "doc-warning" : "doc-valid")">
+                                                        تأمين: @v.InsuranceExpiryDate.Value.ToString("yyyy-MM-dd")
+                                                    </span>
+                                                }
+                                                @if (!v.LicenseExpiryDate.HasValue && !v.InsuranceExpiryDate.HasValue)
+                                                {
+                                                    <span class="td-muted">لم يتم تسجيل بيانات</span>
+                                                }
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            <span class="flt-status-chip @StatusChipClass(v.Status)">
+                                                <span class="flt-status-dot @StatusDotClass(v.Status)" aria-hidden="true"></span>
+                                                @StatusAr(v.Status)
+                                            </span>
+                                        </td>
+
+                                        @if (CanEdit)
                                         {
-                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" OnClick="() => DeleteVehicle(v)">متأكد؟</MudButton>
+                                            <td>
+                                                <div class="flt-actions">
+                                                    <button type="button" class="flt-act-btn act-edit" @onclick="() => EditVehicle(v)" title="تعديل بيانات المركبة">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                        </svg>
+                                                    </button>
+                                                    @if (CanDelete)
+                                                    {
+                                                        @if (_confirmV == v.VehicleId)
+                                                        {
+                                                            <button type="button" class="flt-confirm-del" @onclick="() => DeleteVehicle(v)">تأكيد الحذف؟</button>
+                                                        }
+                                                        else
+                                                        {
+                                                            <button type="button" class="flt-act-btn act-del" @onclick="() => _confirmV = v.VehicleId" title="حذف المركبة">
+                                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                                    <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                                </svg>
+                                                            </button>
+                                                        }
+                                                    }
+                                                </div>
+                                            </td>
                                         }
-                                        else if (CanDelete)
-                                        {
-                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => _confirmV = v.VehicleId" />
-                                        }
-                                    </div></td>
+                                    </tr>
                                 }
-                            </tr>
-                        }
-                        @if (!VehiclesFiltered.Any()) { <tr><td colspan="7"><div class="fc-empty"><div>لايوجد اى سيارات</div></div></td></tr> }
-                    </tbody>
-                </table></div>
+                            </tbody>
+                        </table>
+                    </div>
+                }
             }
             else
             {
-                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
-                    <thead><tr><th>الكود</th><th>اللوحة</th><th>النوع</th><th>المقاس</th><th>الحالة</th>
-                        @if (CanEdit) { <th style="width:120px; text-align:left">إجراءات</th> }</tr></thead>
-                    <tbody>
-                        @foreach (var t in TrailersFiltered)
-                        {
-                            <tr>
-                                <td><span class="fc-role-chip">@t.TrailerCode</span></td>
-                                <td><div class="fc-cell-main">@(t.PlateNumber ?? "—")</div></td>
-                                <td class="fc-cell-sub">@t.TrailerType</td>
-                                <td class="fc-cell-sub">@(t.SizeFeet?.ToString() ?? "—") قدم</td>
-                                <td>@StatusAr(t.Status)</td>
-                                @if (CanEdit)
+                @if (!TrailersFiltered.Any())
+                {
+                    <div class="flt-empty">
+                        <div class="flt-empty-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.4">
+                                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                                <line x1="4" y1="22" x2="4" y2="15"/>
+                            </svg>
+                        </div>
+                        <div class="flt-empty-title">لا توجد مقطورات مسجلة</div>
+                        <div class="flt-empty-sub">ابدأ بتسجيل أول مقطورة في الأسطول التشغيلي</div>
+                    </div>
+                }
+                else
+                {
+                    <div class="flt-table-wrap">
+                        <table class="flt-table" aria-label="قائمة المقطورات">
+                            <thead>
+                                <tr>
+                                    <th class="th-start">بيانات المقطورة</th>
+                                    <th>النوع والمقاس</th>
+                                    <th>الرخصة والتأمين</th>
+                                    <th>الحالة</th>
+                                    @if (CanEdit) { <th style="width:110px">إجراءات</th> }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var t in TrailersFiltered)
                                 {
-                                    <td><div class="fc-row-actions">
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="() => EditTrailer(t)" />
-                                        @if (_confirmT == t.TrailerId)
+                                    <tr>
+                                        <td class="td-start">
+                                            <div class="flt-item-cell">
+                                                <div class="flt-avatar @VehicleAvatarClass(t.Status)" aria-hidden="true">
+                                                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                                                        <line x1="4" y1="22" x2="4" y2="15"/>
+                                                    </svg>
+                                                </div>
+                                                <div class="flt-item-info">
+                                                    <div class="flt-code-plate">
+                                                        <span class="flt-code-chip">@t.TrailerCode</span>
+                                                    </div>
+                                                    <div class="flt-plate-num">@(t.PlateNumber ?? "بدون لوحة")</div>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            <div class="flt-type-cell">
+                                                <span class="flt-type-tag">@t.TrailerType</span>
+                                                @if (t.SizeFeet.HasValue)
+                                                {
+                                                    <div class="flt-brand-sub">@t.SizeFeet قدم</div>
+                                                }
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            <div class="flt-doc-cell">
+                                                <span class="td-muted">راجع تفاصيل المقطورة</span>
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            <span class="flt-status-chip @StatusChipClass(t.Status)">
+                                                <span class="flt-status-dot @StatusDotClass(t.Status)" aria-hidden="true"></span>
+                                                @StatusAr(t.Status)
+                                            </span>
+                                        </td>
+
+                                        @if (CanEdit)
                                         {
-                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" OnClick="() => DeleteTrailer(t)">متأكد؟</MudButton>
+                                            <td>
+                                                <div class="flt-actions">
+                                                    <button type="button" class="flt-act-btn act-edit" @onclick="() => EditTrailer(t)" title="تعديل بيانات المقطورة">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                        </svg>
+                                                    </button>
+                                                    @if (CanDelete)
+                                                    {
+                                                        @if (_confirmT == t.TrailerId)
+                                                        {
+                                                            <button type="button" class="flt-confirm-del" @onclick="() => DeleteTrailer(t)">تأكيد الحذف؟</button>
+                                                        }
+                                                        else
+                                                        {
+                                                            <button type="button" class="flt-act-btn act-del" @onclick="() => _confirmT = t.TrailerId" title="حذف المقطورة">
+                                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                                    <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                                </svg>
+                                                            </button>
+                                                        }
+                                                    }
+                                                </div>
+                                            </td>
                                         }
-                                        else if (CanDelete)
-                                        {
-                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => _confirmT = t.TrailerId" />
-                                        }
-                                    </div></td>
+                                    </tr>
                                 }
-                            </tr>
-                        }
-                        @if (!TrailersFiltered.Any()) { <tr><td colspan="6"><div class="fc-empty"><div>مافيش مقطورات</div></div></td></tr> }
-                    </tbody>
-                </table></div>
+                            </tbody>
+                        </table>
+                    </div>
+                }
             }
-        </div></div>
-    }
 
-    @* ═══ مودال عربية ═══ *@
-    @if (_vOpen && CanCreate)
-    {
-        <div class="fc-modal-backdrop" @onclick="CloseAll">
-            <div class="fc-modal" @onclick:stopPropagation>
-                <div class="fc-modal-head">
-                    <div><div class="fc-modal-title">@(_vId is null ? "عربية جديدة" : "تعديل عربية")</div>
-                        <div class="fc-modal-sub">الكود بيتولد تلقائيًا (VEH-)</div></div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseAll" />
-                </div>
-                <div class="fc-modal-body">
-                    @if (_msg is not null)
-                    {
-                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
-                    }
-                    <div class="fc-form-grid">
-                        <MudTextField T="string" @bind-Value="_vf.PlateNumber" Label="رقم اللوحة *" Variant="Variant.Outlined" />
-                        <MudTextField T="string" @bind-Value="_vf.VehicleType" Label="النوع (جرار/نقل/سطحة) *" Variant="Variant.Outlined" />
-                        <MudTextField T="string" @bind-Value="_vf.Brand" Label="الماركة" Variant="Variant.Outlined" />
-                        <MudTextField T="string" @bind-Value="_vf.Model" Label="الموديل" Variant="Variant.Outlined" />
-                        <div><div class="fc-panel-sub" style="margin-bottom:6px">الملكية</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_vf.OwnershipType">
-                                <option value="Company">شركة</option><option value="External">خارجي</option>
-                            </select></div>
-                        @if (_vf.OwnershipType == "External")
-                        {
-                            <div><div class="fc-panel-sub" style="margin-bottom:6px">المورد</div>
-                                <select class="fc-sel fc-sel-lg" @bind="_vf.SupplierId">
-                                    <option value="">—</option>
-                                    @foreach (var s in _suppliers) { <option value="@s.Id">@s.Label</option> }
-                                </select></div>
-                        }
-                        <MudTextField T="decimal?" @bind-Value="_vf.CapacityTon" Label="الحمولة (طن)" Variant="Variant.Outlined" />
-                        <MudTextField T="byte" @bind-Value="_vf.ContainerSlots20" Label="عدد حاويات 20 قدم" Variant="Variant.Outlined" />
-                        <div><div class="fc-panel-sub" style="margin-bottom:6px">انتهاء الرخصة</div>
-                            <input type="date" class="fc-sel fc-sel-lg" value="@_vf.LicenseExpiryDate"
-                                   @onchange="e => _vf.LicenseExpiryDate = e.Value?.ToString()" /></div>
-                        <div><div class="fc-panel-sub" style="margin-bottom:6px">انتهاء التأمين</div>
-                            <input type="date" class="fc-sel fc-sel-lg" value="@_vf.InsuranceExpiryDate"
-                                   @onchange="e => _vf.InsuranceExpiryDate = e.Value?.ToString()" /></div>
-                        <div><div class="fc-panel-sub" style="margin-bottom:6px">الحالة</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_vf.Status">
-                                <option value="Available">متاحة</option><option value="InTrip">في رحلة</option>
-                                <option value="Maintenance">صيانة</option><option value="OutOfService">خارج الخدمة</option>
-                            </select></div>
-                    </div>
-                </div>
-                <div class="fc-modal-foot">
-                    <MudButton Variant="Variant.Outlined" OnClick="CloseAll">إلغاء</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveVehicleAsync">حفظ</MudButton>
-                </div>
-            </div>
-        </div>
-    }
-
-    @* ═══ مودال مقطورة ═══ *@
-    @if (_tOpen && CanCreate)
-    {
-        <div class="fc-modal-backdrop" @onclick="CloseAll">
-            <div class="fc-modal" @onclick:stopPropagation>
-                <div class="fc-modal-head">
-                    <div><div class="fc-modal-title">@(_tId is null ? "مقطورة جديدة" : "تعديل مقطورة")</div>
-                        <div class="fc-modal-sub">الكود بيتولد تلقائيًا (TRL-)</div></div>
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseAll" />
-                </div>
-                <div class="fc-modal-body">
-                    @if (_msg is not null)
-                    {
-                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
-                    }
-                    <MudTextField T="string" @bind-Value="_tf.PlateNumber" Label="رقم اللوحة" Variant="Variant.Outlined" Class="mb-3" />
-                    <MudTextField T="string" @bind-Value="_tf.TrailerType" Label="النوع *" Variant="Variant.Outlined" Class="mb-3" />
-                    <div class="fc-form-grid">
-                        <div><div class="fc-panel-sub" style="margin-bottom:6px">المقاس (قدم)</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_tf.SizeFeet">
-                                <option value="">—</option>
-                                <option value="20">20</option><option value="40">40</option>
-                                <option value="45">45</option><option value="53">53</option>
-                            </select></div>
-                        <div><div class="fc-panel-sub" style="margin-bottom:6px">الملكية</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_tf.OwnershipType">
-                                <option value="Company">شركة</option><option value="External">خارجي</option>
-                            </select></div>
-                        @if (_tf.OwnershipType == "External")
-                        {
-                            <div><div class="fc-panel-sub" style="margin-bottom:6px">المورد</div>
-                                <select class="fc-sel fc-sel-lg" @bind="_tf.SupplierId">
-                                    <option value="">—</option>
-                                    @foreach (var s in _suppliers) { <option value="@s.Id">@s.Label</option> }
-                                </select></div>
-                        }
-                        <div><div class="fc-panel-sub" style="margin-bottom:6px">انتهاء الرخصة</div>
-                            <input type="date" class="fc-sel fc-sel-lg" value="@_tf.LicenseExpiryDate"
-                                   @onchange="e => _tf.LicenseExpiryDate = e.Value?.ToString()" /></div>
-                        <div><div class="fc-panel-sub" style="margin-bottom:6px">انتهاء التأمين</div>
-                            <input type="date" class="fc-sel fc-sel-lg" value="@_tf.InsuranceExpiryDate"
-                                   @onchange="e => _tf.InsuranceExpiryDate = e.Value?.ToString()" /></div>
-                        <div><div class="fc-panel-sub" style="margin-bottom:6px">الحالة</div>
-                            <select class="fc-sel fc-sel-lg" @bind="_tf.Status">
-                                <option value="Available">متاحة</option><option value="InTrip">في رحلة</option>
-                                <option value="Maintenance">صيانة</option><option value="OutOfService">خارج الخدمة</option>
-                            </select></div>
-                    </div>
-                    <div style="margin-top:14px">
-                        <div class="fc-panel-sub" style="margin-bottom:6px">ملاحظات</div>
-                        <textarea class="fc-sel fc-sel-lg" rows="2" @bind="_tf.Notes"></textarea>
-                    </div>
-                </div>
-                <div class="fc-modal-foot">
-                    <MudButton Variant="Variant.Outlined" OnClick="CloseAll">إلغاء</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SaveTrailerAsync">حفظ</MudButton>
-                </div>
-            </div>
         </div>
     }
 </div>
 
+
+@* ═══════════════════════════════════════════
+   MODAL — مركبة (svc-modal Standard)
+═══════════════════════════════════════════ *@
+@if (_vOpen && CanCreate)
+{
+    <div class="svc-modal-backdrop" @onclick="CloseAll" role="dialog" aria-modal="true">
+        <div class="svc-modal" @onclick:stopPropagation="true">
+
+            <div class="svc-modal-head">
+                <div class="svc-head-icon @(_vId is null ? "svc-icon-create" : "svc-icon-edit")" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="1" y="3" width="15" height="13" rx="2"/>
+                        <path d="M16 8h4l3 3v5h-7V8z"/>
+                        <circle cx="5.5" cy="18.5" r="2.5"/>
+                        <circle cx="18.5" cy="18.5" r="2.5"/>
+                    </svg>
+                </div>
+                <div class="svc-head-text">
+                    <div class="svc-head-title">@(_vId is null ? "تسجيل مركبة جديدة بالأسطول" : "تعديل بيانات المركبة")</div>
+                    <div class="svc-head-sub">
+                        @if (_vId is null)
+                        {
+                            <span>يتم توليد الكود التعريفي تلقائياً بالبادئة (VEH-)</span>
+                        }
+                        else
+                        {
+                            <span>تحديث البيانات الفنية والتشغيلية والملفات الرسمية للمركبة</span>
+                        }
+                    </div>
+                </div>
+                <button class="svc-head-close" @onclick="CloseAll" aria-label="إغلاق" type="button">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            @if (_msg is not null)
+            {
+                <div class="svc-banner @(_ok ? "svc-banner-ok" : "svc-banner-err")" role="alert">
+                    <span class="svc-banner-msg">@_msg</span>
+                    <button class="svc-banner-x" @onclick="() => _msg = null" type="button">✕</button>
+                </div>
+            }
+
+            <div class="svc-modal-body">
+                <MudTabs Elevation="0" Rounded="false" ApplyEffectsToContainer="true"
+                         PanelClass="svc-tab-panel" @bind-ActivePanelIndex="_vActiveTab" Class="svc-mud-tabs">
+
+                    @* TAB 1 - البيانات الأساسية *@
+                    <MudTabPanel>
+                        <TabContent>
+                            <div class="svc-tab-label">
+                                <div class="svc-tab-ic svc-tab-ic-blue">
+                                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                        <path d="M16 8h4l3 3v5h-7V8z"/>
+                                        <circle cx="5.5" cy="18.5" r="2.5"/>
+                                    </svg>
+                                </div>
+                                <span>البيانات الأساسية</span>
+                            </div>
+                        </TabContent>
+                        <ChildContent>
+                            <div class="svc-section">
+                                <div class="svc-section-head">
+                                    <div class="svc-section-ic blue">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                            <path d="M14 2v6h6"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="svc-section-title">بيانات المركبة التعريفية والفنية</div>
+                                        <div class="svc-section-sub">اللوحة، النوع، الماركة، الموديل، والحمولة الفنية</div>
+                                    </div>
+                                </div>
+
+                                <div class="svc-grid">
+                                    <div class="svc-field">
+                                        <label class="svc-label">رقم اللوحة <span class="svc-req">*</span></label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                                    <line x1="8" y1="10" x2="16" y2="10"/>
+                                                    <line x1="8" y1="14" x2="14" y2="14"/>
+                                                </svg>
+                                            </span>
+                                            <input class="svc-input with-prefix" @bind="_vf.PlateNumber" placeholder="ب ب ك - 1234" maxlength="20" />
+                                        </div>
+                                    </div>
+
+                                    <div class="svc-field">
+                                        <label class="svc-label">نوع المركبة <span class="svc-req">*</span></label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                                </svg>
+                                            </span>
+                                            <input class="svc-input with-prefix" @bind="_vf.VehicleType" placeholder="جرار، نقل ثقيل، سطحة..." maxlength="50" />
+                                        </div>
+                                    </div>
+
+                                    <div class="svc-field">
+                                        <label class="svc-label">الماركة (اختياري)</label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <circle cx="12" cy="12" r="10"/>
+                                                    <path d="M12 6l4 6-4 6-4-6z"/>
+                                                </svg>
+                                            </span>
+                                            <input class="svc-input with-prefix" @bind="_vf.Brand" placeholder="مرسيدس، سكانيا، فولفو..." maxlength="50" />
+                                        </div>
+                                    </div>
+
+                                    <div class="svc-field">
+                                        <label class="svc-label">الموديل والفئة</label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                                </svg>
+                                            </span>
+                                            <input class="svc-input with-prefix" @bind="_vf.Model" placeholder="Actros 2545..." maxlength="50" />
+                                        </div>
+                                    </div>
+
+                                    <div class="svc-field">
+                                        <label class="svc-label">الحمولة القصوى (طن)</label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix txt">طن</span>
+                                            <input type="number" step="0.1" min="0" class="svc-input ltr with-prefix"
+                                                   value="@_vf.CapacityTon" placeholder="25"
+                                                   @onchange="e => _vf.CapacityTon = ParseNullDec(e.Value)" />
+                                        </div>
+                                    </div>
+
+                                    <div class="svc-field">
+                                        <label class="svc-label">عدد الحاويات (20 قدم)</label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                                </svg>
+                                            </span>
+                                            <input type="number" min="1" max="10" class="svc-input ltr with-prefix"
+                                                   value="@_vf.ContainerSlots20"
+                                                   @onchange="e => _vf.ContainerSlots20 = ParseByte(e.Value, 1)" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </ChildContent>
+                    </MudTabPanel>
+
+                    @* TAB 2 - الملكية والحالة *@
+                    <MudTabPanel>
+                        <TabContent>
+                            <div class="svc-tab-label">
+                                <div class="svc-tab-ic svc-tab-ic-green">
+                                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                    </svg>
+                                </div>
+                                <span>الملكية والحالة</span>
+                            </div>
+                        </TabContent>
+                        <ChildContent>
+                            <div class="svc-section">
+                                <div class="svc-section-head">
+                                    <div class="svc-section-ic green">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                            <circle cx="12" cy="7" r="4"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="svc-section-title">ملكية المركبة وحالتها التشغيلية</div>
+                                        <div class="svc-section-sub">تحديد نوع الملكية (شركة أو مورد خارجي) والوضع الحالي</div>
+                                    </div>
+                                </div>
+
+                                <div class="svc-grid">
+                                    <div class="svc-field">
+                                        <label class="svc-label">نوع الملكية <span class="svc-req">*</span></label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                                </svg>
+                                            </span>
+                                            <select class="svc-input svc-select with-prefix" @bind="_vf.OwnershipType">
+                                                <option value="Company">🏢 شركة (ملكية داخلية)</option>
+                                                <option value="External">🚚 خارجي (مورد نقل)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    @if (_vf.OwnershipType == "External")
+                                    {
+                                        <div class="svc-field">
+                                            <label class="svc-label">المورد المالك <span class="svc-req">*</span></label>
+                                            <div class="svc-input-wrap">
+                                                <span class="svc-prefix">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <circle cx="11" cy="11" r="8"/>
+                                                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                                                    </svg>
+                                                </span>
+                                                <input class="svc-input with-prefix"
+                                                       value="@_supplierSearch"
+                                                       placeholder="ابحث باسم المورد..."
+                                                       @oninput="OnSupplierSearch"
+                                                       @onkeydown="OnSupplierInputKeyDown"
+                                                       @onfocus="OnSupplierInputFocus"
+                                                       @onblur="OnSupplierInputBlur"
+                                                       autocomplete="off" />
+                                                @if (!string.IsNullOrEmpty(_supplierSearch))
+                                                {
+                                                    <button type="button" class="field-clear-btn" @onclick="ClearSupplierSelection">✕</button>
+                                                }
+                                            </div>
+                                            @if (_showSupplierDropdown && _filteredSuppliers.Count > 0)
+                                            {
+                                                <div class="field-dropdown">
+                                                    @for (int i = 0; i < _filteredSuppliers.Count; i++)
+                                                    {
+                                                        var s = _filteredSuppliers[i];
+                                                        <div class="field-dropdown-item @(i == _focusedSupplierIndex ? "is-focused" : "")"
+                                                             @onmousedown="() => PickSupplier(s)">
+                                                            <span>@s.Label</span>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+
+                                    <div class="svc-field @(_vf.OwnershipType == "External" ? "" : "svc-full")">
+                                        <label class="svc-label">الحالة التشغيلية</label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <circle cx="12" cy="12" r="10"/>
+                                                    <path d="M12 6v6l4 2" stroke-linecap="round"/>
+                                                </svg>
+                                            </span>
+                                            <select class="svc-input svc-select with-prefix" @bind="_vf.Status">
+                                                <option value="Available">✅ متاحة للتشغيل</option>
+                                                <option value="InTrip">🚛 في رحلة نشطة</option>
+                                                <option value="Maintenance">🔧 قيد الصيانة</option>
+                                                <option value="OutOfService">🚫 خارج الخدمة</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </ChildContent>
+                    </MudTabPanel>
+
+                    @* TAB 3 - الوثائق والرخص *@
+                    <MudTabPanel>
+                        <TabContent>
+                            <div class="svc-tab-label">
+                                <div class="svc-tab-ic svc-tab-ic-amber">
+                                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                        <path d="M14 2v6h6"/>
+                                    </svg>
+                                </div>
+                                <span>الوثائق والرخص</span>
+                            </div>
+                        </TabContent>
+                        <ChildContent>
+                            <div class="svc-section">
+                                <div class="svc-section-head">
+                                    <div class="svc-section-ic amber">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                            <path d="M14 2v6h6M9 13h6M9 17h6"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="svc-section-title">تواريخ الرخصة والتأمين</div>
+                                        <div class="svc-section-sub">تنبيهات ذكية عند اقتراب انتهاء الوثائق الرسمية</div>
+                                    </div>
+                                </div>
+
+                                <div class="svc-grid">
+                                    <div class="svc-field">
+                                        <label class="svc-label">تاريخ انتهاء الرخصة الرسمية</label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <rect x="3" y="5" width="18" height="16" rx="2"/>
+                                                    <path d="M7 3V7M17 3V7M3 10H21" stroke-linecap="round"/>
+                                                </svg>
+                                            </span>
+                                            <input type="date" class="svc-input with-prefix"
+                                                   value="@_vf.LicenseExpiryDate"
+                                                   @onchange="e => _vf.LicenseExpiryDate = e.Value?.ToString()" />
+                                        </div>
+                                    </div>
+
+                                    <div class="svc-field">
+                                        <label class="svc-label">تاريخ انتهاء التأمين البنكي</label>
+                                        <div class="svc-input-wrap">
+                                            <span class="svc-prefix">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                                </svg>
+                                            </span>
+                                            <input type="date" class="svc-input with-prefix"
+                                                   value="@_vf.InsuranceExpiryDate"
+                                                   @onchange="e => _vf.InsuranceExpiryDate = e.Value?.ToString()" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </ChildContent>
+                    </MudTabPanel>
+
+                </MudTabs>
+            </div>
+
+            <div class="svc-modal-foot">
+                <div class="svc-foot-right">
+                    <button class="svc-btn-cancel" @onclick="CloseAll" type="button">تراجع</button>
+                    <button class="svc-btn-save" @onclick="SaveVehicleAsync" disabled="@_saving" type="button">
+                        @if (_saving)
+                        {
+                            <span class="svc-spinner"></span>
+                            <span>جاري الحفظ...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>@(_vId is null ? "تسجيل المركبة" : "حفظ التعديلات")</span>
+                        }
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+@* ═══════════════════════════════════════════
+   MODAL — مقطورة (svc-modal Standard)
+═══════════════════════════════════════════ *@
+@if (_tOpen && CanCreate)
+{
+    <div class="svc-modal-backdrop" @onclick="CloseAll" role="dialog" aria-modal="true">
+        <div class="svc-modal" @onclick:stopPropagation="true">
+
+            <div class="svc-modal-head">
+                <div class="svc-head-icon @(_tId is null ? "svc-icon-create" : "svc-icon-edit")" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                        <line x1="4" y1="22" x2="4" y2="15"/>
+                    </svg>
+                </div>
+                <div class="svc-head-text">
+                    <div class="svc-head-title">@(_tId is null ? "تسجيل مقطورة جديدة بالأسطول" : "تعديل بيانات المقطورة")</div>
+                    <div class="svc-head-sub">
+                        @if (_tId is null)
+                        {
+                            <span>يتم توليد الكود التعريفي تلقائياً بالبادئة (TRL-)</span>
+                        }
+                        else
+                        {
+                            <span>تحديث البيانات التشغيلية والوثائق الرسمية للمقطورة</span>
+                        }
+                    </div>
+                </div>
+                <button class="svc-head-close" @onclick="CloseAll" aria-label="إغلاق" type="button">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            @if (_msg is not null)
+            {
+                <div class="svc-banner @(_ok ? "svc-banner-ok" : "svc-banner-err")" role="alert">
+                    <span class="svc-banner-msg">@_msg</span>
+                    <button class="svc-banner-x" @onclick="() => _msg = null" type="button">✕</button>
+                </div>
+            }
+
+            <div class="svc-modal-body">
+                <div class="svc-section">
+                    <div class="svc-section-head">
+                        <div class="svc-section-ic amber">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                                <line x1="4" y1="22" x2="4" y2="15"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="svc-section-title">البيانات التعريفية والفنية للمقطورة</div>
+                            <div class="svc-section-sub">اللوحة، النوع، المقاس، الملكية والوثائق الرسمية</div>
+                        </div>
+                    </div>
+
+                    <div class="svc-grid">
+                        <div class="svc-field">
+                            <label class="svc-label">رقم اللوحة</label>
+                            <div class="svc-input-wrap">
+                                <span class="svc-prefix">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                    </svg>
+                                </span>
+                                <input class="svc-input with-prefix" @bind="_tf.PlateNumber" placeholder="بدون رقم لوحة أحياناً..." maxlength="20" />
+                            </div>
+                        </div>
+
+                        <div class="svc-field">
+                            <label class="svc-label">نوع المقطورة <span class="svc-req">*</span></label>
+                            <div class="svc-input-wrap">
+                                <span class="svc-prefix">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                    </svg>
+                                </span>
+                                <input class="svc-input with-prefix" @bind="_tf.TrailerType" placeholder="حاويات، سطحة، صهريج..." maxlength="50" />
+                            </div>
+                        </div>
+
+                        <div class="svc-field">
+                            <label class="svc-label">المقاس (قدم)</label>
+                            <div class="svc-input-wrap">
+                                <span class="svc-prefix txt">قدم</span>
+                                <select class="svc-input svc-select with-prefix"
+                                        value="@_tf.SizeFeet"
+                                        @onchange="e => _tf.SizeFeet = ParseNullByte(e.Value)">
+                                    <option value="">— اختر المقاس —</option>
+                                    <option value="20">20</option>
+                                    <option value="40">40</option>
+                                    <option value="45">45</option>
+                                    <option value="53">53</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="svc-field">
+                            <label class="svc-label">نوع الملكية <span class="svc-req">*</span></label>
+                            <div class="svc-input-wrap">
+                                <span class="svc-prefix">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                    </svg>
+                                </span>
+                                <select class="svc-input svc-select with-prefix" @bind="_tf.OwnershipType">
+                                    <option value="Company">🏢 شركة (ملكية داخلية)</option>
+                                    <option value="External">🚚 خارجي (مورد نقل)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        @if (_tf.OwnershipType == "External")
+                        {
+                            <div class="svc-field svc-full">
+                                <label class="svc-label">المورد المالك</label>
+                                <div class="svc-input-wrap">
+                                    <span class="svc-prefix">
+                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="11" cy="11" r="8"/>
+                                            <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                                        </svg>
+                                    </span>
+                                    <input class="svc-input with-prefix"
+                                           value="@_supplierSearch"
+                                           placeholder="ابحث باسم المورد..."
+                                           @oninput="OnSupplierSearch"
+                                           @onkeydown="OnSupplierInputKeyDown"
+                                           @onfocus="OnSupplierInputFocus"
+                                           @onblur="OnSupplierInputBlur"
+                                           autocomplete="off" />
+                                    @if (!string.IsNullOrEmpty(_supplierSearch))
+                                    {
+                                        <button type="button" class="field-clear-btn" @onclick="ClearSupplierSelectionTrailer">✕</button>
+                                    }
+                                </div>
+                                @if (_showSupplierDropdown && _filteredSuppliers.Count > 0)
+                                {
+                                    <div class="field-dropdown">
+                                        @for (int i = 0; i < _filteredSuppliers.Count; i++)
+                                        {
+                                            var s = _filteredSuppliers[i];
+                                            <div class="field-dropdown-item @(i == _focusedSupplierIndex ? "is-focused" : "")"
+                                                 @onmousedown="() => PickSupplierTrailer(s)">
+                                                <span>@s.Label</span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <div class="svc-field">
+                            <label class="svc-label">تاريخ انتهاء الرخصة</label>
+                            <div class="svc-input-wrap">
+                                <span class="svc-prefix">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="5" width="18" height="16" rx="2"/>
+                                        <path d="M7 3V7M17 3V7M3 10H21"/>
+                                    </svg>
+                                </span>
+                                <input type="date" class="svc-input with-prefix"
+                                       value="@_tf.LicenseExpiryDate"
+                                       @onchange="e => _tf.LicenseExpiryDate = e.Value?.ToString()" />
+                            </div>
+                        </div>
+
+                        <div class="svc-field">
+                            <label class="svc-label">تاريخ انتهاء التأمين</label>
+                            <div class="svc-input-wrap">
+                                <span class="svc-prefix">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                    </svg>
+                                </span>
+                                <input type="date" class="svc-input with-prefix"
+                                       value="@_tf.InsuranceExpiryDate"
+                                       @onchange="e => _tf.InsuranceExpiryDate = e.Value?.ToString()" />
+                            </div>
+                        </div>
+
+                        <div class="svc-field">
+                            <label class="svc-label">الحالة التشغيلية</label>
+                            <div class="svc-input-wrap">
+                                <span class="svc-prefix">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <path d="M12 6v6l4 2"/>
+                                    </svg>
+                                </span>
+                                <select class="svc-input svc-select with-prefix" @bind="_tf.Status">
+                                    <option value="Available">✅ متاحة للتشغيل</option>
+                                    <option value="InTrip">🚛 في رحلة نشطة</option>
+                                    <option value="Maintenance">🔧 قيد الصيانة</option>
+                                    <option value="OutOfService">🚫 خارج الخدمة</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="svc-field svc-full">
+                            <label class="svc-label">الملاحظات والبيان الفني</label>
+                            <textarea class="svc-input" style="height: 70px; padding: 8px 12px; resize: none;"
+                                      @bind="_tf.Notes"
+                                      placeholder="أي ملاحظات فنية إضافية عن المقطورة..." maxlength="500"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="svc-modal-foot">
+                <div class="svc-foot-right">
+                    <button class="svc-btn-cancel" @onclick="CloseAll" type="button">تراجع</button>
+                    <button class="svc-btn-save" @onclick="SaveTrailerAsync" disabled="@_saving" type="button">
+                        @if (_saving)
+                        {
+                            <span class="svc-spinner"></span>
+                            <span>جاري الحفظ...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>@(_tId is null ? "تسجيل المقطورة" : "حفظ التعديلات")</span>
+                        }
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+@* ── GLOW FAB (موضع ثابت في أسفل اليسار) ── *@
+@if (CanCreate)
+{
+    <div class="glow-fab-wrap @(_fabOpen ? "is-open" : "")">
+
+        <div class="glow-fab-menu" role="menu" aria-label="الإجراءات السريعة">
+            <button type="button" class="glow-fab-item" role="menuitem" @onclick="NewVehicle">
+                <span class="glow-fab-item-ic">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <rect x="1" y="3" width="15" height="13" rx="2"/>
+                        <path d="M16 8h4l3 3v5h-7V8z"/>
+                        <circle cx="5.5" cy="18.5" r="2.5"/>
+                    </svg>
+                </span>
+                <span>تسجيل مركبة جديدة</span>
+            </button>
+            <button type="button" class="glow-fab-item" role="menuitem" @onclick="NewTrailer">
+                <span class="glow-fab-item-ic">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                        <line x1="4" y1="22" x2="4" y2="15"/>
+                    </svg>
+                </span>
+                <span>تسجيل مقطورة جديدة</span>
+            </button>
+            <button type="button" class="glow-fab-item" role="menuitem" @onclick="Reload">
+                <span class="glow-fab-item-ic">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M23 4v6h-6"/>
+                        <path d="M1 20v-6h6"/>
+                        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                    </svg>
+                </span>
+                <span>تحديث البيانات</span>
+            </button>
+        </div>
+
+        <div class="glow-fab-container">
+            <span class="glow-ring glow-ring-1" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-2" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-3" aria-hidden="true"></span>
+            <span class="glow-halo" aria-hidden="true"></span>
+
+            <button type="button" class="glow-fab-btn" @onclick="ToggleFab" aria-label="لوحة التحكم">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.8" class="glow-fab-icon" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+
+    </div>
+}
+
+@if (_fabOpen)
+{
+    <div class="glow-fab-scrim" @onclick="ToggleFab" aria-hidden="true"></div>
+}
+
+
+@* ═══════════════════════════════════════════
+   CSS STYLES
+═══════════════════════════════════════════ *@
+<style>
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ── Hero ── */
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px; margin: 0 auto; width: 100%;
+        box-sizing: border-box; position: relative; z-index: 1;
+    }
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important; overflow: hidden;
+        box-shadow: 0 12px 32px rgba(13,38,84,.15), 0 4px 12px rgba(13,38,84,.08);
+        border: 1px solid rgba(255,255,255,.08);
+    }
+    .hero-wrapper .fc-hero.fc-hero-slim { padding-top: 18px !important; padding-bottom: 22px !important; }
+
+    .flt-hero-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+    .flt-hero-left { flex: 1; min-width: 200px; }
+    .flt-hero-crumb { display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; color: rgba(255,255,255,.55); margin-bottom: 2px; }
+    .flt-hero-sub { font-size: 13px; color: rgba(255,255,255,.55); font-weight: 600; }
+    .flt-hero-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .flt-hero-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 8px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); color: rgba(255,255,255,.7); font-size: 10.5px; font-weight: 700; white-space: nowrap; }
+
+    .flt-hero-refresh {
+        width: 36px; height: 36px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.08);
+        color: rgba(255,255,255,.75); cursor: pointer; transition: background .15s;
+    }
+    .flt-hero-refresh:hover { background: rgba(255,255,255,.14); }
+
+    .flt-hero-add {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 16px; border-radius: 9px;
+        border: none; background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: #fff; font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; box-shadow: 0 4px 14px rgba(22,163,74,.35);
+        transition: all .15s ease;
+    }
+    .flt-hero-add:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(22,163,74,.4); }
+
+    /* ── KPIs Glass Strip ── */
+    .flt-kpis-strip {
+        display: flex; align-items: stretch;
+        background: rgba(0,0,0,.15); border: 1px solid rgba(255,255,255,.10);
+        border-radius: 12px; overflow: hidden; backdrop-filter: blur(8px); margin-top: 14px;
+    }
+    .flt-kpi-item {
+        flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+        cursor: pointer; transition: background .15s ease;
+    }
+    .flt-kpi-item:hover { background: rgba(255,255,255,.06); }
+    .flt-kpi-item.kpi-active { background: rgba(30,110,245,.28); }
+    .flt-kpi-div { width: 1px; background: rgba(255,255,255,.10); align-self: stretch; }
+    .flt-kpi-icon {
+        width: 36px; height: 36px; flex: 0 0 36px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .kpi-blue  { background: rgba(30,110,245,.2); color: #93c5fd; }
+    .kpi-amber { background: rgba(234,179,8,.2);  color: #fde68a; }
+    .kpi-red   { background: rgba(239,68,68,.2);  color: #fca5a5; }
+    .kpi-green { background: rgba(34,197,94,.2);  color: #86efac; }
+
+    .flt-kpi-label { font-size: 9.5px; color: rgba(255,255,255,.5); font-weight: 600; }
+    .flt-kpi-val { font-size: 15px; font-weight: 900; color: #fff; margin-top: 2px; }
+    .val-green { color: #86efac !important; }
+    .val-red   { color: #fca5a5 !important; }
+    .val-amber { color: #fde68a !important; }
+
+    /* ── Body ── */
+    .flt-body {
+        background: var(--fc-bg); min-height: calc(100vh - 180px);
+        padding: 18px clamp(16px, 3vw, 40px) 96px;
+        max-width: 1440px; width: 100%; margin: 0 auto;
+        box-sizing: border-box; position: relative; z-index: 2;
+        display: flex; flex-direction: column; gap: 14px;
+    }
+
+    .flt-state-box {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px; background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center; box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .flt-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .flt-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+    .flt-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .flt-state-box p { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    .flt-card { background: var(--fc-card); border: 1px solid var(--fc-border); border-radius: var(--fc-radius); box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06); overflow: hidden; }
+
+    /* ── Toolbar ── */
+    .flt-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; background: linear-gradient(180deg, #fff 0%, #fafbfd 100%); border-bottom: 1px solid #edf1f7; flex-wrap: wrap; }
+    .flt-search-wrap { position: relative; display: flex; align-items: center; flex: 1; min-width: 200px; max-width: 380px; }
+    .flt-search-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; }
+    .flt-search-input {
+        width: 100%; height: 42px; padding: 0 36px 0 12px; border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text); font-family: inherit; font-size: 13px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .flt-search-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .flt-search-input::placeholder { color: #b0bcc8; }
+    .flt-search-clear { position: absolute; left: 10px; display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; border: none; background: #edf1f7; color: #8899ae; cursor: pointer; }
+    .flt-search-clear:hover { background: #dde3ed; }
+    .flt-results-badge { display: flex; align-items: center; gap: 5px; margin-right: auto; font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap; }
+    .flt-results-badge strong { color: #5a6e88; }
+
+    /* ── Tabs ── */
+    .flt-tab-bar { padding: 10px 18px; background: #f9fafd; border-bottom: 1px solid #edf1f7; }
+    .flt-tabs { display: flex; gap: 4px; padding: 3px; border-radius: 10px; background: #f0f3f8; width: fit-content; }
+    .flt-tab {
+        display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border: none; border-radius: 7px;
+        background: transparent; color: #6b7d95; font-family: inherit; font-size: 12px; font-weight: 700;
+        cursor: pointer; white-space: nowrap; transition: all .15s ease;
+    }
+    .flt-tab:hover:not(.active) { color: var(--fc-text); background: rgba(255,255,255,.6); }
+    .flt-tab.active { background: var(--fc-card); color: var(--fc-blue); box-shadow: 0 1px 4px rgba(15,41,82,.10); font-weight: 800; }
+    .flt-tab-count { min-width: 22px; height: 20px; border-radius: 5px; padding: 0 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .flt-tab:not(.active) .flt-tab-count { background: #e4eaf3; color: #8899ae; }
+
+    /* ── Loading / Empty ── */
+    .flt-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 200px; color: var(--fc-muted); font-size: 12px; font-weight: 600; }
+    .flt-spinner { width: 32px; height: 32px; border: 3px solid #dde5f0; border-top-color: var(--fc-blue); border-radius: 50%; animation: flt-spin .75s linear infinite; }
+    @@keyframes flt-spin { to { transform: rotate(360deg); } }
+    .flt-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 240px; padding: 40px; text-align: center; }
+    .flt-empty-icon { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #f0f4fa; color: #b0c4d8; }
+    .flt-empty-title { font-size: 15px; font-weight: 800; color: var(--fc-text); }
+    .flt-empty-sub { font-size: 12px; color: var(--fc-muted); }
+
+    /* ── Table ── */
+    .flt-table-wrap { overflow-x: auto; }
+    .flt-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .flt-table thead th {
+        padding: 12px 14px; background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 10.5px; font-weight: 800; text-align: center;
+        border-bottom: 2px solid #e4eaf3; white-space: nowrap;
+    }
+    .flt-table .th-start { text-align: right; }
+    .flt-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background .12s ease; }
+    .flt-table tbody tr:last-child { border-bottom: none; }
+    .flt-table tbody tr:hover { background: #fafcff; }
+    .flt-table tbody td { padding: 11px 12px; color: #526070; text-align: center; vertical-align: middle; }
+    .td-start { text-align: right !important; }
+    .td-muted { color: #8899ae; font-size: 11px; }
+
+    .flt-item-cell { display: flex; align-items: center; gap: 10px; }
+    .flt-avatar { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.10); }
+    .av-available   { background: linear-gradient(135deg, #0d8a48, #16a35b); }
+    .av-intrip      { background: linear-gradient(135deg, #1558d6, #1e6ef5); }
+    .av-maintenance { background: linear-gradient(135deg, #b87d08, #e09a10); }
+    .av-outofservice{ background: linear-gradient(135deg, #6b7d95, #4a5a74); }
+
+    .flt-item-info { min-width: 0; }
+    .flt-code-plate { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .flt-code-chip { display: inline-flex; padding: 2px 8px; border-radius: 6px; background: #f0f4fa; border: 1px solid #e0e8f4; font-size: 10.5px; font-weight: 800; color: var(--fc-blue); font-family: "Inter", Arial, sans-serif; }
+    .flt-plate-num { font-size: 13px; font-weight: 800; color: #1c2b43; margin-top: 4px; font-family: "Inter", Arial, sans-serif; }
+
+    .flt-type-cell { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+    .flt-type-tag { display: inline-flex; padding: 3px 10px; border-radius: 6px; background: var(--fc-blue-lt); color: var(--fc-blue); font-size: 11px; font-weight: 800; border: 1px solid #bdd4fc; }
+    .flt-brand-sub { font-size: 10.5px; color: #8899ae; font-weight: 600; }
+
+    .flt-ownership-badge {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 800;
+    }
+    .ownership-company { background: #eaf1ff; color: var(--fc-blue); border: 1px solid #bdd4fc; }
+    .ownership-external { background: #fff8e6; color: #9a6d08; border: 1px solid #f0d898; }
+
+    .flt-doc-cell { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+    .flt-doc-badge { display: inline-flex; padding: 2px 8px; border-radius: 5px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+    .doc-valid   { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .doc-warning { background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898; }
+    .doc-expired { background: var(--fc-red-lt); color: var(--fc-red); border: 1px solid #ffc8cf; }
+
+    .flt-status-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 7px; font-size: 10.5px; font-weight: 800; }
+    .flt-status-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
+    .chip-available   { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .chip-intrip      { background: var(--fc-blue-lt); color: var(--fc-blue); border: 1px solid #c0d4fb; }
+    .chip-maintenance { background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898; }
+    .chip-outofservice{ background: #f0f3f8; color: #6b7d95; border: 1px solid #dde5f0; }
+    .dot-available    { background: var(--fc-green); }
+    .dot-intrip       { background: var(--fc-blue); }
+    .dot-maintenance  { background: var(--fc-amber); }
+    .dot-outofservice { background: #6b7d95; }
+
+    .flt-actions { display: flex; align-items: center; gap: 3px; justify-content: center; }
+    .flt-act-btn { width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; border: 1px solid transparent; cursor: pointer; transition: all .15s ease; background: transparent; }
+    .act-edit { color: var(--fc-blue); }
+    .act-del  { color: var(--fc-red); }
+    .act-edit:hover { background: var(--fc-blue-lt); border-color: #c0d4fb; }
+    .act-del:hover  { background: var(--fc-red-lt); border-color: #ffc8cf; }
+
+    .flt-confirm-del { height: 28px; padding: 0 10px; border: none; border-radius: 6px; background: linear-gradient(135deg, #e03048, #c0182e); color: #fff; font-family: inherit; font-size: 10px; font-weight: 800; cursor: pointer; animation: flt-pulse-del 1s ease infinite; white-space: nowrap; }
+    @@keyframes flt-pulse-del { 0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.35); } 50% { box-shadow: 0 0 0 5px rgba(224,48,72,0); } }
+
+    /* ── Modals (svc-modal) ── */
+    .svc-modal-backdrop { position: fixed; inset: 0; z-index: 1400; background: rgba(10,27,59,.62); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 20px; animation: svc-fade .2s ease both; }
+    @@keyframes svc-fade { from { opacity: 0; } to { opacity: 1; } }
+
+    .svc-modal { width: 100%; max-width: 720px; background: #fff; border-radius: 20px; box-shadow: 0 25px 60px rgba(10,27,59,.28), 0 8px 20px rgba(10,27,59,.12); overflow: hidden; animation: svc-pop .28s cubic-bezier(.22,.9,.36,1.1) both; max-height: 92vh; display: flex; flex-direction: column; }
+    @@keyframes svc-pop { from { opacity: 0; transform: translateY(20px) scale(.96); } to { opacity: 1; transform: none; } }
+
+    .svc-modal-head { display: flex; align-items: center; gap: 14px; padding: 20px 24px; background: linear-gradient(135deg, #0A1B3B 0%, #16306B 100%); color: #fff; flex: 0 0 auto; position: relative; overflow: hidden; }
+    .svc-modal-head::before { content: ""; position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, rgba(255,128,21,.15) 0%, transparent 70%); pointer-events: none; }
+    .svc-head-icon { width: 46px; height: 46px; flex: 0 0 46px; display: flex; align-items: center; justify-content: center; border-radius: 13px; position: relative; z-index: 1; }
+    .svc-icon-create { background: rgba(27,158,94,.2); color: #6ee7b7; border: 1px solid rgba(110,231,183,.3); }
+    .svc-icon-edit   { background: rgba(255,128,21,.2); color: #FFD9B8; border: 1px solid rgba(255,128,21,.3); }
+    .svc-head-text  { flex: 1; min-width: 0; position: relative; z-index: 1; }
+    .svc-head-title { font-size: 16px; font-weight: 800; color: #fff; line-height: 1.3; }
+    .svc-head-sub   { font-size: 11.5px; color: rgba(255,255,255,.62); margin-top: 3px; }
+    .svc-head-close { width: 34px; height: 34px; flex: 0 0 34px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,.15); border-radius: 9px; background: rgba(255,255,255,.06); color: rgba(255,255,255,.7); cursor: pointer; transition: all .15s; position: relative; z-index: 1; }
+    .svc-head-close:hover { background: rgba(255,255,255,.14); color: #fff; transform: rotate(90deg); }
+
+    .svc-banner { display: flex; align-items: center; gap: 10px; padding: 12px 20px; flex: 0 0 auto; font-size: 12.5px; font-weight: 600; }
+    .svc-banner-ok  { background: #e9f8f0; color: #0e7a43; border-bottom: 1px solid #b5e8d0; }
+    .svc-banner-err { background: #fff0f2; color: #D64545; border-bottom: 1px solid #ffc8cf; }
+    .svc-banner-msg { flex: 1; }
+    .svc-banner-x { background: none; border: none; color: inherit; opacity: .5; cursor: pointer; }
+    .svc-modal-body { flex: 1 1 auto; overflow-y: auto; padding: 0; }
+
+    /* MudTabs */
+    .svc-mud-tabs .mud-tabs-toolbar { background: linear-gradient(180deg, #f8fafd, #f2f5fa) !important; border-bottom: 2px solid #e4eaf3 !important; padding: 0 16px !important; min-height: 52px !important; }
+    .svc-mud-tabs .mud-tab { font-family: inherit !important; font-size: 12px !important; font-weight: 700 !important; color: #6B7A8F !important; padding: 0 10px !important; min-width: unset !important; text-transform: none !important; letter-spacing: 0 !important; min-height: 52px !important; }
+    .svc-mud-tabs .mud-tab.mud-tab-active { color: #0B56DF !important; font-weight: 800 !important; }
+    .svc-mud-tabs .mud-tab-slider { background: #0B56DF !important; height: 3px !important; border-radius: 3px 3px 0 0 !important; }
+    .svc-mud-tabs .mud-tab:hover:not(.mud-tab-active) { color: #1A2332 !important; background: rgba(11,86,223,.04) !important; border-radius: 8px !important; }
+    .svc-tab-panel { padding: 0 !important; }
+
+    .svc-tab-label { display: flex; align-items: center; gap: 7px; padding: 0 4px; white-space: nowrap; }
+    .svc-tab-ic { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 7px; }
+    .svc-tab-ic-blue  { background: #eaf1ff; color: #0B56DF; }
+    .svc-tab-ic-green { background: #e9f8f0; color: #1B9E5E; }
+    .svc-tab-ic-amber { background: #fff8e6; color: #E8A317; }
+
+    .svc-section { padding: 22px 24px 26px; }
+    .svc-section-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #edf1f7; }
+    .svc-section-ic { width: 40px; height: 40px; flex: 0 0 40px; display: flex; align-items: center; justify-content: center; border-radius: 11px; }
+    .svc-section-ic.blue  { background: #eaf1ff; color: #0B56DF; border: 1px solid #bdd4fc; }
+    .svc-section-ic.green { background: #e9f8f0; color: #1B9E5E; border: 1px solid #b0e0c5; }
+    .svc-section-ic.amber { background: #fff8e6; color: #E8A317; border: 1px solid #f0d898; }
+    .svc-section-title { font-size: 14.5px; font-weight: 800; color: #1A2332; line-height: 1.2; }
+    .svc-section-sub   { font-size: 11px; font-weight: 500; color: #6B7A8F; margin-top: 3px; }
+
+    .svc-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .svc-full { grid-column: 1 / -1; }
+    .svc-field { display: flex; flex-direction: column; gap: 5px; position: relative; }
+    .svc-label { font-size: 11.5px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 4px; }
+    .svc-req { color: #D64545; font-size: 13px; }
+
+    .svc-input-wrap { position: relative; display: flex; align-items: center; }
+    .svc-prefix { position: absolute; right: 12px; z-index: 1; display: flex; align-items: center; color: #9aaabb; pointer-events: none; }
+    .svc-prefix.txt { font-size: 11px; font-weight: 800; color: #6B7A8F; }
+    .svc-input { width: 100%; height: 42px; border: 1.5px solid #d8e2f0; border-radius: 10px; background: #fafcff; color: #1A2332; font-family: inherit; font-size: 13px; padding: 0 12px; outline: none; box-sizing: border-box; transition: border-color .15s, box-shadow .15s, background .15s; }
+    .svc-input:focus { border-color: #0B56DF; box-shadow: 0 0 0 3px rgba(11,86,223,.1); background: #fff; }
+    .svc-input::placeholder { color: #b0bcc8; }
+    .svc-input.ltr { direction: ltr; text-align: left; }
+    .svc-input.with-prefix { padding-right: 40px; }
+
+    .svc-select {
+        cursor: pointer; -webkit-appearance: none; appearance: none;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B7A8F' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
+        background-repeat: no-repeat; background-position: left 12px center; background-size: 13px; padding-left: 34px;
+    }
+
+    .field-clear-btn { position: absolute; left: 12px; background: none; border: none; color: #9aaabb; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 50%; font-size: 11px; font-weight: bold; }
+    .field-clear-btn:hover { background: rgba(0,0,0,0.05); color: var(--fc-red); }
+
+    .field-dropdown { position: absolute; top: 100%; right: 0; left: 0; margin-top: 4px; background: #fafcff; border: 1px solid #d8e2f0; border-radius: 9px; box-shadow: 0 8px 24px rgba(0,0,0,.12); max-height: 240px; overflow-y: auto; z-index: 100; }
+    .field-dropdown-item { padding: 10px 12px; font-size: 13px; color: var(--fc-text); cursor: pointer; transition: background .1s; }
+    .field-dropdown-item:hover, .field-dropdown-item.is-focused { background: #eaf1ff; color: var(--fc-blue); font-weight: 600; }
+
+    .svc-modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 20px; background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%); border-top: 1px solid #edf1f7; flex: 0 0 auto; }
+    .svc-foot-right { display: flex; align-items: center; gap: 8px; }
+    .svc-btn-cancel { height: 38px; padding: 0 16px; border: 1.5px solid #d8e2f0; border-radius: 9px; background: #fff; color: #6B7A8F; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s; }
+    .svc-btn-cancel:hover { background: #f0f4fa; color: #1A2332; border-color: #c0ccd8; }
+    .svc-btn-save { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 22px; border: none; border-radius: 10px; background: linear-gradient(135deg, #0B56DF, #083CA8); color: #fff; font-family: inherit; font-size: 12.5px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(11,86,223,.28); transition: all .18s; }
+    .svc-btn-save:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(11,86,223,.4); }
+    .svc-btn-save:disabled { opacity: .6; cursor: not-allowed; }
+    .svc-spinner { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: flt-spin .7s linear infinite; }
+
+    /* ── FAB ── */
+    .glow-fab-wrap { position: fixed; left: 28px; bottom: 28px; z-index: 1299; width: 60px; height: 60px; }
+    .glow-fab-container { position: relative; z-index: 2; width: 60px; height: 60px; }
+    .glow-fab-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 58px; height: 58px; border-radius: 50%; background: linear-gradient(135deg, #1e6ef5, #0d47a1); border: 2.5px solid #fbbf24; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(30, 110, 245, .4); transition: transform .2s; z-index: 2; }
+    .glow-fab-btn:hover { transform: translate(-50%, -50%) scale(1.05); }
+    .glow-fab-icon { transition: transform .3s; }
+    .glow-fab-wrap.is-open .glow-fab-icon { transform: rotate(130deg); }
+
+    .glow-halo, .glow-ring { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
+    .glow-halo { width: 58px; height: 58px; background: radial-gradient(circle, rgba(30, 110, 245, .3) 0%, transparent 70%); animation: glow-breath 2s ease-in-out infinite; }
+    .glow-ring { width: 58px; height: 58px; border: 2px solid rgba(30, 110, 245, .4); animation: glow-expand 2s ease-out infinite; }
+    .glow-ring-2 { animation-delay: .3s; }
+    .glow-ring-3 { animation-delay: .6s; }
+
+    @@keyframes glow-breath { 0%, 100% { opacity: .5; transform: translate(-50%, -50%) scale(1); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } }
+    @@keyframes glow-expand { 0% { opacity: .8; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.5); } }
+
+    .glow-fab-menu { position: absolute; bottom: 74px; left: 0; z-index: 3; display: flex; flex-direction: column; gap: 8px; opacity: 0; pointer-events: none; transform: translateY(10px); transition: opacity .2s, transform .2s; }
+    .glow-fab-wrap.is-open .glow-fab-menu { opacity: 1; pointer-events: auto; transform: translateY(0); }
+    .glow-fab-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 12px; background: #fff; border: 1px solid #dde5f0; box-shadow: 0 4px 12px rgba(0, 0, 0, .1); cursor: pointer; font-size: 13px; color: #1c2c44; white-space: nowrap; }
+    .glow-fab-item:hover { background: #f4f7fb; border-color: #1e6ef5; }
+    .glow-fab-item-ic { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: #eaf1ff; color: #1e6ef5; }
+    .glow-fab-scrim { position: fixed; inset: 0; background: rgba(9, 18, 35, .45); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 1298; }
+
+    /* ── Responsive ── */
+    @@media (max-width: 992px) {
+        .flt-kpis-strip { flex-wrap: wrap; }
+        .flt-kpi-item { flex: 0 0 50%; }
+        .flt-kpi-div:nth-child(4) { display: none; }
+    }
+    @@media (max-width: 900px) {
+        .flt-toolbar { flex-direction: column; align-items: stretch; }
+        .flt-search-wrap { max-width: 100%; }
+        .svc-grid { grid-template-columns: 1fr; }
+    }
+    @@media (max-width: 768px) {
+        .flt-hero-row { flex-direction: column; align-items: flex-start; }
+        .flt-hero-right { width: 100%; justify-content: flex-start; }
+        .flt-kpi-item { flex: 0 0 100%; }
+        .flt-kpi-div { display: none; }
+    }
+    @@media (max-width: 680px) {
+        .flt-body { padding: 12px 12px 90px; }
+        .svc-modal { max-width: 100%; border-radius: 16px; }
+        .svc-modal-head { padding: 16px 18px; gap: 10px; }
+        .svc-section { padding: 18px 16px 22px; }
+        .glow-fab-wrap { left: 16px; bottom: 16px; }
+    }
+</style>
+
+
 @code {
+    /* ══════════════════════════════════════
+       DTO CLASSES
+    ══════════════════════════════════════ */
+    public class Opt
+    {
+        public int Id { get; set; }
+        public string Label { get; set; } = "";
+    }
+
+    public class VItem
+    {
+        public int VehicleId { get; set; }
+        public string VehicleCode { get; set; } = "";
+        public string PlateNumber { get; set; } = "";
+        public string VehicleType { get; set; } = "";
+        public string? Brand { get; set; }
+        public string OwnershipType { get; set; } = "";
+        public decimal? CapacityTon { get; set; }
+        public string Status { get; set; } = "";
+        public DateOnly? LicenseExpiryDate { get; set; }
+        public DateOnly? InsuranceExpiryDate { get; set; }
+    }
+
+    public class TItem
+    {
+        public int TrailerId { get; set; }
+        public string TrailerCode { get; set; } = "";
+        public string? PlateNumber { get; set; }
+        public string TrailerType { get; set; } = "";
+        public byte? SizeFeet { get; set; }
+        public string Status { get; set; } = "";
+    }
+
+    public class VDetail
+    {
+        public string PlateNumber { get; set; } = "";
+        public string VehicleType { get; set; } = "";
+        public string? Brand { get; set; }
+        public string? Model { get; set; }
+        public short? ModelYear { get; set; }
+        public string OwnershipType { get; set; } = "";
+        public int? SupplierId { get; set; }
+        public string? SupplierName { get; set; }
+        public decimal? CapacityTon { get; set; }
+        public byte ContainerSlots20 { get; set; }
+        public DateOnly? LicenseExpiryDate { get; set; }
+        public DateOnly? InsuranceExpiryDate { get; set; }
+        public string Status { get; set; } = "";
+    }
+
+    public class TDetail
+    {
+        public string? PlateNumber { get; set; }
+        public string TrailerType { get; set; } = "";
+        public byte? SizeFeet { get; set; }
+        public string OwnershipType { get; set; } = "";
+        public int? SupplierId { get; set; }
+        public string? SupplierName { get; set; }
+        public DateOnly? LicenseExpiryDate { get; set; }
+        public DateOnly? InsuranceExpiryDate { get; set; }
+        public string Status { get; set; } = "";
+        public string? Notes { get; set; }
+    }
+
+    public class VForm
+    {
+        public string PlateNumber { get; set; } = "";
+        public string VehicleType { get; set; } = "";
+        public string? Brand { get; set; }
+        public string? Model { get; set; }
+        public short? ModelYear { get; set; }
+        public string OwnershipType { get; set; } = "Company";
+        public int? SupplierId { get; set; }
+        public decimal? CapacityTon { get; set; }
+        public byte ContainerSlots20 { get; set; } = 1;
+        public string? LicenseExpiryDate { get; set; }
+        public string? InsuranceExpiryDate { get; set; }
+        public string Status { get; set; } = "Available";
+        public string? Notes { get; set; }
+    }
+
+    public class TForm
+    {
+        public string? PlateNumber { get; set; }
+        public string TrailerType { get; set; } = "";
+        public byte? SizeFeet { get; set; }
+        public string OwnershipType { get; set; } = "Company";
+        public int? SupplierId { get; set; }
+        public string? LicenseExpiryDate { get; set; }
+        public string? InsuranceExpiryDate { get; set; }
+        public string Status { get; set; } = "Available";
+        public string? Notes { get; set; }
+    }
+
+    /* ══════════════════════════════════════
+       STATE
+    ══════════════════════════════════════ */
     private AuthUser? _user;
     private bool CanView => _user?.Can("FLEET.VIEW") ?? false;
     private bool CanCreate => _user?.Can("FLEET.CREATE") ?? false;
@@ -265,63 +1595,198 @@
 
     private string _tab = "v";
     private string _search = "";
+    private string _kpiFilter = "";
     private bool _loading;
     private List<VItem> _vehicles = new();
     private List<TItem> _trailers = new();
     private List<Opt> _suppliers = new();
+    private List<Opt> _filteredSuppliers = new();
     private int? _confirmV, _confirmT;
+    private bool _fabOpen;
 
-    private bool _vOpen, _tOpen, _saving; private string? _msg; private bool _ok;
+    private bool _vOpen, _tOpen, _saving;
+    private string? _msg;
+    private bool _ok;
     private int? _vId, _tId;
-    private VForm _vf = new(); private TForm _tf = new();
+    private VForm _vf = new();
+    private TForm _tf = new();
+    private int _vActiveTab = 0;
 
-    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
-    public class VItem { public int VehicleId { get; set; } public string VehicleCode { get; set; } = "";
-        public string PlateNumber { get; set; } = ""; public string VehicleType { get; set; } = "";
-        public string? Brand { get; set; } public string OwnershipType { get; set; } = "";
-        public decimal? CapacityTon { get; set; } public string Status { get; set; } = ""; }
-    public class TItem { public int TrailerId { get; set; } public string TrailerCode { get; set; } = "";
-        public string? PlateNumber { get; set; } public string TrailerType { get; set; } = "";
-        public byte? SizeFeet { get; set; } public string Status { get; set; } = ""; }
+    private string _supplierSearch = "";
+    private bool _showSupplierDropdown;
+    private int _focusedSupplierIndex = -1;
 
-    public class VDetail { public string PlateNumber { get; set; } = ""; public string VehicleType { get; set; } = "";
-        public string? Brand { get; set; } public string? Model { get; set; } public short? ModelYear { get; set; }
-        public string OwnershipType { get; set; } = ""; public int? SupplierId { get; set; }
-        public decimal? CapacityTon { get; set; } public byte ContainerSlots20 { get; set; }
-        public DateOnly? LicenseExpiryDate { get; set; } public DateOnly? InsuranceExpiryDate { get; set; }
-        public string Status { get; set; } = ""; }
-    /* 🔴 كانت ناقصة SupplierId / التواريخ / Notes — والسيرفر بيرجّعهم في TrailerDetail.
-     *    نقصهم كان بيخلي EditTrailer يبعتهم null فـ UpdateTrailer يمسحهم من القاعدة. */
-    public class TDetail { public string? PlateNumber { get; set; } public string TrailerType { get; set; } = "";
-        public byte? SizeFeet { get; set; } public string OwnershipType { get; set; } = "";
-        public int? SupplierId { get; set; }
-        public DateOnly? LicenseExpiryDate { get; set; } public DateOnly? InsuranceExpiryDate { get; set; }
-        public string Status { get; set; } = ""; public string? Notes { get; set; } }
-
-    public class VForm { public string PlateNumber { get; set; } = ""; public string VehicleType { get; set; } = "";
-        public string? Brand { get; set; } public string? Model { get; set; } public short? ModelYear { get; set; }
-        public string OwnershipType { get; set; } = "Company"; public int? SupplierId { get; set; }
-        public decimal? CapacityTon { get; set; } public byte ContainerSlots20 { get; set; } = 1;
-        public string? LicenseExpiryDate { get; set; } public string? InsuranceExpiryDate { get; set; }
-        public string Status { get; set; } = "Available"; public string? Notes { get; set; } }
-    public class TForm { public string? PlateNumber { get; set; } public string TrailerType { get; set; } = "";
-        public byte? SizeFeet { get; set; } public string OwnershipType { get; set; } = "Company";
-        public int? SupplierId { get; set; } public string? LicenseExpiryDate { get; set; }
-        public string? InsuranceExpiryDate { get; set; } public string Status { get; set; } = "Available";
-        public string? Notes { get; set; } }
-
+    /* ══════════════════════════════════════
+       COMPUTED
+    ══════════════════════════════════════ */
     private static string StatusAr(string s) => s switch
     {
-        "Available" => "متاحة", "InTrip" => "في رحلة", "Maintenance" => "صيانة", _ => "خارج الخدمة"
+        "Available"    => "متاحة للتشغيل",
+        "InTrip"       => "في رحلة نشطة",
+        "Maintenance"  => "قيد الصيانة",
+        "OutOfService" => "خارج الخدمة",
+        _              => s
     };
 
-    private IEnumerable<VItem> VehiclesFiltered => string.IsNullOrWhiteSpace(_search) ? _vehicles :
-        _vehicles.Where(v => v.PlateNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                             v.VehicleCode.Contains(_search, StringComparison.OrdinalIgnoreCase));
-    private IEnumerable<TItem> TrailersFiltered => string.IsNullOrWhiteSpace(_search) ? _trailers :
-        _trailers.Where(t => (t.PlateNumber ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                             t.TrailerCode.Contains(_search, StringComparison.OrdinalIgnoreCase));
+    private static string StatusChipClass(string s) => s switch
+    {
+        "Available"    => "chip-available",
+        "InTrip"       => "chip-intrip",
+        "Maintenance"  => "chip-maintenance",
+        "OutOfService" => "chip-outofservice",
+        _              => "chip-outofservice"
+    };
 
+    private static string StatusDotClass(string s) => s switch
+    {
+        "Available"    => "dot-available",
+        "InTrip"       => "dot-intrip",
+        "Maintenance"  => "dot-maintenance",
+        "OutOfService" => "dot-outofservice",
+        _              => "dot-outofservice"
+    };
+
+    private static string VehicleAvatarClass(string s) => s switch
+    {
+        "Available"    => "av-available",
+        "InTrip"       => "av-intrip",
+        "Maintenance"  => "av-maintenance",
+        "OutOfService" => "av-outofservice",
+        _              => "av-outofservice"
+    };
+
+    private IEnumerable<VItem> VehiclesFiltered => _vehicles.Where(v =>
+        (_kpiFilter == "" || v.Status == _kpiFilter) &&
+        (string.IsNullOrWhiteSpace(_search) ||
+         NormalizeArabic(v.PlateNumber).Contains(NormalizeArabic(_search)) ||
+         NormalizeArabic(v.VehicleCode).Contains(NormalizeArabic(_search))));
+
+    private IEnumerable<TItem> TrailersFiltered => _trailers.Where(t =>
+        (_kpiFilter == "" || t.Status == _kpiFilter) &&
+        (string.IsNullOrWhiteSpace(_search) ||
+         NormalizeArabic(t.PlateNumber ?? "").Contains(NormalizeArabic(_search)) ||
+         NormalizeArabic(t.TrailerCode).Contains(NormalizeArabic(_search))));
+
+    private static string NormalizeArabic(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        string[] diacritics = new[] { "َ", "ُ", "ِ", "ّ", "ً", "ٌ", "ٍ", "ْ", "ـ" };
+        foreach (var d in diacritics) s = s.Replace(d, "");
+        return s
+            .Replace('أ', 'ا').Replace('إ', 'ا').Replace('آ', 'ا').Replace('ٱ', 'ا').Replace('ء', 'ا')
+            .Replace('ة', 'ه').Replace('ى', 'ي').Replace('ؤ', 'و').Replace('ئ', 'ي')
+            .Replace("  ", " ").ToLowerInvariant().Trim();
+    }
+
+    private static decimal? ParseNullDec(object? v) =>
+        decimal.TryParse(v?.ToString(), out var n) && n >= 0 ? n : (decimal?)null;
+    private static byte ParseByte(object? v, byte fallback) =>
+        byte.TryParse(v?.ToString(), out var n) ? n : fallback;
+    private static byte? ParseNullByte(object? v) =>
+        byte.TryParse(v?.ToString(), out var n) ? n : (byte?)null;
+
+    private void SetKpiFilter(string f) { _kpiFilter = _kpiFilter == f ? "" : f; }
+    private void ToggleFab() => _fabOpen = !_fabOpen;
+
+    /* ══════════════════════════════════════
+       AUTOCOMPLETE (Supplier)
+    ══════════════════════════════════════ */
+    private void OnSupplierSearch(ChangeEventArgs e)
+    {
+        _supplierSearch = e.Value?.ToString() ?? "";
+        _showSupplierDropdown = true;
+        _focusedSupplierIndex = -1;
+        FilterSuppliers(_supplierSearch);
+    }
+
+    private void FilterSuppliers(string search)
+    {
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            _filteredSuppliers = _suppliers.Take(20).ToList();
+            return;
+        }
+        var normalized = NormalizeArabic(search.Trim());
+        _filteredSuppliers = _suppliers
+            .Where(s => NormalizeArabic(s.Label).Contains(normalized))
+            .Take(20)
+            .ToList();
+    }
+
+    private void OnSupplierInputKeyDown(KeyboardEventArgs e)
+    {
+        if (!_showSupplierDropdown || !_filteredSuppliers.Any())
+        {
+            if (e.Key == "ArrowDown") _showSupplierDropdown = true;
+            return;
+        }
+        if (e.Key == "ArrowDown")
+            _focusedSupplierIndex = (_focusedSupplierIndex + 1) % _filteredSuppliers.Count;
+        else if (e.Key == "ArrowUp")
+            _focusedSupplierIndex = _focusedSupplierIndex <= 0 ? _filteredSuppliers.Count - 1 : _focusedSupplierIndex - 1;
+        else if (e.Key == "Enter")
+        {
+            if (_focusedSupplierIndex >= 0 && _focusedSupplierIndex < _filteredSuppliers.Count)
+            {
+                if (_vOpen) PickSupplier(_filteredSuppliers[_focusedSupplierIndex]);
+                else if (_tOpen) PickSupplierTrailer(_filteredSuppliers[_focusedSupplierIndex]);
+            }
+        }
+        else if (e.Key == "Escape")
+        {
+            _showSupplierDropdown = false;
+            _focusedSupplierIndex = -1;
+        }
+    }
+
+    private void OnSupplierInputFocus()
+    {
+        _showSupplierDropdown = true;
+        _focusedSupplierIndex = -1;
+        FilterSuppliers(_supplierSearch);
+    }
+
+    private async Task OnSupplierInputBlur()
+    {
+        await Task.Delay(250);
+        _showSupplierDropdown = false;
+    }
+
+    private void PickSupplier(Opt s)
+    {
+        _vf.SupplierId = s.Id;
+        _supplierSearch = s.Label;
+        _showSupplierDropdown = false;
+        _focusedSupplierIndex = -1;
+        StateHasChanged();
+    }
+
+    private void PickSupplierTrailer(Opt s)
+    {
+        _tf.SupplierId = s.Id;
+        _supplierSearch = s.Label;
+        _showSupplierDropdown = false;
+        _focusedSupplierIndex = -1;
+        StateHasChanged();
+    }
+
+    private void ClearSupplierSelection()
+    {
+        _vf.SupplierId = null;
+        _supplierSearch = "";
+        _focusedSupplierIndex = -1;
+    }
+
+    private void ClearSupplierSelectionTrailer()
+    {
+        _tf.SupplierId = null;
+        _supplierSearch = "";
+        _focusedSupplierIndex = -1;
+    }
+
+    /* ══════════════════════════════════════
+       INITIALIZATION
+    ══════════════════════════════════════ */
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
@@ -347,10 +1812,37 @@
         finally { _loading = false; }
     }
 
-    private void CloseAll() { _vOpen = false; _tOpen = false; }
+    private void CloseAll()
+    {
+        _vOpen = false;
+        _tOpen = false;
+        _msg = null;
+        _supplierSearch = "";
+        _filteredSuppliers = new();
+    }
 
-    private void NewVehicle() { _vId = null; _vf = new VForm(); _msg = null; _tOpen = false; _vOpen = true; }
-    private void NewTrailer() { _tId = null; _tf = new TForm(); _msg = null; _vOpen = false; _tOpen = true; }
+    private void NewVehicle()
+    {
+        _vId = null;
+        _vf = new VForm();
+        _supplierSearch = "";
+        _msg = null;
+        _tOpen = false;
+        _vOpen = true;
+        _vActiveTab = 0;
+        _fabOpen = false;
+    }
+
+    private void NewTrailer()
+    {
+        _tId = null;
+        _tf = new TForm();
+        _supplierSearch = "";
+        _msg = null;
+        _vOpen = false;
+        _tOpen = true;
+        _fabOpen = false;
+    }
 
     private async Task EditVehicle(VItem v)
     {
@@ -359,12 +1851,26 @@
             var d = await Http.GetFromJsonAsync<VDetail>($"api/fleet/vehicles/{v.VehicleId}");
             if (d is null) return;
             _vId = v.VehicleId;
-            _vf = new VForm { PlateNumber = d.PlateNumber, VehicleType = d.VehicleType, Brand = d.Brand,
-                Model = d.Model, ModelYear = d.ModelYear, OwnershipType = d.OwnershipType,
-                SupplierId = d.SupplierId, CapacityTon = d.CapacityTon, ContainerSlots20 = d.ContainerSlots20,
+            _vf = new VForm
+            {
+                PlateNumber = d.PlateNumber,
+                VehicleType = d.VehicleType,
+                Brand = d.Brand,
+                Model = d.Model,
+                ModelYear = d.ModelYear,
+                OwnershipType = d.OwnershipType,
+                SupplierId = d.SupplierId,
+                CapacityTon = d.CapacityTon,
+                ContainerSlots20 = d.ContainerSlots20,
                 LicenseExpiryDate = d.LicenseExpiryDate?.ToString("yyyy-MM-dd"),
-                InsuranceExpiryDate = d.InsuranceExpiryDate?.ToString("yyyy-MM-dd"), Status = d.Status };
-            _msg = null; _tOpen = false; _vOpen = true;
+                InsuranceExpiryDate = d.InsuranceExpiryDate?.ToString("yyyy-MM-dd"),
+                Status = d.Status
+            };
+            _supplierSearch = d.SupplierName ?? "";
+            _msg = null;
+            _tOpen = false;
+            _vOpen = true;
+            _vActiveTab = 0;
         }
         catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
     }
@@ -376,26 +1882,43 @@
             var d = await Http.GetFromJsonAsync<TDetail>($"api/fleet/trailers/{t.TrailerId}");
             if (d is null) return;
             _tId = t.TrailerId;
-            _tf = new TForm { PlateNumber = d.PlateNumber, TrailerType = d.TrailerType, SizeFeet = d.SizeFeet,
-                OwnershipType = d.OwnershipType, SupplierId = d.SupplierId,
+            _tf = new TForm
+            {
+                PlateNumber = d.PlateNumber,
+                TrailerType = d.TrailerType,
+                SizeFeet = d.SizeFeet,
+                OwnershipType = d.OwnershipType,
+                SupplierId = d.SupplierId,
                 LicenseExpiryDate = d.LicenseExpiryDate?.ToString("yyyy-MM-dd"),
                 InsuranceExpiryDate = d.InsuranceExpiryDate?.ToString("yyyy-MM-dd"),
-                Status = d.Status, Notes = d.Notes };
-            _msg = null; _vOpen = false; _tOpen = true;
+                Status = d.Status,
+                Notes = d.Notes
+            };
+            _supplierSearch = d.SupplierName ?? "";
+            _msg = null;
+            _vOpen = false;
+            _tOpen = true;
         }
         catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
     }
 
     private async Task SaveVehicleAsync()
     {
-        _saving = true; _msg = null;
+        _saving = true;
+        _msg = null;
         try
         {
             var res = _vId is null
                 ? await Http.PostAsJsonAsync("api/fleet/vehicles", _vf)
                 : await Http.PutAsJsonAsync($"api/fleet/vehicles/{_vId}", _vf);
-            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
-            if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); CloseAll(); await LoadAsync(); }
+            _msg = await MsgOf(res);
+            _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(_msg, Severity.Success);
+                CloseAll();
+                await LoadAsync();
+            }
         }
         catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
         finally { _saving = false; }
@@ -403,21 +1926,33 @@
 
     private async Task SaveTrailerAsync()
     {
-        _saving = true; _msg = null;
+        _saving = true;
+        _msg = null;
         try
         {
             var payload = new
             {
-                plateNumber = _tf.PlateNumber, trailerType = _tf.TrailerType, sizeFeet = _tf.SizeFeet,
-                ownershipType = _tf.OwnershipType, supplierId = _tf.SupplierId,
-                licenseExpiryDate = _tf.LicenseExpiryDate, insuranceExpiryDate = _tf.InsuranceExpiryDate,
-                status = _tf.Status, notes = _tf.Notes
+                plateNumber = _tf.PlateNumber,
+                trailerType = _tf.TrailerType,
+                sizeFeet = _tf.SizeFeet,
+                ownershipType = _tf.OwnershipType,
+                supplierId = _tf.SupplierId,
+                licenseExpiryDate = _tf.LicenseExpiryDate,
+                insuranceExpiryDate = _tf.InsuranceExpiryDate,
+                status = _tf.Status,
+                notes = _tf.Notes
             };
             var res = _tId is null
                 ? await Http.PostAsJsonAsync("api/fleet/trailers", payload)
                 : await Http.PutAsJsonAsync($"api/fleet/trailers/{_tId}", payload);
-            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
-            if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); CloseAll(); await LoadAsync(); }
+            _msg = await MsgOf(res);
+            _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(_msg, Severity.Success);
+                CloseAll();
+                await LoadAsync();
+            }
         }
         catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
         finally { _saving = false; }
@@ -455,6 +1990,6 @@
             var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
             return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
         }
-        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+        catch { return res.IsSuccessStatusCode ? "تمت العملية بنجاح" : $"حدث خطأ {(int)res.StatusCode}"; }
     }
 }

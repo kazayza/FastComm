@@ -96,7 +96,7 @@ public class CustomersController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "فشل ترقيم عميل جديد");
-            return StatusCode(500, new { message = "تعذّر توليد كود العميل — حاول تاني" });
+            return StatusCode(500, new { message = "تعذّر توليد كود العميل — حاول مره اخرى" });
         }
 
         var c = new Customer

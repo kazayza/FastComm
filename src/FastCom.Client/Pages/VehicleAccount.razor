@@ -8,154 +8,321 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
-<PageTitle>كشف حساب العربية — فاست كوم</PageTitle>
+<PageTitle>كشف حساب المركبة — فاست كوم</PageTitle>
 
 @* ═══════════════════════════════════════════
-   HERO — كارت مستقل بحواف دائرية
+   HERO SECTION
 ═══════════════════════════════════════════ *@
 <div class="hero-wrapper">
     <div class="fc-hero fc-hero-slim">
         <div class="fc-hero-inner">
 
-            <div class="va-hero-row">
-                <div class="va-hero-left">
-                    <div class="va-hero-crumb">
+            <div class="pay-hero-row">
+                <div class="pay-hero-left">
+                    <div class="pay-hero-crumb">
                         <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/>
-                            <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+                            <rect x="1" y="3" width="15" height="13" rx="2"/>
+                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                            <circle cx="18.5" cy="18.5" r="2.5"/>
                         </svg>
-                        <span>الأسطول · كشف الحساب</span>
+                        <span>الأسطول التشغيلي · كشوفات الحسابات المالية</span>
                     </div>
-                    <h1 class="fc-hero-title fc-hero-title-slim">كشف حساب @_stmt?.PlateNumber</h1>
-                    <span class="va-hero-sub">من @(_from == default ? "—" : _from.ToString("dd/MM/yyyy")) إلى @(_to == default ? "—" : _to.AddDays(-1).ToString("dd/MM/yyyy"))</span>
+                    <h1 class="fc-hero-title fc-hero-title-slim">
+                        كشف حساب المركبة @(_stmt is null ? "" : _stmt.PlateNumber)
+                    </h1>
+                    <span class="pay-hero-sub">كشف الحركة المالية والمحاسبية من @(_from == default ? "—" : _from.ToString("dd/MM/yyyy")) حتى @(_to == default ? "—" : _to.AddDays(-1).ToString("dd/MM/yyyy"))</span>
                 </div>
 
-                <div class="va-hero-right">
-                    <span class="va-hero-chip">
+                <div class="pay-hero-right">
+                    <button type="button" class="pay-hero-refresh" @onclick="LoadAsync" title="تحديث البيانات">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 4v6h-6"/>
+                            <path d="M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                        </svg>
+                    </button>
+                    <button type="button" class="pay-hero-add" @onclick="OpenPayment">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                        </svg>
+                        تسجيل دفعة جديدة
+                    </button>
+                    <span class="pay-hero-chip">
                         <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
                         </svg>
                         @_monthLabel
                     </span>
                 </div>
             </div>
 
-            <div class="va-kpis-row">
-                <div class="va-kpi va-kpi-blue">
-                    <div class="va-kpi-inner">
-                        <div class="va-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.AccountBalance" Size="Size.Small" /></div>
-                        <div class="va-kpi-data">
-                            <div class="va-kpi-num">@Money(_stmt?.Opening ?? 0)</div>
-                            <div class="va-kpi-label">رصيد مُرحّل</div>
-                        </div>
+            @* ── KPI Connected Glass Strip ── *@
+            <div class="pay-kpis-strip">
+
+                <div class="pay-kpi-item">
+                    <div class="pay-kpi-icon kpi-blue">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 21h18M3 10h18M5 6h14M10 10v11M14 10v11" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="pay-kpi-text">
+                        <div class="pay-kpi-label">الرصيد المُرحّل السابق</div>
+                        <div class="pay-kpi-val">@Money(_stmt?.Opening ?? 0) <small>ج.م</small></div>
                     </div>
                 </div>
-                <div class="va-kpi va-kpi-green">
-                    <div class="va-kpi-inner">
-                        <div class="va-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Small" /></div>
-                        <div class="va-kpi-data">
-                            <div class="va-kpi-num">@Money(_stmt?.TotalDebit ?? 0)</div>
-                            <div class="va-kpi-label">نولون</div>
-                        </div>
+
+                <div class="pay-kpi-div" aria-hidden="true"></div>
+
+                <div class="pay-kpi-item">
+                    <div class="pay-kpi-icon kpi-green">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                            <polyline points="17 6 23 6 23 12"/>
+                        </svg>
+                    </div>
+                    <div class="pay-kpi-text">
+                        <div class="pay-kpi-label">إجمالي النولون المستحق</div>
+                        <div class="pay-kpi-val kpi-val-green">@Money(_stmt?.TotalDebit ?? 0) <small>ج.م</small></div>
                     </div>
                 </div>
-                <div class="va-kpi va-kpi-red">
-                    <div class="va-kpi-inner">
-                        <div class="va-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.TrendingDown" Size="Size.Small" /></div>
-                        <div class="va-kpi-data">
-                            <div class="va-kpi-num">@Money(_stmt?.TotalCredit ?? 0)</div>
-                            <div class="va-kpi-label">خصومات</div>
-                        </div>
+
+                <div class="pay-kpi-div" aria-hidden="true"></div>
+
+                <div class="pay-kpi-item">
+                    <div class="pay-kpi-icon kpi-red">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/>
+                            <polyline points="17 18 23 18 23 12"/>
+                        </svg>
+                    </div>
+                    <div class="pay-kpi-text">
+                        <div class="pay-kpi-label">إجمالي الخصومات والدفعات</div>
+                        <div class="pay-kpi-val kpi-val-red">@Money(_stmt?.TotalCredit ?? 0) <small>ج.م</small></div>
                     </div>
                 </div>
-                <div class="va-kpi va-kpi-gold">
-                    <div class="va-kpi-inner">
-                        <div class="va-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Small" /></div>
-                        <div class="va-kpi-data">
-                            <div class="va-kpi-num">@Money(_stmt?.Closing ?? 0)</div>
-                            <div class="va-kpi-label">رصيد آخر الشهر</div>
-                        </div>
+
+                <div class="pay-kpi-div" aria-hidden="true"></div>
+
+                <div class="pay-kpi-item">
+                    <div class="pay-kpi-icon kpi-amber">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                    </div>
+                    <div class="pay-kpi-text">
+                        <div class="pay-kpi-label">رصيد الإقفال آخر الفترة</div>
+                        <div class="pay-kpi-val kpi-val-amber">@Money(_stmt?.Closing ?? 0) <small>ج.م</small></div>
                     </div>
                 </div>
+
             </div>
 
         </div>
     </div>
 </div>
 
+
 @* ═══════════════════════════════════════════
    BODY
 ═══════════════════════════════════════════ *@
-<div class="fc-overlap">
-    <div class="fc-card">
+<div class="pay-body">
+
+    <div class="pay-card">
 
         @* ── Toolbar ── *@
-        <div class="fc-toolbar">
-            <div class="fc-filters">
-                <select class="fc-sel" @bind="_selectedVehicleId" @bind:after="LoadAsync">
-                    <option value="0">— اختر سيارة —</option>
+        <div class="pay-toolbar">
+
+            <div class="va-filter-wrap">
+                <svg class="va-filter-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <rect x="1" y="3" width="15" height="13" rx="2"/>
+                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                </svg>
+                <select class="va-filter-select" @bind="_selectedVehicleId" @bind:after="LoadAsync">
+                    <option value="0">— اختر المركبة —</option>
                     @foreach (var v in _vehicles)
                     {
                         <option value="@v.VehicleId">@v.PlateNumber — @v.VehicleType</option>
                     }
                 </select>
-                <select class="fc-sel" @bind="_month" @bind:after="LoadAsync">
+            </div>
+
+            <div class="va-filter-wrap">
+                <svg class="va-filter-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="18" rx="2"/>
+                    <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                </svg>
+                <select class="va-filter-select" @bind="_month" @bind:after="LoadAsync">
                     @foreach (var m in _months)
                     {
                         <option value="@m.ToString("yyyy-MM")">@m.ToString("MMMM yyyy")</option>
                     }
                 </select>
             </div>
-            <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="LoadAsync" />
-                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print" OnClick="Print">طباعة</MudButton>
+
+            <button type="button" class="va-print-btn" @onclick="Print" title="طباعة كشف الحساب">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 6 2 18 2 18 9"/>
+                    <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+                    <rect x="6" y="14" width="12" height="8"/>
+                </svg>
+                طباعة
+            </button>
+
+            <div class="pay-results-badge">
+                <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                    <circle cx="8" cy="8" r="6"/>
+                    <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                </svg>
+                @if (_stmt is not null)
+                {
+                    <span>عرض <strong>@_stmt.Lines.Count</strong> حركة مالية</span>
+                }
+                else
+                {
+                    <span>لا توجد بيانات</span>
+                }
             </div>
+
         </div>
 
-        @* ── الجدول ── *@
+
+        @* ── Content ── *@
         @if (_loading)
         {
-            <div class="fc-empty"><MudProgressCircular Indeterminate="true" /> جارٍ التحميل...</div>
+            <div class="pay-loading">
+                <div class="pay-spinner" aria-label="جاري التحميل"></div>
+                <span>جاري تحميل الحركات المالية للفترة المحددة...</span>
+            </div>
+        }
+        else if (_selectedVehicleId <= 0)
+        {
+            <div class="pay-empty">
+                <div class="pay-empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.4">
+                        <rect x="1" y="3" width="15" height="13" rx="2"/>
+                        <path d="M16 8h4l3 3v5h-7V8z"/>
+                        <circle cx="5.5" cy="18.5" r="2.5"/>
+                        <circle cx="18.5" cy="18.5" r="2.5"/>
+                    </svg>
+                </div>
+                <div class="pay-empty-title">يرجى اختيار المركبة أولاً</div>
+                <div class="pay-empty-sub">حدد المركبة والفترة المالية لعرض كشف الحساب المفصل</div>
+            </div>
         }
         else if (_stmt is null || _stmt.Lines.Count == 0)
         {
-            <div class="fc-empty">لايوجد حركات في هذه الفترة</div>
+            <div class="pay-empty">
+                <div class="pay-empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.4">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+                    </svg>
+                </div>
+                <div class="pay-empty-title">لا توجد حركات مالية في هذه الفترة</div>
+                <div class="pay-empty-sub">لم يتم تسجيل أي حركة مالية على هذه المركبة خلال شهر @_monthLabel</div>
+            </div>
         }
         else
         {
-            <div class="fc-table-wrap">
-                <table class="fc-table">
+            <div class="pay-table-wrap">
+                <table class="pay-table" aria-label="كشف حساب المركبة">
                     <thead>
                         <tr>
-                            <th>التاريخ</th>
-                            <th>النوع</th>
-                            <th>المرجع</th>
-                            <th>البيان</th>
-                            <th class="num">مدين</th>
-                            <th class="num">دائن</th>
-                            <th class="num">الرصيد</th>
+                            <th class="th-start" style="width:110px">التاريخ</th>
+                            <th style="width:130px">نوع الحركة</th>
+                            <th style="width:130px">المرجع</th>
+                            <th class="th-start">البيان الوصفي</th>
+                            <th style="width:120px">مدين</th>
+                            <th style="width:120px">دائن</th>
+                            <th style="width:130px">الرصيد الجاري</th>
                         </tr>
                     </thead>
                     <tbody>
+                        @* الرصيد الافتتاحي كصف ثابت *@
+                        <tr class="va-opening-row">
+                            <td class="td-start va-date-cell">@_from.ToString("dd/MM/yyyy")</td>
+                            <td colspan="3" class="td-start">
+                                <div class="va-opening-label">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <path d="M23 4v6h-6"/>
+                                        <path d="M20.49 15A9 9 0 016 6l5-5"/>
+                                    </svg>
+                                    الرصيد المُرحّل من الفترة السابقة
+                                </div>
+                            </td>
+                            <td class="td-muted">—</td>
+                            <td class="td-muted">—</td>
+                            <td>
+                                <span class="va-balance-chip opening">@Money(_stmt.Opening)</span>
+                            </td>
+                        </tr>
+
                         @foreach (var l in _stmt.Lines)
                         {
                             <tr>
-                                <td>@l.Date.ToString("dd/MM/yyyy")</td>
-                                <td><span class="va-kind va-kind-@l.Kind.ToLower()">@KindAr(l.Kind)</span></td>
-                                <td>@l.Ref</td>
-                                <td>@l.Description</td>
-                                <td class="num">@(l.Debit > 0 ? Money(l.Debit) : "—")</td>
-                                <td class="num">@(l.Credit > 0 ? Money(l.Credit) : "—")</td>
-                                <td class="num"><strong>@Money(l.Balance)</strong></td>
+                                <td class="td-start va-date-cell">@l.Date.ToString("dd/MM/yyyy")</td>
+                                <td>
+                                    <span class="va-kind-chip kind-@l.Kind.ToLower()">
+                                        <span class="va-kind-dot" aria-hidden="true"></span>
+                                        @KindAr(l.Kind)
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(l.Ref))
+                                    {
+                                        <span class="va-ref-chip">@l.Ref</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="td-muted">—</span>
+                                    }
+                                </td>
+                                <td class="td-start va-desc-cell">@(l.Description ?? "—")</td>
+                                <td>
+                                    @if (l.Debit > 0)
+                                    {
+                                        <span class="va-num va-num-debit">@Money(l.Debit)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="td-muted">—</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (l.Credit > 0)
+                                    {
+                                        <span class="va-num va-num-credit">@Money(l.Credit)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="td-muted">—</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="va-balance-chip @(l.Balance < 0 ? "neg" : "pos")">
+                                        @Money(l.Balance)
+                                    </span>
+                                </td>
                             </tr>
                         }
                     </tbody>
                     <tfoot>
                         <tr>
-                            <td colspan="4"><strong>الإجمالي</strong></td>
-                            <td class="num"><strong>@Money(_stmt.TotalDebit)</strong></td>
-                            <td class="num"><strong>@Money(_stmt.TotalCredit)</strong></td>
-                            <td class="num"><strong>@Money(_stmt.Closing)</strong></td>
+                            <td colspan="4" class="td-start va-total-label">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <line x1="12" y1="1" x2="12" y2="23"/>
+                                    <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                                </svg>
+                                إجمالي الحركة المالية للفترة
+                            </td>
+                            <td><span class="va-num va-num-debit">@Money(_stmt.TotalDebit)</span></td>
+                            <td><span class="va-num va-num-credit">@Money(_stmt.TotalCredit)</span></td>
+                            <td><span class="va-balance-chip closing">@Money(_stmt.Closing)</span></td>
                         </tr>
                     </tfoot>
                 </table>
@@ -165,65 +332,467 @@
     </div>
 </div>
 
-@* FAB — تسجيل دفعة *@
+
+@* ═══════════════════════════════════════════
+   MODAL — تسجيل دفعة مالية (svc-modal Standard)
+═══════════════════════════════════════════ *@
+@if (_payOpen)
+{
+    <div class="svc-modal-backdrop" @onclick="() => _payOpen = false" role="dialog" aria-modal="true">
+        <div class="svc-modal svc-modal-sm" @onclick:stopPropagation="true">
+
+            <div class="svc-modal-head">
+                <div class="svc-head-icon svc-icon-create" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="1" x2="12" y2="23"/>
+                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                </div>
+                <div class="svc-head-text">
+                    <div class="svc-head-title">تسجيل دفعة مالية جديدة</div>
+                    <div class="svc-head-sub">تحصيل مبلغ من حساب المركبة <strong>@_stmt?.PlateNumber</strong></div>
+                </div>
+                <button class="svc-head-close" @onclick="() => _payOpen = false" aria-label="إغلاق" type="button">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="svc-modal-body" style="padding: 22px 24px">
+                <div class="svc-grid">
+
+                    <div class="svc-field svc-full">
+                        <label class="svc-label">القيمة المالية المستلمة <span class="svc-req">*</span></label>
+                        <div class="svc-input-wrap">
+                            <span class="svc-prefix txt">ج.م</span>
+                            <input type="number" step="0.01" min="0.01"
+                                   class="svc-input ltr with-prefix"
+                                   @bind="_payAmount"
+                                   placeholder="0.00" />
+                        </div>
+                    </div>
+
+                    <div class="svc-field svc-full">
+                        <label class="svc-label">البيان والملاحظات</label>
+                        <div class="svc-input-wrap">
+                            <span class="svc-prefix">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                                </svg>
+                            </span>
+                            <input type="text" class="svc-input with-prefix"
+                                   @bind="_payDesc"
+                                   maxlength="200"
+                                   placeholder="مثال: دفعة تسوية شهر مارس..." />
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="svc-modal-foot">
+                <div class="svc-foot-right">
+                    <button class="svc-btn-cancel" @onclick="() => _payOpen = false" type="button">تراجع</button>
+                    <button class="svc-btn-save" @onclick="SavePayment" disabled="@_saving" type="button">
+                        @if (_saving)
+                        {
+                            <span class="svc-spinner"></span>
+                            <span>جاري تسجيل الدفعة...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>تسجيل الدفعة</span>
+                        }
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+@* ── GLOW FAB ── *@
 <div class="glow-fab-wrap @(_fabOpen ? "is-open" : "")">
-    <div class="glow-fab-menu" role="menu">
+    <div class="glow-fab-menu" role="menu" aria-label="الإجراءات السريعة">
         <button type="button" class="glow-fab-item" role="menuitem" @onclick="OpenPayment">
-            <span class="glow-fab-item-ic"><MudIcon Icon="@Icons.Material.Filled.Payments" Size="Size.Small" /></span>
-            <span class="glow-fab-item-lb">تسجيل دفعة</span>
+            <span class="glow-fab-item-ic">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <line x1="12" y1="1" x2="12" y2="23"/>
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                </svg>
+            </span>
+            <span>تسجيل دفعة مالية</span>
+        </button>
+        <button type="button" class="glow-fab-item" role="menuitem" @onclick="Print">
+            <span class="glow-fab-item-ic">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <polyline points="6 9 6 2 18 2 18 9"/>
+                    <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+                    <rect x="6" y="14" width="12" height="8"/>
+                </svg>
+            </span>
+            <span>طباعة كشف الحساب</span>
         </button>
         <button type="button" class="glow-fab-item" role="menuitem" @onclick="LoadAsync">
-            <span class="glow-fab-item-ic"><MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" /></span>
-            <span class="glow-fab-item-lb">تحديث</span>
+            <span class="glow-fab-item-ic">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M23 4v6h-6"/>
+                    <path d="M1 20v-6h6"/>
+                    <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                </svg>
+            </span>
+            <span>تحديث الكشف</span>
         </button>
     </div>
+
     <div class="glow-fab-container">
-        <div class="glow-halo"></div>
-        <div class="glow-ring glow-ring-1"></div>
-        <div class="glow-ring glow-ring-2"></div>
-        <div class="glow-ring glow-ring-3"></div>
-        <button type="button" class="glow-fab-btn" @onclick="() => _fabOpen = !_fabOpen" aria-label="إجراءات">
+        <span class="glow-ring glow-ring-1" aria-hidden="true"></span>
+        <span class="glow-ring glow-ring-2" aria-hidden="true"></span>
+        <span class="glow-ring glow-ring-3" aria-hidden="true"></span>
+        <span class="glow-halo" aria-hidden="true"></span>
+
+        <button type="button" class="glow-fab-btn" @onclick="() => _fabOpen = !_fabOpen" aria-label="لوحة التحكم" aria-expanded="@(_fabOpen ? "true" : "false")">
             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.8" class="glow-fab-icon" aria-hidden="true">
                 <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
             </svg>
         </button>
     </div>
 </div>
+
 @if (_fabOpen)
 {
-    <div class="glow-fab-scrim" @onclick="() => _fabOpen = false"></div>
+    <div class="glow-fab-scrim" @onclick="() => _fabOpen = false" aria-hidden="true"></div>
 }
 
-@* ── Modal: تسجيل دفعة ── *@
-@if (_payOpen)
-{
-    <div class="fc-modal-backdrop" @onclick="() => _payOpen = false">
-        <div class="fc-modal fc-modal-sm" @onclick:stopPropagation="true">
-            <div class="fc-modal-head">
-                <div>
-                    <div class="fc-modal-title">تسجيل دفعة</div>
-                    <div class="fc-modal-sub">على العربية @_stmt?.PlateNumber</div>
-                </div>
-            </div>
-            <div class="fc-modal-body">
-                <div class="form-field">
-                    <label class="field-label">المبلغ *</label>
-                    <input type="number" step="0.01" min="0" class="field-input" @bind="_payAmount" />
-                </div>
-                <div class="form-field">
-                    <label class="field-label">البيان</label>
-                    <input type="text" class="field-input" @bind="_payDesc" placeholder="مثال: دفعة شهر 3" />
-                </div>
-            </div>
-            <div class="fc-modal-foot">
-                <MudButton Variant="Variant.Text" OnClick="() => _payOpen = false">إلغاء</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SavePayment" Disabled="@_saving">
-                    @(_saving ? "جارٍ الحفظ..." : "حفظ")
-                </MudButton>
-            </div>
-        </div>
-    </div>
-}
+
+@* ═══════════════════════════════════════════
+   CSS STYLES
+═══════════════════════════════════════════ *@
+<style>
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ── Hero ── */
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px; margin: 0 auto; width: 100%;
+        box-sizing: border-box; position: relative; z-index: 1;
+    }
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important; overflow: hidden;
+        box-shadow: 0 12px 32px rgba(13, 38, 84, 0.15), 0 4px 12px rgba(13, 38, 84, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .hero-wrapper .fc-hero.fc-hero-slim { padding-top: 18px !important; padding-bottom: 22px !important; }
+
+    .pay-hero-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+    .pay-hero-left { flex: 1; min-width: 200px; }
+    .pay-hero-crumb { display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; color: rgba(255,255,255,.55); margin-bottom: 2px; }
+    .pay-hero-sub { font-size: 13px; color: rgba(255,255,255,.55); font-weight: 600; }
+    .pay-hero-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pay-hero-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 8px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); color: rgba(255,255,255,.7); font-size: 10.5px; font-weight: 700; white-space: nowrap; }
+
+    .pay-hero-refresh {
+        width: 36px; height: 36px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.75); cursor: pointer; transition: background .15s;
+    }
+    .pay-hero-refresh:hover { background: rgba(255, 255, 255, 0.14); }
+
+    .pay-hero-add {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 16px; border-radius: 9px;
+        border: none; background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: #fff; font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; box-shadow: 0 4px 14px rgba(22,163,74,.35);
+        transition: all .15s ease;
+    }
+    .pay-hero-add:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(22,163,74,.4); }
+
+    /* ── KPI Connected Glass Strip ── */
+    .pay-kpis-strip {
+        display: flex; align-items: stretch;
+        background: rgba(0,0,0,.15); border: 1px solid rgba(255,255,255,.10);
+        border-radius: 12px; overflow: hidden; backdrop-filter: blur(8px); margin-top: 14px;
+    }
+    .pay-kpi-item {
+        flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+    }
+    .pay-kpi-div { width: 1px; background: rgba(255,255,255,.10); align-self: stretch; }
+    .pay-kpi-icon {
+        width: 36px; height: 36px; flex: 0 0 36px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .kpi-blue  { background: rgba(30,110,245,.2); color: #93c5fd; }
+    .kpi-amber { background: rgba(234,179,8,.2);  color: #fde68a; }
+    .kpi-red   { background: rgba(239,68,68,.2);  color: #fca5a5; }
+    .kpi-green { background: rgba(34,197,94,.2);  color: #86efac; }
+
+    .pay-kpi-label { font-size: 9.5px; color: rgba(255,255,255,.5); font-weight: 600; }
+    .pay-kpi-val { font-size: 15px; font-weight: 900; color: #fff; margin-top: 2px; }
+    .pay-kpi-val small { font-size: 10px; font-weight: 600; opacity: .7; }
+    .kpi-val-amber { color: #fde68a; }
+    .kpi-val-red   { color: #fca5a5; }
+    .kpi-val-green { color: #86efac; }
+
+    /* ── Body ── */
+    .pay-body {
+        background: var(--fc-bg); min-height: calc(100vh - 180px);
+        padding: 18px clamp(16px, 3vw, 40px) 96px;
+        max-width: 1440px; width: 100%; margin: 0 auto;
+        box-sizing: border-box; position: relative; z-index: 2;
+        display: flex; flex-direction: column; gap: 14px;
+    }
+    .pay-card { background: var(--fc-card); border: 1px solid var(--fc-border); border-radius: var(--fc-radius); box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06); overflow: hidden; }
+
+    /* ── Toolbar ── */
+    .pay-toolbar { display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: linear-gradient(180deg, #fff 0%, #fafbfd 100%); border-bottom: 1px solid #edf1f7; flex-wrap: wrap; }
+
+    .va-filter-wrap {
+        position: relative; display: flex; align-items: center;
+        min-width: 220px; flex: 1 1 220px; max-width: 280px;
+    }
+    .va-filter-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; z-index: 1; }
+    .va-filter-select {
+        width: 100%; height: 42px; padding: 0 36px 0 12px;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 13px; outline: none;
+        cursor: pointer; -webkit-appearance: none; appearance: none;
+        transition: border-color .15s, box-shadow .15s;
+    }
+    .va-filter-select:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+
+    .va-print-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 42px; padding: 0 16px; border-radius: 9px;
+        border: 1px solid var(--fc-blue); background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; transition: all .15s ease;
+    }
+    .va-print-btn:hover { background: var(--fc-blue); color: #fff; }
+
+    .pay-results-badge {
+        display: flex; align-items: center; gap: 5px;
+        margin-right: auto; font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap;
+    }
+    .pay-results-badge strong { color: #5a6e88; }
+
+    /* ── Loading / Empty ── */
+    .pay-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 200px; color: var(--fc-muted); font-size: 12px; font-weight: 600; }
+    .pay-spinner { width: 32px; height: 32px; border: 3px solid #dde5f0; border-top-color: var(--fc-blue); border-radius: 50%; animation: pay-spin .75s linear infinite; }
+    @@keyframes pay-spin { to { transform: rotate(360deg); } }
+
+    .pay-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 240px; padding: 40px; text-align: center; }
+    .pay-empty-icon { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #f0f4fa; color: #b0c4d8; }
+    .pay-empty-title { font-size: 15px; font-weight: 800; color: var(--fc-text); }
+    .pay-empty-sub { font-size: 12px; color: var(--fc-muted); }
+
+    /* ── Table (pay-table Standard) ── */
+    .pay-table-wrap { overflow-x: auto; }
+    .pay-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .pay-table thead th {
+        padding: 12px 14px; background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 10.5px; font-weight: 800; text-align: center; border-bottom: 2px solid #e4eaf3; white-space: nowrap;
+    }
+    .pay-table .th-start { text-align: right; }
+    .pay-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background .12s ease; }
+    .pay-table tbody tr:last-child { border-bottom: none; }
+    .pay-table tbody tr:hover { background: #fafcff; }
+    .pay-table tbody td { padding: 11px 12px; color: #526070; text-align: center; vertical-align: middle; }
+    .td-start { text-align: right !important; }
+    .td-muted { color: #9aaabb; font-size: 11px; }
+
+    .va-opening-row { background: linear-gradient(180deg, #f0f7ff 0%, #eaf1ff 100%); }
+    .va-opening-row:hover { background: linear-gradient(180deg, #eaf1ff 0%, #e0eafc 100%) !important; }
+    .va-opening-row td { border-bottom: 2px solid #c0d4fb !important; }
+    .va-opening-label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; color: var(--fc-blue); }
+
+    .va-date-cell { font-family: "Inter", Arial, sans-serif; font-size: 11.5px; color: #526070; font-weight: 600; white-space: nowrap; }
+
+    .va-kind-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 3px 10px; border-radius: 7px;
+        font-size: 10.5px; font-weight: 800; white-space: nowrap;
+    }
+    .va-kind-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
+    .kind-freight { background: var(--fc-blue-lt); color: var(--fc-blue); border: 1px solid #c0d4fb; }
+    .kind-freight .va-kind-dot { background: var(--fc-blue); }
+    .kind-custody { background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898; }
+    .kind-custody .va-kind-dot { background: var(--fc-amber); }
+    .kind-expense { background: var(--fc-red-lt); color: var(--fc-red); border: 1px solid #ffc8cf; }
+    .kind-expense .va-kind-dot { background: var(--fc-red); }
+    .kind-payment { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .kind-payment .va-kind-dot { background: var(--fc-green); }
+
+    .va-ref-chip {
+        display: inline-flex; padding: 2px 8px; border-radius: 5px;
+        background: #f0f4fa; border: 1px solid #e0e8f4;
+        font-size: 10.5px; font-weight: 700; color: var(--fc-blue);
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .va-desc-cell { font-size: 12px; color: #344563; font-weight: 600; }
+
+    .va-num {
+        display: inline-block; font-family: "Inter", Arial, sans-serif;
+        font-size: 12.5px; font-weight: 800;
+    }
+    .va-num-debit  { color: var(--fc-green); }
+    .va-num-credit { color: var(--fc-red); }
+
+    .va-balance-chip {
+        display: inline-flex; padding: 3px 10px; border-radius: 6px;
+        font-family: "Inter", Arial, sans-serif; font-size: 12.5px; font-weight: 900;
+        background: #f0f4fa; border: 1px solid #e0e8f4; color: var(--fc-text);
+    }
+    .va-balance-chip.pos { background: #f0f4fa; color: var(--fc-text); border-color: #e0e8f4; }
+    .va-balance-chip.neg { background: var(--fc-red-lt); color: var(--fc-red); border-color: #ffc8cf; }
+    .va-balance-chip.opening { background: var(--fc-blue-lt); color: var(--fc-blue); border-color: #bdd4fc; }
+    .va-balance-chip.closing { background: linear-gradient(135deg, #16a35b, #0d8a48); color: #fff; border-color: transparent; font-size: 13px; padding: 4px 12px; }
+
+    .pay-table tfoot {
+        background: linear-gradient(180deg, #f9fafd, #f0f3f8);
+    }
+    .pay-table tfoot td {
+        padding: 14px 14px; color: var(--fc-text); font-weight: 800;
+        border-top: 2px solid #e4eaf3;
+    }
+    .va-total-label {
+        display: flex; align-items: center; gap: 6px;
+        font-size: 12.5px; font-weight: 800; color: var(--fc-text);
+    }
+
+    /* ── Modal (svc-modal Standard) ── */
+    .svc-modal-backdrop { position: fixed; inset: 0; z-index: 1400; background: rgba(10,27,59,.62); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 20px; animation: svc-fade .2s ease both; }
+    @@keyframes svc-fade { from { opacity: 0; } to { opacity: 1; } }
+
+    .svc-modal { width: 100%; max-width: 680px; background: #fff; border-radius: 20px; box-shadow: 0 25px 60px rgba(10,27,59,.28), 0 8px 20px rgba(10,27,59,.12); overflow: hidden; animation: svc-pop .28s cubic-bezier(.22,.9,.36,1.1) both; max-height: 92vh; display: flex; flex-direction: column; }
+    .svc-modal-sm { max-width: 480px; }
+    @@keyframes svc-pop { from { opacity: 0; transform: translateY(20px) scale(.96); } to { opacity: 1; transform: none; } }
+
+    .svc-modal-head { display: flex; align-items: center; gap: 14px; padding: 20px 24px; background: linear-gradient(135deg, #0A1B3B 0%, #16306B 100%); color: #fff; flex: 0 0 auto; position: relative; overflow: hidden; }
+    .svc-modal-head::before { content: ""; position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, rgba(255,128,21,.15) 0%, transparent 70%); pointer-events: none; }
+    .svc-head-icon { width: 46px; height: 46px; flex: 0 0 46px; display: flex; align-items: center; justify-content: center; border-radius: 13px; position: relative; z-index: 1; }
+    .svc-icon-create { background: rgba(27,158,94,.2); color: #6ee7b7; border: 1px solid rgba(110,231,183,.3); }
+    .svc-head-text { flex: 1; min-width: 0; position: relative; z-index: 1; }
+    .svc-head-title { font-size: 16px; font-weight: 800; color: #fff; line-height: 1.3; }
+    .svc-head-sub { font-size: 11.5px; color: rgba(255,255,255,.62); margin-top: 3px; }
+    .svc-head-sub strong { color: #FFD9B8; font-weight: 700; }
+    .svc-head-close { width: 34px; height: 34px; flex: 0 0 34px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,.15); border-radius: 9px; background: rgba(255,255,255,.06); color: rgba(255,255,255,.7); cursor: pointer; transition: all .15s; position: relative; z-index: 1; }
+    .svc-head-close:hover { background: rgba(255,255,255,.14); color: #fff; transform: rotate(90deg); }
+
+    .svc-modal-body { flex: 1 1 auto; overflow-y: auto; padding: 0; }
+    .svc-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    .svc-full { grid-column: 1 / -1; }
+    .svc-field { display: flex; flex-direction: column; gap: 5px; }
+    .svc-label { font-size: 11.5px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 4px; }
+    .svc-req { color: var(--fc-red); font-size: 13px; }
+    .svc-input-wrap { position: relative; display: flex; align-items: center; }
+    .svc-prefix { position: absolute; right: 12px; z-index: 1; display: flex; align-items: center; color: #9aaabb; pointer-events: none; }
+    .svc-prefix.txt { font-size: 11px; font-weight: 800; color: #6B7A8F; }
+    .svc-input { width: 100%; height: 42px; border: 1.5px solid #d8e2f0; border-radius: 10px; background: #fafcff; color: #1A2332; font-family: inherit; font-size: 13px; padding: 0 12px; outline: none; box-sizing: border-box; transition: border-color .15s, box-shadow .15s, background .15s; }
+    .svc-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(11,86,223,.1); background: #fff; }
+    .svc-input.ltr { direction: ltr; text-align: left; }
+    .svc-input.with-prefix { padding-right: 40px; }
+    .svc-input::placeholder { color: #b0bcc8; }
+
+    .svc-modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 20px; background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%); border-top: 1px solid #edf1f7; flex: 0 0 auto; }
+    .svc-foot-right { display: flex; align-items: center; gap: 8px; }
+    .svc-btn-cancel { height: 38px; padding: 0 16px; border: 1.5px solid #d8e2f0; border-radius: 9px; background: #fff; color: #6B7A8F; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s; }
+    .svc-btn-cancel:hover { background: #f0f4fa; color: var(--fc-text); border-color: #c0ccd8; }
+    .svc-btn-save { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 22px; border: none; border-radius: 10px; background: linear-gradient(135deg, #0B56DF, #083CA8); color: #fff; font-family: inherit; font-size: 12.5px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(11,86,223,.28); transition: all .18s; }
+    .svc-btn-save:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(11,86,223,.4); }
+    .svc-btn-save:disabled { opacity: .6; cursor: not-allowed; }
+    .svc-spinner { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: pay-spin .7s linear infinite; }
+
+    /* ── Precise Scoped FAB ── */
+    .glow-fab-wrap { position: fixed; left: 28px; bottom: 28px; z-index: 1299; width: 60px; height: 60px; }
+    .glow-fab-container { position: relative; z-index: 2; width: 60px; height: 60px; }
+    .glow-fab-btn {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        width: 58px; height: 58px; border-radius: 50%;
+        background: linear-gradient(135deg, #1e6ef5, #0d47a1);
+        border: 2.5px solid #fbbf24; color: #fff; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 16px rgba(30, 110, 245, .4); transition: transform .2s; z-index: 2;
+    }
+    .glow-fab-btn:hover { transform: translate(-50%, -50%) scale(1.05); }
+    .glow-fab-icon { transition: transform .3s; }
+    .glow-fab-wrap.is-open .glow-fab-icon { transform: rotate(130deg); }
+
+    .glow-halo, .glow-ring { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
+    .glow-halo { width: 58px; height: 58px; background: radial-gradient(circle, rgba(30, 110, 245, .3) 0%, transparent 70%); animation: glow-breath 2s ease-in-out infinite; }
+    .glow-ring { width: 58px; height: 58px; border: 2px solid rgba(30, 110, 245, .4); animation: glow-expand 2s ease-out infinite; }
+    .glow-ring-2 { animation-delay: .3s; }
+    .glow-ring-3 { animation-delay: .6s; }
+
+    @@keyframes glow-breath { 0%, 100% { opacity: .5; transform: translate(-50%, -50%) scale(1); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } }
+    @@keyframes glow-expand { 0% { opacity: .8; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.5); } }
+
+    .glow-fab-menu {
+        position: absolute; bottom: 74px; left: 0; z-index: 3;
+        display: flex; flex-direction: column; gap: 8px;
+        opacity: 0; pointer-events: none; transform: translateY(10px); transition: opacity .2s, transform .2s;
+    }
+    .glow-fab-wrap.is-open .glow-fab-menu { opacity: 1; pointer-events: auto; transform: translateY(0); }
+    .glow-fab-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 16px; border-radius: 12px; background: #fff;
+        border: 1px solid #dde5f0; box-shadow: 0 4px 12px rgba(0, 0, 0, .1);
+        cursor: pointer; font-size: 13px; color: #1c2c44; white-space: nowrap;
+    }
+    .glow-fab-item:hover { background: #f4f7fb; border-color: var(--fc-blue); }
+    .glow-fab-item-ic { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: #eaf1ff; color: var(--fc-blue); }
+    .glow-fab-scrim { position: fixed; inset: 0; background: rgba(9, 18, 35, .45); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 1298; }
+
+    /* ── Responsive ── */
+    @@media (max-width: 992px) {
+        .pay-kpis-strip { flex-wrap: wrap; }
+        .pay-kpi-item { flex: 0 0 50%; }
+        .pay-kpi-div:nth-child(4) { display: none; }
+    }
+    @@media (max-width: 900px) {
+        .pay-toolbar { flex-direction: column; align-items: stretch; }
+        .va-filter-wrap { max-width: 100%; }
+        .va-print-btn { width: 100%; justify-content: center; }
+    }
+    @@media (max-width: 768px) {
+        .pay-hero-row { flex-direction: column; align-items: flex-start; }
+        .pay-hero-right { width: 100%; justify-content: flex-start; }
+        .pay-kpi-item { flex: 0 0 100%; }
+        .pay-kpi-div { display: none; }
+    }
+    @@media (max-width: 680px) {
+        .pay-body { padding: 12px 12px 90px; }
+        .svc-modal { max-width: 100%; border-radius: 16px; }
+        .glow-fab-wrap { left: 16px; bottom: 16px; }
+        .pay-table { font-size: 11px; }
+    }
+</style>
+
 
 @code {
     [Parameter] public int VehicleId { get; set; }
@@ -285,7 +854,11 @@
 
     private async Task SavePayment()
     {
-        if (_payAmount <= 0) { Snackbar.Add("المبلغ لازم يكون أكتر من صفر", Severity.Warning); return; }
+        if (_payAmount <= 0)
+        {
+            Snackbar.Add("يرجى إدخال مبلغ صحيح أكبر من صفر", Severity.Warning);
+            return;
+        }
         _saving = true;
         try
         {
@@ -299,7 +872,7 @@
             });
             if (res.IsSuccessStatusCode)
             {
-                Snackbar.Add("اتسجلت الدفعة", Severity.Success);
+                Snackbar.Add("تم تسجيل الدفعة المالية بنجاح", Severity.Success);
                 _payOpen = false;
                 await LoadAsync();
             }
@@ -309,18 +882,22 @@
                 Snackbar.Add(err, Severity.Error);
             }
         }
-        catch { Snackbar.Add("حصل خطأ", Severity.Error); }
+        catch { Snackbar.Add("تعذر تسجيل الدفعة — يرجى المحاولة مرة أخرى", Severity.Error); }
         finally { _saving = false; }
     }
 
-    private void Print() => Nav.NavigateTo($"/vehicles/{VehicleId}/account?print=1", true);
+    private void Print()
+    {
+        _fabOpen = false;
+        Nav.NavigateTo($"/vehicles/{_selectedVehicleId}/account?print=1", true);
+    }
 
     private static string KindAr(string k) => k switch
     {
-        "Freight" => "نولون",
-        "Custody" => "عهدة",
-        "Expense" => "مصروف",
-        "Payment" => "دفعة",
+        "Freight" => "نولون رحلة",
+        "Custody" => "عهدة نقدية",
+        "Expense" => "مصروف تشغيلي",
+        "Payment" => "دفعة سداد",
         _ => k
     };
 
@@ -355,56 +932,3 @@
         public string Status { get; set; } = "";
     }
 }
-
-<style>
-    .hero-wrapper { padding: 16px clamp(16px, 3vw, 40px) 0; max-width: 1440px; margin: 0 auto; width: 100%; box-sizing: border-box; position: relative; z-index: 1; }
-    .hero-wrapper .fc-hero { border-radius: 20px !important; overflow: hidden; box-shadow: 0 12px 32px rgba(13,38,84,.15), 0 4px 12px rgba(13,38,84,.08); border: 1px solid rgba(255,255,255,.08); }
-    .hero-wrapper .fc-hero.fc-hero-slim { padding-top: 18px !important; padding-bottom: 22px !important; }
-    .fc-hero-title-slim { font-size: clamp(18px, 2vw, 24px) !important; margin: 0 !important; }
-
-    .va-hero-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
-    .va-hero-left { display: flex; flex-direction: column; gap: 4px; }
-    .va-hero-crumb { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #9FB4CC; font-weight: 600; }
-    .va-hero-sub { font-size: 12px; color: #9FB4CC; }
-    .va-hero-right { display: flex; gap: 8px; flex-wrap: wrap; }
-    .va-hero-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 8px; background: rgba(255,255,255,.08); font-size: 11px; color: #9FB4CC; font-weight: 600; }
-
-    .va-kpis-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
-    .va-kpi { flex: 1 1 160px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); border-radius: 14px; padding: 12px; }
-    .va-kpi-inner { display: flex; align-items: center; gap: 10px; }
-    .va-kpi-icon { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-    .va-kpi-blue .va-kpi-icon { background: rgba(30,110,245,.18); color: #7EB6FF; }
-    .va-kpi-green .va-kpi-icon { background: rgba(34,197,94,.18); color: #86EFAC; }
-    .va-kpi-red .va-kpi-icon { background: rgba(239,68,68,.18); color: #FCA5A5; }
-    .va-kpi-gold .va-kpi-icon { background: rgba(251,191,36,.18); color: #FDE68A; }
-    .va-kpi-num { font-size: 18px; font-weight: 800; color: #fff; }
-    .va-kpi-label { font-size: 10.5px; color: #9FB4CC; }
-
-    .va-kind { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 10.5px; font-weight: 700; }
-    .va-kind-freight { background: #DBEAFE; color: #1E40AF; }
-    .va-kind-custody { background: #FEF3C7; color: #92400E; }
-    .va-kind-expense { background: #FEE2E2; color: #991B1B; }
-    .va-kind-payment { background: #D1FAE5; color: #065F46; }
-
-    .glow-fab-scrim { position: fixed; inset: 0; z-index: 1298; background: rgba(10,20,40,.4); backdrop-filter: blur(4px); animation: glow-fadein .2s ease both; }
-    .glow-fab-wrap { position: fixed; left: 28px; bottom: 28px; z-index: 1299; display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
-    .glow-fab-container { position: relative; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; }
-    .glow-halo { position: absolute; inset: -6px; border-radius: 50%; background: radial-gradient(circle, rgba(251,191,36,.55) 0%, rgba(245,158,11,.35) 40%, rgba(245,158,11,0) 75%); filter: blur(12px); animation: glow-breath 2.5s ease-in-out infinite; pointer-events: none; z-index: 1; }
-    @@keyframes glow-breath { 0%,100% { opacity:.7; transform:scale(1); } 50% { opacity:1; transform:scale(1.15); } }
-    .glow-ring { position: absolute; inset: 0; border-radius: 50%; border: 2.5px solid #fbbf24; pointer-events: none; opacity: 0; z-index: 2; }
-    .glow-ring-1 { animation: glow-expand 2.4s ease-out infinite; }
-    .glow-ring-2 { animation: glow-expand 2.4s ease-out infinite; animation-delay: .8s; }
-    .glow-ring-3 { animation: glow-expand 2.4s ease-out infinite; animation-delay: 1.6s; }
-    @@keyframes glow-expand { 0% { opacity:.8; transform:scale(1); border-width:3px; } 60% { opacity:.4; } 100% { opacity:0; transform:scale(2); border-width:1px; } }
-    .glow-fab-btn { position: relative; width: 60px; height: 60px; border-radius: 50%; border: 2.5px solid #fbbf24; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; background: linear-gradient(135deg, #1e6ef5 0%, #0d47a1 100%); color: #fff; box-shadow: 0 8px 24px rgba(30,110,245,.5), 0 4px 12px rgba(251,191,36,.35), inset 0 1px 0 rgba(255,255,255,.3); transition: transform .25s cubic-bezier(.34,1.3,.64,1); z-index: 3; }
-    .glow-fab-btn:hover { transform: scale(1.08); }
-    .glow-fab-icon { transition: transform .3s cubic-bezier(.34,1.3,.64,1); }
-    .glow-fab-wrap.is-open .glow-fab-icon { transform: rotate(135deg); }
-    .glow-fab-menu { display: flex; flex-direction: column; gap: 8px; opacity: 0; pointer-events: none; transform: translateY(15px) scale(.9); transform-origin: bottom left; transition: opacity .2s ease, transform .24s cubic-bezier(.34,1.3,.64,1); }
-    .glow-fab-wrap.is-open .glow-fab-menu { opacity: 1; pointer-events: auto; transform: none; }
-    .glow-fab-item { display: inline-flex; align-items: center; gap: 10px; min-width: 170px; padding: 9px 12px; background: #fff; border: 1px solid #e6ecf5; border-radius: 13px; box-shadow: 0 6px 18px rgba(13,38,84,.14); font-family: inherit; font-size: 12.5px; font-weight: 800; color: #16243c; cursor: pointer; transition: border-color .16s ease, transform .16s ease; }
-    .glow-fab-item:hover { border-color: #E8A317; transform: translateX(-3px); }
-    .glow-fab-item-ic { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; background: #eef3fb; color: #24589e; }
-    .glow-fab-item-lb { white-space: nowrap; }
-    @@keyframes glow-fadein { from { opacity:0; } to { opacity:1; } }
-</style>

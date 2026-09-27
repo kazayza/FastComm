@@ -8,38 +8,40 @@
 
 <PageTitle>جدول الترقيم — فاست كوم</PageTitle>
 
-<div class="fc-hero">
-    <div class="fc-hero-inner">
-        <div class="fc-page-head">
-            <div>
-                <div class="fc-crumb">البيانات الأساسية</div>
-                <h1 class="fc-hero-title">جدول الترقيم</h1>
-                <p class="fc-hero-sub">سلاسل أرقام المستندات — البادئة وطول الرقم ودورية التصفير</p>
-            </div>
-            <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="LoadAsync" Style="color:#9FB4CC" />
-                @if (CanManage)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.DateRange" OnClick="OpenPrepare">
-                        تجهيز سنة جديدة
-                    </MudButton>
-                }
-            </div>
-        </div>
-
-        <div class="fc-kpis-glass">
-            <div class="fc-kpi">
-                <div class="fc-kpi-lb">سلاسل السنة</div>
-                <div class="fc-kpi-num">@_items.Count</div>
-            </div>
-            <div class="fc-kpi">
-                <div class="fc-kpi-lb">إجمالي الأرقام المصروفة</div>
-                <div class="fc-kpi-num">@_items.Sum(i => i.CurrentNumber).ToString("N0")</div>
-            </div>
-            <div class="fc-kpi">
-                <div class="fc-kpi-lb">السنة المعروضة</div>
-                <div class="fc-kpi-num">@(_year ?? DateTime.UtcNow.Year)</div>
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
+            <div class="num-hero-row">
+                <div class="num-hero-left">
+                    <div class="num-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                        </svg>
+                        <span>البيانات الأساسية · الترقيم</span>
+                    </div>
+                    <h1 class="fc-hero-title fc-hero-title-slim">جدول الترقيم</h1>
+                    <span class="num-hero-sub">سلاسل أرقام المستندات — البادئة وطول الرقم ودورية التصفير</span>
+                </div>
+                <div class="num-hero-right">
+                    <span class="num-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                    <span class="num-hero-chip num-chip-highlight">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 6v6l4 2" stroke-linecap="round"/>
+                        </svg>
+                        @_items.Count سلسلة
+                    </span>
+                </div>
             </div>
         </div>
     </div>
@@ -48,346 +50,1710 @@
 <div class="fc-page">
     @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض البيانات الأساسية.</MudAlert>
+        <div class="state-container">
+            <div class="state-card state-card--warning">
+                <div class="state-icon-wrap state-icon-wrap--warning">
+                    <svg viewBox="0 0 24 24" width="28" height="28" fill="none"
+                         stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="state-content">
+                    <div class="state-title">وصول محظور</div>
+                    <div class="state-desc">
+                        تحتاج إلى صلاحية
+                        <code class="state-perm">NUMBERING.VIEW</code>
+                        للوصول إلى هذه الصفحة
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (_loading)
+    {
+        <div class="state-container">
+            <div class="loading-card">
+                <div class="loading-spinner-wrap">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-pulse"></div>
+                </div>
+                <div class="loading-text">جاري تحميل البيانات</div>
+                <div class="loading-sub">يرجى الانتظار لحظة...</div>
+            </div>
+        </div>
+    }
+    else if (_items.Count == 0)
+    {
+        <div class="state-container">
+            <div class="state-card state-card--empty">
+                <div class="state-icon-wrap state-icon-wrap--empty">
+                    <svg viewBox="0 0 24 24" width="28" height="28" fill="none"
+                         stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                </div>
+                <div class="state-content">
+                    <div class="state-title">لا توجد سلاسل ترقيم</div>
+                    <div class="state-desc">لم يتم إعداد أي سلاسل ترقيم لهذه السنة بعد</div>
+                </div>
+                @if (CanManage)
+                {
+                    <button class="state-action-btn" @onclick="OpenPrepare" type="button">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        تجهيز سنة جديدة
+                    </button>
+                }
+            </div>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
+        <div class="kpi-grid">
+            <button class="kpi-card @(_year is null ? "kpi-card--active" : "")"
+                    @onclick="() => SetYear(null)" type="button">
+                <div class="kpi-card-inner">
+                    <div class="kpi-icon-wrap kpi-icon-wrap--blue">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="2" y1="12" x2="22" y2="12"/>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                        </svg>
+                    </div>
+                    <div class="kpi-body">
+                        <div class="kpi-label">إجمالي السنوات</div>
+                        <div class="kpi-value">@_allYears.Count</div>
+                        <div class="kpi-sub">كل السنوات المتاحة</div>
+                    </div>
+                </div>
+                @if (_year is null)
+                {
+                    <div class="kpi-active-bar"></div>
+                }
+            </button>
 
-            @* ── تنبيه: الترقيم بيتم بـ Stored Procedure ── *@
-            <div class="fc-alert fc-alert-info">
-                <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Info" /></div>
-                <div class="fc-alert-body">
-                    <div class="fc-alert-title">الأرقام بتتولّد تلقائيًا</div>
-                    <div>الصيغة: <b>البادئة + السنة + "-" + الرقم</b> — مثال <b>OP-2026-000042</b>.
-                        هنا بتغيّر الشكل بس؛ الكود هو اللي بيصرف الأرقام.</div>
+            <button class="kpi-card @(_year == DateTime.UtcNow.Year ? "kpi-card--active" : "")"
+                    @onclick="() => SetYear((short)DateTime.UtcNow.Year)" type="button">
+                <div class="kpi-card-inner">
+                    <div class="kpi-icon-wrap kpi-icon-wrap--indigo">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="kpi-body">
+                        <div class="kpi-label">سلاسل السنة الحالية</div>
+                        <div class="kpi-value">@_items.Count</div>
+                        <div class="kpi-sub">سنة @DateTime.UtcNow.Year</div>
+                    </div>
+                </div>
+                @if (_year == DateTime.UtcNow.Year)
+                {
+                    <div class="kpi-active-bar"></div>
+                }
+            </button>
+
+            <div class="kpi-card kpi-card--static">
+                <div class="kpi-card-inner">
+                    <div class="kpi-icon-wrap kpi-icon-wrap--emerald">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <div class="kpi-body">
+                        <div class="kpi-label">إجمالي الأرقام المصروفة</div>
+                        <div class="kpi-value">@_items.Sum(i => i.CurrentNumber).ToString("N0")</div>
+                        <div class="kpi-sub">عبر جميع السلاسل</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="data-card">
+            <div class="data-card-header">
+                <div class="data-card-header-right">
+                    <div class="data-card-icon">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="data-card-title">سلاسل الترقيم</div>
+                        <div class="data-card-sub">
+                            @if (_year is null)
+                            {
+                                <span>عرض كل السنوات</span>
+                            }
+                            else
+                            {
+                                <span>عرض سنة @_year</span>
+                            }
+                            — @_items.Count سلسلة
+                        </div>
+                    </div>
+                </div>
+                <div class="data-card-header-left">
+                    @if (_allYears.Count > 0)
+                    {
+                        <div class="year-pills">
+                            <button class="year-pill @(_year is null ? "year-pill--active" : "")"
+                                    @onclick="() => SetYear(null)" type="button">
+                                الكل
+                            </button>
+                            @foreach (var y in _allYears.OrderByDescending(x => x).Take(5))
+                            {
+                                <button class="year-pill @(_year == y ? "year-pill--active" : "")"
+                                        @onclick="() => SetYear(y)" type="button">
+                                    @y
+                                </button>
+                            }
+                        </div>
+                    }
                 </div>
             </div>
 
-            @* ── فلتر السنة ── *@
-            <div class="fc-fsec">
-                <div class="fc-fsec-head">
-                    <span class="fc-fsec-n">1</span>
-                    <div>
-                        <div class="fc-fsec-t">السلاسل</div>
-                        <div class="fc-fsec-d">كل نوع مستند له سلسلة مستقلة لكل سنة</div>
-                    </div>
-                    <span class="fc-fsec-ic"><MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Small" /></span>
-                </div>
-
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-                    <select class="fc-sel" value="@_year" @onchange="OnYearChanged" style="max-width:150px">
-                        @foreach (var y in _years) { <option value="@y">@y</option> }
-                    </select>
-                    <input class="fc-sel" placeholder="بحث بالنوع أو البادئة…" @bind="_q"
-                           @bind:event="oninput" style="max-width:260px" />
-                    <span class="fc-cell-sub">عرض @Filtered.Count() من @_items.Count</span>
-                </div>
-
-                <div class="fc-table-wrap"><table class="fc-table">
-                    <thead><tr>
-                        <th>النوع</th><th>البادئة</th><th>طول الرقم</th>
-                        <th>العدّاد</th><th>التصفير</th><th>الرقم الجاي</th><th style="width:70px"></th>
-                    </tr></thead>
+            <div class="table-scroll">
+                <table class="num-table">
+                    <thead>
+                        <tr>
+                            <th class="col-type">
+                                <div class="th-inner">
+                                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                                         stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                                    </svg>
+                                    النوع
+                                </div>
+                            </th>
+                            <th class="col-prefix">
+                                <div class="th-inner">
+                                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                                         stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <polyline points="4 7 4 4 20 4 20 7"/>
+                                        <line x1="9" y1="20" x2="15" y2="20"/>
+                                        <line x1="12" y1="4" x2="12" y2="20"/>
+                                    </svg>
+                                    البادئة
+                                </div>
+                            </th>
+                            <th class="col-len">
+                                <div class="th-inner th-inner--center">
+                                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                                         stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <line x1="21" y1="10" x2="3" y2="10"/>
+                                        <line x1="21" y1="6" x2="3" y2="6"/>
+                                        <line x1="21" y1="14" x2="3" y2="14"/>
+                                        <line x1="21" y1="18" x2="9" y2="18"/>
+                                    </svg>
+                                    طول الرقم
+                                </div>
+                            </th>
+                            <th class="col-reset">
+                                <div class="th-inner">
+                                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                                         stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <polyline points="1 4 1 10 7 10"/>
+                                        <path d="M3.51 15a9 9 0 1 0 .49-3.27" stroke-linecap="round"/>
+                                    </svg>
+                                    دورية التصفير
+                                </div>
+                            </th>
+                            <th class="col-current">
+                                <div class="th-inner th-inner--center">
+                                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                                         stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <path d="M12 6v6l4 2" stroke-linecap="round"/>
+                                    </svg>
+                                    الرقم الحالي
+                                </div>
+                            </th>
+                            <th class="col-example">
+                                <div class="th-inner">
+                                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                                         stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <polyline points="16 18 22 12 16 6"/>
+                                        <polyline points="8 6 2 12 8 18"/>
+                                    </svg>
+                                    مثال
+                                </div>
+                            </th>
+                            @if (CanManage)
+                            {
+                                <th class="col-actions">
+                                    <div class="th-inner th-inner--center">إجراءات</div>
+                                </th>
+                            }
+                        </tr>
+                    </thead>
                     <tbody>
-                        @foreach (var i in Filtered)
+                        @foreach (var s in _items)
                         {
-                            <tr>
-                                <td class="fc-cell-main">
-                                    @i.TypeNameAr
-                                    <div class="fc-cell-sub">@i.DocumentType</div>
+                            <tr class="num-table-row">
+                                <td class="col-type">
+                                    <div class="doc-type-cell">
+                                        <span class="doc-type-dot doc-type-dot--@GetTypeColor(s.DocumentType)"></span>
+                                        <span class="doc-type-name">@TypeAr(s.DocumentType)</span>
+                                    </div>
                                 </td>
-                                <td><span class="fc-role-chip">@i.Prefix</span></td>
-                                <td>@i.NumberLength</td>
-                                <td>@i.CurrentNumber.ToString("N0")</td>
-                                <td class="fc-cell-sub">@PeriodAr(i.ResetPeriod)</td>
-                                <td><b>@i.Sample</b></td>
-                                <td>
-                                    @if (CanManage)
-                                    {
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
-                                                       Color="Color.Primary" title="تعديل" OnClick="() => OpenEdit(i)" />
-                                    }
+                                <td class="col-prefix">
+                                    <span class="prefix-badge">@s.Prefix</span>
                                 </td>
+                                <td class="col-len">
+                                    <div class="num-center">
+                                        <span class="len-badge">@s.NumberLength</span>
+                                    </div>
+                                </td>
+                                <td class="col-reset">
+                                    <span class="reset-badge reset-badge--@s.ResetPeriod.ToLower()">
+                                        @ResetAr(s.ResetPeriod)
+                                    </span>
+                                </td>
+                                <td class="col-current">
+                                    <div class="num-center current-num">
+                                        @s.CurrentNumber.ToString("N0")
+                                    </div>
+                                </td>
+                                <td class="col-example">
+                                    <span class="example-code">@Example(s)</span>
+                                </td>
+                                @if (CanManage)
+                                {
+                                    <td class="col-actions">
+                                        <div class="actions-center">
+                                            <button class="edit-btn" @onclick="() => OpenEdit(s)"
+                                                    title="تعديل سلسلة @TypeAr(s.DocumentType)"
+                                                    type="button">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+                                                     stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                </svg>
+                                                <span>تعديل</span>
+                                            </button>
+                                        </div>
+                                    </td>
+                                }
                             </tr>
                         }
-                        @if (!Filtered.Any())
-                        {
-                            <tr><td colspan="7"><div class="fc-empty">مافيش سلاسل للسنة دي</div></td></tr>
-                        }
                     </tbody>
-                </table></div>
+                </table>
             </div>
 
-        </div></div>
+            <div class="data-card-footer">
+                <span class="footer-count">
+                    إجمالي السلاسل: <strong>@_items.Count</strong>
+                </span>
+                <span class="footer-total">
+                    إجمالي الأرقام المصروفة: <strong>@_items.Sum(i => i.CurrentNumber).ToString("N0")</strong>
+                </span>
+            </div>
+        </div>
     }
 </div>
 
-@* ═══════════ مودال: تعديل سلسلة ═══════════ *@
-@if (_editOpen && CanManage && _e is not null)
+@if (CanManage)
 {
-    <div class="fc-modal-backdrop" @onclick="CloseEdit">
-        <div class="fc-modal fc-modal-sm" @onclick:stopPropagation="true">
-            <div class="fc-modal-head">
-                <div>
-                    <div class="fc-modal-title">تعديل سلسلة @_e.TypeNameAr</div>
-                    <div class="fc-modal-sub">@_e.DocumentType · سنة @_e.Year</div>
+    @if (_fabOpen)
+    {
+        <div class="glow-fab-scrim" @onclick="ToggleFab" aria-hidden="true"></div>
+    }
+
+    <div class="glow-fab-wrap">
+        <div class="glow-fab-menu @(_fabOpen ? "glow-fab-menu--open" : "")"
+             role="menu" aria-label="الإجراءات السريعة">
+            <button type="button" class="glow-fab-item" role="menuitem"
+                    @onclick="HandleOpenPrepare">
+                <span class="glow-fab-item-ic">
+                    <MudIcon Icon="@Icons.Material.Filled.DateRange" Size="Size.Small"/>
+                </span>
+                <span class="glow-fab-item-lb">تجهيز سنة جديدة</span>
+            </button>
+            <button type="button" class="glow-fab-item" role="menuitem"
+                    @onclick="HandleRefresh">
+                <span class="glow-fab-item-ic">
+                    <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small"/>
+                </span>
+                <span class="glow-fab-item-lb">تحديث البيانات</span>
+            </button>
+        </div>
+
+        <div class="glow-fab-container">
+            <span class="glow-ring glow-ring-1" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-2" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-3" aria-hidden="true"></span>
+            <span class="glow-halo" aria-hidden="true"></span>
+            <button type="button" class="glow-fab-btn @(_fabOpen ? "glow-fab-btn--open" : "")"
+                    @onclick="ToggleFab"
+                    @onkeydown="OnFabKeyDown"
+                    aria-label="التحكم"
+                    aria-expanded="@(_fabOpen ? "true" : "false")">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none"
+                     stroke="currentColor" stroke-width="2.8"
+                     class="glow-fab-icon" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+}
+
+@if (_prepareOpen)
+{
+    <div class="modal-backdrop" @onclick="ClosePrepare">
+        <div class="modal-sheet modal-sheet--sm" @onclick:stopPropagation>
+            <div class="modal-header">
+                <div class="modal-header-icon modal-header-icon--blue">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                         stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <rect x="3" y="4" width="18" height="18" rx="2"/>
+                        <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                    </svg>
                 </div>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="CloseEdit" />
+                <div class="modal-header-text">
+                    <div class="modal-title">تجهيز سنة جديدة</div>
+                    <div class="modal-sub">إنشاء سلاسل ترقيم للسنة القادمة</div>
+                </div>
+                <button class="modal-close-btn" @onclick="ClosePrepare" type="button" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
+                         stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
             </div>
-            <div class="fc-modal-body">
-                @if (_msg is not null)
-                {
-                    <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
-                              Class="mb-4">@_msg</MudAlert>
-                }
-
-                <div class="fc-alert fc-alert-warn">
-                    <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
-                    <div class="fc-alert-body">
-                        <div class="fc-alert-title">النوع والسنة مقفولين</div>
-                        <div>الكود بينادي الاسم <b>@_e.DocumentType</b> حرفيًا — تغييره هيوقّف الترقيم.</div>
+            <div class="modal-body">
+                <div class="modal-info-box">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
+                         stroke="currentColor" stroke-width="2" aria-hidden="true"
+                         class="modal-info-icon">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    <div class="modal-info-text">
+                        <p>
+                            سيتم إنشاء نسخ من جميع سلاسل الترقيم للسنة
+                            <strong class="modal-year-badge">@_prepareYear</strong>
+                            مع تصفير الأرقام من البداية.
+                        </p>
                     </div>
                 </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn--ghost" @onclick="ClosePrepare" type="button">
+                    إلغاء
+                </button>
+                <button class="modal-btn modal-btn--primary" @onclick="DoPrepare"
+                        disabled="@_prepareBusy" type="button">
+                    @if (_prepareBusy)
+                    {
+                        <span class="btn-spinner"></span>
+                        <span>جاري التجهيز...</span>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <span>تجهيز السنة @_prepareYear</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
 
-                <div class="fc-form-grid" style="margin-top:14px">
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">البادئة<i>*</i></div>
-                        <input class="fc-sel fc-sel-lg" @bind="_f.Prefix" maxlength="20" dir="ltr" />
-                        <div class="fc-fld-hint">حروف إنجليزية وشرطة — زي OP- أو INV-</div>
+@if (_editOpen && _editItem is not null)
+{
+    <div class="modal-backdrop" @onclick="CloseEdit">
+        <div class="modal-sheet" @onclick:stopPropagation>
+            <div class="modal-header">
+                <div class="modal-header-icon modal-header-icon--indigo">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                         stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                </div>
+                <div class="modal-header-text">
+                    <div class="modal-title">تعديل سلسلة الترقيم</div>
+                    <div class="modal-sub">@TypeAr(_editItem.DocumentType)</div>
+                </div>
+                <button class="modal-close-btn" @onclick="CloseEdit" type="button" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
+                         stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-field form-field--full">
+                        <label class="form-label">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                                 stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                            </svg>
+                            نوع المستند
+                        </label>
+                        <div class="form-input-wrap">
+                            <input class="form-input form-input--disabled"
+                                   value="@TypeAr(_editItem.DocumentType)" disabled/>
+                            <span class="form-lock-icon">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                                     stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                        </div>
                     </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">طول الرقم</div>
-                        <select class="fc-sel fc-sel-lg" @bind="_f.NumberLength">
-                            @foreach (var l in new[] { 4, 5, 6, 7, 8 }) { <option value="@l">@l أرقام</option> }
-                        </select>
+
+                    <div class="form-field">
+                        <label class="form-label" for="edit-prefix">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                                 stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <polyline points="4 7 4 4 20 4 20 7"/>
+                                <line x1="9" y1="20" x2="15" y2="20"/>
+                                <line x1="12" y1="4" x2="12" y2="20"/>
+                            </svg>
+                            البادئة
+                        </label>
+                        <div class="form-input-wrap">
+                            <input id="edit-prefix" class="form-input"
+                                   @bind="_editPrefix" placeholder="مثال: INV-"/>
+                        </div>
+                        <div class="form-hint">الحروف التي تسبق الرقم في المستند</div>
                     </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">دورية التصفير</div>
-                        <select class="fc-sel fc-sel-lg" @bind="_f.ResetPeriod">
-                            <option value="Yearly">سنوي</option>
-                            <option value="Monthly">شهري</option>
-                            <option value="Never">أبدي</option>
-                        </select>
+
+                    <div class="form-field">
+                        <label class="form-label" for="edit-length">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                                 stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <line x1="21" y1="10" x2="3" y2="10"/>
+                                <line x1="21" y1="6" x2="3" y2="6"/>
+                                <line x1="21" y1="14" x2="3" y2="14"/>
+                                <line x1="21" y1="18" x2="9" y2="18"/>
+                            </svg>
+                            طول الرقم
+                        </label>
+                        <div class="form-input-wrap">
+                            <input id="edit-length" class="form-input"
+                                   type="number" @bind="_editLength" min="1" max="10"/>
+                        </div>
+                        <div class="form-hint">عدد الخانات الرقمية (1–10)</div>
                     </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">العدّاد</div>
-                        <input type="number" min="0" class="fc-sel fc-sel-lg" value="@_f.CurrentNumber"
-                               @onchange="e => _f.CurrentNumber = ParseLong(e.Value)" />
-                        <div class="fc-fld-hint">حاليًا @_e.CurrentNumber — يطلع لفوق بس، أو صفر للبداية من جديد</div>
+
+                    <div class="form-field">
+                        <label class="form-label" for="edit-reset">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                                 stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <polyline points="1 4 1 10 7 10"/>
+                                <path d="M3.51 15a9 9 0 1 0 .49-3.27" stroke-linecap="round"/>
+                            </svg>
+                            دورية التصفير
+                        </label>
+                        <div class="form-input-wrap form-input-wrap--select">
+                            <select id="edit-reset" class="form-input form-select" @bind="_editReset">
+                                <option value="Never">أبداً</option>
+                                <option value="Yearly">سنوي</option>
+                                <option value="Monthly">شهري</option>
+                            </select>
+                            <span class="form-select-arrow">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+                                     stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                                    <polyline points="6 9 12 15 18 9"/>
+                                </svg>
+                            </span>
+                        </div>
                     </div>
-                    <div class="fc-fld fc-field-full">
-                        <div class="fc-fld-lb">معاينة الرقم الجاي</div>
-                        <div class="fc-sel fc-sel-lg" style="display:flex;align-items:center;font-weight:800;letter-spacing:.5px">
-                            @Preview
+
+                    <div class="form-field">
+                        <label class="form-label" for="edit-current">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                                 stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 6v6l4 2" stroke-linecap="round"/>
+                            </svg>
+                            الرقم الحالي
+                        </label>
+                        <div class="form-input-wrap">
+                            <input id="edit-current" class="form-input"
+                                   type="number" @bind="_editCurrent" min="0"/>
+                        </div>
+                        <div class="form-hint">الرقم التسلسلي الأخير المستخدم</div>
+                    </div>
+
+                    <div class="form-field form-field--full">
+                        <label class="form-label">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                                 stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <polyline points="16 18 22 12 16 6"/>
+                                <polyline points="8 6 2 12 8 18"/>
+                            </svg>
+                            معاينة الرقم التالي
+                        </label>
+                        <div class="preview-box">
+                            <span class="preview-value">
+                                @(_editPrefix)@((_editCurrent + 1).ToString().PadLeft(_editLength, '0'))
+                            </span>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="fc-modal-foot">
-                <MudButton Variant="Variant.Text" OnClick="CloseEdit">إلغاء</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
-                           StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">حفظ</MudButton>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn--ghost" @onclick="CloseEdit" type="button">
+                    إلغاء
+                </button>
+                <button class="modal-btn modal-btn--primary" @onclick="DoEdit"
+                        disabled="@_editBusy" type="button">
+                    @if (_editBusy)
+                    {
+                        <span class="btn-spinner"></span>
+                        <span>جاري الحفظ...</span>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/>
+                            <polyline points="7 3 7 8 15 8"/>
+                        </svg>
+                        <span>حفظ التعديلات</span>
+                    }
+                </button>
             </div>
         </div>
     </div>
 }
 
-@* ═══════════ مودال: تجهيز سنة جديدة ═══════════ *@
-@if (_prepOpen && CanManage)
-{
-    <div class="fc-modal-backdrop" @onclick="() => _prepOpen = false">
-        <div class="fc-modal fc-modal-sm" @onclick:stopPropagation="true">
-            <div class="fc-modal-head">
-                <div>
-                    <div class="fc-modal-title">تجهيز سلاسل سنة جديدة</div>
-                    <div class="fc-modal-sub">بينسخ البادئة وطول الرقم من آخر سنة · العدّاد من الصفر</div>
-                </div>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _prepOpen = false" />
-            </div>
-            <div class="fc-modal-body">
-                @if (_msg is not null)
-                {
-                    <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
-                              Class="mb-4">@_msg</MudAlert>
-                }
-                <div class="fc-alert fc-alert-warn">
-                    <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
-                    <div class="fc-alert-body">
-                        <div class="fc-alert-title">لازم تعملها قبل أول مستند في السنة</div>
-                        <div>لو سلاسل السنة مش موجودة، النظام هيرفض إنشاء أي حجز أو فاتورة جديدة.</div>
-                    </div>
-                </div>
-                <div class="fc-fld" style="margin-top:14px">
-                    <div class="fc-fld-lb">السنة</div>
-                    <input type="number" class="fc-sel fc-sel-lg" value="@_prepYear"
-                           @onchange="e => _prepYear = (short)ParseLong(e.Value)" />
-                </div>
-            </div>
-            <div class="fc-modal-foot">
-                <MudButton Variant="Variant.Text" OnClick="() => _prepOpen = false">إلغاء</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
-                           OnClick="PrepareAsync">تجهيز</MudButton>
-            </div>
-        </div>
-    </div>
-}
+<style>
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px;
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 1;
+    }
+
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important;
+        overflow: hidden;
+        box-shadow: 0 12px 32px rgba(13,38,84,.15), 0 4px 12px rgba(13,38,84,.08);
+        border: 1px solid rgba(255,255,255,.08);
+    }
+
+    .hero-wrapper .fc-hero.fc-hero-slim {
+        padding-top: 18px !important;
+        padding-bottom: 22px !important;
+    }
+
+    .num-hero-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .num-hero-left  { flex: 1; min-width: 200px; }
+
+    .num-hero-crumb {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        color: #6b7d95;
+        margin-bottom: 6px;
+    }
+
+    .num-hero-sub   { font-size: 13px; color: #6b7d95; }
+    .num-hero-right { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .num-hero-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        background: rgba(255,255,255,.1);
+        border: 1px solid rgba(255,255,255,.2);
+        font-size: 11.5px;
+        color: #fff;
+    }
+
+    .num-chip-highlight {
+        background: rgba(30,110,245,.2);
+        border-color: rgba(30,110,245,.4);
+    }
+
+    .fc-page {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 24px clamp(16px, 3vw, 40px) 80px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    /* ── State Cards ── */
+    .state-container {
+        display: flex;
+        justify-content: center;
+        padding: 48px 16px;
+    }
+
+    .state-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 16px;
+        padding: 36px 28px;
+        border-radius: 16px;
+        max-width: 420px;
+        width: 100%;
+    }
+
+    .state-card--warning { background: #fffbeb; border: 1px solid #fde68a; }
+    .state-card--empty   { background: #f8fafc; border: 1px solid #e2e8f0; }
+
+    .state-icon-wrap {
+        width: 60px; height: 60px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .state-icon-wrap--warning { background: #fef3c7; color: #d97706; }
+    .state-icon-wrap--empty   { background: #e0e7ff; color: #4f46e5; }
+
+    .state-title { font-size: 16px; font-weight: 700; color: #1c2c44; }
+
+    .state-desc { font-size: 13.5px; color: #64748b; line-height: 1.6; }
+
+    .state-perm {
+        display: inline-block;
+        padding: 1px 7px;
+        border-radius: 6px;
+        background: #fef9c3;
+        border: 1px solid #fde047;
+        font-family: monospace;
+        font-size: 12px;
+        color: #854d0e;
+    }
+
+    .state-action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: 4px;
+        padding: 9px 20px;
+        border-radius: 10px;
+        background: #1e6ef5;
+        color: #fff;
+        border: none;
+        font-size: 13.5px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background .15s, transform .1s;
+    }
+
+    .state-action-btn:hover { background: #1558d0; transform: translateY(-1px); }
+
+    /* ── Loading ── */
+    .loading-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        padding: 48px 32px;
+    }
+
+    .loading-spinner-wrap { position: relative; width: 52px; height: 52px; }
+
+    .loading-spinner {
+        width: 52px; height: 52px;
+        border: 3px solid #e0e7ff;
+        border-top-color: #1e6ef5;
+        border-radius: 50%;
+        animation: spin .8s linear infinite;
+    }
+
+    .loading-pulse {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%,-50%);
+        width: 20px; height: 20px;
+        border-radius: 50%;
+        background: #1e6ef5;
+        opacity: .3;
+        animation: pulse-load 1.2s ease-in-out infinite;
+    }
+
+    .loading-text { font-size: 15px; font-weight: 600; color: #1c2c44; }
+    .loading-sub  { font-size: 13px; color: #94a3b8; margin-top: -8px; }
+
+    @@keyframes spin        { to { transform: rotate(360deg); } }
+    @@keyframes pulse-load  {
+        0%,100% { transform: translate(-50%,-50%) scale(.8); opacity: .3; }
+        50%     { transform: translate(-50%,-50%) scale(1.2); opacity: .6; }
+    }
+
+    /* ── KPI Grid ── */
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+    }
+
+    .kpi-card {
+        position: relative;
+        background: #fff;
+        border: 1.5px solid #e8eef6;
+        border-radius: 16px;
+        padding: 20px;
+        cursor: pointer;
+        text-align: right;
+        transition: border-color .2s, box-shadow .2s, transform .15s;
+        overflow: hidden;
+        box-shadow: 0 1px 4px rgba(0,0,0,.04);
+    }
+
+    .kpi-card:hover:not(.kpi-card--static) {
+        border-color: #1e6ef5;
+        box-shadow: 0 4px 16px rgba(30,110,245,.12);
+        transform: translateY(-2px);
+    }
+
+    .kpi-card--active {
+        border-color: #1e6ef5;
+        background: #f0f6ff;
+        box-shadow: 0 4px 16px rgba(30,110,245,.15);
+    }
+
+    .kpi-card--static { cursor: default; }
+
+    .kpi-card-inner { display: flex; align-items: flex-start; gap: 14px; }
+
+    .kpi-icon-wrap {
+        width: 44px; height: 44px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .kpi-icon-wrap--blue    { background: #dbeafe; color: #1d4ed8; }
+    .kpi-icon-wrap--indigo  { background: #e0e7ff; color: #4338ca; }
+    .kpi-icon-wrap--emerald { background: #d1fae5; color: #059669; }
+
+    .kpi-body { flex: 1; }
+    .kpi-label { font-size: 12px; color: #64748b; font-weight: 500; margin-bottom: 4px; }
+    .kpi-value { font-size: 26px; font-weight: 800; color: #1c2c44; line-height: 1.1; letter-spacing: -.5px; }
+    .kpi-sub   { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+
+    .kpi-active-bar {
+        position: absolute;
+        bottom: 0; right: 0; left: 0;
+        height: 3px;
+        background: linear-gradient(90deg,#1e6ef5,#6366f1);
+        border-radius: 0 0 14px 14px;
+    }
+
+    /* ── Data Card ── */
+    .data-card {
+        background: #fff;
+        border: 1.5px solid #e8eef6;
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,.05);
+    }
+
+    .data-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 18px 24px;
+        border-bottom: 1.5px solid #f1f5f9;
+        flex-wrap: wrap;
+    }
+
+    .data-card-header-right { display: flex; align-items: center; gap: 12px; }
+
+    .data-card-icon {
+        width: 36px; height: 36px;
+        border-radius: 10px;
+        background: #e0e7ff;
+        color: #4338ca;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .data-card-title { font-size: 15px; font-weight: 700; color: #1c2c44; }
+    .data-card-sub   { font-size: 12.5px; color: #64748b; margin-top: 1px; }
+    .data-card-header-left { display: flex; align-items: center; gap: 10px; }
+
+    .year-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    .year-pill {
+        padding: 5px 12px;
+        border-radius: 20px;
+        border: 1.5px solid #e2e8f0;
+        background: #f8fafc;
+        color: #475569;
+        font-size: 12.5px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all .15s;
+    }
+
+    .year-pill:hover { border-color: #1e6ef5; color: #1e6ef5; background: #f0f6ff; }
+    .year-pill--active { background: #1e6ef5; border-color: #1e6ef5; color: #fff; }
+
+    /* ── Table ── */
+    .table-scroll { overflow-x: auto; }
+
+    .num-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 680px;
+    }
+
+    .num-table thead tr {
+        background: #f8fafc;
+        border-bottom: 2px solid #e8eef6;
+    }
+
+    .num-table th {
+        padding: 11px 16px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        white-space: nowrap;
+    }
+
+    .th-inner { display: flex; align-items: center; gap: 6px; }
+    .th-inner--center { justify-content: center; }
+
+    .num-table-row {
+        border-bottom: 1px solid #f1f5f9;
+        transition: background .12s;
+    }
+
+    .num-table-row:last-child { border-bottom: none; }
+    .num-table-row:hover { background: #f8fafc; }
+    .num-table td { padding: 13px 16px; vertical-align: middle; }
+
+    .col-type    { width: 160px; }
+    .col-prefix  { width: 110px; }
+    .col-len     { width: 110px; }
+    .col-reset   { width: 130px; }
+    .col-current { width: 140px; }
+    .col-example { width: 160px; }
+    .col-actions { width: 100px; }
+
+    .doc-type-cell { display: flex; align-items: center; gap: 9px; }
+
+    .doc-type-dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .doc-type-dot--blue    { background: #3b82f6; }
+    .doc-type-dot--green   { background: #10b981; }
+    .doc-type-dot--purple  { background: #8b5cf6; }
+    .doc-type-dot--orange  { background: #f59e0b; }
+    .doc-type-dot--red     { background: #ef4444; }
+    .doc-type-dot--cyan    { background: #06b6d4; }
+    .doc-type-dot--default { background: #94a3b8; }
+
+    .doc-type-name { font-size: 13.5px; font-weight: 600; color: #1e293b; }
+
+    .prefix-badge {
+        display: inline-block;
+        padding: 3px 9px;
+        border-radius: 7px;
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 12.5px;
+        color: #334155;
+        font-weight: 600;
+        letter-spacing: .5px;
+    }
+
+    .num-center { display: flex; justify-content: center; }
+
+    .len-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px; height: 30px;
+        border-radius: 8px;
+        background: #e0e7ff;
+        color: #4338ca;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .reset-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .reset-badge--never   { background: #f1f5f9; color: #64748b;  border: 1px solid #e2e8f0; }
+    .reset-badge--yearly  { background: #dcfce7; color: #16a34a;  border: 1px solid #bbf7d0; }
+    .reset-badge--monthly { background: #fef9c3; color: #ca8a04;  border: 1px solid #fde68a; }
+
+    .current-num {
+        font-size: 14px;
+        font-weight: 700;
+        color: #1c2c44;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .example-code {
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 12.5px;
+        color: #1e6ef5;
+        background: #eff6ff;
+        padding: 3px 9px;
+        border-radius: 7px;
+        border: 1px solid #bfdbfe;
+        font-weight: 600;
+        letter-spacing: .5px;
+    }
+
+    .actions-center { display: flex; justify-content: center; }
+
+    .edit-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 8px;
+        border: 1.5px solid #e2e8f0;
+        background: #f8fafc;
+        color: #475569;
+        font-size: 12.5px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all .15s;
+        white-space: nowrap;
+    }
+
+    .edit-btn:hover { border-color: #1e6ef5; background: #eff6ff; color: #1e6ef5; }
+
+    .data-card-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 24px;
+        border-top: 1.5px solid #f1f5f9;
+        background: #f8fafc;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .footer-count, .footer-total { font-size: 12.5px; color: #64748b; }
+    .footer-count strong, .footer-total strong { color: #1c2c44; font-weight: 700; }
+
+    /* ════════════════════════════════
+       FAB — إصلاح كامل
+    ════════════════════════════════ */
+    .glow-fab-scrim {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.25);
+        backdrop-filter: blur(3px);
+        z-index: 1200;
+    }
+
+    .glow-fab-wrap {
+        position: fixed;
+        left: 28px;
+        bottom: 28px;
+        z-index: 1300;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0;
+    }
+
+    /* القائمة — مخفية افتراضيًا */
+    .glow-fab-menu {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 12px;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translateY(8px);
+        transition: opacity .22s ease, transform .22s ease, visibility .22s;
+    }
+
+    /* القائمة — مفتوحة */
+    .glow-fab-menu--open {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: translateY(0);
+    }
+
+    .glow-fab-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        border-radius: 12px;
+        background: #fff;
+        border: 1.5px solid #dde5f0;
+        box-shadow: 0 4px 16px rgba(0,0,0,.12);
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        color: #1c2c44;
+        transition: background .15s, border-color .15s, transform .15s;
+        white-space: nowrap;
+        width: 100%;
+    }
+
+    .glow-fab-item:hover {
+        background: #f4f7fb;
+        border-color: #1e6ef5;
+        transform: translateX(2px);
+    }
+
+    .glow-fab-item-ic {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px; height: 30px;
+        border-radius: 8px;
+        background: #eaf1ff;
+        color: #1e6ef5;
+        flex-shrink: 0;
+    }
+
+    .glow-fab-container {
+        position: relative;
+        width: 64px;
+        height: 64px;
+        flex-shrink: 0;
+    }
+
+    .glow-fab-btn {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%,-50%);
+        width: 60px; height: 60px;
+        border-radius: 50%;
+        background: linear-gradient(135deg,#1e6ef5,#0d47a1);
+        border: 2.5px solid #fbbf24;
+        color: #fff;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 20px rgba(30,110,245,.45);
+        transition: transform .2s, box-shadow .2s;
+        z-index: 2;
+    }
+
+    .glow-fab-btn:hover {
+        transform: translate(-50%,-50%) scale(1.06);
+        box-shadow: 0 6px 28px rgba(30,110,245,.55);
+    }
+
+    .glow-fab-icon {
+        transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+    }
+
+    /* تدوير أيقونة الـ + عند الفتح */
+    .glow-fab-btn--open .glow-fab-icon {
+        transform: rotate(135deg);
+    }
+
+    .glow-halo, .glow-ring {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%,-50%);
+        border-radius: 50%;
+        pointer-events: none;
+    }
+
+    .glow-halo {
+        width: 60px; height: 60px;
+        background: radial-gradient(circle,rgba(30,110,245,.28) 0%,transparent 70%);
+        animation: glow-breath 2.2s ease-in-out infinite;
+    }
+
+    .glow-ring {
+        width: 60px; height: 60px;
+        border: 2px solid rgba(30,110,245,.35);
+        animation: glow-expand 2.2s ease-out infinite;
+    }
+
+    .glow-ring-2 { animation-delay: .35s; }
+    .glow-ring-3 { animation-delay: .7s; }
+
+    @@keyframes glow-breath {
+        0%,100% { opacity:.45; transform:translate(-50%,-50%) scale(1);   }
+        50%      { opacity:.9;  transform:translate(-50%,-50%) scale(1.12); }
+    }
+
+    @@keyframes glow-expand {
+        0%   { opacity:.75; transform:translate(-50%,-50%) scale(1);   }
+        100% { opacity:0;   transform:translate(-50%,-50%) scale(2.6); }
+    }
+
+    /* ════════════════════════════════
+       Modals
+    ════════════════════════════════ */
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(15,23,42,.5);
+        backdrop-filter: blur(6px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1400;
+        padding: 16px;
+        animation: backdrop-in .2s ease;
+    }
+
+    @@keyframes backdrop-in { from { opacity:0; } to { opacity:1; } }
+
+    .modal-sheet {
+        background: #fff;
+        border-radius: 20px;
+        width: 100%;
+        max-width: 540px;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 24px 64px rgba(15,23,42,.22), 0 8px 24px rgba(15,23,42,.12);
+        animation: sheet-in .25s cubic-bezier(.34,1.56,.64,1);
+        display: flex;
+        flex-direction: column;
+    }
+
+    .modal-sheet--sm { max-width: 420px; }
+
+    @@keyframes sheet-in {
+        from { opacity:0; transform: scale(.93) translateY(14px); }
+        to   { opacity:1; transform: scale(1)   translateY(0);    }
+    }
+
+    .modal-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 20px 24px;
+        border-bottom: 1.5px solid #f1f5f9;
+        flex-shrink: 0;
+    }
+
+    .modal-header-icon {
+        width: 44px; height: 44px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .modal-header-icon--blue   { background: #dbeafe; color: #1d4ed8; }
+    .modal-header-icon--indigo { background: #e0e7ff; color: #4338ca; }
+
+    .modal-header-text { flex: 1; }
+    .modal-title { font-size: 16px; font-weight: 700; color: #1c2c44; }
+    .modal-sub   { font-size: 12.5px; color: #64748b; margin-top: 2px; }
+
+    .modal-close-btn {
+        width: 32px; height: 32px;
+        border-radius: 8px;
+        border: 1.5px solid #e2e8f0;
+        background: #f8fafc;
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all .15s;
+        flex-shrink: 0;
+    }
+
+    .modal-close-btn:hover { border-color: #ef4444; color: #ef4444; background: #fef2f2; }
+
+    .modal-body { padding: 22px 24px; flex: 1; overflow-y: auto; }
+
+    .modal-info-box {
+        display: flex;
+        gap: 12px;
+        padding: 16px;
+        border-radius: 12px;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+    }
+
+    .modal-info-icon { color: #3b82f6; flex-shrink: 0; margin-top: 2px; }
+
+    .modal-info-text p {
+        font-size: 13.5px;
+        color: #1e40af;
+        line-height: 1.6;
+        margin: 0;
+    }
+
+    .modal-year-badge {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 6px;
+        background: #1e6ef5;
+        color: #fff;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    .form-field { display: flex; flex-direction: column; gap: 6px; }
+    .form-field--full { grid-column: 1 / -1; }
+
+    .form-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: #475569;
+    }
+
+    .form-input-wrap { position: relative; }
+
+    .form-input {
+        width: 100%;
+        padding: 9px 12px;
+        border-radius: 10px;
+        border: 1.5px solid #e2e8f0;
+        background: #fff;
+        font-size: 13.5px;
+        color: #1e293b;
+        outline: none;
+        transition: border-color .15s, box-shadow .15s;
+        box-sizing: border-box;
+        font-family: inherit;
+    }
+
+    .form-input:focus {
+        border-color: #1e6ef5;
+        box-shadow: 0 0 0 3px rgba(30,110,245,.12);
+    }
+
+    .form-input--disabled {
+        background: #f8fafc;
+        color: #94a3b8;
+        cursor: not-allowed;
+        padding-left: 36px;
+    }
+
+    .form-lock-icon {
+        position: absolute;
+        left: 12px; top: 50%;
+        transform: translateY(-50%);
+        color: #cbd5e1;
+        display: flex;
+    }
+
+    .form-hint { font-size: 11.5px; color: #94a3b8; }
+
+    .form-input-wrap--select { position: relative; }
+
+    .form-select { appearance: none; padding-left: 36px; cursor: pointer; }
+
+    .form-select-arrow {
+        position: absolute;
+        left: 10px; top: 50%;
+        transform: translateY(-50%);
+        color: #94a3b8;
+        pointer-events: none;
+        display: flex;
+    }
+
+    .preview-box {
+        padding: 14px 18px;
+        border-radius: 12px;
+        background: #f0fdf4;
+        border: 1.5px solid #86efac;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .preview-value {
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 20px;
+        font-weight: 800;
+        color: #16a34a;
+        letter-spacing: 1px;
+    }
+
+    .modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 16px 24px;
+        border-top: 1.5px solid #f1f5f9;
+        background: #f8fafc;
+        border-radius: 0 0 20px 20px;
+        flex-shrink: 0;
+    }
+
+    .modal-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 9px 20px;
+        border-radius: 10px;
+        font-size: 13.5px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all .15s;
+        border: 1.5px solid transparent;
+    }
+
+    .modal-btn--ghost {
+        background: #fff;
+        border-color: #e2e8f0;
+        color: #475569;
+    }
+
+    .modal-btn--ghost:hover { border-color: #cbd5e1; background: #f1f5f9; }
+
+    .modal-btn--primary {
+        background: #1e6ef5;
+        color: #fff;
+        border-color: #1e6ef5;
+    }
+
+    .modal-btn--primary:hover:not(:disabled) {
+        background: #1558d0;
+        border-color: #1558d0;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(30,110,245,.35);
+    }
+
+    .modal-btn:disabled { opacity: .6; cursor: not-allowed; transform: none !important; }
+
+    .btn-spinner {
+        width: 14px; height: 14px;
+        border: 2px solid rgba(255,255,255,.4);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin .7s linear infinite;
+        display: inline-block;
+    }
+
+    /* ── Responsive ── */
+    @@media (max-width: 768px) {
+        .hero-wrapper  { padding: 12px 12px 0; }
+        .hero-wrapper .fc-hero { border-radius: 16px !important; }
+        .num-hero-row  { flex-direction: column; align-items: flex-start; }
+        .num-hero-right { width: 100%; justify-content: flex-start; }
+        .kpi-grid { grid-template-columns: 1fr; }
+        .data-card-header { flex-direction: column; align-items: flex-start; }
+        .form-grid { grid-template-columns: 1fr; }
+        .modal-sheet { border-radius: 16px; }
+        .data-card-footer { flex-direction: column; align-items: flex-start; }
+        .glow-fab-wrap { left: 16px; bottom: 16px; }
+    }
+
+    @@media (max-width: 480px) {
+        .modal-footer { flex-direction: column-reverse; }
+        .modal-btn    { width: 100%; justify-content: center; }
+        .year-pills   { display: none; }
+    }
+</style>
 
 @code {
+    private List<NumberingDto> _items    = new();
+    private List<short>        _allYears = new();
+    private short?             _year;
+    private bool               _loading  = true;
+    private string?            _error;
+    private bool               _fabOpen;
+
+    private bool  _prepareOpen;
+    private short _prepareYear = (short)(DateTime.UtcNow.Year + 1);
+    private bool  _prepareBusy;
+
+    private bool          _editOpen;
+    private NumberingDto? _editItem;
+    private string        _editPrefix  = "";
+    private int           _editLength;
+    private string        _editReset   = "";
+    private int           _editCurrent;
+    private bool          _editBusy;
+
+    private bool CanView   => _user?.Can("NUMBERING.VIEW")   ?? false;
+    private bool CanManage => _user?.Can("NUMBERING.MANAGE") ?? false;
     private AuthUser? _user;
-    private bool CanView   => _user?.Can("MASTERDATA.VIEW") ?? false;
-    private bool CanManage => _user?.Can("MASTERDATA.MANAGE") ?? false;
-
-    private List<Item> _items = new();
-    private List<short> _years = new();
-    private short? _year;
-    private string _q = "";
-
-    private bool _editOpen, _prepOpen, _saving;
-    private string? _msg; private bool _ok = true;
-    private Item? _e;
-    private Form _f = new();
-    private short _prepYear = (short)(DateTime.UtcNow.Year + 1);
-
-    /// <summary>مطابق لـ <c>NumberingController.Item</c> — 11 حقل.</summary>
-    public class Item
-    {
-        public int NumberSequenceId { get; set; }
-        public int? BranchId { get; set; }
-        public string DocumentType { get; set; } = "";
-        public string TypeNameAr { get; set; } = "";
-        public string Prefix { get; set; } = "";
-        public short Year { get; set; }
-        public long CurrentNumber { get; set; }
-        public byte NumberLength { get; set; }
-        public string ResetPeriod { get; set; } = "";
-        public string Sample { get; set; } = "";
-        public DateTime? UpdatedAt { get; set; }
-    }
-
-    /// <summary>مطابق لـ <c>NumberingController.Upsert</c> — 4 حقول.</summary>
-    public class Form
-    {
-        public string Prefix { get; set; } = "";
-        public byte NumberLength { get; set; } = 6;
-        public string ResetPeriod { get; set; } = "Yearly";
-        public long CurrentNumber { get; set; }
-    }
-
-    private IEnumerable<Item> Filtered => _items.Where(i =>
-        string.IsNullOrWhiteSpace(_q) ||
-        i.TypeNameAr.Contains(_q, StringComparison.OrdinalIgnoreCase) ||
-        i.DocumentType.Contains(_q, StringComparison.OrdinalIgnoreCase) ||
-        i.Prefix.Contains(_q, StringComparison.OrdinalIgnoreCase));
-
-    /// <summary>معاينة حية — نفس صيغة الـ SP.</summary>
-    private string Preview
-    {
-        get
-        {
-            if (_e is null) return "";
-            var l = _f.NumberLength < 1 ? 1 : (int)_f.NumberLength;
-            var s = (_f.CurrentNumber + 1).ToString();
-            if (s.Length < l) s = new string('0', l - s.Length) + s;
-            return $"{_f.Prefix?.Trim().ToUpperInvariant()}{_e.Year}-{s}";
-        }
-    }
 
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
-        if (!CanView) return;
         await LoadAsync();
     }
 
     private async Task LoadAsync()
     {
+        _loading = true;
+        _error   = null;
+        StateHasChanged(); // إجبار الـ UI على عرض Loading فورًا
         try
         {
-            _years = await Http.GetFromJsonAsync<List<short>>("api/master/numbering/years") ?? new();
-            if (_year is null) _year = _years.FirstOrDefault();
-            if (_year is null) return;
-            _items = await Http.GetFromJsonAsync<List<Item>>($"api/master/numbering?year={_year}") ?? new();
+            var url   = _year is null
+                ? "api/master/numbering"
+                : $"api/master/numbering?year={_year}";
+            _items    = await Http.GetFromJsonAsync<List<NumberingDto>>(url) ?? new();
+            var years = await Http.GetFromJsonAsync<List<short>>("api/master/numbering/years");
+            _allYears = years ?? new();
         }
-        catch (Exception ex) { _msg = "فشل التحميل: " + ex.Message; _ok = false; }
+        catch (Exception ex)
+        {
+            _error = "فشل التحميل: " + ex.Message;
+            Snackbar.Add(_error, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged(); // إجبار الـ UI على التحديث بعد انتهاء التحميل
+        }
     }
 
-    private async Task OnYearChanged(ChangeEventArgs e)
+    // ── إصلاح SetYear: async بدل fire-and-forget ──
+    private async Task SetYear(short? y)
     {
-        _year = short.TryParse(e.Value?.ToString(), out var y) ? y : _year;
+        _year = y;
         await LoadAsync();
     }
 
-    private void OpenEdit(Item i)
+    private void ToggleFab()
     {
-        _e = i;
-        _f = new Form
-        {
-            Prefix        = i.Prefix,
-            NumberLength  = i.NumberLength,
-            ResetPeriod   = i.ResetPeriod,
-            CurrentNumber = i.CurrentNumber
-        };
-        _msg = null; _editOpen = true;
+        _fabOpen = !_fabOpen;
+        StateHasChanged();
     }
 
-    private void CloseEdit() { _editOpen = false; _e = null; _msg = null; }
-
-    private void OpenPrepare() { _msg = null; _prepOpen = true; }
-
-    private async Task SaveAsync()
+    private void OnFabKeyDown(KeyboardEventArgs e)
     {
-        if (_saving || _e is null) return;
-        if (string.IsNullOrWhiteSpace(_f.Prefix)) { _ok = false; _msg = "البادئة مطلوبة"; return; }
+        if (e.Key is "Enter" or " ") ToggleFab();
+    }
 
-        _saving = true; _msg = null;
+    // ── أزرار الـ FAB يغلقون القائمة أولاً ثم ينفذون الأمر ──
+    private async Task HandleOpenPrepare()
+    {
+        _fabOpen = false;
+        StateHasChanged();
+        await Task.Delay(180); // انتظر انتهاء animation الإغلاق
+        OpenPrepare();
+    }
+
+    private async Task HandleRefresh()
+    {
+        _fabOpen = false;
+        StateHasChanged();
+        await LoadAsync();
+    }
+
+    private void OpenPrepare()
+    {
+        _prepareYear = (short)(DateTime.UtcNow.Year + 1);
+        _prepareOpen = true;
+        StateHasChanged();
+    }
+
+    private void ClosePrepare()
+    {
+        _prepareOpen = false;
+        StateHasChanged();
+    }
+
+    private async Task DoPrepare()
+    {
+        _prepareBusy = true;
+        StateHasChanged();
         try
         {
-            var res = await Http.PutAsJsonAsync($"api/master/numbering/{_e.NumberSequenceId}", new
+            var res = await Http.PostAsJsonAsync(
+                $"api/master/numbering/prepare-year?year={_prepareYear}", new { });
+            if (res.IsSuccessStatusCode)
             {
-                prefix        = _f.Prefix,
-                numberLength  = _f.NumberLength,
-                resetPeriod   = _f.ResetPeriod,
-                currentNumber = (long?)_f.CurrentNumber
-            });
-            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
-            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
-            if (res.IsSuccessStatusCode) { CloseEdit(); await LoadAsync(); }
+                Snackbar.Add($"تم إنشاء سلاسل سنة {_prepareYear}", Severity.Success);
+                _prepareOpen = false;
+                await LoadAsync();
+            }
+            else
+            {
+                var msg = await res.Content.ReadAsStringAsync();
+                Snackbar.Add("فشل: " + msg, Severity.Error);
+            }
         }
-        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
-        finally { _saving = false; }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        finally
+        {
+            _prepareBusy = false;
+            StateHasChanged();
+        }
     }
 
-    private async Task PrepareAsync()
+    private void OpenEdit(NumberingDto s)
     {
-        if (_saving) return;
-        _saving = true; _msg = null;
+        _editItem    = s;
+        _editPrefix  = s.Prefix;
+        _editLength  = s.NumberLength;
+        _editReset   = s.ResetPeriod;
+        _editCurrent = s.CurrentNumber;
+        _editOpen    = true;
+        StateHasChanged();
+    }
+
+    private void CloseEdit()
+    {
+        _editOpen = false;
+        StateHasChanged();
+    }
+
+    private async Task DoEdit()
+    {
+        if (_editItem is null) return;
+        _editBusy = true;
+        StateHasChanged();
         try
         {
-            var res = await Http.PostAsJsonAsync("api/master/numbering/prepare-year", new { year = _prepYear });
-            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
-            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
-            if (res.IsSuccessStatusCode) { _prepOpen = false; _year = _prepYear; await LoadAsync(); }
+            var payload = new
+            {
+                prefix        = _editPrefix.Trim(),
+                numberLength  = _editLength,
+                resetPeriod   = _editReset,
+                currentNumber = _editCurrent
+            };
+            var res = await Http.PutAsJsonAsync(
+                $"api/master/numbering/{_editItem.DocumentType}", payload);
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add("تم حفظ التعديلات بنجاح", Severity.Success);
+                _editOpen = false;
+                await LoadAsync();
+            }
+            else
+            {
+                var msg = await res.Content.ReadAsStringAsync();
+                Snackbar.Add("فشل: " + msg, Severity.Error);
+            }
         }
-        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
-        finally { _saving = false; }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        finally
+        {
+            _editBusy = false;
+            StateHasChanged();
+        }
     }
 
-    private static long ParseLong(object? v) => long.TryParse(v?.ToString(), out var n) && n >= 0 ? n : 0;
-
-    private static string PeriodAr(string p) => p switch
+    private static string GetTypeColor(string t) => t switch
     {
-        "Yearly" => "سنوي", "Monthly" => "شهري", "Never" => "أبدي", _ => p
+        "BOOKING"   or "INVOICE"          => "blue",
+        "OPERATION" or "TRIP"             => "green",
+        "CUSTOMER"  or "SUPPLIER"         => "purple",
+        "DRIVER"    or "EMPLOYEE"         => "cyan",
+        "VEHICLE"   or "TRAILER"          => "orange",
+        "EXPENSE"   or "MAINTENANCE"      => "red",
+        "PAYMENT"   or "SUPPLIER_PAYMENT" => "green",
+        _                                 => "default"
     };
 
-    private static async Task<string> MsgOf(HttpResponseMessage res)
+    private static string TypeAr(string t) => t switch
     {
-        try
-        {
-            var b = await res.Content.ReadAsStringAsync();
-            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
-            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
-        }
-        catch { return res.IsSuccessStatusCode ? "✅ تم" : "حصل خطأ — حاول تاني"; }
-    }
+        "BOOKING"          => "حجز",
+        "OPERATION"        => "عملية",
+        "TRIP"             => "رحلة",
+        "CUSTODY"          => "عهدة",
+        "CUSTOMER"         => "عميل",
+        "SUPPLIER"         => "مورد",
+        "DRIVER"           => "سائق",
+        "EMPLOYEE"         => "موظف",
+        "VEHICLE"          => "عربية",
+        "TRAILER"          => "مقطورة",
+        "EXPENSE"          => "مصروف",
+        "INVOICE"          => "فاتورة",
+        "CREDITNOTE"       => "إشعار دائن",
+        "PAYMENT"          => "دفعة",
+        "SUPPLIER_INVOICE" => "فاتورة مورد",
+        "SUPPLIER_PAYMENT" => "دفعة مورد",
+        "MAINTENANCE"      => "صيانة",
+        "CASH_RECEIPT"     => "سند قبض",
+        "CASH_PAYMENT"     => "سند صرف",
+        "SHIPPING_AGENT"   => "وكيل ملاحي",
+        _                  => t
+    };
+
+    private static string ResetAr(string r) => r switch
+    {
+        "Never"   => "أبداً",
+        "Yearly"  => "سنوي",
+        "Monthly" => "شهري",
+        _         => r
+    };
+
+    private static string Example(NumberingDto s)
+        => $"{s.Prefix}{s.CurrentNumber.ToString().PadLeft(s.NumberLength, '0')}";
+
+    private record NumberingDto(
+        string DocumentType,
+        string Prefix,
+        int    NumberLength,
+        string ResetPeriod,
+        int    CurrentNumber,
+        short  Year
+    );
 }

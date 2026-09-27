@@ -8,158 +8,983 @@
 
 <PageTitle>شروط الدفع — فاست كوم</PageTitle>
 
-<div class="fc-hero">
-    <div class="fc-hero-inner">
-        <div class="fc-page-head">
-            <div>
-                <div class="fc-crumb">البيانات الأساسية</div>
-                <h1 class="fc-hero-title">شروط الدفع</h1>
-                <p class="fc-hero-sub">نقدي · 15 يوم · 30 يوم — بتحدد تاريخ استحقاق الفاتورة</p>
-            </div>
-            <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="LoadAsync" Style="color:#9FB4CC" />
-                @if (CanManage)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="ResetForm">شرط جديد</MudButton>
-                }
-            </div>
-        </div>
 
-        <div class="fc-kpis-glass">
-            <div class="fc-kpi"><div class="fc-kpi-lb">الشروط</div><div class="fc-kpi-num">@_items.Count</div></div>
-            <div class="fc-kpi"><div class="fc-kpi-lb">أطول مدة</div>
-                <div class="fc-kpi-num">@(_items.Count == 0 ? 0 : _items.Max(i => i.DueDays)) يوم</div></div>
+@* ════════════════════════════════════════════════════════════
+   شروط الدفع — تصميم عربي كامل (RTL)
+   الهيرو = نفس شاشة الخدمات / طرق الدفع:
+   .hero-wrapper › .fc-hero.fc-hero-slim › .fc-hero-inner › .doc-hero-row
+   (.doc-hero-left + .doc-hero-right) › .doc-kpis-row (.doc-kpi ×4)
+   والإنشاء عبر الزر العائم .fc-fab-container — مفيش زر في الهيرو
+   ════════════════════════════════════════════════════════════ *@
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
+            <div class="doc-hero-row">
+                <div class="doc-hero-left">
+                    <div class="doc-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="2" y="5" width="20" height="14" rx="2"/>
+                            <path d="M2 10h20" stroke-linecap="round"/>
+                        </svg>
+                        <span>البيانات الأساسية · شروط الدفع</span>
+                    </div>
+                    <h1 class="fc-hero-title">شروط الدفع</h1>
+                    <p class="fc-hero-sub">مدد الاستحقاق المتفق عليها مع العملاء — تُختار تلقائيًا عند إصدار الفاتورة</p>
+                </div>
+                <div class="doc-hero-right">
+                    <span class="doc-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                </div>
+            </div>
+
+            @* ═══ KPIs — .doc-kpis-row (نفس شاشة الخدمات) ═══ *@
+            @if (CanView)
+            {
+                <div class="doc-kpis-row">
+                    <div class="doc-kpi doc-kpi-blue">
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon">
+                                <MudIcon Icon="@Icons.Material.Filled.List" Size="Size.Small"/>
+                            </div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@_items.Count</div>
+                                <div class="doc-kpi-label">إجمالي الشروط</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="doc-kpi doc-kpi-green">
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon">
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small"/>
+                            </div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@UsedCount</div>
+                                <div class="doc-kpi-label">مستخدمة في عملاء</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="doc-kpi doc-kpi-amber">
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon">
+                                <MudIcon Icon="@Icons.Material.Filled.Block" Size="Size.Small"/>
+                            </div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@UnusedCount</div>
+                                <div class="doc-kpi-label">غير مستخدمة</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="doc-kpi doc-kpi-red">
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon">
+                                <MudIcon Icon="@Icons.Material.Filled.DateRange" Size="Size.Small"/>
+                            </div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@AvgDays</div>
+                                <div class="doc-kpi-label">متوسط الاستحقاق (يوم)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
         </div>
     </div>
 </div>
 
-<div class="fc-page">
+@* ═══ الجسم — .doc-body (نفس عرض الهيرو: --fc-page-w) ═══ *@
+<div class="doc-body">
+
+
+    @* ═══ TOOLBAR ═══ *@
+    @if (CanView)
+    {
+        <div class="pt-toolbar">
+            <div class="pt-search">
+                <svg class="pt-search-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                </svg>
+                <input class="pt-search-input" placeholder="ابحث بالكود أو الاسم..."
+                       @bind="_search" @bind:event="oninput" aria-label="بحث" />
+                @if (!string.IsNullOrWhiteSpace(_search))
+                {
+                    <button type="button" class="pt-search-clear" @onclick="() => _search = string.Empty" aria-label="مسح البحث">×</button>
+                }
+            </div>
+
+            <div class="pt-filters" role="group" aria-label="تصفية">
+                <button type="button" class="pt-filter @(_filter == "all" ? "active" : "")"
+                        @onclick='() => _filter = "all"'>
+                    الكل <span class="pt-filter-count">@_items.Count</span>
+                </button>
+                <button type="button" class="pt-filter @(_filter == "used" ? "active" : "")"
+                        @onclick='() => _filter = "used"'>
+                    مستخدمة <span class="pt-filter-count">@UsedCount</span>
+                </button>
+                <button type="button" class="pt-filter @(_filter == "unused" ? "active" : "")"
+                        @onclick='() => _filter = "unused"'>
+                    غير مستخدمة <span class="pt-filter-count">@UnusedCount</span>
+                </button>
+            </div>
+
+            <span class="pt-results">
+                <strong>@Filtered.Count()</strong> من @_items.Count
+            </span>
+        </div>
+    }
+
+
+    @* ═══ TABLE ═══ *@
     @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض البيانات الأساسية.</MudAlert>
+        <div class="pt-state">
+            <div class="pt-state-ic pt-state-ic-err">
+                <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <div class="pt-state-t">وصول محظور</div>
+            <div class="pt-state-s">
+                تحتاج إلى صلاحية <code class="pt-perm">MASTERDATA.VIEW</code> لعرض شروط الدفع.
+            </div>
+        </div>
+    }
+    else if (_loading)
+    {
+        <div class="pt-state">
+            <div class="pt-spinner"></div>
+            <div class="pt-state-s">جاري تحميل الشروط...</div>
+        </div>
+    }
+    else if (_error is not null)
+    {
+        <div class="pt-state">
+            <div class="pt-state-ic pt-state-ic-err">!</div>
+            <div class="pt-state-t">تعذّر تحميل البيانات</div>
+            <div class="pt-state-s">@_error</div>
+            <button type="button" class="pt-btn pt-btn-ghost" @onclick="LoadAsync">إعادة المحاولة</button>
+        </div>
+    }
+    else if (!Filtered.Any())
+    {
+        <div class="pt-state">
+            <div class="pt-state-ic">
+                <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                    <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="12" y2="15"/>
+                </svg>
+            </div>
+            <div class="pt-state-t">@(_items.Count == 0 ? "لا توجد شروط دفع" : "لا نتائج مطابقة")</div>
+            <div class="pt-state-s">
+                @(_items.Count == 0
+                    ? "ابدأ بإضافة أول شرط دفع لتستخدمه في الفواتير."
+                    : "جرّب تعديل كلمة البحث أو إظهار كل الفلاتر.")
+            </div>
+            @if (_items.Count > 0)
+            {
+                <button type="button" class="pt-btn pt-btn-ghost"
+                        @onclick='() => { _search = string.Empty; _filter = "all"; }'>مسح الفلاتر</button>
+            }
+            else if (CanManage)
+            {
+                <button type="button" class="pt-btn pt-btn-primary" @onclick="OpenAdd">إضافة أول شرط</button>
+            }
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
-
-            <div class="fc-alert fc-alert-info">
-                <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Info" /></div>
-                <div class="fc-alert-body">
-                    <div class="fc-alert-title">تاريخ الاستحقاق = تاريخ الفاتورة + عدد الأيام</div>
-                    <div>الشرط بيتربط بالعميل، وبيتطبق على فواتيره تلقائيًا.
-                        <b>نقدي</b> = صفر يوم (الاستحقاق فورًا).</div>
-                </div>
+        <div class="pt-card">
+            <div class="pt-table-wrap">
+                <table class="pt-table">
+                    <thead>
+                        <tr>
+                            <th style="width:150px;">الكود</th>
+                            <th>الاسم بالعربية</th>
+                            <th style="width:170px;">الاسم بالإنجليزية</th>
+                            <th class="pt-th-center" style="width:130px;">الاستحقاق</th>
+                            <th class="pt-th-center" style="width:140px;">الاستخدام</th>
+                            @if (CanManage)
+                            {
+                                <th class="pt-th-center" style="width:70px;">تعديل</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in Filtered)
+                        {
+                            <tr @onclick="() => Edit(t)">
+                                <td><span class="pt-code">@t.Code</span></td>
+                                <td>@t.NameAr</td>
+                                <td class="pt-td-en" dir="ltr">@(string.IsNullOrWhiteSpace(t.NameEn) ? "—" : t.NameEn)</td>
+                                <td class="pt-td-center">
+                                    <span class="pt-days @(t.DueDays == 0 ? "pt-days-now" : t.DueDays <= 30 ? "pt-days-s" : "pt-days-l")">
+                                        @DaysLabel(t.DueDays)
+                                    </span>
+                                </td>
+                                <td class="pt-td-center">
+                                    @if (t.UsageCount > 0)
+                                    {
+                                        <span class="pt-badge pt-badge-used">مستخدمة · @t.UsageCount</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="pt-badge pt-badge-free">غير مستخدمة</span>
+                                    }
+                                </td>
+                                @if (CanManage)
+                                {
+                                    <td class="pt-td-center">
+                                        <button type="button" class="pt-edit" aria-label="تعديل"
+                                                @onclick:stopPropagation="true" @onclick="() => Edit(t)">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                            </svg>
+                                        </button>
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
+        </div>
+    }
 
-            @if (CanManage)
-            {
-                <div class="fc-fsec">
-                    <div class="fc-fsec-head">
-                        <span class="fc-fsec-n">1</span>
-                        <div>
-                            <div class="fc-fsec-t">@(_editId is null ? "شرط دفع جديد" : $"تعديل: {_f.NameAr}")</div>
-                            <div class="fc-fsec-d">الكود بالحروف الإنجليزية — زي 30D أو CASH</div>
+    @* ═══ MODAL ═══ *@
+    @if (_modalOpen && CanManage)
+    {
+        <div class="pt-modal-backdrop" @onclick="CloseModal" role="dialog" aria-modal="true"
+             aria-label="@(_editId is null ? "شرط دفع جديد" : "تعديل شرط الدفع")">
+            <div class="pt-modal" @onclick:stopPropagation="true">
+
+                <div class="pt-modal-head">
+                    <div class="pt-head-icon @(_editId is null ? "pt-icon-create" : "pt-icon-edit")" aria-hidden="true">
+                        @if (_editId is null)
+                        {
+                            <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                        }
+                    </div>
+                    <div class="pt-head-text">
+                        <div class="pt-head-title">@(_editId is null ? "شرط دفع جديد" : "تعديل شرط الدفع")</div>
+                        <div class="pt-head-sub">
+                            @(_editId is null
+                                ? "أضف مدة استحقاق جديدة لتُختار عند إصدار الفاتورة."
+                                : $"الكود: {_f.Code} · مرتبط بـ {_f.UsageCount} عميل")
                         </div>
-                        <span class="fc-fsec-ic"><MudIcon Icon="@Icons.Material.Filled.Event" Size="Size.Small" /></span>
+                    </div>
+                    <button type="button" class="pt-head-close" @onclick="CloseModal" aria-label="إغلاق">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true">
+                            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="pt-modal-body">
+                    <div class="pt-form-grid">
+                        <div class="form-field">
+                            <label class="field-label" for="pt-code">
+                                الكود <span class="field-required">*</span>
+                            </label>
+                            <input id="pt-code" type="text" maxlength="30" placeholder="NET30" autocomplete="off"
+                                   class="field-input ltr @(_tried && string.IsNullOrWhiteSpace(_f.Code) ? "field-error" : "")"
+                                   value="@_f.Code" @oninput="OnCodeInput" disabled="@CodeLocked" />
+                            @if (CodeLocked)
+                            {
+                                <span class="field-hint">مقفل — الكود مرتبط بـ @_f.UsageCount عميل، يمكنك تعديل المدة فقط.</span>
+                            }
+                            else
+                            {
+                                <span class="field-hint">حروف إنجليزية وأرقام فقط — حتى 30 حرف.</span>
+                            }
+                            @if (_tried && string.IsNullOrWhiteSpace(_f.Code))
+                            {
+                                <span class="field-err-msg">الكود مطلوب.</span>
+                            }
+                        </div>
+
+                        <div class="form-field">
+                            <label class="field-label" for="pt-days">
+                                أيام الاستحقاق <span class="field-required">*</span>
+                            </label>
+                            <div class="field-input-group">
+                                <span class="field-prefix">
+                                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                                    </svg>
+                                </span>
+                                <input id="pt-days" type="number" min="0" max="730" step="1"
+                                       class="field-input with-prefix @(_tried && (_f.DueDays < 0 || _f.DueDays > 730) ? "field-error" : "")"
+                                       @bind="_f.DueDays" />
+                            </div>
+                            <div class="pt-presets">
+                                @foreach (var p in Presets)
+                                {
+                                    <button type="button" class="pt-preset @(p.Days == _f.DueDays ? "on" : "")"
+                                            @onclick='() => SetPreset(p.Days)'>@p.Label</button>
+                                }
+                            </div>
+                            @if (_tried && (_f.DueDays < 0 || _f.DueDays > 730))
+                            {
+                                <span class="field-err-msg">المدة لازم تكون بين 0 و 730 يومًا.</span>
+                            }
+                        </div>
+                        <div class="form-field">
+                            <label class="field-label" for="pt-ar">
+                                الاسم بالعربية <span class="field-required">*</span>
+                            </label>
+                            <input id="pt-ar" type="text" maxlength="150" placeholder="مثال: صافي 30 يوم"
+                                   class="field-input @(_tried && string.IsNullOrWhiteSpace(_f.NameAr) ? "field-error" : "")"
+                                   @bind="_f.NameAr" @bind:event="oninput" />
+                            @if (_tried && string.IsNullOrWhiteSpace(_f.NameAr))
+                            {
+                                <span class="field-err-msg">الاسم بالعربية مطلوب.</span>
+                            }
+                            else
+                            {
+                                <span class="field-hint">هو الاسم الظاهر في الفواتير والتقارير.</span>
+                            }
+                        </div>
+
+                        <div class="form-field">
+                            <label class="field-label" for="pt-en">الاسم بالإنجليزية</label>
+                            <input id="pt-en" type="text" maxlength="150" dir="ltr" placeholder="Net 30 Days"
+                                   class="field-input ltr" @bind="_f.NameEn" @bind:event="oninput" />
+                            <span class="field-hint">اختياري — يظهر في المستندات الإنجليزية.</span>
+                        </div>
+
+                        <div class="form-field pt-field-full">
+                            <div class="pt-term-preview">
+                                <span>المعاينة:</span>
+                                <strong>@DaysLabel(_f.DueDays)</strong>
+                                @if (!string.IsNullOrWhiteSpace(_f.NameAr))
+                                {
+                                    <span class="pt-preview-sep">·</span>
+                                    <span>@_f.NameAr</span>
+                                }
+                            </div>
+                        </div>
                     </div>
 
                     @if (_msg is not null)
                     {
-                        <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
-                                  Class="mb-4">@_msg</MudAlert>
+                        <div class="pt-alert @(_ok ? "pt-alert-ok" : "pt-alert-err")">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                                <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5" stroke-linecap="round"/>
+                            </svg>
+                            <span>@_msg</span>
+                        </div>
                     }
+                </div>
 
-                    <div class="fc-form-grid">
-                        <div class="fc-fld">
-                            <div class="fc-fld-lb">الكود<i>*</i></div>
-                            <input class="fc-sel fc-sel-lg" @bind="_f.Code" maxlength="30" dir="ltr"
-                                   disabled="@(_editId is not null && _f.UsageCount > 0)" />
-                            @if (_editId is not null && _f.UsageCount > 0)
-                            {
-                                <div class="fc-fld-hint">مقفل — مستخدم في @_f.UsageCount عميل</div>
-                            }
-                        </div>
-                        <div class="fc-fld">
-                            <div class="fc-fld-lb">الاسم بالعربي<i>*</i></div>
-                            <input class="fc-sel fc-sel-lg" @bind="_f.NameAr" maxlength="100" />
-                        </div>
-                        <div class="fc-fld">
-                            <div class="fc-fld-lb">الاسم بالإنجليزي</div>
-                            <input class="fc-sel fc-sel-lg" @bind="_f.NameEn" maxlength="100" />
-                        </div>
-                        <div class="fc-fld">
-                            <div class="fc-fld-lb">عدد الأيام<i>*</i></div>
-                            <input type="number" min="0" max="730" class="fc-sel fc-sel-lg" value="@_f.DueDays"
-                                   @onchange="e => _f.DueDays = (int)ParseLong(e.Value)" />
-                            <div class="fc-fld-hint">صفر = نقدي (الاستحقاق فورًا)</div>
-                        </div>
-                    </div>
-
-                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+                <div class="pt-modal-foot">
+                    <div class="pt-foot-left">
                         @if (_editId is not null)
                         {
-                            <MudButton Variant="Variant.Text" OnClick="ResetForm">إلغاء التعديل</MudButton>
+                            <button type="button" class="pt-btn pt-btn-ghost" @onclick="ResetForm">إعادة تعيين</button>
                         }
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
-                                   StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">حفظ</MudButton>
+                    </div>
+                    <div class="pt-foot-right">
+                        <button type="button" class="pt-foot-cancel" @onclick="CloseModal">إلغاء</button>
+                        <button type="button" class="pt-foot-save" @onclick="SaveAsync" disabled="@_saving">
+                            @if (_saving)
+                            {
+                                <span class="pt-spin"></span>
+                                <span>جاري الحفظ...</span>
+                            }
+                            else
+                            {
+                                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                                    <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                <span>@(_editId is null ? "إضافة الشرط" : "حفظ التعديلات")</span>
+                            }
+                        </button>
                     </div>
                 </div>
-            }
-
-            <div class="fc-fsec" style="margin-top:26px">
-                <div class="fc-fsec-head">
-                    <span class="fc-fsec-n">2</span>
-                    <div><div class="fc-fsec-t">الشروط الموجودة</div></div>
-                </div>
-
-                <div class="fc-table-wrap"><table class="fc-table">
-                    <thead><tr>
-                        <th>الكود</th><th>الاسم</th><th>المدة</th><th>عملاء</th><th style="width:70px"></th>
-                    </tr></thead>
-                    <tbody>
-                        @foreach (var t in _items)
-                        {
-                            <tr>
-                                <td><span class="fc-role-chip">@t.Code</span></td>
-                                <td class="fc-cell-main">
-                                    @t.NameAr
-                                    @if (!string.IsNullOrWhiteSpace(t.NameEn))
-                                    {
-                                        <div class="fc-cell-sub">@t.NameEn</div>
-                                    }
-                                </td>
-                                <td>
-                                    @if (t.DueDays == 0)
-                                    {
-                                        <span class="fc-chip fc-chip-ok">نقدي</span>
-                                    }
-                                    else
-                                    {
-                                        <b>@t.DueDays</b> <span class="fc-cell-sub">يوم</span>
-                                    }
-                                </td>
-                                <td>@t.UsageCount</td>
-                                <td>
-                                    @if (CanManage)
-                                    {
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
-                                                       Color="Color.Primary" title="تعديل" OnClick="() => Edit(t)" />
-                                    }
-                                </td>
-                            </tr>
-                        }
-                        @if (_items.Count == 0)
-                        {
-                            <tr><td colspan="5"><div class="fc-empty">مافيش شروط — ضيف أول شرط</div></td></tr>
-                        }
-                    </tbody>
-                </table></div>
             </div>
-
-        </div></div>
+        </div>
     }
 </div>
+
+@* ══════════════════════════════════════════
+   FAB — الزر العائم (نفس شاشة الخدمات / طرق الدفع)
+   scrim خارج الـ container + قايمة أزرار فوق الزر
+══════════════════════════════════════════ *@
+@if (CanManage && !_loading)
+{
+    @if (_fabOpen)
+    {
+        <div class="fc-fab-scrim" @onclick="ToggleFab" aria-hidden="true"></div>
+    }
+
+    <div class="fc-fab-container">
+        <div class="fc-fab-menu @(_fabOpen ? "fc-fab-menu--open" : "")" role="menu">
+            <button type="button" class="fc-fab-item" role="menuitem"
+                    @onclick="HandleOpenCreate">
+                <span class="fc-fab-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small"/>
+                </span>
+                <span class="fc-fab-label">شرط دفع جديد</span>
+            </button>
+            <button type="button" class="fc-fab-item" role="menuitem"
+                    @onclick="HandleReload">
+                <span class="fc-fab-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small"/>
+                </span>
+                <span class="fc-fab-label">تحديث البيانات</span>
+            </button>
+        </div>
+
+        <button type="button"
+                class="fc-fab-main fc-glow-gold @(_fabOpen ? "is-open" : "")"
+                @onclick="ToggleFab"
+                aria-label="التحكم"
+                aria-expanded="@(_fabOpen ? "true" : "false")">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none"
+                 stroke="currentColor" stroke-width="2.5" class="fc-fab-svg"
+                 aria-hidden="true">
+                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+            </svg>
+        </button>
+    </div>
+}
+
+<style>
+
+/* ═══ 1) الهيرو + KPIs — نفس شاشة الخدمات / طرق الدفع بالحرف ═══
+   .hero-wrapper (حد أقصى = --fc-page-w) › .fc-hero.fc-hero-slim ›
+   .doc-hero-row (.doc-hero-left + .doc-hero-right) › .doc-kpis-row (.doc-kpi ×4)
+   والجسم داخل .doc-body بنفس العرض. */
+    .hero-wrapper {
+        padding: 16px clamp(14px, 2.4vw, 34px) 0;
+        max-width: var(--fc-page-w, 1440px);
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 1;
+    }
+
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important;
+        overflow: hidden;
+        box-shadow: 0 12px 32px rgba(13,38,84,.15), 0 4px 12px rgba(13,38,84,.08);
+        border: 1px solid rgba(255,255,255,.08);
+    }
+
+    .hero-wrapper .fc-hero.fc-hero-slim {
+        padding-top: 18px !important;
+        padding-bottom: 22px !important;
+    }
+
+    .doc-body {
+        padding: 18px clamp(16px, 3vw, 40px) 100px;
+        max-width: var(--fc-page-w, 1440px);
+        margin-inline: auto;
+        box-sizing: border-box;
+        width: 100%;
+        position: relative;
+        z-index: 2;
+    }
+
+    .doc-hero-row {
+        display: flex; align-items: center;
+        justify-content: space-between;
+        gap: 16px; flex-wrap: wrap;
+        margin-bottom: 10px;
+    }
+
+    .doc-hero-left { display: flex; flex-direction: column; gap: 2px; }
+
+    .doc-hero-crumb {
+        display: flex; align-items: center; gap: 5px;
+        font-size: 10.5px; font-weight: 700;
+        color: rgba(255,255,255,.55);
+        margin-bottom: 2px;
+    }
+
+    .fc-hero-sub { font-size: 10.5px; color: rgba(255,255,255,.55); font-weight: 600; }
+
+    .doc-hero-right {
+        display: flex; align-items: center;
+        gap: 8px; flex-shrink: 0;
+    }
+
+    .doc-hero-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 5px 11px; border-radius: 8px;
+        background: rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.14);
+        color: rgba(255,255,255,.7);
+        font-size: 10.5px; font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .doc-kpis-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .doc-kpi {
+        background: rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.12);
+        backdrop-filter: blur(12px);
+        border-radius: 10px;
+        padding: 10px 12px;
+    }
+
+    .doc-kpi-inner { display: flex; align-items: center; gap: 10px; }
+
+    .doc-kpi-icon {
+        width: 34px; height: 34px; border-radius: 9px;
+        display: flex; align-items: center;
+        justify-content: center; flex-shrink: 0;
+    }
+
+    .doc-kpi-blue .doc-kpi-icon  { background: rgba(125,211,252,.15); color: #7dd3fc; }
+    .doc-kpi-green .doc-kpi-icon { background: rgba(110,231,183,.15); color: #6ee7b7; }
+    .doc-kpi-amber .doc-kpi-icon { background: rgba(251,191,36,.15);  color: #fbbf24; }
+    .doc-kpi-red .doc-kpi-icon   { background: rgba(252,165,165,.15); color: #fca5a5; }
+
+    .doc-kpi-data { flex: 1; min-width: 0; }
+
+    .doc-kpi-num {
+        font-size: 18px; font-weight: 900;
+        color: #fff; line-height: 1;
+    }
+
+    .doc-kpi-label {
+        font-size: 10.5px; font-weight: 700;
+        color: rgba(255,255,255,.6); margin-top: 3px;
+    }
+
+
+/* ═══ 1-b) الزر العائم FAB — نفس شاشة الخدمات / طرق الدفع ═══ */
+    .fc-fab-scrim {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.25);
+        backdrop-filter: blur(3px);
+        z-index: 1200;
+    }
+
+    .fc-fab-container {
+        position: fixed;
+        left: 28px;
+        bottom: 28px;
+        z-index: 1300;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0;
+    }
+
+    .fc-fab-menu {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 12px;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translateY(8px);
+        transition: opacity .22s ease, transform .22s ease, visibility .22s;
+    }
+
+    .fc-fab-menu--open {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: translateY(0);
+    }
+
+    .fc-fab-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        border-radius: 12px;
+        background: #fff;
+        border: 1.5px solid #dde5f0;
+        box-shadow: 0 4px 16px rgba(0,0,0,.12);
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        color: #1c2c44;
+        font-family: inherit;
+        transition: background .15s, border-color .15s, transform .15s;
+        white-space: nowrap;
+        width: 100%;
+    }
+
+    .fc-fab-item:hover {
+        background: #f4f7fb;
+        border-color: #0B56DF;
+        transform: translateX(2px);
+    }
+
+    .fc-fab-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px; height: 30px;
+        border-radius: 8px;
+        background: #eaf1ff;
+        color: #0B56DF;
+        flex-shrink: 0;
+    }
+
+    .fc-fab-main {
+        width: 60px; height: 60px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        border: none;
+        transition: transform .2s, box-shadow .2s;
+    }
+
+    .fc-fab-main:hover { transform: scale(1.06); }
+
+    .fc-fab-svg {
+        transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+    }
+
+    .fc-fab-main.is-open .fc-fab-svg { transform: rotate(135deg); }
+
+    /* Gold Glow Style */
+    .fc-glow-gold {
+        background: linear-gradient(135deg, #0B56DF 0%, #083CA8 100%) !important;
+        border: 2px solid #FF8015 !important;
+        box-shadow: 0 4px 16px rgba(11,86,223,.4);
+        animation: fc-gold-pulse 2.2s infinite;
+        color: #fff;
+    }
+
+    .fc-glow-gold::before {
+        content: "";
+        position: absolute; inset: -2px;
+        border-radius: 50%;
+        border: 2px solid #FF8015;
+        opacity: 0; pointer-events: none;
+        animation: fc-ring-expand 2.2s cubic-bezier(.24,0,.38,1) infinite;
+    }
+
+    @@keyframes fc-gold-pulse {
+        0%,100% { box-shadow: 0 0 0 0 rgba(255,128,21,.6), 0 8px 24px rgba(11,86,223,.4); }
+        50%     { box-shadow: 0 0 0 12px rgba(255,128,21,0), 0 12px 32px rgba(11,86,223,.55); }
+    }
+
+    @@keyframes fc-ring-expand {
+        0%   { transform: scale(1); opacity: .8; border-width: 3px; }
+        100% { transform: scale(1.6); opacity: 0; border-width: 1px; }
+    }
+
+    .fc-glow-gold.is-open {
+        background: linear-gradient(135deg, #D64545 0%, #991b1b 100%) !important;
+        border-color: #fca5a5 !important;
+        animation: none !important;
+    }
+
+    .fc-glow-gold.is-open::before { animation: none !important; }
+
+/* ═══ 2) TOOLBAR + STATES + CARD + TABLE + BADGES ═══ */
+    .pt-toolbar {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        margin-top: 16px; padding: 10px 12px;
+        background: #fff; border: 1px solid #e6ecf6; border-radius: 14px;
+        box-shadow: 0 2px 10px rgba(16,42,80,.05);
+    }
+    .pt-search { position: relative; display: flex; align-items: center; width: 290px; max-width: 100%; }
+    .pt-search-ic { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; }
+    .pt-search-input {
+        height: 40px; width: 100%; padding: 0 34px;
+        border: 1px solid #d8e2f0; border-radius: 10px; background: #fafcff; color: #1c2c44;
+        font-family: inherit; font-size: 12.5px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    .pt-search-input:focus { border-color: #1e6ef5; box-shadow: 0 0 0 3px rgba(30,110,245,.10); background: #fff; }
+    .pt-search-input::placeholder { color: #b0bcc8; }
+    .pt-search-clear {
+        position: absolute; left: 8px; width: 24px; height: 24px;
+        display: flex; align-items: center; justify-content: center;
+        border: none; border-radius: 50%; background: #eef3fb; color: #5a6e88;
+        font-size: 15px; line-height: 1; cursor: pointer; transition: all .14s ease;
+    }
+    .pt-search-clear:hover { background: #e03048; color: #fff; }
+    .pt-filters { display: flex; align-items: center; gap: 6px; }
+    .pt-filter {
+        display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+        border: 1px solid #e0e8f4; border-radius: 9px; background: #f7f9fd; color: #5a6e88;
+        font-family: inherit; font-size: 11.5px; font-weight: 800; cursor: pointer;
+        white-space: nowrap; transition: all .14s ease;
+    }
+    .pt-filter:hover { border-color: #c7d8f5; color: #1e6ef5; }
+    .pt-filter.active { background: #1e6ef5; border-color: #1e6ef5; color: #fff; box-shadow: 0 4px 10px rgba(30,110,245,.25); }
+    .pt-filter-count {
+        min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,.07); font-size: 10px; font-weight: 900;
+    }
+    .pt-filter.active .pt-filter-count { background: rgba(255,255,255,.25); }
+    .pt-results { margin-inline-start: auto; font-size: 11.5px; font-weight: 700; color: #6b7d95; }
+    .pt-results strong { color: #1c2c44; font-weight: 900; }
+
+    /* الحالات: تحميل / خطأ / فارغ */
+    .pt-state {
+        display: flex; flex-direction: column; align-items: center; gap: 8px;
+        margin-top: 16px; padding: 44px 20px; text-align: center;
+        background: #fff; border: 1px solid #e6ecf6; border-radius: 16px;
+    }
+    .pt-state-ic {
+        width: 60px; height: 60px; border-radius: 18px;
+        display: flex; align-items: center; justify-content: center;
+        background: #eef3fb; color: #7d90aa; font-size: 24px; font-weight: 900;
+    }
+    .pt-state-ic-err { background: #fff0f2; color: #e03048; }
+    .pt-state-t { font-size: 15px; font-weight: 900; color: #1c2c44; }
+    .pt-state-s { max-width: 520px; font-size: 12px; font-weight: 500; color: #6b7d95; line-height: 1.7; }
+    .pt-spinner {
+        width: 34px; height: 34px; border-radius: 50%;
+        border: 3px solid #e3ebf7; border-top-color: #1e6ef5;
+        animation: pt-spin .72s linear infinite;
+    }
+    @@keyframes pt-spin { to { transform: rotate(360deg); } }
+
+    /* الكارت والجدول */
+    .pt-card {
+        margin-top: 15px; background: #fff; border: 1px solid #e6ecf6;
+        border-radius: 16px; overflow: hidden; box-shadow: 0 6px 22px rgba(16,42,80,.07);
+    }
+    .pt-table-wrap { overflow-x: auto; }
+    .pt-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .pt-table thead th {
+        padding: 12px 14px; text-align: right; white-space: nowrap;
+        background: linear-gradient(180deg, #f7f9fd 0%, #eef3fb 100%);
+        color: #465b78; font-size: 11px; font-weight: 900; border-bottom: 1px solid #e6ecf6;
+    }
+    .pt-table tbody td {
+        padding: 12px 14px; border-bottom: 1px solid #f1f5fa;
+        color: #1c2c44; font-weight: 600; vertical-align: middle;
+    }
+    .pt-table tbody tr { cursor: pointer; transition: background .12s ease; }
+    .pt-table tbody tr:hover { background: #f7faff; }
+    .pt-table tbody tr:last-child td { border-bottom: none; }
+    .pt-th-center, .pt-td-center { text-align: center; }
+    .pt-td-en { color: #5a6e88; font-weight: 600; }
+    .pt-code {
+        display: inline-block; padding: 3px 9px; border-radius: 7px; direction: ltr;
+        background: #eef3fb; color: #1e50a8;
+        font-family: "Consolas", monospace; font-size: 11.5px; font-weight: 800; letter-spacing: .4px;
+    }
+    .pt-days {
+        display: inline-flex; align-items: center; height: 24px; padding: 0 10px;
+        border-radius: 12px; font-size: 11px; font-weight: 800;
+    }
+    .pt-days-now { background: #e8f7ef; color: #177a45; }
+    .pt-days-s   { background: #eaf1ff; color: #1e50a8; }
+    .pt-days-l   { background: #fff8ec; color: #a56a10; }
+    .pt-badge {
+        display: inline-flex; align-items: center; height: 23px; padding: 0 10px;
+        border-radius: 8px; font-size: 10.5px; font-weight: 800;
+    }
+    .pt-badge-used { background: #e8f7ef; color: #177a45; }
+    .pt-badge-free { background: #f2f5f9; color: #7d90aa; }
+    .pt-edit {
+        width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
+        border: 1px solid #dbe6f6; border-radius: 8px; background: #fff; color: #1e6ef5;
+        cursor: pointer; transition: all .14s ease;
+    }
+    .pt-edit:hover { background: #eaf1ff; border-color: #1e6ef5; }
+
+    /* أزرار عامة */
+    .pt-btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        height: 38px; padding: 0 16px; border: 1px solid transparent; border-radius: 10px;
+        font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer; transition: all .15s ease;
+    }
+    .pt-btn-primary { background: #1e6ef5; border-color: #1e6ef5; color: #fff; box-shadow: 0 6px 14px rgba(30,110,245,.25); }
+    .pt-btn-primary:hover:not(:disabled) { background: #1a5fd6; }
+    .pt-btn-ghost { background: #fff; border-color: #d8e2f0; color: #465b78; }
+    .pt-btn-ghost:hover { border-color: #1e6ef5; color: #1e6ef5; background: #eaf1ff; }
+    .pt-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+    /* ═══ MODAL ═══ */
+    .pt-modal-backdrop {
+        position: fixed; inset: 0; z-index: 1400; padding: 20px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(10,27,59,.62); backdrop-filter: blur(6px);
+        animation: pt-fade .2s ease both;
+    }
+    @@keyframes pt-fade { from { opacity: 0; } to { opacity: 1; } }
+    .pt-modal {
+        width: 100%; max-width: 640px; max-height: 92vh;
+        display: flex; flex-direction: column;
+        background: #fff; border-radius: 20px; overflow: hidden;
+        box-shadow: 0 25px 60px rgba(10,27,59,.28), 0 8px 20px rgba(10,27,59,.12);
+        animation: pt-pop .28s cubic-bezier(.22,.9,.36,1.1) both;
+    }
+    @@keyframes pt-pop {
+        from { opacity: 0; transform: translateY(20px) scale(.96); }
+        to   { opacity: 1; transform: none; }
+    }
+    .pt-modal-head {
+        position: relative; overflow: hidden; display: flex; align-items: center; gap: 14px;
+        padding: 18px 22px; flex: 0 0 auto; color: #fff;
+        background: linear-gradient(135deg, #0A1B3B 0%, #16306B 100%);
+    }
+    .pt-modal-head::before {
+        content: ""; position: absolute; top: -50px; right: -50px;
+        width: 200px; height: 200px; border-radius: 50%; pointer-events: none;
+        background: radial-gradient(circle, rgba(255,128,21,.15) 0%, transparent 70%);
+    }
+    .pt-head-icon {
+        position: relative; z-index: 1; width: 44px; height: 44px; flex: 0 0 44px;
+        display: flex; align-items: center; justify-content: center; border-radius: 13px;
+    }
+    .pt-icon-create { background: rgba(27,158,94,.2); color: #6ee7b7; border: 1px solid rgba(110,231,183,.3); }
+    .pt-icon-edit   { background: rgba(255,128,21,.2); color: #FFD9B8; border: 1px solid rgba(255,128,21,.3); }
+    .pt-head-text { position: relative; z-index: 1; flex: 1; min-width: 0; }
+    .pt-head-title { font-size: 16px; font-weight: 800; line-height: 1.3; }
+    .pt-head-sub { margin-top: 3px; font-size: 11.5px; color: rgba(255,255,255,.62); }
+    .pt-head-close {
+        position: relative; z-index: 1; width: 34px; height: 34px; flex: 0 0 34px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid rgba(255,255,255,.2); border-radius: 10px;
+        background: rgba(255,255,255,.1); color: #fff; cursor: pointer; transition: all .15s ease;
+    }
+    .pt-head-close:hover { background: rgba(224,48,72,.88); border-color: transparent; }
+    .pt-modal-body { flex: 1 1 auto; overflow-y: auto; padding: 20px 22px; }
+    .pt-modal-foot {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        flex: 0 0 auto; padding: 14px 20px;
+        background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%);
+        border-top: 1px solid #edf1f7;
+    }
+    .pt-foot-left, .pt-foot-right { display: flex; align-items: center; gap: 8px; }
+    .pt-foot-right { margin-right: auto; }
+    .pt-foot-cancel {
+        height: 38px; padding: 0 16px; border: 1px solid #e0e8f4; border-radius: 10px;
+        background: #fff; color: #465b78;
+        font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer; transition: all .15s ease;
+    }
+    .pt-foot-cancel:hover { border-color: #e03048; background: #fff0f2; color: #e03048; }
+    .pt-foot-save {
+        display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 18px;
+        border: none; border-radius: 10px; background: #1e6ef5; color: #fff;
+        font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 6px 14px rgba(30,110,245,.28); transition: all .15s ease;
+    }
+    .pt-foot-save:hover:not(:disabled) { background: #1a5fd6; }
+    .pt-foot-save:disabled { opacity: .6; cursor: not-allowed; }
+    .pt-spin {
+        width: 14px; height: 14px; border-radius: 50%;
+        border: 2px solid rgba(255,255,255,.45); border-top-color: #fff;
+        animation: pt-spin .7s linear infinite;
+    }
+    .pt-term-preview {
+        display: flex; align-items: center; gap: 7px; padding: 10px 12px;
+        border: 1px dashed #cddefb; border-radius: 10px; background: #f4f8ff;
+        color: #465b78; font-size: 11.5px; font-weight: 700;
+    }
+    .pt-term-preview strong { color: #1e50a8; font-size: 12.5px; font-weight: 900; }
+    .pt-preview-sep { color: #b0bcc8; }
+
+    /* ═══ 3) FORM FIELDS + ALERTS + RESPONSIVE ═══ */
+    .pt-form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .pt-field-full { grid-column: 1 / -1; }
+
+    /* المعيار المعتمد — docs/FIELD-DESIGN.md */
+    .form-field { display: flex; flex-direction: column; gap: 6px; position: relative; }
+    .field-label {
+        font-size: 12px; font-weight: 800; color: #344258;
+        display: flex; align-items: center; gap: 4px;
+    }
+    .field-required { color: #e03048; font-size: 14px; line-height: 1; }
+    .field-input {
+        height: 42px; width: 100%;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: #1c2c44;
+        font-family: inherit; font-size: 13px; padding: 0 12px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    .field-input.with-prefix { padding-right: 36px; }
+    .field-input.ltr { direction: ltr; text-align: right; letter-spacing: .3px; }
+    .field-input:focus { border-color: #1e6ef5; box-shadow: 0 0 0 3px rgba(30,110,245,.10); background: #fff; }
+    .field-input::placeholder { color: #b0bcc8; }
+    .field-input:disabled { opacity: .7; background: #f3f5f8; cursor: not-allowed; }
+    .field-input.field-error { border-color: #e03048; box-shadow: 0 0 0 3px rgba(224,48,72,.08); }
+    .field-input-group { position: relative; display: flex; align-items: center; }
+    .field-prefix { position: absolute; right: 12px; display: flex; align-items: center; color: #9aaabb; pointer-events: none; z-index: 1; }
+    .field-hint { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: #6b7d95; font-weight: 500; }
+    .field-err-msg { font-size: 10.5px; color: #e03048; font-weight: 700; }
+
+    /* مختارات المدة */
+    .pt-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+    .pt-preset {
+        height: 26px; padding: 0 10px; border-radius: 7px;
+        border: 1px solid #d8e2f0; background: #fff; color: #5a6e88;
+        font-family: inherit; font-size: 10.5px; font-weight: 800; cursor: pointer;
+        transition: all .14s ease;
+    }
+    .pt-preset:hover { border-color: #1e6ef5; color: #1e6ef5; background: #eaf1ff; }
+    .pt-preset.on { background: #1e6ef5; border-color: #1e6ef5; color: #fff; }
+
+    /* تنبيهات */
+    .pt-alert {
+        display: flex; align-items: flex-start; gap: 8px; margin-top: 14px;
+        padding: 10px 12px; border-radius: 10px; font-size: 11.5px; font-weight: 700;
+    }
+    .pt-alert-err  { background: #fff0f2; color: #c02440; }
+    .pt-alert-warn { background: #fff8ec; color: #a56a10; }
+    .pt-alert-ok   { background: #e8f7ef; color: #177a45; }
+    .pt-perm { font-family: "Consolas", monospace; font-size: 11px; background: rgba(0,0,0,.05); padding: 1px 5px; border-radius: 5px; }
+
+    /* ═══ RESPONSIVE — نفس نقاط التوقف المعتمدة في النظام (900 · 680 · 480)
+           الهيرو (.hero-wrapper) والـKPIs (.doc-kpis-row) والجسم (.doc-body)
+           والزر العائم (.fc-fab-container) — بنفس قواعد شاشة الخدمات ═══ */
+    @@media (max-width: 900px) {
+        .pt-toolbar { flex-direction: column; align-items: stretch; gap: 10px; }
+        .pt-search { width: 100% !important; flex: 1 1 100%; }
+        .pt-results { margin-inline-start: 0; }
+        .doc-kpis-row { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @@media (max-width: 680px) {
+        .hero-wrapper { padding: 12px 12px 0; }
+        .hero-wrapper .fc-hero { border-radius: 16px !important; }
+        .doc-body { padding: 14px 12px 90px; }
+        .pt-toolbar { padding: 9px 10px; }
+        .pt-search { width: 100%; }
+        .pt-filters { width: 100%; overflow-x: auto; padding-bottom: 2px; }
+        .pt-results { width: 100%; }
+        .pt-form-grid { grid-template-columns: 1fr; }
+        .pt-modal { width: calc(100vw - 20px); border-radius: 16px; }
+        .fc-fab-container { left: 16px; bottom: 16px; }
+    }
+
+    @@media (max-width: 480px) {
+        .doc-kpis-row { grid-template-columns: 1fr 1fr; }
+    }
+</style>
 
 @code {
     private AuthUser? _user;
@@ -171,6 +996,21 @@
     private string? _msg; private bool _ok = true;
     private int? _editId;
     private Form _f = new();
+
+    /* ── حالة الواجهة ── */
+    private static readonly (int Days, string Label)[] Presets =
+    {
+        (0, "فوري"), (7, "أسبوع"), (15, "أسبوعين"), (30, "شهر"),
+        (45, "يوم وشهر"), (60, "شهران"), (90, "3 شهور")
+    };
+
+    private bool _loading = true;
+    private string? _error;
+    private bool _modalOpen;
+    private bool _fabOpen;
+    private bool _tried;
+    private string _search = "";
+    private string _filter = "all";
 
     /// <summary>مطابق لـ <c>MasterDataController.TermItem</c> — 6 حقول.</summary>
     public class Item
@@ -193,23 +1033,128 @@
         public int UsageCount { get; set; }   /* للـ UI بس — قفل الكود */
     }
 
+    /* ── مشتقات العرض ── */
+    private IEnumerable<Item> Filtered =>
+        _items.Where(Match)
+              .OrderBy(i => i.DueDays)
+              .ThenBy(i => i.Code, StringComparer.OrdinalIgnoreCase);
+
+    private int UsedCount   => _items.Count(i => i.UsageCount > 0);
+    private int UnusedCount => _items.Count(i => i.UsageCount == 0);
+    private int AvgDays     => _items.Count == 0
+        ? 0
+        : (int)Math.Round(_items.Average(i => (double)i.DueDays));
+
+    /// <summary>الكود مقفل عند التعديل إذا كان مرتبطًا بعملاء — نفس قيد الـ API.</summary>
+    private bool CodeLocked => _editId is not null && _f.UsageCount > 0;
+
+    private bool Match(Item t)
+    {
+        var ok = _filter switch
+        {
+            "used"   => t.UsageCount > 0,
+            "unused" => t.UsageCount == 0,
+            _        => true
+        };
+        if (!ok) return false;
+        if (string.IsNullOrWhiteSpace(_search)) return true;
+
+        var q = _search.Trim();
+        return t.Code.Contains(q, StringComparison.OrdinalIgnoreCase)
+            || t.NameAr.Contains(q, StringComparison.OrdinalIgnoreCase)
+            || (t.NameEn?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    private static string DaysLabel(int d) => d switch
+    {
+        0    => "فوري",
+        1    => "يوم واحد",
+        2    => "يومان",
+        30   => "شهر",
+        60   => "شهران",
+        90   => "3 شهور",
+        < 11 => $"{d} أيام",
+        _    => $"{d} يومًا"
+    };
+
+    /// <summary>يقصر الكود على [A-Za-z0-9] ويحوله لأحرف كبيرة — مطابق لقاعدة الـ API.</summary>
+    private void OnCodeInput(ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString() ?? string.Empty;
+        _f.Code = new string(raw.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+    }
+
+    private void OpenAdd()
+    {
+        _editId = null;
+        _f = new Form();
+        _msg = null;
+        _tried = false;
+        _modalOpen = true;
+    }
+
+    private void CloseModal() => _modalOpen = false;
+
+    /* ── الزر العائم FAB (نفس شاشة الخدمات / طرق الدفع) ── */
+    private void ToggleFab()
+    {
+        _fabOpen = !_fabOpen;
+        StateHasChanged();
+    }
+
+    private async Task HandleReload()
+    {
+        _fabOpen = false;
+        StateHasChanged();
+        await LoadAsync();
+        Snackbar.Add("تم تحديث البيانات", Severity.Success);
+    }
+
+    private async Task HandleOpenCreate()
+    {
+        _fabOpen = false;
+        StateHasChanged();
+        await Task.Delay(180);
+        OpenAdd();
+    }
+
+    /// <summary>يضبط المدة من أزرار الاقتراح السريعة.</summary>
+    private void SetPreset(int days) => _f.DueDays = days;
+
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
-        if (!CanView) return;
+        if (!CanView) { _loading = false; return; }
         await LoadAsync();
     }
 
     private async Task LoadAsync()
     {
-        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/master/payment-terms") ?? new(); }
-        catch (Exception ex) { _ok = false; _msg = "فشل التحميل: " + ex.Message; }
+        _loading = true;
+        _error = null;
+        try
+        {
+            _items = await Http.GetFromJsonAsync<List<Item>>("api/master/payment-terms") ?? new();
+        }
+        catch (Exception ex)
+        {
+            _items = new();
+            _error = ex.Message;
+        }
+        finally { _loading = false; }
     }
 
-    private void ResetForm() { _editId = null; _f = new Form(); _msg = null; }
+    private void ResetForm()
+    {
+        var keepUsage = _f.UsageCount;
+        _f = new Form { UsageCount = keepUsage };
+        _msg = null;
+        _tried = false;
+    }
 
     private void Edit(Item t)
     {
+        if (!CanManage) return;
         _editId = t.PaymentTermId;
         _f = new Form
         {
@@ -217,13 +1162,17 @@
             DueDays = t.DueDays, UsageCount = t.UsageCount
         };
         _msg = null;
+        _tried = false;
+        _modalOpen = true;
     }
 
     private async Task SaveAsync()
     {
         if (_saving) return;
+        _tried = true;
         if (string.IsNullOrWhiteSpace(_f.Code))   { _ok = false; _msg = "الكود مطلوب"; return; }
         if (string.IsNullOrWhiteSpace(_f.NameAr)) { _ok = false; _msg = "الاسم بالعربي مطلوب"; return; }
+        if (_f.DueDays is < 0 or > 730)           { _ok = false; _msg = "أيام الاستحقاق لازم تكون بين 0 و 730"; return; }
 
         _saving = true; _msg = null;
         try
@@ -235,13 +1184,11 @@
 
             _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
             Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
-            if (res.IsSuccessStatusCode) { ResetForm(); await LoadAsync(); }
+            if (res.IsSuccessStatusCode) { ResetForm(); _editId = null; _modalOpen = false; await LoadAsync(); }
         }
         catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
         finally { _saving = false; }
     }
-
-    private static long ParseLong(object? v) => long.TryParse(v?.ToString(), out var n) && n >= 0 ? n : 0;
 
     private static async Task<string> MsgOf(HttpResponseMessage res)
     {

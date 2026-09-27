@@ -9,190 +9,1470 @@
 
 <PageTitle>دفعات الموردين — فاست كوم</PageTitle>
 
-<div class="fc-hero">
-    <div class="fc-hero-inner">
-        <div class="fc-page-head">
-            <div>
-                <div class="fc-crumb">المالية · الذمم الدائنة</div>
-                <h1 class="fc-hero-title">دفعات الموردين</h1>
-                <p class="fc-hero-sub">سندات الصرف للموردين — بتتوزّع تلقائيًا على فواتيرهم المفتوحة (الأقدم أولًا)</p>
+
+@* ═══════════════════════════════════════════
+   HERO SECTION
+═══════════════════════════════════════════ *@
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
+
+            <div class="sp-hero-row">
+                <div class="sp-hero-left">
+                    <div class="sp-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                        <span>المالية · الذمم الدائنة</span>
+                    </div>
+                    <h1 class="fc-hero-title fc-hero-title-slim">دفعات الموردين</h1>
+                    <span class="sp-hero-sub">سندات صرف الموردين — يتم توزيعها تلقائياً على الفواتير المفتوحة (الأقدم أولاً)</span>
+                </div>
+
+                <div class="sp-hero-right">
+                    <button class="sp-hero-refresh" @onclick="Reload" title="تحديث البيانات">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 4v6h-6"/>
+                            <path d="M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                        </svg>
+                    </button>
+                    @if (CanCreate)
+                    {
+                        <button class="sp-hero-add" @onclick="GoNew">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                            دفعة مورد جديدة
+                        </button>
+                    }
+                    <span class="sp-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                </div>
             </div>
-            <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="Reload" Style="color:#9FB4CC" />
-                @if (CanCreate)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="GoNew">دفعة جديدة</MudButton>
-                }
-            </div>
+
         </div>
-        @if (CanView)
+
+        @if (CanView && !_loading)
         {
-            <div class="fc-kpis fc-kpis-glass">
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.ReceiptLong" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">عدد الدفعات</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Payments" /></div>
-                    <div><div class="fc-kpi-num">@Money(PostedTotal)</div><div class="fc-kpi-lb">إجمالي المسجّل</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Cancel" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(p => p.Status == "Cancelled")</div><div class="fc-kpi-lb">ملغاة</div></div></div>
-                <div class="fc-kpi"><div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.Receipt" /></div>
-                    <div><div class="fc-kpi-num">@_items.Sum(p => p.InvoiceCount)</div><div class="fc-kpi-lb">فواتير مسدّدة</div></div></div>
+            <div class="sp-kpis-strip">
+
+                <div class="sp-kpi-item">
+                    <div class="sp-kpi-icon kpi-blue" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="sp-kpi-text">
+                        <div class="sp-kpi-label">إجمالي السندات</div>
+                        <div class="sp-kpi-val">@_items.Count</div>
+                    </div>
+                </div>
+
+                <div class="sp-kpi-div" aria-hidden="true"></div>
+
+                <div class="sp-kpi-item">
+                    <div class="sp-kpi-icon kpi-green" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                            <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div class="sp-kpi-text">
+                        <div class="sp-kpi-label">إجمالي المدفوع الفعلي</div>
+                        <div class="sp-kpi-val kpi-val-green">@Money(PostedTotal) <small>ج.م</small></div>
+                    </div>
+                </div>
+
+                <div class="sp-kpi-div" aria-hidden="true"></div>
+
+                <div class="sp-kpi-item">
+                    <div class="sp-kpi-icon kpi-red" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="sp-kpi-text">
+                        <div class="sp-kpi-label">السندات الملغاة</div>
+                        <div class="sp-kpi-val kpi-val-red">@CancelledCount</div>
+                    </div>
+                </div>
+
+                <div class="sp-kpi-div" aria-hidden="true"></div>
+
+                <div class="sp-kpi-item">
+                    <div class="sp-kpi-icon kpi-amber" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 11l3 3L22 4"/>
+                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                        </svg>
+                    </div>
+                    <div class="sp-kpi-text">
+                        <div class="sp-kpi-label">فواتير مسددة كلياً أو جزئياً</div>
+                        <div class="sp-kpi-val kpi-val-amber">@_items.Sum(p => p.InvoiceCount)</div>
+                    </div>
+                </div>
+
             </div>
         }
+
     </div>
 </div>
 
-<div class="fc-page">
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="sp-body">
+
     @if (!CanView)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض دفعات الموردين.</MudAlert>
+        <div class="sp-state-box">
+            <div class="sp-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليس لديك صلاحية لعرض دفعات الموردين. تواصل مع مدير النظام لتفعيل الصلاحية.</p>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
-            <div class="fc-toolbar">
-                <div class="fc-filters">
-                    <button class='@TabClass("")' @onclick='() => SetTab("")'>الكل</button>
-                    <button class='@TabClass("Posted")' @onclick='() => SetTab("Posted")'>مسجّلة</button>
-                    <button class='@TabClass("Cancelled")' @onclick='() => SetTab("Cancelled")'>ملغاة</button>
+        <div class="sp-card">
+
+            @* ── Toolbar ── *@
+            <div class="sp-toolbar">
+
+                <div class="sp-search-wrap">
+                    <svg class="sp-search-icon" viewBox="0 0 24 24" width="16" height="16"
+                         fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                    </svg>
+                    <input class="sp-search-input"
+                           placeholder="بحث برقم السند أو المورد أو رقم الشيك..."
+                           @bind="_search" @bind:event="oninput"
+                           aria-label="بحث في الدفعات" />
+                    @if (!string.IsNullOrWhiteSpace(_search))
+                    {
+                        <button class="sp-search-clear" @onclick="() => _search = string.Empty" title="مسح البحث">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    }
                 </div>
-                <MudTextField T="string" Value="_search" ValueChanged="v => _search = v"
-                              Placeholder="ابحث بالرقم أو المورد أو الشيك..." Variant="Variant.Outlined" Dense="true"
-                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                              Class="fc-search-box" Immediate="true" />
-                <span class="fc-count">عرض @Filtered.Count() من @_items.Count</span>
+
+                <div class="sp-filter-wrap">
+                    <svg class="sp-filter-icon" viewBox="0 0 24 24" width="13" height="13"
+                         fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    <select class="sp-filter-select" @bind="_supFilter" aria-label="تصفية حسب المورد">
+                        <option value="">جميع الموردين</option>
+                        @foreach (var s in _suppliers)
+                        {
+                            <option value="@s.Id">@s.Label</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="sp-filter-wrap">
+                    <svg class="sp-filter-icon" viewBox="0 0 24 24" width="13" height="13"
+                         fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <rect x="2" y="6" width="20" height="12" rx="2"/>
+                        <line x1="2" y1="10" x2="22" y2="10"/>
+                    </svg>
+                    <select class="sp-filter-select" @bind="_methodFilter" aria-label="تصفية حسب طريقة الدفع">
+                        <option value="">جميع طرق الدفع</option>
+                        @foreach (var m in _methods)
+                        {
+                            <option value="@m.Id">@m.Label</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="sp-results-badge">
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>
+                    </svg>
+                    عرض <strong>@Filtered.Count()</strong> من <strong>@_items.Count</strong>
+                </div>
+
             </div>
 
+
+            @* ── Status Tabs ── *@
+            <div class="sp-status-bar">
+                <div class="sp-status-tabs" role="group" aria-label="تصفية حسب الحالة">
+                    @foreach (var t in _statusTabs)
+                    {
+                        var cnt = t.Key == "all"
+                            ? _items.Count
+                            : _items.Count(x => x.Status == t.Key);
+
+                        <button class="sp-status-tab @(_tab == t.Key ? "active" : "")"
+                                @onclick="() => SetTab(t.Key)"
+                                aria-pressed="@(_tab == t.Key)">
+                            <span class="sp-tab-dot @StatusDotColor(t.Key)" aria-hidden="true"></span>
+                            <span>@t.Value</span>
+                            <span class="sp-tab-count">@cnt</span>
+                        </button>
+                    }
+                </div>
+            </div>
+
+
+            @* ── Banner ── *@
+            @if (_msg is not null)
+            {
+                <div class="sp-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                    <div aria-hidden="true">
+                        @if (_ok)
+                        {
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                                <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                            </svg>
+                        }
+                    </div>
+                    <span>@_msg</span>
+                    <button class="banner-close" @onclick="() => _msg = null">✕</button>
+                </div>
+            }
+
+
+            @* ── Content ── *@
             @if (_loading)
             {
-                <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+                <div class="sp-loading">
+                    <div class="sp-spinner" aria-label="جاري التحميل"></div>
+                    <span>جاري تحميل دفعات الموردين...</span>
+                </div>
+            }
+            else if (!Filtered.Any())
+            {
+                <div class="sp-empty">
+                    <div class="sp-empty-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.4">
+                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                    </div>
+                    <div class="sp-empty-title">
+                        @(string.IsNullOrWhiteSpace(_search) && _tab == "all" && string.IsNullOrEmpty(_supFilter) && string.IsNullOrEmpty(_methodFilter)
+                            ? "لا توجد دفعات موردين مسجّلة"
+                            : "لا توجد نتائج مطابقة لمعايير البحث")
+                    </div>
+                    <div class="sp-empty-sub">
+                        @(string.IsNullOrWhiteSpace(_search) && _tab == "all" && string.IsNullOrEmpty(_supFilter) && string.IsNullOrEmpty(_methodFilter)
+                            ? "ابدأ بتسجيل أول سند صرف لأحد الموردين"
+                            : "جرّب تعديل معايير التصفية أو مسح البحث")
+                    </div>
+                    @if (CanCreate && string.IsNullOrWhiteSpace(_search) && _tab == "all")
+                    {
+                        <button class="sp-add-btn" @onclick="GoNew">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                            تسجيل دفعة مورد جديدة
+                        </button>
+                    }
+                </div>
             }
             else
             {
-                <div class="fc-table-wrap"><table class="fc-table fc-table-pro">
-                    <thead><tr><th>الرقم</th><th>التاريخ</th><th>المورد</th><th>طريقة الدفع</th>
-                        <th style="text-align:left">المبلغ</th><th>فواتير</th><th>الحالة</th>
-                        @if (CanEdit) { <th style="width:110px; text-align:left">إجراءات</th> }</tr></thead>
-                    <tbody>
-                        @foreach (var p in Filtered)
-                        {
+                <div class="sp-table-wrap">
+                    <table class="sp-table" aria-label="قائمة دفعات الموردين">
+                        <thead>
                             <tr>
-                                <td><span class="fc-role-chip">@p.SupplierPaymentNumber</span></td>
-                                <td class="fc-cell-sub">@p.PaymentDate</td>
-                                <td><div class="fc-cell-main">@p.SupplierName</div></td>
-                                <td><div class="fc-cell-main">@p.MethodName</div>
-                                    @if (!string.IsNullOrWhiteSpace(p.ChequeNumber))
-                                    {
-                                        <div class="fc-cell-sub">شيك @p.ChequeNumber</div>
-                                    }</td>
-                                <td class="is-neg" style="text-align:left; font-weight:800">@Money(p.Amount)</td>
-                                <td>@p.InvoiceCount</td>
-                                <td><span class="@StatusCls(p.Status)">@StatusAr(p.Status)</span></td>
+                                <th scope="col" class="th-start">بيانات السند</th>
+                                <th scope="col">تاريخ الصرف</th>
+                                <th scope="col">طريقة الدفع</th>
+                                <th scope="col">المبلغ المدفوع</th>
+                                <th scope="col">التوزيع</th>
+                                <th scope="col">الحالة</th>
                                 @if (CanEdit)
                                 {
-                                    <td><div class="fc-row-actions">
-                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Assessment"
-                                                       title="التفاصيل" OnClick="() => ShowDetail(p)" />
-                                        @if (p.Status == "Posted")
-                                        {
-                                            @if (_voidId == p.SupplierPaymentId)
-                                            {
-                                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
-                                                           OnClick="() => Void(p)">متأكد؟</MudButton>
-                                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Close"
-                                                               OnClick="() => _voidId = null" />
-                                            }
-                                            else
-                                            {
-                                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.DeleteOutline"
-                                                               Color="Color.Error" title="إلغاء الدفعة"
-                                                               OnClick="() => _voidId = p.SupplierPaymentId" />
-                                            }
-                                        }
-                                    </div></td>
+                                    <th scope="col" style="width:120px">إجراءات</th>
                                 }
                             </tr>
-                        }
-                        @if (!Filtered.Any())
-                        {
-                            <tr><td colspan="8"><div class="fc-empty"><div>مافيش دفعات مطابقة</div></div></td></tr>
-                        }
-                    </tbody>
-                </table></div>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in Filtered)
+                            {
+                                <tr class="@(p.Status == "Cancelled" ? "row-cancelled" : "")">
+
+                                    <td class="td-start">
+                                        <div class="sp-pay-cell">
+                                            <div class="sp-avatar @AvatarClass(p.Status)" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <line x1="12" y1="1" x2="12" y2="23"></line>
+                                                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                                </svg>
+                                            </div>
+                                            <div class="sp-pay-info">
+                                                <div class="sp-pay-num">
+                                                    <span class="sp-code-chip">@p.SupplierPaymentNumber</span>
+                                                </div>
+                                                <div class="sp-supplier-name">@p.SupplierName</div>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td class="td-muted">
+                                        <div class="sp-date-cell">
+                                            <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                                                <rect x="2" y="3" width="12" height="11" rx="2"/>
+                                                <path d="M5 1v3M11 1v3M2 7h12" stroke-linecap="round"/>
+                                            </svg>
+                                            @p.PaymentDate
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <div class="sp-method-cell">
+                                            <span class="sp-method-badge">@p.MethodName</span>
+                                            @if (!string.IsNullOrWhiteSpace(p.ChequeNumber))
+                                            {
+                                                <div class="sp-cheque-tag">
+                                                    <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                        <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                                        <line x1="2" y1="10" x2="22" y2="10"/>
+                                                    </svg>
+                                                    شيك رقم: @p.ChequeNumber
+                                                </div>
+                                            }
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <div class="sp-amount-cell">
+                                            <div class="sp-amount-val">@Money(p.Amount)</div>
+                                            <div class="sp-amount-cur">ج.م</div>
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <span class="sp-inv-count-badge">
+                                            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                                <path d="M14 2v6h6"/>
+                                            </svg>
+                                            @p.InvoiceCount فاتورة
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        <span class="sp-chip @StatusChipClass(p.Status)">
+                                            <span class="sp-chip-dot @StatusDotClass(p.Status)" aria-hidden="true"></span>
+                                            @StatusAr(p.Status)
+                                        </span>
+                                    </td>
+
+                                    @if (CanEdit)
+                                    {
+                                        <td>
+                                            <div class="sp-actions">
+                                                <button class="sp-act-btn act-view"
+                                                        @onclick="() => ShowDetail(p)"
+                                                        title="عرض التفاصيل"
+                                                        aria-label="عرض تفاصيل @p.SupplierPaymentNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                                        <circle cx="12" cy="12" r="3"/>
+                                                    </svg>
+                                                </button>
+
+                                                @if (p.Status == "Posted")
+                                                {
+                                                    <button class="sp-act-btn act-cancel"
+                                                            @onclick="() => AskVoid(p)"
+                                                            title="إلغاء السند"
+                                                            aria-label="إلغاء @p.SupplierPaymentNumber">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <circle cx="12" cy="12" r="10"/>
+                                                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </td>
+                                    }
+
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
-        </div></div>
+
+        </div>
     }
 </div>
 
-@* ── مودال التفاصيل (للعرض بس — مافيش تعديل على دفعة مسجّلة) ── *@
+
+@* ═══════════════════════════════════════════
+   MODAL — تفاصيل الدفعة
+═══════════════════════════════════════════ *@
 @if (_detail is not null)
 {
-    <div class="fc-modal-backdrop" @onclick="() => _detail = null">
-        <div class="fc-modal" @onclick:stopPropagation="true">
-            <div class="fc-modal-head">
+    <div class="sp-modal-backdrop" @onclick="() => _detail = null"
+         role="dialog" aria-modal="true" aria-label="تفاصيل الدفعة">
+        <div class="sp-modal sp-modal-lg" @onclick:stopPropagation="true">
+
+            <div class="sp-modal-head">
+                <div class="sp-modal-icon detail-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="1" x2="12" y2="23"></line>
+                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                </div>
                 <div>
-                    <div class="fc-modal-title">@_detail.SupplierPaymentNumber</div>
-                    <div class="fc-modal-sub">@_detail.SupplierName · @_detail.PaymentDate · @_detail.MethodName</div>
+                    <div class="sp-modal-title">تفاصيل سند الصرف</div>
+                    <div class="sp-modal-sub">@_detail.SupplierPaymentNumber · @_detail.SupplierName</div>
                 </div>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="() => _detail = null" />
+                <button class="sp-modal-close" @onclick="() => _detail = null" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
             </div>
-            <div class="fc-modal-body">
-                <div class="fc-stats">
-                    <div class="fc-stat"><div class="fc-stat-lb">المبلغ</div>
-                        <div class="fc-stat-num is-neg">@Money(_detail.Amount)</div></div>
-                    <div class="fc-stat"><div class="fc-stat-lb">الحالة</div>
-                        <div class="fc-stat-num">@StatusAr(_detail.Status)</div></div>
+
+            <div class="sp-modal-body">
+
+                @* ── Summary Cards ── *@
+                <div class="sp-detail-summary">
+                    <div class="sp-ds-item">
+                        <div class="sp-ds-label">المبلغ الإجمالي</div>
+                        <div class="sp-ds-val amount-val">@Money(_detail.Amount) <small>ج.م</small></div>
+                    </div>
+                    <div class="sp-ds-sep" aria-hidden="true"></div>
+                    <div class="sp-ds-item">
+                        <div class="sp-ds-label">تاريخ الصرف</div>
+                        <div class="sp-ds-val">@_detail.PaymentDate</div>
+                    </div>
+                    <div class="sp-ds-sep" aria-hidden="true"></div>
+                    <div class="sp-ds-item">
+                        <div class="sp-ds-label">طريقة الدفع</div>
+                        <div class="sp-ds-val">@_detail.MethodName</div>
+                    </div>
+                    <div class="sp-ds-sep" aria-hidden="true"></div>
+                    <div class="sp-ds-item">
+                        <div class="sp-ds-label">الحالة</div>
+                        <div class="sp-ds-val">
+                            <span class="sp-chip @StatusChipClass(_detail.Status)">
+                                <span class="sp-chip-dot @StatusDotClass(_detail.Status)" aria-hidden="true"></span>
+                                @StatusAr(_detail.Status)
+                            </span>
+                        </div>
+                    </div>
                 </div>
-                @if (!string.IsNullOrWhiteSpace(_detail.ChequeNumber))
+
+                @* ── Cheque & Bank Info ── *@
+                @if (!string.IsNullOrWhiteSpace(_detail.ChequeNumber) || !string.IsNullOrWhiteSpace(_detail.BankAccount))
                 {
-                    <div class="fc-panel-sub" style="margin:16px 0 6px">بيانات الشيك</div>
-                    <div class="fc-cell-sub">شيك @_detail.ChequeNumber @(_detail.ChequeDate is null ? "" : "· استحقاق " + _detail.ChequeDate)</div>
+                    <div class="sp-detail-section">
+                        <div class="sp-detail-section-title">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                <line x1="2" y1="10" x2="22" y2="10"/>
+                            </svg>
+                            بيانات الشيك والحساب البنكي
+                        </div>
+                        <div class="sp-detail-info-grid">
+                            @if (!string.IsNullOrWhiteSpace(_detail.ChequeNumber))
+                            {
+                                <div class="sp-info-item">
+                                    <div class="sp-info-label">رقم الشيك</div>
+                                    <div class="sp-info-val">@_detail.ChequeNumber</div>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(_detail.ChequeDate))
+                                {
+                                    <div class="sp-info-item">
+                                        <div class="sp-info-label">تاريخ استحقاق الشيك</div>
+                                        <div class="sp-info-val">@_detail.ChequeDate</div>
+                                    </div>
+                                }
+                            }
+                            @if (!string.IsNullOrWhiteSpace(_detail.BankAccount))
+                            {
+                                <div class="sp-info-item sp-info-full">
+                                    <div class="sp-info-label">الحساب البنكي</div>
+                                    <div class="sp-info-val">@_detail.BankAccount</div>
+                                </div>
+                            }
+                        </div>
+                    </div>
                 }
-                @if (!string.IsNullOrWhiteSpace(_detail.BankAccount))
-                {
-                    <div class="fc-panel-sub" style="margin:16px 0 6px">الحساب</div>
-                    <div class="fc-cell-sub">@_detail.BankAccount</div>
-                }
-                <div class="fc-panel-sub" style="margin:16px 0 6px">اتوزّعت على @(_detail.Allocations.Count) فاتورة</div>
-                <div class="fc-table-wrap"><table class="fc-table">
-                    <thead><tr><th>الفاتورة</th><th style="text-align:left">المسدد منها</th></tr></thead>
-                    <tbody>
-                        @foreach (var a in _detail.Allocations)
-                        {
-                            <tr><td><span class="fc-role-chip">@a.SupplierInvoiceNumber</span></td>
-                                <td style="text-align:left; font-weight:700">@Money(a.AllocatedAmount)</td></tr>
-                        }
-                        @if (!_detail.Allocations.Any())
-                        {
-                            <tr><td colspan="2"><div class="fc-empty"><div>مافيش توزيع</div></div></td></tr>
-                        }
-                    </tbody>
-                </table></div>
+
+                @* ── Allocations ── *@
+                <div class="sp-detail-section">
+                    <div class="sp-detail-section-title">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+                        </svg>
+                        توزيع المبلغ على الفواتير
+                        <span class="sp-count-badge">@_detail.Allocations.Count فاتورة</span>
+                    </div>
+
+                    @if (!_detail.Allocations.Any())
+                    {
+                        <div class="sp-alloc-empty">
+                            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 8v4M12 16h.01"/>
+                            </svg>
+                            <span>لا يوجد توزيع لهذا السند</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="sp-alloc-list">
+                            @foreach (var a in _detail.Allocations)
+                            {
+                                <div class="sp-alloc-item">
+                                    <div class="sp-alloc-left">
+                                        <div class="sp-alloc-icon">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                                <path d="M14 2v6h6"/>
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <div class="sp-alloc-label">رقم الفاتورة</div>
+                                            <div class="sp-alloc-num">@a.SupplierInvoiceNumber</div>
+                                        </div>
+                                    </div>
+                                    <div class="sp-alloc-right">
+                                        <div class="sp-alloc-label">المبلغ المخصص</div>
+                                        <div class="sp-alloc-amt">@Money(a.AllocatedAmount) <small>ج.م</small></div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @* ── Notes ── *@
                 @if (!string.IsNullOrWhiteSpace(_detail.Notes))
                 {
-                    <div class="fc-panel-sub" style="margin:16px 0 6px">ملاحظات</div>
-                    <div class="fc-cell-sub">@_detail.Notes</div>
+                    <div class="sp-detail-section">
+                        <div class="sp-detail-section-title">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                            </svg>
+                            ملاحظات
+                        </div>
+                        <div class="sp-notes-box">@_detail.Notes</div>
+                    </div>
                 }
+
             </div>
-            <div class="fc-modal-foot">
-                <MudButton Variant="Variant.Outlined" OnClick="() => _detail = null">إغلاق</MudButton>
+
+            <div class="sp-modal-foot">
+                <button class="sp-modal-close-btn" @onclick="() => _detail = null">إغلاق</button>
             </div>
+
         </div>
     </div>
 }
 
+
+@* ═══════════════════════════════════════════
+   MODAL — تأكيد الإلغاء
+═══════════════════════════════════════════ *@
+@if (_voidTarget is not null)
+{
+    <div class="sp-modal-backdrop" @onclick="() => _voidTarget = null"
+         role="dialog" aria-modal="true" aria-label="تأكيد إلغاء السند">
+        <div class="sp-modal" @onclick:stopPropagation="true">
+
+            <div class="sp-modal-head">
+                <div class="sp-modal-icon cancel-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="sp-modal-title">تأكيد إلغاء سند الصرف</div>
+                    <div class="sp-modal-sub">@_voidTarget.SupplierPaymentNumber · @_voidTarget.SupplierName</div>
+                </div>
+                <button class="sp-modal-close" @onclick="() => _voidTarget = null" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="sp-modal-body">
+
+                <div class="sp-void-summary">
+                    <div class="sp-vs-item">
+                        <div class="sp-vs-label">المبلغ</div>
+                        <div class="sp-vs-val">@Money(_voidTarget.Amount) ج.م</div>
+                    </div>
+                    <div class="sp-vs-sep" aria-hidden="true"></div>
+                    <div class="sp-vs-item">
+                        <div class="sp-vs-label">طريقة الدفع</div>
+                        <div class="sp-vs-val">@_voidTarget.MethodName</div>
+                    </div>
+                    <div class="sp-vs-sep" aria-hidden="true"></div>
+                    <div class="sp-vs-item">
+                        <div class="sp-vs-label">التوزيع</div>
+                        <div class="sp-vs-val">@_voidTarget.InvoiceCount فاتورة</div>
+                    </div>
+                </div>
+
+                <div class="sp-cancel-warn" role="alert">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                        <path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
+                    </svg>
+                    <div>
+                        <strong>تنبيه: هذا الإجراء نهائي</strong>
+                        <p>سيتم إلغاء السند وعكس جميع التوزيعات على الفواتير المرتبطة به. ستعود الفواتير لحالتها قبل السداد. لا يمكن التراجع عن هذا الإجراء.</p>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="sp-modal-foot">
+                <button class="sp-modal-cancel-btn" @onclick="() => _voidTarget = null">تراجع</button>
+                <button class="sp-modal-confirm-btn" @onclick="DoVoid" disabled="@_busy">
+                    @if (_busy)
+                    {
+                        <span class="btn-spinner sm" aria-hidden="true"></span>
+                        <span>جاري الإلغاء...</span>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                        </svg>
+                        <span>تأكيد الإلغاء</span>
+                    }
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+
+@* ── FAB ── *@
+@if (CanCreate)
+{
+    <div class="glow-fab-wrap @(_fabOpen ? "is-open" : "")">
+
+        <div class="glow-fab-menu" role="menu" aria-label="الإجراءات السريعة">
+            <button type="button" class="glow-fab-item" role="menuitem" @onclick="GoNew">
+                <span class="glow-fab-item-ic">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                    </svg>
+                </span>
+                <span>سند صرف جديد</span>
+            </button>
+            <button type="button" class="glow-fab-item" role="menuitem" @onclick="Reload">
+                <span class="glow-fab-item-ic">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M23 4v6h-6"/>
+                        <path d="M1 20v-6h6"/>
+                        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                    </svg>
+                </span>
+                <span>تحديث البيانات</span>
+            </button>
+        </div>
+
+        <div class="glow-fab-container">
+            <span class="glow-ring glow-ring-1" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-2" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-3" aria-hidden="true"></span>
+            <span class="glow-halo" aria-hidden="true"></span>
+
+            <button type="button" class="glow-fab-btn" @onclick="ToggleFab" aria-label="الإجراءات السريعة" aria-expanded="@(_fabOpen ? "true" : "false")">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.8" class="glow-fab-icon" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+
+    </div>
+}
+
+@if (_fabOpen)
+{
+    <div class="glow-fab-scrim" @onclick="ToggleFab" aria-hidden="true"></div>
+}
+
+
+<style>
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ── Hero ── */
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px; margin: 0 auto; width: 100%;
+        box-sizing: border-box; position: relative; z-index: 1;
+    }
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important; overflow: hidden;
+        box-shadow: 0 12px 32px rgba(13,38,84,.15), 0 4px 12px rgba(13,38,84,.08);
+        border: 1px solid rgba(255,255,255,.08);
+    }
+    .hero-wrapper .fc-hero.fc-hero-slim { padding-top: 18px !important; padding-bottom: 22px !important; }
+
+    .sp-hero-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .sp-hero-left { flex: 1; min-width: 200px; }
+    .sp-hero-crumb { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: rgba(255,255,255,.55); margin-bottom: 6px; }
+    .sp-hero-sub { font-size: 13px; color: rgba(255,255,255,.55); }
+    .sp-hero-right { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+    .sp-hero-chip {
+        display: flex; align-items: center; gap: 6px;
+        padding: 6px 12px; border-radius: 20px;
+        background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+        font-size: 11.5px; color: #fff;
+    }
+
+    .sp-hero-refresh {
+        width: 36px; height: 36px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.08);
+        color: rgba(255,255,255,.75); cursor: pointer; transition: background .15s;
+    }
+    .sp-hero-refresh:hover { background: rgba(255,255,255,.14); }
+
+    .sp-hero-add {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 16px; border-radius: 9px;
+        border: none; background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: #fff; font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; box-shadow: 0 4px 14px rgba(22,163,74,.35);
+        transition: all .15s ease;
+    }
+    .sp-hero-add:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(22,163,74,.4); }
+
+    /* ── KPIs ── */
+    .sp-kpis-strip {
+        display: flex; align-items: stretch;
+        background: rgba(0,0,0,.15); border: 1px solid rgba(255,255,255,.10);
+        border-radius: 12px; overflow: hidden; backdrop-filter: blur(8px); margin-top: 14px;
+    }
+    .sp-kpi-item { flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 16px; }
+    .sp-kpi-div { width: 1px; background: rgba(255,255,255,.10); align-self: stretch; }
+    .sp-kpi-icon {
+        width: 36px; height: 36px; flex: 0 0 36px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .kpi-blue  { background: rgba(30,110,245,.2); color: #93c5fd; }
+    .kpi-amber { background: rgba(234,179,8,.2);  color: #fde68a; }
+    .kpi-red   { background: rgba(239,68,68,.2);  color: #fca5a5; }
+    .kpi-green { background: rgba(34,197,94,.2);  color: #86efac; }
+
+    .sp-kpi-label { font-size: 9.5px; color: rgba(255,255,255,.5); font-weight: 600; }
+    .sp-kpi-val { font-size: 15px; font-weight: 900; color: #fff; margin-top: 2px; }
+    .sp-kpi-val small { font-size: 10px; font-weight: 600; opacity: .7; }
+    .kpi-val-amber { color: #fde68a; }
+    .kpi-val-red { color: #fca5a5; }
+    .kpi-val-green { color: #86efac; }
+
+    /* ── Body ── */
+    .sp-body {
+        background: var(--fc-bg); min-height: calc(100vh - 200px);
+        padding: 18px clamp(16px, 3vw, 40px) 96px;
+        max-width: 1440px; width: 100%; margin: 0 auto;
+        box-sizing: border-box;
+    }
+
+    .sp-state-box {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .sp-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .sp-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+    .sp-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .sp-state-box p { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    .sp-card {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden;
+    }
+
+    /* ── Toolbar ── */
+    .sp-toolbar {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7; flex-wrap: wrap;
+    }
+
+    .sp-search-wrap {
+        position: relative; display: flex; align-items: center;
+        flex: 1; min-width: 200px; max-width: 340px;
+    }
+    .sp-search-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; }
+    .sp-search-input {
+        width: 100%; height: 38px; padding: 0 36px 0 12px;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; outline: none;
+        transition: border-color .15s, box-shadow .15s;
+    }
+    .sp-search-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .sp-search-input::placeholder { color: #b0bcc8; }
+    .sp-search-clear {
+        position: absolute; left: 10px;
+        width: 22px; height: 22px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        border: none; background: #edf1f7; color: #8899ae; cursor: pointer;
+    }
+    .sp-search-clear:hover { background: #dde3ed; }
+
+    .sp-filter-wrap {
+        position: relative; display: flex; align-items: center;
+        min-width: 150px; max-width: 200px;
+    }
+    .sp-filter-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; z-index: 1; }
+    .sp-filter-select {
+        width: 100%; height: 38px; padding: 0 32px 0 10px;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; outline: none; cursor: pointer;
+        -webkit-appearance: none; appearance: none;
+    }
+    .sp-filter-select:focus { border-color: var(--fc-blue); }
+
+    .sp-results-badge {
+        display: flex; align-items: center; gap: 5px;
+        margin-right: auto; font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap;
+    }
+    .sp-results-badge strong { color: #5a6e88; }
+
+    /* ── Status Tabs ── */
+    .sp-status-bar {
+        padding: 10px 18px;
+        background: #f9fafd; border-bottom: 1px solid #edf1f7;
+    }
+    .sp-status-tabs { display: flex; gap: 4px; padding: 3px; border-radius: 10px; background: #f0f3f8; width: fit-content; }
+    .sp-status-tab {
+        display: flex; align-items: center; gap: 5px;
+        height: 32px; padding: 0 12px; border: none; border-radius: 7px;
+        background: transparent; color: #6b7d95;
+        font-family: inherit; font-size: 11px; font-weight: 700;
+        cursor: pointer; white-space: nowrap; transition: all .15s;
+    }
+    .sp-status-tab:hover:not(.active) { color: var(--fc-text); background: rgba(255,255,255,.6); }
+    .sp-status-tab.active { background: var(--fc-card); color: var(--fc-text); box-shadow: 0 1px 4px rgba(15,41,82,.10); font-weight: 800; }
+    .sp-tab-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px; }
+    .sp-tab-count {
+        min-width: 16px; height: 16px; border-radius: 4px; padding: 0 3px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 9px; font-weight: 900;
+    }
+    .sp-status-tab.active .sp-tab-count { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .sp-status-tab:not(.active) .sp-tab-count { background: #e4eaf3; color: #8899ae; }
+
+    .sdot-all { background: var(--fc-blue); }
+    .sdot-posted { background: var(--fc-green); }
+    .sdot-cancelled { background: var(--fc-red); }
+    .sdot-returned { background: var(--fc-amber); }
+
+    /* ── Banner ── */
+    .sp-banner {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 18px; font-size: 12px; font-weight: 600;
+        animation: sp-banner-in .25s ease;
+    }
+    @@keyframes sp-banner-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+    .banner-close { background: none; border: none; cursor: pointer; opacity: .6; margin-right: auto; }
+    .banner-success { background: #e9f8f0; color: #0e7a43; }
+    .banner-error { background: #fff0f2; color: var(--fc-red); }
+
+    /* ── Loading / Empty ── */
+    .sp-loading {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 200px; color: var(--fc-muted); font-size: 12px; font-weight: 600;
+    }
+    .sp-spinner {
+        width: 32px; height: 32px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: sp-spin .75s linear infinite;
+    }
+    @@keyframes sp-spin { to { transform: rotate(360deg); } }
+
+    .sp-empty {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 10px; min-height: 240px; padding: 40px; text-align: center;
+    }
+    .sp-empty-icon { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #f0f4fa; color: #b0c4d8; }
+    .sp-empty-title { font-size: 15px; font-weight: 800; color: var(--fc-text); }
+    .sp-empty-sub { font-size: 12px; color: var(--fc-muted); }
+
+    .sp-add-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 16px; margin-top: 6px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; transition: all .15s;
+    }
+    .sp-add-btn:hover { background: var(--fc-blue); color: #fff; }
+
+    /* ── Table ── */
+    .sp-table-wrap { overflow-x: auto; }
+    .sp-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .sp-table thead th {
+        padding: 10px 12px;
+        background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 10.5px; font-weight: 800;
+        text-align: center; border-bottom: 2px solid #e4eaf3;
+        white-space: nowrap;
+    }
+    .sp-table .th-start { text-align: right; }
+    .sp-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background .12s; }
+    .sp-table tbody tr:last-child { border-bottom: none; }
+    .sp-table tbody tr:hover { background: #fafcff; }
+    .sp-table tbody tr.row-cancelled { opacity: .55; }
+    .sp-table tbody td { padding: 11px 12px; color: #526070; text-align: center; vertical-align: middle; }
+    .td-start { text-align: right !important; }
+    .td-muted { color: #8899ae; font-size: 11px; }
+
+    /* Payment Cell */
+    .sp-pay-cell { display: flex; align-items: flex-start; gap: 10px; }
+    .sp-avatar {
+        width: 36px; height: 36px; flex: 0 0 36px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.10); margin-top: 2px;
+    }
+    .av-posted { background: linear-gradient(135deg, #0d8a48, #16a35b); }
+    .av-cancelled { background: linear-gradient(135deg, #b02040, #e03048); }
+    .av-returned { background: linear-gradient(135deg, #b87d08, #e09a10); }
+
+    .sp-pay-info { min-width: 0; }
+    .sp-pay-num { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .sp-code-chip {
+        display: inline-flex; padding: 2px 8px; border-radius: 6px;
+        background: #f0f4fa; border: 1px solid #e0e8f4;
+        font-size: 10.5px; font-weight: 800; color: var(--fc-green);
+    }
+    .sp-supplier-name { font-size: 12px; font-weight: 700; color: #344563; margin-top: 3px; }
+
+    /* Date */
+    .sp-date-cell { display: flex; align-items: center; gap: 4px; justify-content: center; font-size: 11px; color: #6b7d95; }
+
+    /* Method Cell */
+    .sp-method-cell { display: flex; flex-direction: column; gap: 3px; align-items: center; }
+    .sp-method-badge {
+        display: inline-flex; padding: 3px 10px; border-radius: 7px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-size: 11px; font-weight: 800; border: 1px solid #c0d4fb;
+    }
+    .sp-cheque-tag {
+        display: inline-flex; align-items: center; gap: 3px;
+        font-size: 9.5px; color: #9aaabb; margin-top: 2px;
+    }
+
+    /* Amount */
+    .sp-amount-cell { display: flex; align-items: baseline; gap: 3px; justify-content: center; }
+    .sp-amount-val { font-size: 14px; font-weight: 900; color: var(--fc-green); }
+    .sp-amount-cur { font-size: 10px; color: #9aaabb; font-weight: 600; }
+
+    /* Invoice Count */
+    .sp-inv-count-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 3px 9px; border-radius: 7px;
+        background: #f0f4fa; border: 1px solid #e0e8f4;
+        color: #5a6e88; font-size: 10.5px; font-weight: 800;
+    }
+
+    /* Chips */
+    .sp-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 7px; font-size: 10.5px; font-weight: 800; white-space: nowrap; }
+    .sp-chip-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
+
+    .chip-s-posted { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .chip-s-cancelled { background: var(--fc-red-lt); color: var(--fc-red); border: 1px solid #ffc8cf; }
+    .chip-s-returned { background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898; }
+
+    .sdotc-posted { background: var(--fc-green); }
+    .sdotc-cancelled { background: var(--fc-red); }
+    .sdotc-returned { background: var(--fc-amber); }
+
+    /* Actions */
+    .sp-actions { display: flex; align-items: center; gap: 3px; justify-content: center; }
+    .sp-act-btn {
+        width: 28px; height: 28px; border-radius: 7px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; cursor: pointer;
+        transition: all .15s; background: transparent;
+    }
+    .act-view { color: var(--fc-blue); }
+    .act-cancel { color: var(--fc-red); }
+    .act-view:hover { background: var(--fc-blue-lt); border-color: #c0d4fb; }
+    .act-cancel:hover { background: var(--fc-red-lt); border-color: #ffc8cf; }
+
+    /* ── Modal ── */
+    .sp-modal-backdrop {
+        position: fixed; inset: 0; z-index: 9999;
+        background: rgba(10,20,40,.58); backdrop-filter: blur(5px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px; animation: sp-fade-in .2s ease;
+    }
+    @@keyframes sp-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+    .sp-modal {
+        width: 100%; max-width: 480px;
+        background: var(--fc-card); border: 1px solid rgba(0,0,0,.08);
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(10,20,50,.18), 0 30px 80px rgba(10,20,50,.22);
+        overflow: hidden;
+        animation: sp-modal-in .28s cubic-bezier(.34,1.3,.64,1);
+        display: flex; flex-direction: column;
+        max-height: 90vh;
+    }
+    .sp-modal-lg { max-width: 620px; }
+    @@keyframes sp-modal-in { from { opacity: 0; transform: scale(.94) translateY(12px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+
+    .sp-modal-head {
+        display: flex; align-items: center; gap: 14px;
+        padding: 18px 22px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7; flex-shrink: 0;
+    }
+    .sp-modal-icon {
+        width: 48px; height: 48px; flex: 0 0 48px; border-radius: 14px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .detail-icon { background: linear-gradient(135deg, #eaf1ff, #dbe7fd); color: var(--fc-blue); border: 1px solid #c0d4fb; }
+    .cancel-icon { background: linear-gradient(135deg, #fff0f2, #ffe8ec); color: var(--fc-red); border: 1px solid #ffc8cf; }
+    .sp-modal-title { font-size: 15px; font-weight: 900; color: #1c2b43; }
+    .sp-modal-sub { font-size: 10.5px; color: var(--fc-muted); margin-top: 2px; }
+    .sp-modal-close {
+        margin-right: auto; width: 34px; height: 34px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid #e4eaf2; border-radius: 9px;
+        background: none; color: #9aaabb; cursor: pointer;
+    }
+    .sp-modal-close:hover { background: #f0f4fa; color: var(--fc-text); }
+
+    .sp-modal-body { padding: 20px 22px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; flex: 1; }
+
+    /* Detail Summary */
+    .sp-detail-summary {
+        display: grid; grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr;
+        background: #f5f7fa; border: 1px solid #e4eaf3;
+        border-radius: 12px; overflow: hidden;
+    }
+    .sp-ds-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 14px 10px; text-align: center; }
+    .sp-ds-sep { width: 1px; background: #e4eaf3; align-self: stretch; }
+    .sp-ds-label { font-size: 9.5px; color: #9aaabb; font-weight: 700; }
+    .sp-ds-val { font-size: 13px; font-weight: 900; color: var(--fc-text); }
+    .sp-ds-val small { font-size: 10px; font-weight: 700; color: #94a3b8; }
+    .sp-ds-val.amount-val { color: var(--fc-green); font-size: 16px; }
+
+    /* Detail Section */
+    .sp-detail-section {
+        background: #fbfcfe; border: 1px solid #e4eaf3;
+        border-radius: 12px; padding: 14px 16px;
+    }
+    .sp-detail-section-title {
+        display: flex; align-items: center; gap: 7px;
+        font-size: 12px; font-weight: 800; color: #344258;
+        margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #edf1f7;
+    }
+    .sp-count-badge {
+        margin-right: auto;
+        padding: 2px 8px; border-radius: 6px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-size: 10px; font-weight: 800;
+    }
+
+    /* Detail Info Grid */
+    .sp-detail-info-grid {
+        display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+    }
+    .sp-info-item { display: flex; flex-direction: column; gap: 3px; }
+    .sp-info-full { grid-column: 1 / -1; }
+    .sp-info-label { font-size: 10.5px; color: var(--fc-muted); font-weight: 700; }
+    .sp-info-val {
+        font-size: 12.5px; font-weight: 700; color: var(--fc-text);
+        padding: 8px 10px; background: #fff; border: 1px solid #e4eaf3; border-radius: 8px;
+    }
+
+    /* Allocations */
+    .sp-alloc-list { display: flex; flex-direction: column; gap: 8px; }
+    .sp-alloc-item {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 10px 14px; background: #fff;
+        border: 1px solid #e4eaf3; border-radius: 10px;
+        transition: border-color .15s;
+    }
+    .sp-alloc-item:hover { border-color: #c0d4fb; }
+    .sp-alloc-left { display: flex; align-items: center; gap: 10px; }
+    .sp-alloc-icon {
+        width: 30px; height: 30px; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+    }
+    .sp-alloc-label { font-size: 9.5px; color: #9aaabb; font-weight: 700; }
+    .sp-alloc-num { font-size: 12.5px; font-weight: 800; color: var(--fc-text); }
+    .sp-alloc-right { text-align: left; }
+    .sp-alloc-amt { font-size: 13px; font-weight: 900; color: var(--fc-green); }
+    .sp-alloc-amt small { font-size: 10px; font-weight: 600; color: #94a3b8; }
+
+    .sp-alloc-empty {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 8px; padding: 24px; text-align: center;
+        color: var(--fc-muted); font-size: 12px; font-weight: 600;
+    }
+
+    /* Notes */
+    .sp-notes-box {
+        padding: 12px 14px; background: #fff;
+        border: 1px solid #e4eaf3; border-radius: 8px;
+        font-size: 12.5px; color: var(--fc-text); line-height: 1.6;
+    }
+
+    /* Void Summary */
+    .sp-void-summary {
+        display: flex; align-items: stretch;
+        background: #f5f7fa; border: 1px solid #e4eaf3;
+        border-radius: 12px; overflow: hidden;
+    }
+    .sp-vs-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 14px 10px; text-align: center; }
+    .sp-vs-sep { width: 1px; background: #e4eaf3; align-self: stretch; }
+    .sp-vs-label { font-size: 9.5px; color: #9aaabb; font-weight: 700; }
+    .sp-vs-val { font-size: 13px; font-weight: 900; color: var(--fc-text); }
+
+    /* Cancel Warning */
+    .sp-cancel-warn {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 14px 16px; border-radius: 12px;
+        background: var(--fc-amber-lt); border: 1px solid #f0d898;
+    }
+    .sp-cancel-warn svg { flex: 0 0 auto; color: #d97706; margin-top: 2px; }
+    .sp-cancel-warn strong { display: block; font-size: 13px; font-weight: 800; color: #92400e; }
+    .sp-cancel-warn p { margin: 3px 0 0; font-size: 11.5px; color: #b45309; line-height: 1.6; }
+
+    /* Modal Foot */
+    .sp-modal-foot {
+        display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+        padding: 14px 22px;
+        background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%);
+        border-top: 1px solid #edf1f7; flex-shrink: 0;
+    }
+    .sp-modal-close-btn, .sp-modal-cancel-btn {
+        height: 40px; padding: 0 20px;
+        border: 1px solid var(--fc-border); border-radius: 10px;
+        background: var(--fc-card); color: var(--fc-text);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+    }
+    .sp-modal-close-btn:hover, .sp-modal-cancel-btn:hover { background: #f0f4fa; }
+    .sp-modal-confirm-btn {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 40px; padding: 0 20px; border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #e03048, #c0182e);
+        color: #fff; font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; box-shadow: 0 4px 14px rgba(224,48,72,.28); transition: all .15s;
+    }
+    .sp-modal-confirm-btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .sp-modal-confirm-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    .btn-spinner { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: sp-spin .7s linear infinite; }
+    .btn-spinner.sm { width: 13px; height: 13px; }
+
+    /* ── FAB ── */
+    .glow-fab-wrap { position: fixed; left: 28px; bottom: 28px; z-index: 1299; }
+    .glow-fab-container { position: relative; z-index: 2; width: 64px; height: 64px; }
+    .glow-fab-btn {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        width: 60px; height: 60px; border-radius: 50%;
+        background: linear-gradient(135deg, #1e6ef5, #0d47a1);
+        border: 2.5px solid #fbbf24; color: #fff; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 16px rgba(30,110,245,.4); transition: transform .2s; z-index: 2;
+    }
+    .glow-fab-btn:hover { transform: translate(-50%, -50%) scale(1.05); }
+    .glow-fab-icon { transition: transform .3s; }
+    .glow-fab-wrap.is-open .glow-fab-icon { transform: rotate(130deg); }
+
+    .glow-halo, .glow-ring { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
+    .glow-halo { width: 60px; height: 60px; background: radial-gradient(circle, rgba(30,110,245,.3) 0%, transparent 70%); animation: glow-breath 2s ease-in-out infinite; }
+    .glow-ring { width: 60px; height: 60px; border: 2px solid rgba(30,110,245,.4); animation: glow-expand 2s ease-out infinite; }
+    .glow-ring-2 { animation-delay: .3s; }
+    .glow-ring-3 { animation-delay: .6s; }
+    @@keyframes glow-breath { 0%, 100% { opacity: .5; transform: translate(-50%, -50%) scale(1); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } }
+    @@keyframes glow-expand { 0% { opacity: .8; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.5); } }
+
+    .glow-fab-menu {
+        position: absolute; bottom: 80px; left: 0; z-index: 3;
+        display: flex; flex-direction: column; gap: 8px;
+        opacity: 0; pointer-events: none; transform: translateY(10px); transition: opacity .2s, transform .2s;
+    }
+    .glow-fab-wrap.is-open .glow-fab-menu { opacity: 1; pointer-events: auto; transform: translateY(0); }
+    .glow-fab-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 16px; border-radius: 12px; background: #fff;
+        border: 1px solid #dde5f0; box-shadow: 0 4px 12px rgba(0,0,0,.1);
+        cursor: pointer; font-size: 13px; color: #1c2c44; white-space: nowrap;
+    }
+    .glow-fab-item:hover { background: #f4f7fb; border-color: #1e6ef5; }
+    .glow-fab-item-ic { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: #eaf1ff; color: #1e6ef5; }
+    .glow-fab-scrim { position: fixed; inset: 0; background: rgba(9,18,35,.45); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 1298; }
+
+    /* ── Responsive ── */
+    @@media (max-width: 992px) {
+        .sp-kpis-strip { flex-wrap: wrap; }
+        .sp-kpi-item { flex: 0 0 50%; }
+        .sp-kpi-div:nth-child(4) { display: none; }
+        .sp-detail-summary { grid-template-columns: 1fr; }
+        .sp-ds-sep { display: none; }
+        .sp-void-summary { flex-wrap: wrap; }
+        .sp-vs-item { flex: 0 0 100%; }
+        .sp-vs-sep { display: none; }
+    }
+    @@media (max-width: 900px) {
+        .sp-toolbar { flex-direction: column; align-items: stretch; }
+        .sp-search-wrap, .sp-filter-wrap { max-width: 100%; }
+        .sp-results-badge { margin-right: 0; }
+    }
+    @@media (max-width: 768px) {
+        .sp-hero-row { flex-direction: column; align-items: flex-start; }
+        .sp-hero-right { width: 100%; justify-content: flex-start; }
+        .sp-kpi-item { flex: 0 0 100%; }
+        .sp-kpi-div { display: none; }
+        .sp-detail-info-grid { grid-template-columns: 1fr; }
+    }
+    @@media (max-width: 680px) {
+        .sp-body { padding: 10px 12px 90px; }
+        .sp-toolbar { padding: 10px 12px; }
+        .sp-avatar { display: none; }
+        .sp-modal-backdrop { padding: 10px; }
+        .sp-modal { border-radius: 16px; max-height: 95vh; }
+        .glow-fab-wrap { left: 18px; bottom: 18px; }
+    }
+    @@media (max-width: 480px) {
+        .sp-status-tabs { flex-wrap: wrap; }
+        .sp-status-tab { padding: 0 8px; font-size: 10px; }
+        .sp-tab-dot { display: none; }
+        .sp-kpis-strip { display: none; }
+    }
+</style>
+
+
 @code {
     private AuthUser? _user;
-    private bool CanView   => _user?.Can("SUPPLIER.VIEW") ?? false;
+    private bool CanView   => _user?.Can("SUPPLIER.VIEW")   ?? false;
     private bool CanCreate => _user?.Can("SUPPLIER.CREATE") ?? false;
-    private bool CanEdit   => _user?.Can("SUPPLIER.EDIT") ?? false;
+    private bool CanEdit   => _user?.Can("SUPPLIER.EDIT")   ?? false;
 
-    private bool _loading = true;
-    private string _search = "";
-    private string _status = "";
-    private long? _voidId;
+    private static readonly (string Key, string Value)[] _statusTabs =
+    {
+        ("all",       "الكل"),
+        ("Posted",    "مسجّلة"),
+        ("Cancelled", "ملغاة"),
+        ("Returned",  "مرتجعة")
+    };
+
     private List<Item> _items = new();
+    private List<Opt> _suppliers = new();
+    private List<Opt> _methods = new();
+    private bool _loading = true;
+    private bool _busy;
+    private bool _fabOpen;
+    private string _search = "";
+    private string _tab = "all";
+    private string _supFilter = "";
+    private string _methodFilter = "";
+    private string? _msg;
+    private bool _ok = true;
     private Detail? _detail;
+    private Item? _voidTarget;
+
+    private decimal PostedTotal => _items.Where(p => p.Status == "Posted").Sum(p => p.Amount);
+    private int CancelledCount => _items.Count(p => p.Status == "Cancelled");
+
+    private IEnumerable<Item> Filtered => _items
+        .Where(p => _tab == "all" || p.Status == _tab)
+        .Where(p => string.IsNullOrEmpty(_supFilter) || p.SupplierId.ToString() == _supFilter)
+        .Where(p => string.IsNullOrEmpty(_methodFilter) || p.PaymentMethodId.ToString() == _methodFilter)
+        .Where(p => string.IsNullOrWhiteSpace(_search)
+                 || NormalizeArabic(p.SupplierPaymentNumber).Contains(NormalizeArabic(_search))
+                 || NormalizeArabic(p.SupplierName).Contains(NormalizeArabic(_search))
+                 || NormalizeArabic(p.ChequeNumber ?? "").Contains(NormalizeArabic(_search)));
+
+    private static string NormalizeArabic(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        string[] diacritics = new[] { "َ", "ُ", "ِ", "ّ", "ً", "ٌ", "ٍ", "ْ", "ـ" };
+        foreach (var d in diacritics) s = s.Replace(d, "");
+        return s
+            .Replace('أ', 'ا').Replace('إ', 'ا').Replace('آ', 'ا').Replace('ٱ', 'ا').Replace('ء', 'ا')
+            .Replace('ة', 'ه').Replace('ى', 'ي').Replace('ؤ', 'و').Replace('ئ', 'ي')
+            .Replace("  ", " ").ToLowerInvariant().Trim();
+    }
+
+    private static string Money(decimal v) => v.ToString("N2");
+
+    private static string StatusAr(string s) => s switch
+    {
+        "Posted"    => "مسجّلة",
+        "Cancelled" => "ملغاة",
+        "Returned"  => "مرتجعة",
+        _           => s
+    };
+
+    private static string StatusChipClass(string s) => s switch
+    {
+        "Posted"    => "chip-s-posted",
+        "Cancelled" => "chip-s-cancelled",
+        "Returned"  => "chip-s-returned",
+        _           => "chip-s-posted"
+    };
+
+    private static string StatusDotClass(string s) => s switch
+    {
+        "Posted"    => "sdotc-posted",
+        "Cancelled" => "sdotc-cancelled",
+        "Returned"  => "sdotc-returned",
+        _           => "sdotc-posted"
+    };
+
+    private static string AvatarClass(string s) => s switch
+    {
+        "Posted"    => "av-posted",
+        "Cancelled" => "av-cancelled",
+        "Returned"  => "av-returned",
+        _           => "av-posted"
+    };
+
+    private static string StatusDotColor(string s) => s switch
+    {
+        "all"       => "sdot-all",
+        "Posted"    => "sdot-posted",
+        "Cancelled" => "sdot-cancelled",
+        "Returned"  => "sdot-returned",
+        _           => "sdot-all"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (!CanView) { _loading = false; return; }
+
+        _suppliers = await SafeOpts("api/options/suppliers");
+        _methods   = await SafeOpts("api/options/payment-methods");
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/supplier-payments") ?? new(); }
+        catch (Exception ex) { _ok = false; _msg = "تعذّر تحميل دفعات الموردين: " + ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task<List<Opt>> SafeOpts(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<Opt>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    private async Task Reload() { _msg = null; await LoadAsync(); }
+    private void SetTab(string s) { _tab = s; }
+    private void ToggleFab() => _fabOpen = !_fabOpen;
+    private void GoNew() => Nav.NavigateTo("/supplier-payments/new");
+
+    private async Task ShowDetail(Item p)
+    {
+        try
+        {
+            _detail = await Http.GetFromJsonAsync<Detail>($"api/supplier-payments/{p.SupplierPaymentId}");
+        }
+        catch (Exception ex) { _ok = false; _msg = "تعذّر تحميل التفاصيل: " + ex.Message; }
+    }
+
+    private void AskVoid(Item p) { _voidTarget = p; }
+
+    private async Task DoVoid()
+    {
+        if (_voidTarget is null) return;
+        _busy = true;
+        try
+        {
+            var res = await Http.PostAsync($"api/supplier-payments/{_voidTarget.SupplierPaymentId}/void", null);
+            var m = await MsgOf(res);
+            _msg = res.IsSuccessStatusCode ? "تم إلغاء السند بنجاح" : m;
+            _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode)
+            {
+                _voidTarget = null;
+                await LoadAsync();
+                Snackbar.Add("تم إلغاء السند بنجاح", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add(m, Severity.Error);
+            }
+        }
+        catch (Exception ex) { _ok = false; _msg = "تعذّر الإلغاء: " + ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم الحفظ" : $"حدث خطأ {(int)res.StatusCode}"; }
+    }
 
     public class Item
     {
@@ -236,81 +1516,9 @@
         public List<Alloc> Allocations { get; set; } = new();
     }
 
-    private decimal PostedTotal => _items.Where(p => p.Status == "Posted").Sum(p => p.Amount);
-
-    private IEnumerable<Item> Filtered => _items
-        .Where(p => string.IsNullOrEmpty(_status) || p.Status == _status)
-        .Where(p => string.IsNullOrWhiteSpace(_search)
-                 || p.SupplierPaymentNumber.Contains(_search, StringComparison.OrdinalIgnoreCase)
-                 || p.SupplierName.Contains(_search, StringComparison.OrdinalIgnoreCase)
-                 || (p.ChequeNumber ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase));
-
-    protected override async Task OnInitializedAsync()
+    public class Opt
     {
-        _user = await Auth.GetUserAsync();
-        if (CanView) await LoadAsync();
-        else _loading = false;
-    }
-
-    private async Task LoadAsync()
-    {
-        _loading = true;
-        try { _items = await Http.GetFromJsonAsync<List<Item>>("api/supplier-payments") ?? new(); }
-        catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
-        finally { _loading = false; }
-    }
-
-    private async Task Reload() { await LoadAsync(); Snackbar.Add("اتحدّث", Severity.Info); }
-    private void SetTab(string s) { _status = s; }
-    private void GoNew() => Nav.NavigateTo("/supplier-payments/new");
-
-    private async Task ShowDetail(Item p)
-    {
-        try { _detail = await Http.GetFromJsonAsync<Detail>($"api/supplier-payments/{p.SupplierPaymentId}"); }
-        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
-    }
-
-    private async Task Void(Item p)
-    {
-        try
-        {
-            var res = await Http.PostAsync($"api/supplier-payments/{p.SupplierPaymentId}/void", null);
-            var m = await MsgOf(res);
-            Snackbar.Add(m, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
-            _voidId = null;
-            if (res.IsSuccessStatusCode) await LoadAsync();
-        }
-        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
-    }
-
-    /* ── تنسيق ── */
-    private string TabClass(string k) => _status == k ? "fc-filter on" : "fc-filter";
-    private static string Money(decimal v) => v.ToString("N2");
-
-    private static string StatusAr(string s) => s switch
-    {
-        "Posted"    => "مسجّلة",
-        "Cancelled" => "ملغاة",
-        "Returned"  => "مرتجعة",
-        _           => s
-    };
-
-    private static string StatusCls(string s) => s switch
-    {
-        "Posted"    => "fc-chip-ok",
-        "Cancelled" => "fc-chip-gray",
-        "Returned"  => "fc-chip-warn",
-        _           => "fc-chip-gray"
-    };
-
-    private static async Task<string> MsgOf(HttpResponseMessage res)
-    {
-        try
-        {
-            var b = await res.Content.ReadAsStringAsync();
-            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
-            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
-        }
-        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+        public int Id { get; set; }
+        public string Label { get; set; } = "";
     }
 }

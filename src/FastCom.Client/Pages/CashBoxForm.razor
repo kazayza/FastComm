@@ -8,111 +8,814 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
-<PageTitle>@(_id is null ? "خزينة جديدة" : "تعديل خزينة") — فاست كوم</PageTitle>
+<PageTitle>@(_id is null ? "إضافة خزينة جديدة" : "تعديل بيانات الخزينة") — فاست كوم</PageTitle>
 
-<div class="fc-hero">
-    <div class="fc-hero-inner">
-        <div class="fc-page-head">
-            <div>
-                <div class="fc-crumb">المالية · الخزينة</div>
-                <h1 class="fc-hero-title">@(_id is null ? "خزينة جديدة" : $"تعديل {_f.NameAr}")</h1>
-                <p class="fc-hero-sub">
-                    @(_id is null
-                        ? "درج كاشير أو خزينة فرعية — تربطها بموظف مسؤول، ووقتها تسويتها بتتحوّل للرئيسية وتتحط مقفولة"
-                        : "الاسم والموظف المسؤول — الكود مايتغيرش")
-                </p>
+@* ═══════════════════════════════════════════
+   HERO SECTION
+═══════════════════════════════════════════ *@
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
+
+            <div class="bk-hero-row">
+                <div class="bk-hero-left">
+                    <div class="bk-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                            <line x1="9" y1="3" x2="9" y2="21"/>
+                        </svg>
+                        <span>المالية · الخزينة وصناديق النقد</span>
+                    </div>
+                    <h1 class="fc-hero-title fc-hero-title-slim">
+                        @if (_id is null)
+                        {
+                            <span>إضافة خزينة جديدة</span>
+                        }
+                        else
+                        {
+                            <span>@_f.NameAr</span>
+                        }
+                    </h1>
+                    <span class="bk-hero-sub">
+                        @(_id is null ? "إنشاء صندوق نقدي مالي جديد أو نقطة بيع فرعية وربطها بالموظف المسؤول" : $"إدارة وتعديل إعدادات الخزينة وبنود الموظف المسؤول")
+                    </span>
+                </div>
+
+                <div class="bk-hero-right">
+                    <span class="bk-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                </div>
             </div>
-            <div class="fc-head-actions">
-                <MudButton Variant="Variant.Outlined" OnClick="GoBack" Style="color:#9FB4CC">رجوع</MudButton>
-                @if (CanManage)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving"
-                               StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="SaveAsync">حفظ</MudButton>
-                }
-            </div>
+
         </div>
+
+        @if (_id is not null && _box is not null && !_loading)
+        {
+            <div class="bk-hero-summary">
+
+                <div class="bk-sum-item">
+                    <div class="bk-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                            <circle cx="12" cy="7" r="4"/>
+                        </svg>
+                    </div>
+                    <div class="bk-sum-text">
+                        <div class="bk-sum-label">الموظف المسؤول</div>
+                        <div class="bk-sum-val">@(_box.ResponsibleEmployeeName ?? "غير محدد")</div>
+                    </div>
+                </div>
+
+                <div class="bk-sum-div" aria-hidden="true"></div>
+
+                <div class="bk-sum-item">
+                    <div class="bk-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="1" y="3" width="15" height="13" rx="2"/>
+                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                        </svg>
+                    </div>
+                    <div class="bk-sum-text">
+                        <div class="bk-sum-label">كود النظام</div>
+                        <div class="bk-sum-val font-mono">@_box.Code</div>
+                    </div>
+                </div>
+
+                <div class="bk-sum-div" aria-hidden="true"></div>
+
+                <div class="bk-sum-item">
+                    <div class="bk-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                    </div>
+                    <div class="bk-sum-text">
+                        <div class="bk-sum-label">الرصيد المتاح حالياً</div>
+                        <div class="bk-sum-val total-highlight">@Money(_box.CurrentBalance) @_box.CurrencyCode</div>
+                    </div>
+                </div>
+
+            </div>
+        }
+
     </div>
 </div>
 
-<div class="fc-page">
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="bk-body">
+
     @if (!CanManage)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">
-            ليس لديك صلاحية إدارة الخزائن.
-        </MudAlert>
+        <div class="bk-state-box">
+            <div class="bk-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليست لديك صلاحية لإدارة أو إضافة صناديق النقد والخزائن الحالية.</p>
+            <button class="bk-state-back" @onclick="GoBack">العودة للخلف</button>
+        </div>
     }
     else if (_loading)
     {
-        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+        <div class="bk-loading-wrap">
+            <div class="bk-spinner" aria-label="جاري التحميل"></div>
+            <div class="bk-loading-text">جاري جلب إعدادات صناديق النقد...</div>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
-
-            @if (_msg is not null)
-            {
-                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
-                          Class="mb-4">@_msg</MudAlert>
-            }
-
-            <div class="fc-panel-sub" style="margin-bottom:14px">بيانات الخزينة</div>
-            <div class="fc-form-grid">
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">الكود *</div>
-                    <input class="fc-sel fc-sel-lg" @bind="_f.Code" maxlength="30" dir="ltr"
-                           style="text-align:right" disabled="@(_id is not null)" />
-                    <div class="fc-field-hint">حروف إنجليزية — مثال: CASH-OP1 (مايتغيرش بعد الحفظ)</div>
+        @if (_msg is not null)
+        {
+            <div class="bk-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                <div aria-hidden="true">
+                    @if (_ok)
+                    {
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                            <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                        </svg>
+                    }
                 </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">الاسم *</div>
-                    <input class="fc-sel fc-sel-lg" @bind="_f.NameAr" maxlength="150" />
-                    <div class="fc-field-hint">مثال: درج أحمد — خزينة التشغيل</div>
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">الموظف المسؤول</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.ResponsibleEmployeeId">
-                        <option value="0">— من غير مسؤول محدد —</option>
-                        @foreach (var e in _employees)
-                        {
-                            <option value="@e.Id">@e.Label</option>
-                        }
-                    </select>
-                    <div class="fc-field-hint">مين اللي ماسك الدرج ده</div>
-                </div>
-                @if (_id is null)
-                {
-                    <div>
-                        <div class="fc-panel-sub" style="margin-bottom:6px">الرصيد الافتتاحي</div>
-                        <input type="number" min="0" step="0.01" class="fc-sel fc-sel-lg"
-                               value="@_f.OpeningBalance"
-                               @onchange="e => _f.OpeningBalance = ParseDec(e.Value)" />
-                        <div class="fc-field-hint">الفلوس الموجودة في الدرج دلوقتي</div>
-                    </div>
-                }
+                <span>@_msg</span>
+                <button class="banner-close" @onclick="() => _msg = null">✕</button>
             </div>
+        }
 
-            @if (_id is not null && _box is not null)
+        <div class="bk-tabs-wrap">
+
+            <MudTabs Elevation="0"
+                     Rounded="false"
+                     ApplyEffectsToContainer="true"
+                     PanelClass="bk-tab-panel"
+                     @bind-ActivePanelIndex="_activeTab"
+                     Class="bk-mud-tabs">
+
+                @* TAB 1 - بيانات الخزينة الأساسية *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="btab-label">
+                            <div class="btab-icon btab-blue" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 21h18M3 10h18M5 6h14M10 10v11M14 10v11" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <span>بيانات الصندوق والخزينة</span>
+                            @if (HasTabError(1))
+                            {
+                                <span class="btab-err-dot" aria-label="يوجد خطأ"></span>
+                            }
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="tab-section">
+
+                            <div class="tab-section-head">
+                                <div class="tab-section-icon blue" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                        <line x1="9" y1="3" x2="9" y2="21"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="tab-section-title">بيانات الصندوق ومحددات الكود</div>
+                                    <div class="tab-section-sub">تعريف اسم الصندوق البرمجي، الاسم التجاري، والموظف المسؤول عن العهد النقدية</div>
+                                </div>
+                            </div>
+
+                            <div class="bk-form-grid">
+
+                                @* الكود *@
+                                <div class="form-field">
+                                    <label class="field-label" for="code">
+                                        كود الخزينة التعريفي
+                                        <span class="field-required" aria-label="مطلوب">*</span>
+                                    </label>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                            </svg>
+                                        </span>
+                                        <input id="code"
+                                               class="field-input with-prefix font-mono @(string.IsNullOrWhiteSpace(_f.Code) && _triedSave ? "field-error" : "")"
+                                               @bind="_f.Code"
+                                               maxlength="30"
+                                               dir="ltr"
+                                               disabled="@(_id is not null)"
+                                               placeholder="CASH-OP1"
+                                               aria-required="true" />
+                                    </div>
+                                    <div class="field-hint">
+                                        حروف إنجليزية كبيرة مميزة — لا يمكن تعديل الكود بعد إتمام عملية الحفظ الأولى
+                                    </div>
+                                </div>
+
+                                @* الاسم *@
+                                <div class="form-field">
+                                    <label class="field-label" for="name">
+                                        اسم الخزينة (باللغة العربية)
+                                        <span class="field-required" aria-label="مطلوب">*</span>
+                                    </label>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                                            </svg>
+                                        </span>
+                                        <input id="name"
+                                               class="field-input with-prefix @(string.IsNullOrWhiteSpace(_f.NameAr) && _triedSave ? "field-error" : "")"
+                                               @bind="_f.NameAr"
+                                               maxlength="150"
+                                               placeholder="درج الكاشير، خزينة التشغيل الأساسية..."
+                                               aria-required="true" />
+                                    </div>
+                                    <div class="field-hint">
+                                        الاسم الوصفي الظاهر للمستخدمين في النوافذ المالية والقوائم
+                                    </div>
+                                </div>
+
+                                @* الموظف المسؤول — بحث ذكي *@
+                                <div class="form-field">
+                                    <label class="field-label" for="employee">الموظف المسؤول</label>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                                <circle cx="12" cy="7" r="4"/>
+                                            </svg>
+                                        </span>
+                                        <input id="employee"
+                                               class="field-input with-prefix"
+                                               value="@_employeeSearch"
+                                               placeholder="ابحث باسم الموظف المسؤول..."
+                                               @oninput="OnEmployeeSearch"
+                                               @onkeydown="OnEmployeeInputKeyDown"
+                                               @onfocus="OnEmployeeInputFocus"
+                                               @onblur="OnEmployeeInputBlur"
+                                               autocomplete="off" />
+
+                                        @if (!string.IsNullOrEmpty(_employeeSearch))
+                                        {
+                                            <button type="button" class="field-clear-btn" @onclick="ClearEmployeeSelection" title="مسح الموظف">
+                                                ✕
+                                            </button>
+                                        }
+                                    </div>
+                                    @if (_showEmployeeDropdown && _filteredEmployees.Count > 0)
+                                    {
+                                        <div class="field-dropdown">
+                                            @for (int i = 0; i < _filteredEmployees.Count; i++)
+                                            {
+                                                var emp = _filteredEmployees[i];
+                                                var index = i;
+                                                <div class="field-dropdown-item @(index == _focusedEmployeeIndex ? "is-focused" : "")"
+                                                     @onmousedown="() => PickEmployee(emp)">
+                                                    <span>@emp.Label</span>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                    <div class="field-hint">
+                                        @if (_f.ResponsibleEmployeeId > 0)
+                                        {
+                                            <span style="color:var(--fc-green); font-weight:700">✓ تم الربط مع: @_employeeSearch</span>
+                                        }
+                                        else
+                                        {
+                                            <span>يسمح بربط الخزينة بموظف محدد كمسؤول عهدة مالي مباشر</span>
+                                        }
+                                    </div>
+                                </div>
+
+                                @* الرصيد الافتتاحي *@
+                                @if (_id is null)
+                                {
+                                    <div class="form-field">
+                                        <label class="field-label" for="openingBal">الرصيد الافتتاحي التأسيسي</label>
+                                        <div class="field-input-group">
+                                            <span class="field-prefix">ج.م</span>
+                                            <input id="openingBal" type="number" step="0.01" min="0"
+                                                   class="field-input with-prefix @(_f.OpeningBalance < 0 && _triedSave ? "field-error" : "")"
+                                                   value="@_f.OpeningBalance"
+                                                   @onchange="e => _f.OpeningBalance = ParseDec(e.Value)" />
+                                        </div>
+                                        <div class="field-hint">
+                                            السيولة النقدية أو رصيد الكاشير الفعلي لحظة تأسيس السجل
+                                        </div>
+                                    </div>
+                                }
+
+                            </div>
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+                @* TAB 2 - الرصيد والنشاط (للتعديل فقط) *@
+                @if (_id is not null && _box is not null)
+                {
+                    <MudTabPanel>
+                        <TabContent>
+                            <div class="btab-label">
+                                <div class="btab-icon btab-green" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="12" y1="1" x2="12" y2="23"></line>
+                                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                    </svg>
+                                </div>
+                                <span>الرصيد المالي الحالي</span>
+                            </div>
+                        </TabContent>
+
+                        <ChildContent>
+                            <div class="tab-section">
+
+                                <div class="tab-section-head">
+                                    <div class="tab-section-icon green" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="tab-section-title">المؤشرات المالية للنشاط والعمليات</div>
+                                        <div class="tab-section-sub">الرصد اللحظي لصافي السيولة النقدية، السجلات، وتراكم الحركات الجارية على الخزينة</div>
+                                    </div>
+                                </div>
+
+                                <div class="inv-summary-cards">
+                                    <div class="inv-sum-card highlight">
+                                        <div class="inv-sum-card-head">
+                                            <span class="inv-sum-card-icon green">
+                                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <rect x="2" y="4" width="20" height="16" rx="2" ry="2"/>
+                                                    <line x1="12" y1="18" x2="12" y2="18"/>
+                                                </svg>
+                                            </span>
+                                            <span class="inv-sum-card-title">صافي رصيد الخزينة الحالي</span>
+                                        </div>
+                                        <div class="inv-sum-card-val expense">@Money(_box.CurrentBalance) <small>@_box.CurrencyCode</small></div>
+                                    </div>
+
+                                    <div class="inv-sum-card">
+                                        <div class="inv-sum-card-head">
+                                            <span class="inv-sum-card-icon blue">
+                                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                                                </svg>
+                                            </span>
+                                            <span class="inv-sum-card-title">عدد العمليات والحركات النقدية</span>
+                                        </div>
+                                        <div class="inv-sum-card-val">@_box.TxCount <small>عملية</small></div>
+                                    </div>
+
+                                    <div class="inv-sum-card">
+                                        <div class="inv-sum-card-head">
+                                            <span class="inv-sum-card-icon amber">
+                                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <circle cx="12" cy="12" r="10"/>
+                                                    <line x1="12" y1="16" x2="12" y2="12"/>
+                                                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                                                </svg>
+                                            </span>
+                                            <span class="inv-sum-card-title">حالة الخزينة التشغيلية</span>
+                                        </div>
+                                        <div class="inv-sum-card-val font-arabic">
+                                            @(_box.Status == "Closed" ? "مغلقة / غير نشطة" : "مفتوحة ونشطة")
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </ChildContent>
+                    </MudTabPanel>
+                }
+
+            </MudTabs>
+        </div>
+
+
+        @* ── Bottom Actions ── *@
+        <div class="bk-bottom-actions">
+
+            <button class="bk-bottom-back" @onclick="GoBack">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                رجوع لقائمة الصناديق
+            </button>
+
+            @if (CanManage)
             {
-                <div class="fc-panel-sub" style="margin:26px 0 14px">الرصيد الحالي</div>
-                <div class="fc-kpis">
-                    <div class="fc-kpi">
-                        <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" /></div>
-                        <div><div class="fc-kpi-num">@Money(_box.CurrentBalance)</div><div class="fc-kpi-lb">الرصيد الحالي (@_box.CurrencyCode)</div></div>
-                    </div>
-                    <div class="fc-kpi">
-                        <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.ReceiptLong" /></div>
-                        <div><div class="fc-kpi-num">@_box.TxCount</div><div class="fc-kpi-lb">عدد الحركات</div></div>
-                    </div>
-                    <div class="fc-kpi">
-                        <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.Info" /></div>
-                        <div><div class="fc-kpi-num">@(_box.Status == "Closed" ? "مقفولة" : "مفتوحة")</div><div class="fc-kpi-lb">الحالة</div></div>
-                    </div>
+                <div class="bk-bottom-right">
+
+                    @if (_activeTab == 0 && _id is not null)
+                    {
+                        <button class="bk-next-btn" @onclick="() => _activeTab = 1">
+                            التالي: كشف الإحصائيات المالية
+                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    }
+
+                    <button class="bk-bottom-save" @onclick="SaveAsync" disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="btn-spinner sm" aria-hidden="true"></span>
+                            <span>جاري حفظ البيانات...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>حفظ الخزينة</span>
+                        }
+                    </button>
+
                 </div>
             }
 
-        </div></div>
+        </div>
+
     }
 </div>
+
+
+@* ── FAB ── *@
+@if (CanManage)
+{
+    <div class="glow-fab-wrap @(_fabOpen ? "is-open" : "")">
+
+        <div class="glow-fab-menu" role="menu" aria-label="الإجراءات السريعة">
+            <button type="button" class="glow-fab-item" role="menuitem" @onclick="SaveAsync" disabled="@_saving">
+                <span class="glow-fab-item-ic">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                        <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </span>
+                <span class="glow-fab-item-lb">@(_saving ? "جاري الحفظ..." : "حفظ الخزينة")</span>
+            </button>
+            <button type="button" class="glow-fab-item" role="menuitem" @onclick="GoBack">
+                <span class="glow-fab-item-ic">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </span>
+                <span class="glow-fab-item-lb">إلغاء</span>
+            </button>
+        </div>
+
+        <div class="glow-fab-container">
+            <span class="glow-ring glow-ring-1" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-2" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-3" aria-hidden="true"></span>
+            <span class="glow-halo" aria-hidden="true"></span>
+
+            <button type="button" class="glow-fab-btn" @onclick="ToggleFab" aria-label="التحكم" aria-expanded="@(_fabOpen ? "true" : "false")">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.8" class="glow-fab-icon" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+
+    </div>
+}
+
+@if (_fabOpen)
+{
+    <div class="glow-fab-scrim" @onclick="ToggleFab" aria-hidden="true"></div>
+}
+
+
+@* ═══════════════════════════════════════════
+   CSS STYLES
+═══════════════════════════════════════════ *@
+<style>
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ── Hero ── */
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px; margin: 0 auto; width: 100%;
+        box-sizing: border-box; position: relative; z-index: 1;
+    }
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important; overflow: hidden;
+        box-shadow: 0 12px 32px rgba(13, 38, 84, 0.15), 0 4px 12px rgba(13, 38, 84, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .hero-wrapper .fc-hero.fc-hero-slim { padding-top: 18px !important; padding-bottom: 22px !important; }
+
+    .bk-hero-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .bk-hero-left { flex: 1; min-width: 200px; }
+    .bk-hero-crumb { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: rgba(255,255,255,.55); margin-bottom: 6px; }
+    .bk-hero-sub { font-size: 13px; color: rgba(255,255,255,.55); }
+    .bk-hero-right { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+    .bk-hero-chip {
+        display: flex; align-items: center; gap: 6px;
+        padding: 6px 12px; border-radius: 20px;
+        background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .2);
+        font-size: 11.5px; color: #fff;
+    }
+
+    .bk-hero-summary {
+        display: flex; align-items: stretch;
+        background: rgba(0,0,0,.15); border: 1px solid rgba(255,255,255,.10);
+        border-radius: 12px; overflow: hidden; backdrop-filter: blur(8px); margin-top: 14px;
+    }
+    .bk-sum-item { flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 16px; }
+    .bk-sum-div { width: 1px; background: rgba(255,255,255,.10); align-self: stretch; }
+    .bk-sum-icon {
+        width: 32px; height: 32px; flex: 0 0 32px; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(255,255,255,.10); color: rgba(255,255,255,.7);
+    }
+    .bk-sum-label { font-size: 9.5px; color: rgba(255,255,255,.5); font-weight: 600; }
+    .bk-sum-val { font-size: 13px; font-weight: 800; color: #fff; margin-top: 2px; }
+    .total-highlight { color: #86efac !important; font-size: 14px; }
+
+    /* ── Body ── */
+    .bk-body {
+        background: var(--fc-bg); min-height: calc(100vh - 180px);
+        padding: 18px clamp(16px, 3vw, 40px) 96px;
+        max-width: 1440px; width: 100%; margin: 0 auto;
+        box-sizing: border-box; position: relative; z-index: 2;
+        display: flex; flex-direction: column; gap: 14px;
+    }
+
+    /* ── States & Banners ── */
+    .bk-state-box {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 280px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .bk-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .bk-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+    .bk-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .bk-state-box p { margin: 0; font-size: 13px; color: var(--fc-muted); }
+    .bk-state-back {
+        margin-top: 8px; padding: 9px 20px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-text);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+    }
+    .bk-state-back:hover { background: #f0f4fa; }
+
+    .bk-loading-wrap {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 14px; min-height: 260px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .bk-spinner {
+        width: 36px; height: 36px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: bk-spin .75s linear infinite;
+    }
+    @@keyframes bk-spin { to { transform: rotate(360deg); } }
+    .bk-loading-text { font-size: 13px; font-weight: 600; color: var(--fc-muted); }
+
+    .bk-banner {
+        display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 600;
+        animation: sp-banner-in .25s ease;
+    }
+    @@keyframes sp-banner-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    .banner-success { background: #e9f8f0; color: #0e7a43; border: 1px solid #b5e8d0; }
+    .banner-error { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8d0; }
+    .banner-close { margin-right: auto; background: none; border: none; color: inherit; opacity: .6; cursor: pointer; font-size: 13px; padding: 2px 6px; border-radius: 5px; }
+
+    /* ── Tabs ── */
+    .bk-tabs-wrap {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden; flex: 1;
+    }
+    .bk-mud-tabs .mud-tabs-toolbar {
+        background: linear-gradient(180deg, #f9fafd 0%, #f3f6fb 100%);
+        border-bottom: 2px solid #e8edf5; padding: 0 16px; min-height: 54px;
+    }
+    .bk-mud-tabs .mud-tab { font-family: inherit; font-size: 12px; font-weight: 700; color: var(--fc-muted); padding: 0 6px; min-width: unset; transition: color .15s ease; }
+    .bk-mud-tabs .mud-tab.mud-tab-active { color: var(--fc-blue) !important; font-weight: 800; }
+    .bk-mud-tabs .mud-tab-slider { background: var(--fc-blue) !important; height: 3px; border-radius: 3px 3px 0 0; }
+    .bk-tab-panel { padding: 0; }
+
+    .btab-label { display: flex; align-items: center; gap: 7px; padding: 0 4px; white-space: nowrap; }
+    .btab-icon { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 7px; }
+    .btab-blue { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .btab-green { background: var(--fc-green-lt); color: var(--fc-green); }
+    .btab-err-dot {
+        width: 7px; height: 7px; border-radius: 50%; background: var(--fc-red); flex: 0 0 7px;
+        animation: bk-pulse 1.5s ease infinite;
+    }
+    @@keyframes bk-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.4); } 50% { box-shadow: 0 0 0 5px rgba(224,48,72,0); } }
+
+    /* ── Tab Sections & Forms ── */
+    .tab-section { padding: 24px clamp(16px, 3vw, 40px) 28px; max-width: 1440px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+    .tab-section-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid #edf1f7; }
+    .tab-section-icon { width: 42px; height: 42px; flex: 0 0 42px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+    .tab-section-icon.blue { background: var(--fc-blue-lt); color: var(--fc-blue); border: 1px solid #bdd4fc; }
+    .tab-section-icon.green { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .tab-section-title { font-size: 15px; font-weight: 800; color: #1c2b43; line-height: 1.2; }
+    .tab-section-sub { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
+
+    .tab-section-sub-head { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 800; color: #344258; margin: 22px 0 12px; padding-top: 18px; border-top: 1px solid #edf1f7; }
+
+    .bk-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; width: 100%; }
+    .form-field { display: flex; flex-direction: column; gap: 6px; position: relative; }
+    .field-label { font-size: 12px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 4px; }
+    .field-required { color: var(--fc-red); font-size: 14px; line-height: 1; }
+
+    .field-input {
+        height: 42px; width: 100%; border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text); font-family: inherit; font-size: 13px; padding: 0 12px;
+        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; outline: none; box-sizing: border-box;
+    }
+    .field-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); background: #fff; }
+    .field-input:disabled { opacity: .7; background: #f3f5f8; cursor: not-allowed; }
+    .field-input.field-error { border-color: var(--fc-red); box-shadow: 0 0 0 3px rgba(224,48,72,.08); }
+
+    .field-input-group { position: relative; display: flex; align-items: center; width: 100%; }
+    .field-prefix { position: absolute; right: 12px; display: flex; align-items: center; font-size: 11px; font-weight: 700; color: #9aaabb; pointer-events: none; z-index: 1; }
+    .field-input.with-prefix { padding-right: 36px; }
+
+    .field-clear-btn {
+        position: absolute; left: 12px; background: none; border: none;
+        color: #9aaabb; cursor: pointer; display: flex; align-items: center; justify-content: center;
+        padding: 4px; border-radius: 50%; transition: background .15s, color .15s; font-size: 11px; font-weight: bold;
+    }
+    .field-clear-btn:hover { background: rgba(0,0,0,0.05); color: var(--fc-red); }
+
+    .field-dropdown {
+        position: absolute; top: 100%; right: 0; left: 0; margin-top: 4px;
+        background: #fafcff; border: 1px solid #d8e2f0; border-radius: 9px;
+        box-shadow: 0 8px 24px rgba(0,0,0,.12); max-height: 240px; overflow-y: auto; z-index: 100;
+    }
+    .field-dropdown-item {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 10px 12px; font-size: 13px; color: var(--fc-text); cursor: pointer; transition: background .1s;
+    }
+    .field-dropdown-item:hover, .field-dropdown-item.is-focused { background: #eaf1ff; color: var(--fc-blue); font-weight: 600; }
+    .field-hint { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--fc-muted); font-weight: 500; }
+    .field-err-msg { font-size: 10.5px; color: var(--fc-red); font-weight: 700; }
+
+    /* ── Summary Financial Cards ── */
+    .inv-summary-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 10px; }
+    .inv-sum-card {
+        background: #fff; border: 1px solid #e2e8f0;
+        border-radius: 12px; padding: 16px 18px; box-shadow: 0 2px 6px rgba(0,0,0,.02);
+    }
+    .inv-sum-card.highlight { background: linear-gradient(135deg, #f0fdf4, #e8f9ee); border-color: #bbf7d0; }
+    .inv-sum-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .inv-sum-card-icon { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; }
+    .inv-sum-card-icon.blue { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .inv-sum-card-icon.amber { background: var(--fc-amber-lt); color: var(--fc-amber); }
+    .inv-sum-card-icon.green { background: #dcfce7; color: var(--fc-green); }
+    .inv-sum-card-title { font-size: 11.5px; font-weight: 700; color: #64748b; }
+    .inv-sum-card-val { font-size: 18px; font-weight: 900; color: #1e293b; }
+    .inv-sum-card-val.expense { color: var(--fc-green); font-size: 20px; }
+    .inv-sum-card-val.font-arabic { font-size: 14.5px; font-weight: 800; color: var(--fc-text); }
+    .inv-sum-card-val small { font-size: 11px; font-weight: 700; color: #94a3b8; }
+
+    /* ── Bottom Actions ── */
+    .bk-bottom-actions {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 14px 20px; background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); box-shadow: 0 2px 8px rgba(15,41,82,.04);
+    }
+    .bk-bottom-back {
+        display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s ease;
+    }
+    .bk-bottom-back:hover { background: #f0f4fa; color: var(--fc-text); }
+    .bk-bottom-back svg { transform: rotate(180deg); }
+    .bk-bottom-right { display: flex; align-items: center; gap: 10px; }
+
+    .bk-next-btn {
+        display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer; transition: all .15s ease;
+    }
+    .bk-next-btn:hover { background: var(--fc-blue); color: #fff; }
+    .bk-next-btn svg { transform: rotate(180deg); }
+
+    .bk-bottom-save {
+        display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 22px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #1e6ef5, #1558d6);
+        color: #fff; font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(30,110,245,.30); transition: all .15s ease;
+    }
+    .bk-bottom-save:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(30,110,245,.38); }
+    .bk-bottom-save:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* ── FAB ── */
+    .glow-fab-wrap { position: fixed; left: 28px; bottom: 28px; z-index: 1299; width: 60px; height: 60px; }
+    .glow-fab-container { position: relative; z-index: 2; width: 60px; height: 60px; }
+    .glow-fab-btn {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        width: 58px; height: 58px; border-radius: 50%;
+        background: linear-gradient(135deg, #1e6ef5, #0d47a1);
+        border: 2.5px solid #fbbf24; color: #fff; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 16px rgba(30, 110, 245, .4); transition: transform .2s; z-index: 2;
+    }
+    .glow-fab-btn:hover { transform: translate(-50%, -50%) scale(1.05); }
+    .glow-fab-icon { transition: transform .3s; }
+    .glow-fab-wrap.is-open .glow-fab-icon { transform: rotate(130deg); }
+
+    .glow-halo, .glow-ring { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
+    .glow-halo { width: 58px; height: 58px; background: radial-gradient(circle, rgba(30,110,245,.3) 0%, transparent 70%); animation: glow-breath 2s ease-in-out infinite; }
+    .glow-ring { width: 58px; height: 58px; border: 2px solid rgba(30,110,245,.4); animation: glow-expand 2s ease-out infinite; }
+    .glow-ring-2 { animation-delay: .3s; }
+    .glow-ring-3 { animation-delay: .6s; }
+    @@keyframes glow-breath { 0%, 100% { opacity: .5; transform: translate(-50%, -50%) scale(1); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } }
+    @@keyframes glow-expand { 0% { opacity: .8; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.5); } }
+
+    .glow-fab-menu {
+        position: absolute; bottom: 74px; left: 0; z-index: 3;
+        display: flex; flex-direction: column; gap: 8px;
+        opacity: 0; pointer-events: none; transform: translateY(10px); transition: opacity .2s, transform .2s;
+    }
+    .glow-fab-wrap.is-open .glow-fab-menu { opacity: 1; pointer-events: auto; transform: translateY(0); }
+    .glow-fab-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 16px; border-radius: 12px; background: #fff;
+        border: 1px solid #dde5f0; box-shadow: 0 4px 12px rgba(0,0,0,.1);
+        cursor: pointer; font-size: 13px; color: #1c2c44; white-space: nowrap;
+    }
+    .glow-fab-item:hover { background: #f4f7fb; border-color: #1e6ef5; }
+    .glow-fab-item-ic { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: #eaf1ff; color: #1e6ef5; }
+    .glow-fab-scrim { position: fixed; inset: 0; background: rgba(9,18,35,.45); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 1298; }
+
+    /* ── Responsive ── */
+    @@media (max-width: 992px) {
+        .bk-hero-summary { flex-wrap: wrap; }
+        .bk-sum-item { flex: 0 0 50%; }
+        .bk-sum-div:nth-child(4) { display: none; }
+        .inv-summary-cards { grid-template-columns: 1fr; }
+    }
+    @@media (max-width: 768px) {
+        .bk-body { padding: 12px 12px 90px; }
+        .bk-form-grid { grid-template-columns: 1fr; }
+        .bk-bottom-actions { flex-direction: column; }
+        .bk-bottom-back, .bk-bottom-save, .bk-next-btn { width: 100%; justify-content: center; }
+        .bk-bottom-right { width: 100%; flex-direction: column; }
+        .bk-sum-item { flex: 0 0 100%; }
+        .bk-sum-div { display: none; }
+        .glow-fab-wrap { left: 18px; bottom: 18px; }
+    }
+</style>
+
 
 @code {
     [Parameter] public int? Id { get; set; }
@@ -125,10 +828,18 @@
     private string? _msg;
     private bool    _ok;
     private int?    _id;
+    private bool    _fabOpen;
+    private int     _activeTab = 0;
+    private bool    _triedSave;
 
     private List<Opt>  _employees = new();
+    private List<Opt>  _filteredEmployees = new();
     private FormModel  _f = new();
     private BoxInfo?   _box;
+
+    private string _employeeSearch = "";
+    private bool   _showEmployeeDropdown;
+    private int    _focusedEmployeeIndex = -1;
 
     public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
 
@@ -154,6 +865,12 @@
         public string? ResponsibleEmployeeName { get; set; }
     }
 
+    private bool HasTabError(int tab) => _triedSave && tab switch
+    {
+        1 => string.IsNullOrWhiteSpace(_f.Code) || string.IsNullOrWhiteSpace(_f.NameAr) || (_id is null && _f.OpeningBalance < 0),
+        _ => false
+    };
+
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
@@ -173,9 +890,10 @@
                     _f.Code                  = _box.Code;
                     _f.NameAr                = _box.NameAr;
                     _f.ResponsibleEmployeeId = _box.ResponsibleEmployeeId ?? 0;
+                    _employeeSearch          = _box.ResponsibleEmployeeName ?? "";
                 }
             }
-            catch (Exception ex) { _msg = "فشل تحميل الخزينة: " + ex.Message; _ok = false; }
+            catch (Exception ex) { _msg = "فشل تحميل بيانات الخزينة: " + ex.Message; _ok = false; }
         }
         _loading = false;
     }
@@ -186,11 +904,116 @@
         catch { return new(); }
     }
 
+    /* ── بحث الموظف المسؤول ── */
+    private void OnEmployeeSearch(ChangeEventArgs e)
+    {
+        _employeeSearch = e.Value?.ToString() ?? "";
+        _showEmployeeDropdown = true;
+        _focusedEmployeeIndex = -1;
+        FilterEmployees(_employeeSearch);
+    }
+
+    private void FilterEmployees(string search)
+    {
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            _filteredEmployees = _employees.Take(20).ToList();
+            return;
+        }
+
+        var normalized = NormalizeArabic(search.Trim());
+        _filteredEmployees = _employees
+            .Where(emp => NormalizeArabic(emp.Label).Contains(normalized))
+            .Take(20)
+            .ToList();
+    }
+
+    private void OnEmployeeInputKeyDown(KeyboardEventArgs e)
+    {
+        if (!_showEmployeeDropdown || !_filteredEmployees.Any())
+        {
+            if (e.Key == "ArrowDown") _showEmployeeDropdown = true;
+            return;
+        }
+
+        if (e.Key == "ArrowDown")
+            _focusedEmployeeIndex = (_focusedEmployeeIndex + 1) % _filteredEmployees.Count;
+        else if (e.Key == "ArrowUp")
+            _focusedEmployeeIndex = _focusedEmployeeIndex <= 0 ? _filteredEmployees.Count - 1 : _focusedEmployeeIndex - 1;
+        else if (e.Key == "Enter")
+        {
+            if (_focusedEmployeeIndex >= 0 && _focusedEmployeeIndex < _filteredEmployees.Count)
+                PickEmployee(_filteredEmployees[_focusedEmployeeIndex]);
+        }
+        else if (e.Key == "Escape")
+        {
+            _showEmployeeDropdown = false;
+            _focusedEmployeeIndex = -1;
+        }
+    }
+
+    private void OnEmployeeInputFocus()
+    {
+        _showEmployeeDropdown = true;
+        _focusedEmployeeIndex = -1;
+        FilterEmployees(_employeeSearch);
+    }
+
+    private async Task OnEmployeeInputBlur()
+    {
+        await Task.Delay(250);
+        _showEmployeeDropdown = false;
+
+        if (_f.ResponsibleEmployeeId > 0)
+        {
+            var current = _employees.FirstOrDefault(emp => emp.Id == _f.ResponsibleEmployeeId);
+            if (current != null) _employeeSearch = current.Label;
+        }
+    }
+
+    private void PickEmployee(Opt emp)
+    {
+        _f.ResponsibleEmployeeId = emp.Id;
+        _employeeSearch = emp.Label;
+        _showEmployeeDropdown = false;
+        _focusedEmployeeIndex = -1;
+        StateHasChanged();
+    }
+
+    private void ClearEmployeeSelection()
+    {
+        _f.ResponsibleEmployeeId = 0;
+        _employeeSearch = "";
+        _focusedEmployeeIndex = -1;
+        _filteredEmployees = _employees.Take(20).ToList();
+    }
+
+    private static string NormalizeArabic(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+
+        string[] diacritics = new[] { "َ", "ُ", "ِ", "ّ", "ً", "ٌ", "ٍ", "ْ", "ـ" };
+        foreach (var d in diacritics)
+            s = s.Replace(d, "");
+
+        return s
+            .Replace('أ', 'ا').Replace('إ', 'ا').Replace('آ', 'ا').Replace('ٱ', 'ا').Replace('ء', 'ا')
+            .Replace('ة', 'ه')
+            .Replace('ى', 'ي')
+            .Replace('ؤ', 'و')
+            .Replace('ئ', 'ي')
+            .Replace("  ", " ")
+            .ToLowerInvariant()
+            .Trim();
+    }
+
     private async Task SaveAsync()
     {
-        if (string.IsNullOrWhiteSpace(_f.Code))   { _ok = false; _msg = "اكتب كود الخزينة"; return; }
-        if (string.IsNullOrWhiteSpace(_f.NameAr)) { _ok = false; _msg = "اكتب اسم الخزينة"; return; }
-        if (_id is null && _f.OpeningBalance < 0) { _ok = false; _msg = "الرصيد الافتتاحي ماينفعش يكون سالب"; return; }
+        _triedSave = true;
+
+        if (string.IsNullOrWhiteSpace(_f.Code))   { _ok = false; _msg = "يرجى تحديد كود الخزينة التعريفي"; _activeTab = 0; return; }
+        if (string.IsNullOrWhiteSpace(_f.NameAr)) { _ok = false; _msg = "يرجى إدخال اسم الخزينة التعريفي"; _activeTab = 0; return; }
+        if (_id is null && _f.OpeningBalance < 0) { _ok = false; _msg = "الرصيد التأسيسي لا يمكن أن يكون قيمة سالبة"; _activeTab = 0; return; }
 
         _saving = true; _msg = null;
         try
@@ -200,7 +1023,7 @@
                 code                  = _f.Code.Trim().ToUpperInvariant(),
                 nameAr                = _f.NameAr.Trim(),
                 nameEn                = (string?)null,
-                responsibleEmployeeId = _f.ResponsibleEmployeeId == 0 ? (int?)null : _f.ResponsibleEmployeeId,
+                responsibleEmployeeId = _f.ResponsibleEmployeeId <= 0 ? (int?)null : _f.ResponsibleEmployeeId,
                 openingBalance        = _f.OpeningBalance,
                 isActive              = (bool?)null
             };
@@ -217,11 +1040,12 @@
                 Nav.NavigateTo("/treasury");
             }
         }
-        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        catch (Exception ex) { _ok = false; _msg = "فشل في إرسال السجل: " + ex.Message; }
         finally { _saving = false; }
     }
 
     private void GoBack() => Nav.NavigateTo("/treasury");
+    private void ToggleFab() => _fabOpen = !_fabOpen;
 
     private static string Money(decimal v)   => v.ToString("N2");
     private static decimal ParseDec(object? v) => decimal.TryParse(v?.ToString(), out var n) ? n : 0m;
@@ -234,6 +1058,6 @@
             var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
             return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
         }
-        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+        catch { return res.IsSuccessStatusCode ? "تم الحفظ بنجاح" : $"حدث خطأ تعذر بسببه الحفظ {(int)res.StatusCode}"; }
     }
 }

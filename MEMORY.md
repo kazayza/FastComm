@@ -1,5 +1,6 @@
 # 🧠 FastCom — ملف الذاكرة
 
+> **آخر تحديث: 2026-09-27 — جلسة FAB شاشة العميل: إصلاح تنسيق زر الإجراءات العائم في `CustomerForm.razor` (إضافة CSS ناقص `glow-fab-*` + تمييز primary/danger) ثم توحيد لونه للأزرق `#0B56DF` بهوية البرنامج. ⚠️ الـ Build لم يُتحقق منه — التيرمنال كان مشغولًا بعملية `dotnet run` للسيرفر.**
 > **آخر تحديث: 2026-09-08 — إصلاح الـ Git (كل الشغل اتحفظ في 5 Commits منطقية) + إنشاء `AGENT-MEMORY.md` + `docs/REMEDIATION-PLAN.md` + `docs/TOOLKIT-SKILLS.md` + `.gitattributes`. البناء Debug النهائي: 0 أخطاء / 0 تحذيرات.**
 > **آخر تحديث: 2026-09-06 (مساءً)** — خلصنا Steps 4→11 + لوحة المؤشرات. فاضل التقارير + البحث + الإعدادات.
 > **ده ملف الذاكرة الرئيسي. اقرأه الأول قبل أي حاجة.**
@@ -693,6 +694,233 @@ Multi-tenancy · Load balancing/Redis · دفتر الأستاذ في MVP · ا�
 
 ---
 
+## 20) ✅ 2026-09-27 — إصلاح تنسيق FAB شاشة العميل + توحيده للأزرق
+
+**الملف الوحيد:** `src/FastCom.Client/Pages/CustomerForm.razor` (+ تحديث `MEMORY.md`).
+
+**التشخيص:** أسفل الشاشة كان يظهر زرّان بتنسيق غلط (`حفظ بيانات العميل` + `إلغاء والعودة للدليل`) — السبب أن ماركب `glow-fab-*` كان موجودًا من غير أي CSS (`glow-fab-*` = صفر تعريف في الملف)، فظهر بتنسيق المتصفح الافتراضي. القرار: **تعديل التصميم وليس حذف الـ FAB** — بصلاحية الشاشة دي فقط.
+
+### اللى اتعمل (خطوتان)
+
+1. **إضافة بلوك CSS `glow-fab-*` كامل (~80 سطر):** زر رئيسي دائري 60px + قائمة بيضاء فوقه (حفظ مميزة + إلغاء رمادية) + `align-items: flex-end` لإصلاح RTL (نفس درس `Home.razor`) + إخفاء افتراضي وظهور عند `is-open` + `scrim` + دوران 45° + حلقات نبض + دعم `print` و `prefers-reduced-motion` + إصلاح تعليق CSS متعدد السطور لصيغة Razor آمنة.
+2. **توحيد اللون للأزرق بهوية البرنامج:** الزر من `linear-gradient(#22c55e→#16a34a)` أخضر إلى `linear-gradient(#0B56DF→#08409f)` + الظل/الحلقات/الهالة/الأيقونة/تمييز الحفظ كلها `rgba(11,86,223) / #e8f1ff / #b0c8f5`. زر الهيرو `حفظ العميل` الأخضر **لم يُلمس**.
+
+### ⚠️ تحقق معلّق
+
+- التعديل CSS + classes فقط — لا منطق `@code` اتلمس.
+- **`dotnet build` لم يُنفذ** — التيرمنال كان مشغولًا بـ `dotnet run --project src/FastCom.Server` عند المستخدم. **لازم Build من جهته قبل الـ Push.**
+
+---
+
 *آخر تحديث: **2026-09-06** — Steps 11أ (مستندات · إشعارات · تسليم فواتير · طباعة) + 11ب (بوابة العميل) + 12ب (لوحة المؤشرات).*
 *الـ Build عدّى عند المستخدم بعد 4 جولات إصلاح أخطاء (CS0119 · CS0542 · RZ1010 · CS0102 · CS0019 · CS1503 · CS8602 · CS1061).*
 *الجاي: **`/reports`** ← إصلاح `GlobalSearch` ← `/settings` ← تحديث الملف ده.*
+
+---
+
+## 16) ✅ 2026-09-24 — تنظيف الواجهات + معيار الحقول
+
+**تم في هذه الجلسة (Build: 0 أخطاء / 0 تحذيرات):**
+
+1. **إصلاح تداخل `Home.razor`** — إلغاء `margin-top: -70px` (وعمل `-60px` على الموبايل) في `.home-content` داخل `home.css`؛ الكروت بقت تحت الهيرو بدل ما تغطي الـ KPIs. + توحيد شريط الهيرو: العنوان `26px`، الشبائح `border-radius: 20px` زي باقي الشاشات.
+2. **`Bookings.razor`** — حذف زرّي الهيدر المتكررين («حجز جديد» + «تحديث») لأنهم اتنقلوا لقائمة الزر العائم `fc-fab-container` (عنصر `fc-fab-menu` فيه «حجز جديد» + «تحديث البيانات» + سكريم `.bl-fab-scrim`).
+3. **`BookingForm.razor` Tab 3** — زر «إضافة حاوية (متبقي X)» بقى **جنب حقل ملاحظات الحاوية** (`.bk-notes-action-row`) بدل رأس القسم القديم؛ رأس «أرقام الحاويات الفعلية» ورسالة «مافيش حاويات» اتشالوا، والصفوف بتظهر فقط عند وجود `.Details` (`.bk-cc-detail-row` grid 6 أعمدة + زر حذف).
+4. **📝 معيار الحقول: `docs/FIELD-DESIGN.md`** — المرجع الموحّد لحقول الإدخال (`.form-field` / `.field-label` / `.field-input` — ارتفاع 42px، border `#d8e2f0`، focus أزرق `rgba(30,110,245,.10)`). النمط `.field-*` هو المعتمد؛ الأنماط القديمة `.fc-field-*` و `.svc-field-*` مرشحة للترحيل لاحقًا.
+5. **🐛 إصلاح موضع زر الإجراءات العائم في `Home.razor`** — `.glow-fab-wrap` كان فيه `flex-direction: column` **بدون** `align-items`، فقاعدة `flex-start` في سياق RTL كانت تثبّت الزر على الطرف الأيمن من صندوق القائمة (عند `x≈125px` بدل `left: 18px`) والقائمة تنحاز عنه. أُضيف `align-items: flex-end` مع تعليق موضّح، فصار مثبَّتًا في الركن السفلي الأيسر والقائمة داخل الشاشة.
+
+### ⚠️ ملاحظات بيئة (من نفس الجلسة)
+
+- البناء النهائي: **0 Warning / 0 Error**.
+- التحقق الحيّ بالـPlaywright تم على منفذ جديد (`127.0.0.1:5099`) فسقطت جلسة الدخول (نفس الـlocalStorage لا يُشارَك بين منافذ مختلفة) ولا يوجد حساب اختبار موثّق في المستودع — فالقياس الحيّ مؤجَّل للمستخدم.
+- **تحذير مهم للفحص البصري:** لقطات/قياسات الصفحة القديمة كانت تُقرأ من بناء قديم يقدّم كود `HEAD` لا من الملفات المعدَّلة. اعتمد على `git diff` + البناء بدل اعتقاد أن الصفحة تعكس التعديل.
+- الملفات المؤقتة (`final-build.log` · `dll-check.txt` · `build-check*.log` · `client-run.*` · `server-run.*`) اتمسحت بعد الفحص.
+
+
+---
+
+## 17) ✅ 2026-09-25 — شروط الدفع: إكمال إعادة التصميم + إصلاح 8 أخطاء بناء
+
+**الملف:** `src/FastCom.Client/Pages/PaymentTerms.razor` (بعد الإصلاح: 934 سطر · راوت `/master/paymentterms`).
+**البناء:** `dotnet build src/FastCom.Client/FastCom.Client.csproj` → **`0 Error(s)`** / 4 تحذيرات قديمة (`MUDBLAZOR.MUD0002` و `CS0169` في Containers · Trailers · SupplierPayments · NotificationForm — **مش من PaymentTerms**).
+
+### الأخطاء اللى كانت مكسّرة البناء (8 أخطاء · كلها من نفس الملف)
+
+| الخطأ | الموضع | السبب الحقيقي |
+|---|---|---|
+| `RZ9980: Unclosed tag 'div'` | 15,1 | `</div>` قافل `.pt-shell` كان مفقود (وكمان كتلة المودال كاملة) |
+| `RZ9980: Unclosed tag 'section'` | 18,5 | `</section>` بتاع الهيرو كان مفقود — الـKPIs جوه الهيرو (خلفيات `.pt-kpi` شفافة بيضاء) |
+| `CS1525: Invalid expression term ')'` | 122 · 126 · 130 · 190 | `@onclick="() => _filter = "all""` — تنصيص مزدوج متداخل جوه attribute مخلي Razor يقفل القيمة بدري |
+| `CS1002: ; expected` + `CS1513: } expected` | 190,76 | نفس السبب — الكتلة `{ _search = ...; _filter = "all"; }` بقت مقطوعة |
+
+### اللى اتعمل
+
+1. **التنصيص (السبب الجذري لأخطاء الـCS):** اتوحّد على نمط المستودع المقبول `@onclick='() => _filter = "all"'` — نفس اللى مستخدم في `Customers.razor` و `Bookings.razor`. **القاعدة: أي lambda فيها string جوّه attribute لازم الـattribute يبقى بعلامة تنصيص واحدة `'` ومايكونش `"`.**
+2. **قفل الوسوم:** اتضاف `</section>` بعد كروت الـKPIs + `</div>` قافل `.pt-shell`.
+3. **المودال:** اتبنى كامل بنفس لغة `Services.razor` → `.pt-modal-backdrop` (زوم/blur) + `.pt-modal-head` جريدنت `#0A1B3B → #16306B` + أيقونة create/edit + `.pt-modal-foot`، وبحقول `.field-*` المعتمدة (ارتفاع 42px · focus أزرق · نجمة `field-required`) + قفل حقل الكود عند `CodeLocked` (شرط مرتبط بعملاء) + شرائح المدد السريعة (`Presets` ← `SetPreset`) + رسالة خطأ تحت كل حقل عند `_tried` + معاينة `DaysLabel`.
+4. **CSS:** وسم `<style>` كان **مقطوع** (الـCSS كان نص حر جوه الماركب) — اتفتح/اتقفل صح، وقسم الـCSS الثاني (toolbar · search · filters · states · card · table · badges · buttons · modal) اللى كان **مفقود بالكامل** اتعاد كتابته ببادئة `pt-`. التعليقات جوه `<style>` اتحوّلت من `@* *@` إلى `/* */`، ومفاتيح الأنيميشن/الميديا بقت `@@keyframes` / `@@media`.
+5. **الحالة (`@code`):** اتضافت `SetPreset(int days)` (باقي الدوال كانت موجودة ومظبوطة على `TermItem` / `TermUpsert` من `MasterDataController`).
+
+### قيود لسه واقفة (لا تتجاوزها)
+
+- **مفيش `IsActive` ومفيش DELETE** في الـAPI → **مفيش toggle تنشيط ولا زر حذف** في الشاشة (وده مقصود، مش نساوة).
+- **`Code` مقفول عند التعديل لما `UsageCount > 0`** — نفس قيد السيرفر، والـUI بيوضّح السبب في `field-hint`.
+- **التحقق البصري الحيّ مؤجَّل:** مافيش حساب اختبار موثّق في المستودع، والـ`localStorage` مش بيتشارك بين المنافذ. التحقق المتاح = بناء نظيف + `git diff`.
+
+### ⚠️ درس متكرر: الحذر من التعديل الجزئي على ملفات `@code`/`<style>`
+
+الملف كان اتشوّه في الجلسة السابقة لأن **قطع كبيرة منه اتمسحت** (المودال + `</section>` + `</div>` + وسم `<style>` + قسم CSS كامل) من غير ما حد يقرا الـbuild log. **لو `RZ9980 Unclosed tag` ظهرت في ملف بلazor: دوّر على وسم الإغلاق المفقود في الآخر الأول، مش على الوسم المفتوح.** وكمان **اقرأ سجل البناء قبل ما تعتبر الشغل خلص**.
+
+---
+
+## 18) ✅ 2026-09-24 — شروط الدفع: هيرو + زر عائم بنمط شاشة الخدمات (المحاولة الأولى كانت غلط)
+
+**الملف:** `src/FastCom.Client/Pages/PaymentTerms.razor`.
+**البناء:** `FastCom.Client` ✅ **0 أخطاء من الملف** (التحذيرات القديمة بس: `MUD0002` ×3 في Containers/Trailers/SupplierPayments · `CS0169` في NotificationForm · `CS8602` في CustodiesController). أي `Build FAILED` بـ`MSB3027/MSB3021` سببه عملية `FastCom.Server` شغّالة وقافلة الـ`exe` (بيئة، مش كود).
+**🔴 المحاولة الأولى (مرفوضة):** اتعمل الهيرو بالنمط الأول (`fc-hero` › `fc-page-head` › `fc-head-actions` + `fc-kpis-glass`) والزر جوه الهيرو — المستخدم رفض: «راجع صفحة الخدمات واعمل زيها، والزر عيبقى زر عائم». النسخة النهائية = **نمط شاشة الخدمات بالحرف + FAB**.
+
+### المشكلة
+الشاشة كانت بتستخدم **هيرو محلي** (`.pt-hero`) جوه حاوية محلية (`.pt-shell` بـ`max-width: 1320px`) — يعني:
+1. الهيرو شكله مختلف عن باقي الشاشات (كارت أزرق `#1e6ef5 → #0d47a1` بحواف دائرية جوه الصفحة، بدل شريط كحلي كامل العرض).
+2. عرض المحتوى 1320px بدل `--fc-page-w` (1560px) ⇒ الصفحة مش واخدة عرض الشاشة ومش على نفس خط باقي الصفحات.
+
+### 🔴 القاعدة المعمارية (احفظها لكل شاشة جديدة)
+- **عرض المحتوى متحكَّم فيه بمتغيّر واحد:** `--fc-page-w: 1560px` في `app.css:12`.
+  - الجسم: `.fc-page { max-width: var(--fc-page-w); margin-inline: auto; width: 100% }` — `app.css:976`.
+  - الهيرو: `.fc-hero-inner { max-width: var(--fc-page-w); margin-inline: auto }` — `app.css:1152`.
+  - **ممنوع `max-width` محلي للصفحة** — لو الهيرو والجسم ماخدوش نفس القيمة، النص بيخرج عن الخط.
+- **الهيرو الموحّد (النمط الأغلب — مستخدم في 35+ شاشة):** مثال حيّ `Trailers.razor:12-43` و `Vehicles.razor:11-45`:
+  ```razor
+  <div class="fc-hero">
+      <div class="fc-hero-inner">
+          <div class="fc-page-head">
+              <div>
+                  <div class="fc-crumb">البيانات الأساسية · XXX</div>
+                  <h1 class="fc-hero-title">XXX</h1>
+                  <p class="fc-hero-sub">وصف مختصر</p>
+              </div>
+              <div class="fc-head-actions">
+                  <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="LoadAsync" Style="color:#9FB4CC" />
+                  @if (CanManage) { <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAdd">XXX جديد</MudButton> }
+              </div>
+          </div>
+          <div class="fc-kpis fc-kpis-glass">
+              <div class="fc-kpi">
+                  <div class="fc-kpi-ic fc-kpi-blue"><svg …/></div>
+                  <div><div class="fc-kpi-num">@n</div><div class="fc-kpi-lb">العنوان</div></div>
+              </div>
+          </div>
+      </div>
+  </div>
+  <div class="fc-page"> … الجسم … </div>
+  ```
+  - كلاسات الهيرو والـKPIs كلها **عامة في `app.css`** (`fc-crumb` 978 · `fc-page-head` 979 · `fc-hero-title` 1154 · `fc-hero-sub` 1155 · `fc-head-actions` 982 · `fc-kpis`/`fc-kpi`/`fc-kpi-ic`/`fc-kpi-blue|green|red|gold`/`fc-kpi-num`/`fc-kpi-lb` 985-999 · `fc-kpis-glass` 1162-1171) ⇒ **مفيش CSS محلي مطلوب**.
+  - ألوان الـKPI الجاهزة: `fc-kpi-blue` · `fc-kpi-green` · `fc-kpi-gold` · `fc-kpi-red` (مش `slate` ولا أي لون خارج القائمة).
+  - `fc-kpis-glass` بيستخدم `flex: 1 1 190px` فيستوعب 3 أو 4 أو 5 كروت، وعند `900px` بيتحوّل لعمودين (`app.css:1124-1128`).
+- **النمط التاني — «نمط القوائم/المستندات» (10 شاشات): `hero-wrapper` + `fc-hero fc-hero-slim` + `doc-hero-row` (`.doc-hero-left` + `.doc-hero-right`/`.doc-hero-chip`) + `doc-kpis-row`/`doc-kpi` + `.doc-body` + **FAB عائم للإنشاء** (`Services` · `PaymentMethods` · `Documents` · `PriceLists` · `TripTypes` · `Audit` · **`PaymentTerms`**).
+  - **⚠️ التصحيح الأهم:** شاشات عيلة `Services`/`PaymentMethods` (شروط الدفع · طرق الدفع · الخدمات · قوائم الأسعار) بتاخد **النمط التاني**، والإنشاء فيها **دايمًا FAB** — مفيش زر «إضافة» جوه الهيرو.
+  - **قبل ما تقرر نمط أي شاشة: قلّد الشاشة الشقيقة اللي المستخدم بيشاور عليها بالحرف** (نفس الأب المفتوح · نفس الكلاسات · نفس الـ`<style>` المحلي · نفس الـ`@code`). ممنوع تختار نمط «الأكثر انتشارًا» من عندك — ده اللي خلّى المحاولة الأولى مرفوضة.
+  - التفاصيل الكاملة (ماركب + CSS + نقاط التجاوب + FAB): **`docs/FIELD-DESIGN.md` قسم 7** — ومثال حيّ: `Services.razor`.
+
+### اللى اتعمل بالظبط
+
+> ⚠️ **الجدول ده كان المرحلة الأولى (نمط `fc-page-head` + زر جوه الهيرو) واتلغى** — النسخة النهائية تحت.
+
+| قبل | بعد |
+|---|---|
+| هوية الهيرو: `fc-crumb` مكتوب يدويًا بـ`pt-` | `fc-crumb` العام (لون ذهبي `--fc-gold`) |
+| `.pt-hero` كارت أزرق داخل الصفحة | `.fc-hero` شريط كحلي كامل العرض + جريد خلفي (app.css) |
+| `.pt-kpi` شفاف أبيض جوه الهيرو | `.fc-kpi` زجاجي معياري + أيقونات `fc-kpi-blue/green/gold/red` |
+| `.pt-shell` بـ`max-width: 1320px` | `.fc-page` بـ`--fc-page-w` = 1560px (نفس عرض الهيرو) |
+| `pt-hero-btn` مخصص | `MudButton` + `MudIconButton` جوه `fc-head-actions` (زي `Trailers`/`Vehicles`) |
+| `@media 1024px` للـKPIs | قواعد الـKPIs العامة (900px) + `900px` للـtoolbar/البحث (زي `PaymentMethods:1475`) |
+| شريحة تاريخ `pt-chip` | اتشالت — الهيرو المعياري مافيهوش شريحة تاريخ (موجودة بس في نمط `doc-hero-chip`) |
+
+### ✅ النسخة النهائية (نمط `Services` بالحرف + FAB)
+
+| قبل | بعد |
+|---|---|
+| `.pt-shell` (1320px) | `.hero-wrapper` + `.doc-body` (الاتنين `max-width: var(--fc-page-w, 1440px)`) |
+| `.pt-hero` كارت أزرق محلي | `.hero-wrapper` › `.fc-hero.fc-hero-slim` › `.fc-hero-inner` › `.doc-hero-row` |
+| `pt-crumb` يدوي | `.doc-hero-crumb` + أيقونة SVG 12px (زي الخدمات) |
+| شريحة تاريخ `pt-chip` (اتشالت ثم رجعت) | `.doc-hero-chip` — رجعت بنفس شكل الخدمات (`rgba(255,255,255,.08)` + حدود `.14`) |
+| `.pt-kpis` / `.pt-kpi` | `.doc-kpis-row` (`repeat(4, 1fr)`) + `.doc-kpi` ×4 (blue · green · amber · red) |
+| أيقونات KPI بـSVG يدوي | `<MudIcon Icon="@Icons.Material.Filled.X" Size="Size.Small"/>` جوه `.doc-kpi-icon` |
+| «شرط دفع جديد» + «تحديث» جوه الهيرو | **اتشالوا** — الهيرو بلا أي زر، وكل الإجراءات في **الـFAB** |
+| — (جديد) | `.fc-fab-scrim` + `.fc-fab-container` › `.fc-fab-menu` («شرط دفع جديد» · «تحديث البيانات») + `.fc-fab-main.fc-glow-gold` (60px · نبضة برتقالية · دوران 135°) |
+| `@media 1024px` | `900px` (KPIs عمودين) · `680px` (هيرو/جسم/FAB) · `480px` (KPIs) |
+
+- **اتشال من CSS:** `.pt-shell` · `.pt-hero*` · `.pt-chip` · `.pt-kpis` · `.pt-kpi*` · `.pt-ic-*` (45 سطر) — واستُبدلوا بـ**قسم جديد (~300 سطر)** فيه `hero-wrapper` · `doc-body` · `doc-hero-*` · `doc-kpi*` · `fc-fab-*` · `fc-glow-gold` **منسوخين من `Services.razor` بالحرف**.
+- **مهم:** كلاسات `doc-*` و`fc-glow-gold` **مش** في `app.css` ⇒ لازم تتنسخ محليًا جوه `<style>`. أما `fc-fab-*` فموجودة في `app.css:2262-2358` (نسخة 56px بسيطة) بس **النسخة المحلية بتغلبها** (الـ`<style>` بتاع الصفحة بييجي بعد `app.css`) ⇒ انسخ المحلية زي `Services`/`PaymentMethods`.
+- **`@code` اتزاد:** `_fabOpen` + `ToggleFab()` + `HandleReload()` (يقفل القايمة → `LoadAsync` → `Snackbar.Add("تم تحديث البيانات")`) + `HandleOpenCreate()` (يقفل → `Task.Delay(180)` → `OpenAdd()`).
+- **اللي اتساب زي ما هو:** الـtoolbar · البحث · الفلاتر · الحالات · الجدول · المودال · معيار الحقول `.field-*` — كله ببادئة `pt-` وزي ما هو.
+- **اتأكد إن:** توازن الوسوم، صفر كلاسات قديمة (`pt-shell|pt-hero|pt-kpis|pt-kpi|pt-ic-|pt-chip|pt-crumb`)، والبناء 0 أخطاء من `PaymentTerms.razor`.
+
+### ⚠️ الدرس (محدَّث بعد التصحيح)
+
+1. **مش «الهيرو المعياري» — «هيرو الشاشة الشقيقة»:** قبل أي شاشة حدّد عيلتها: عيلة `Services`/`PaymentMethods` (`doc-hero` + FAB) ولا عيلة `Trailers`/`Vehicles` (`fc-page-head` + أزرار في الهيرو). لو مفيش يقين **اسأل المستخدم** — ما تختارش لوحدك (المحاولة الأولى اتلغت عشان كده).
+2. **زر الإنشاء في العيلة الأولى = FAB عائم** (أسفل-يسار · `fc-glow-gold`) — مش زر جوه الهيرو ولا في الـtoolbar.
+3. **مش كل الأنماط «عامة»:** `fc-hero`/`fc-page`/`fc-kpis` عامة في `app.css`، لكن `hero-wrapper` · `doc-body` · `doc-hero-*` · `doc-kpi*` · `fc-glow-gold` **محلية ولازم تنسخها** من الشاشة المرجعية.
+4. **عرض واحد للصفحة:** `--fc-page-w` — الهيرو (`.hero-wrapper`) والجسم (`.doc-body`) بنفس القيمة، ومفيش `max-width` محلي من عندك.
+
+
+## 19) ✅ 2026-09-24 — الفواتير: ترحيل من النمط التاني للنمط الأول (هيرو `doc-hero` + FAB)
+
+**الملف:** `src/FastCom.Client/Pages/Invoices.razor` (3284 سطر بعد التغيير).
+**البناء:** `FastCom.Client` ✅ **Build succeeded — 0 Warning(s) · 0 Error(s)**.
+
+### اللي اتغير (بالظبط)
+
+| قبل | بعد |
+|---|---|
+| `fc-hero` › `fc-page-head` › `fc-crumb` + `fc-head-actions` (زر «فاتورة جديدة» + تحديث **جوه** الهيرو) | `.hero-wrapper` › `.fc-hero.fc-hero-slim` › `.fc-hero-inner` › `.doc-hero-row` (`.doc-hero-left` + `.doc-hero-right`) — **الهيرو بلا أي زر** |
+| شريحة/شريحتان في `doc-hero-right` | `.doc-hero-chip` تاريخ اليوم + `.doc-hero-chip.doc-chip-warn` «متأخرة: N» **شرطية** على `Overdue.Any()` |
+| `fc-kpis fc-kpis-glass` + `fc-kpi` ×4 | `.doc-kpis-row` + `.doc-kpi doc-kpi-{blue,red,amber,green}` ×4 (MudIcon) — **موجودة بس جوه `@if (CanView)`** |
+| جسم الصفحة `.inv-body` (كان `max-width: 1400px` محلي) | `.doc-body` + اتفضّى كله من CSS القديم (0 occurrence) |
+| مفيش FAB | `@if (CanCreate && !_loading)` › `.fc-fab-scrim` (لو مفتوح) + `.fc-fab-container` › `.fc-fab-menu` («فاتورة جديدة» → `HandleOpenCreate` · «تحديث البيانات» → `HandleReload`) + `.fc-fab-main.fc-glow-gold` — **مكانه بعد `</div>` بتاع `.doc-body` وقبل `@* MODAL *@`** |
+| — | `@code`: `bool _fabOpen` · `ToggleFab()` · `HandleReload()` (يقفل → `Reload()` → `Snackbar.Add("تم تحديث البيانات", Severity.Success)`) · `HandleOpenCreate()` (يقفل → `Task.Delay(180)` → `New()`) — **`New()`/`Reload()` هما الإجراءات القديمة بتاعة الشاشة، متغيّرت** |
+| `<style>` بالكلاسات القديمة | قسم CSS جديد منسوخ من `PaymentTerms.razor`/`Services.razor`: `.hero-wrapper` · `.doc-body` · `.doc-hero-*` (+`.doc-chip-warn`) · `.doc-kpis-row` · `.doc-kpi*` · `fc-fab-*` المحلية + `.fc-glow-gold` مع `@@keyframes fc-gold-pulse`/`fc-ring-expand` · `@@media` عند **900 / 680 / 480px** |
+
+### اللي اتساب زي ما هو (مهم)
+
+الـtoolbar · البحث · الفلاتر · `inv-card` الجدول · مودال التفاصيل (`_detailOpen`) · مودال الإنشاء/التعديل (`_modalOpen`) · مودال الحذف · معيار الحقول `.field-*` · كل دوال `@code` القديمة (`LoadAsync`/`New`/`Save`/`Delete`/`Close`) — **كله بالبادئة `inv-` وملمسوش**. كمان `.inv-state-box` اتسابت زي ما هي.
+
+### التحقق
+
+- `inv-body` = 0 · `fc-kpis` = 0 · `fc-kpi-ic` = 0 · `fc-crumb|fc-page-head|fc-head-actions` = 0 · `doc-kpi` = 51 · `<div` 198 = `</div>` 198 (موازنة) · `hero-wrapper` 8 · `doc-body` 6 · `fc-fab-container` 4.
+- البناء: **Build succeeded · 0 Warning(s) · 0 Error(s)** (`dotnet build src\FastCom.Client\FastCom.Client.csproj`).
+
+### ⚠️ الدرس
+
+1. **قبل ما تعدّل شاشة: اقرأ الشقيقة المرجعية (`Services.razor`) أول حاجة** — الماركب بالترتيب الإلزامي (wrapper → hero → inner → row → KPIs) بيتكرر حرفًا، والـCSS المحلي **لازم يتنسخ مش يُكتب من الذاكرة**.
+2. **الـ`@code` ما يتغيّرش** — الشاشة ليها إجراءات جاهزة (`New`/`Reload`)؛ الـFAB handlers بتلفّها مع إغلاق القايمة و`Task.Delay(180)` بس. ممنوع تسمّي دوال جديدة من غير سبب.
+3. **`CanCreate` مش `CanManage`** — الفارق في اسم صلاحية الشاشة؛ شروط §7.2 بتقول «صلاحية الإنشاء بتاعة الشاشة».
+4. **`@@media`/`@@keyframes`** جوه `<style>` بتاع `.razor`.
+5. **الموازنة بتتأكد بالأرقام مش بالعين:** عدّ `<div` مقابل `</div>` قبل ما تعتبر خلص.
+
+---
+
+## 20) تقسيم الفواتير: قائمة + صفحة إنشاء/تعديل مستقلة (2026-09-26)
+
+**الطلب:** قسّم شاشة الفواتير لشاشتين (قائمة + إضافة/تعديل) بدل الدايلوج · وارجعلنا بحث عن العميل جوه الحقل.
+
+| قبل | بعد |
+|---|---|
+| الإنشاء/التعديل مودال جوّه `Invoices.razor` (`_modalOpen` — ~400 سطر) | **صفحة جديدة `InvoiceForm.razor`** — routes `/invoices/new` + `/invoices/new/{Id:long}` (نفس عيلة الـ15 `*Form`، الأشبه `SupplierInvoiceForm.razor`) |
+| FAB «فاتورة جديدة» → `New()` يفتح المودال | FAB → `Nav.NavigateTo("/invoices/new")` |
+| زر الصف «تعديل» → `Edit(i)` | → `Nav.NavigateTo($"/invoices/new/{i.InvoiceId}")` |
+| `<select>` العميل بدون بحث | **حقل بحث `field-input` + `.field-dropdown`** (منسوخ من `BookingForm.razor:277-314` + `NormalizeArabic` — بحث بالاسم أو الكود) |
+| هيرو المودال | `fc-hero › fc-page-head` (رجوع/حفظ) › `.fc-page › .fc-overlap › .fc-card` — قلب `SupplierInvoiceForm` بالحرف |
+
+**اللي اتشال من `Invoices.razor`** (22,491 حرف ماركب + 4,652 حرف `@code`): بلوك المودال بالكامل · `New`/`Edit`/`Close`/`OnCustomerChanged`/`OnPickOp`/`OnManualService`/`AddManual`/`OnLineTax`/`SaveAsync` · `_modalOpen`/`_editId`/`_f`/`_manual`/`_pickOp`/`_ops`/`_services` · كلاسات `Form`/`Svc`/`OpRef` + `ToForm()` + `FormTotal` + `ParseInt`.
+
+**اللي فضل زي ما هو:** مودال التفاصيل (`_detailOpen`) · الإشعار دائن (`_creditOpen`) · التسليم · الحذف · القائمة/الفلاتر/`inv-card` · معيار `.field-*` · `LoadAsync`/`Reload`/`Delete`/`SetStatus` — ومودال الإشعار دائن لسه بيستخدم `ParseDec` (علشان كده اتحتفظ بيه، و`CloseCredit`/`CloseSend`/`CloseDetail` سليمة).
+
+**`InvoiceForm.razor` (~800 سطر):**
+- صلاحيات: `CanSave = _id is null ? INVOICE.CREATE : INVOICE.EDIT` · `Locked = _status is not ("Draft" or "Approved")` (نفس شرط زر الصف) — وقت `Locked`: تنبيه + حقول `disabled` + زر «حفظ» مختفي.
+- endpoints: `api/invoices/{customers|services|tax-rates|billable-operations|operations/{id}/lines}` + GET/POST/PUT `api/invoices`.
+- CSS محلي `<style>`: نواة `.field-*` منسوخة من `BookingForm` (label/input/select/prefix/dropdown/hint/err) + `.invf-*` صغيرون — باقي الصفحة كله كلاسات **عام** في `app.css` (`fc-hero`/`fc-page`/`fc-overlap`/`fc-card`/`fc-form-grid`/`fc-stats`/`fc-table`).
+
+**التحقق:** `InvoiceForm` div 58/58 · `Invoices` div 155/155 · صفر بواقي (`_modalOpen`/`SaveAsync`/`Edit(i)`/`@onclick="New"`/`FormTotal`/`OpRef`/`ToForm` كلهم 0) · **Build succeeded · 0 Error(s)** (التحذيرات الأربعة كلها قديمة في ملفات تانية).
+
+**⚠️ الدرس:** الشاشة اتكتبت على أجزاء بعلامة `@*__APPEND__*@` — والجزء المتبقي من أول chunk (التواريخ + الملاحظات + إغلاق `.fc-form-grid`) **اتسرّب**، والبناء اكتشفه بـ`RZ9980: Unclosed tag 'div'`. **بعد أي تقسيم/إضافة جزئية: فعّل فحص الموازنة `<div`/`</div>` + بناء كامل فورًا.**
+

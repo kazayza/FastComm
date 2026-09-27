@@ -8,119 +8,825 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
-<PageTitle>@(_id is null ? "حاوية جديدة" : "تعديل حاوية") — فاست كوم</PageTitle>
+<PageTitle>@(_id is null ? "تسجيل حاوية جديدة" : $"تعديل الحاوية {ContainerNumber}") — فاست كوم</PageTitle>
 
-<div class="fc-hero">
-    <div class="fc-hero-inner">
-        <div class="fc-page-head">
-            <div>
-                <div class="fc-crumb">البيانات الأساسية · الحاويات</div>
-                <h1 class="fc-hero-title">@(_id is null ? "حاوية جديدة" : $"تعديل {ContainerNumber}")</h1>
-                <p class="fc-hero-sub">الرقم بالشكل الدولي: 4 حروف + 7 أرقام — زي <b>MSCU1234567</b></p>
+
+@* ═══════════════════════════════════════════
+   HERO SECTION
+═══════════════════════════════════════════ *@
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
+
+            <div class="bk-hero-row">
+                <div class="bk-hero-left">
+                    <div class="bk-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
+                        <span>البيانات الأساسية · الحاويات والأصول</span>
+                    </div>
+                    <h1 class="fc-hero-title fc-hero-title-slim">
+                        @if (_id is null)
+                        {
+                            <span>تسجيل حاوية جديدة</span>
+                        }
+                        else
+                        {
+                            <span>@ContainerNumber</span>
+                        }
+                    </h1>
+                    <span class="bk-hero-sub">
+                        @(_id is null 
+                            ? "إدخال حاوية جديدة بالمواصفات الدولية (ISO 6346) — 4 حروف + 7 أرقام" 
+                            : "تعديل بيانات الحاوية التشغيلية والملكية والوضع الجاري")
+                    </span>
+                </div>
+
+                <div class="bk-hero-right">
+                    <span class="bk-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                </div>
             </div>
-            <div class="fc-head-actions">
-                <MudButton Variant="Variant.Outlined" OnClick="GoBack" Style="color:#9FB4CC">رجوع</MudButton>
-                @if (CanSave)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving"
-                               StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="SaveAsync">حفظ</MudButton>
-                }
-            </div>
+
         </div>
+
+        @* ── ملخص الحاوية (يظهر في التعديل فقط) ── *@
+        @if (_id is not null && !_loading)
+        {
+            <div class="bk-hero-summary">
+
+                <div class="bk-sum-item">
+                    <div class="bk-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                        </svg>
+                    </div>
+                    <div class="bk-sum-text">
+                        <div class="bk-sum-label">رقم الحاوية</div>
+                        <div class="bk-sum-val font-mono">@_f.ContainerNumber</div>
+                    </div>
+                </div>
+
+                <div class="bk-sum-div" aria-hidden="true"></div>
+
+                <div class="bk-sum-item">
+                    <div class="bk-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                        </svg>
+                    </div>
+                    <div class="bk-sum-text">
+                        <div class="bk-sum-label">نوع الحاوية</div>
+                        <div class="bk-sum-val">@(_types.FirstOrDefault(t => t.Id == _f.ContainerTypeId)?.Label ?? "—")</div>
+                    </div>
+                </div>
+
+                <div class="bk-sum-div" aria-hidden="true"></div>
+
+                <div class="bk-sum-item">
+                    <div class="bk-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M6.5 6.5h11l1 3-1 3v6a1 1 0 01-1 1h-10a1 1 0 01-1-1v-6l-1-3z"/>
+                            <path d="M9 6.5V4a1 1 0 011-1h4a1 1 0 011 1v2.5"/>
+                        </svg>
+                    </div>
+                    <div class="bk-sum-text">
+                        <div class="bk-sum-label">الوزن الأقصى</div>
+                        <div class="bk-sum-val">@(_f.WeightKg.HasValue ? $"{_f.WeightKg:N0} كجم" : "—")</div>
+                    </div>
+                </div>
+
+                <div class="bk-sum-div" aria-hidden="true"></div>
+
+                <div class="bk-sum-item">
+                    <div class="bk-sum-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 6v6l4 2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="bk-sum-text">
+                        <div class="bk-sum-label">الوضع الحالي</div>
+                        <div class="bk-sum-val total-highlight">@StatusAr(_f.CurrentStatus)</div>
+                    </div>
+                </div>
+
+            </div>
+        }
+
     </div>
 </div>
 
-<div class="fc-page">
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="bk-body">
+
     @if (!CanSave)
     {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية إدارة الحاويات.</MudAlert>
+        <div class="bk-state-box">
+            <div class="bk-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليست لديك الصلاحية الأمنية الكافية لإدارة وتسجيل الحاويات في النظام.</p>
+            <button class="bk-state-back" @onclick="GoBack">العودة للخلف</button>
+        </div>
     }
     else if (_loading)
     {
-        <div class="fc-loading"><MudProgressCircular Indeterminate="true" Color="Color.Primary" /></div>
+        <div class="bk-loading-wrap">
+            <div class="bk-spinner" aria-label="جاري التحميل"></div>
+            <div class="bk-loading-text">جاري تحميل بيانات الحاوية...</div>
+        </div>
     }
     else
     {
-        <div class="fc-overlap"><div class="fc-card">
+        @if (_msg is not null)
+        {
+            <div class="bk-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                <div aria-hidden="true">
+                    @if (_ok)
+                    {
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                            <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                        </svg>
+                    }
+                </div>
+                <span>@_msg</span>
+                <button class="banner-close" @onclick="() => _msg = null">✕</button>
+            </div>
+        }
 
-            @if (_msg is not null)
+        <div class="bk-tabs-wrap">
+
+            <MudTabs Elevation="0"
+                     Rounded="false"
+                     ApplyEffectsToContainer="true"
+                     PanelClass="bk-tab-panel"
+                     @bind-ActivePanelIndex="_activeTab"
+                     Class="bk-mud-tabs">
+
+                @* TAB 1 - التعريف الأساسي *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="btab-label">
+                            <div class="btab-icon btab-blue" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                                    <line x1="8" y1="21" x2="16" y2="21"/>
+                                </svg>
+                            </div>
+                            <span>التعريف الأساسي</span>
+                            @if (_triedSave && (string.IsNullOrWhiteSpace(_f.ContainerNumber) || _f.ContainerTypeId <= 0))
+                            {
+                                <span class="btab-err-dot" aria-label="يوجد خطأ"></span>
+                            }
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="tab-section">
+
+                            <div class="tab-section-head">
+                                <div class="tab-section-icon blue" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                                        <line x1="8" y1="21" x2="16" y2="21"/>
+                                        <line x1="12" y1="17" x2="12" y2="21"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="tab-section-title">التعريف الدولي والمواصفات الفنية</div>
+                                    <div class="tab-section-sub">رقم الحاوية بالمعيار الدولي (ISO 6346)، النوع الفني، والوزن الأقصى</div>
+                                </div>
+                            </div>
+
+                            <div class="bk-form-grid">
+
+                                @* رقم الحاوية *@
+                                <div class="form-field">
+                                    <label class="field-label" for="containerNumber">
+                                        رقم الحاوية الدولي
+                                        <span class="field-required" aria-label="مطلوب">*</span>
+                                    </label>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                            </svg>
+                                        </span>
+                                        <input id="containerNumber"
+                                               class="field-input with-prefix font-mono @(string.IsNullOrWhiteSpace(_f.ContainerNumber) && _triedSave ? "field-error" : "")"
+                                               @bind="_f.ContainerNumber"
+                                               maxlength="11"
+                                               dir="ltr"
+                                               style="text-align:right"
+                                               placeholder="MSCU1234567" />
+                                        @if (!string.IsNullOrWhiteSpace(_f.ContainerNumber))
+                                        {
+                                            <button type="button" class="field-check-badge @(NumberOk ? "check-valid" : "check-warning")" title="@(NumberOk ? "الرقم مطابق للمعيار الدولي" : "الشكل غير مطابق للمعيار الدولي")">
+                                                @if (NumberOk)
+                                                {
+                                                    <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3">
+                                                        <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                }
+                                                else
+                                                {
+                                                    <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3">
+                                                        <path d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                                                    </svg>
+                                                }
+                                            </button>
+                                        }
+                                    </div>
+                                    <div class="field-hint @(NumberOk ? "hint-valid" : "")">
+                                        @if (NumberOk)
+                                        {
+                                            <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                <path d="M13.5 4.5L6 12l-3.5-3.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                            <span>مطابق للمعيار الدولي — 4 حروف كبيرة + 7 أرقام</span>
+                                        }
+                                        else
+                                        {
+                                            <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                                <circle cx="8" cy="8" r="6"/>
+                                                <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                            </svg>
+                                            <span>يجب أن يتكون من 4 حروف كبيرة إنجليزية + 7 أرقام (مثال: MSCU1234567)</span>
+                                        }
+                                    </div>
+                                </div>
+
+                                @* نوع الحاوية *@
+                                <div class="form-field">
+                                    <label class="field-label" for="containerType">
+                                        نوع الحاوية
+                                        <span class="field-required" aria-label="مطلوب">*</span>
+                                    </label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                        </svg>
+                                        <select id="containerType"
+                                                class="field-input field-select @(_f.ContainerTypeId <= 0 && _triedSave ? "field-error" : "")"
+                                                @bind="_f.ContainerTypeId">
+                                            <option value="0">— اختر النوع —</option>
+                                            @foreach (var t in _types)
+                                            {
+                                                <option value="@t.Id">@t.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
+                                @* الوزن *@
+                                <div class="form-field">
+                                    <label class="field-label" for="weight">الوزن الأقصى المسموح</label>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix">كجم</span>
+                                        <input id="weight" type="number" min="0" step="1"
+                                               class="field-input with-prefix"
+                                               value="@_f.WeightKg"
+                                               placeholder="30000"
+                                               @onchange="e => _f.WeightKg = ParseDec(e.Value)" />
+                                    </div>
+                                    <div class="field-hint">
+                                        <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                            <circle cx="8" cy="8" r="6"/>
+                                            <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                        </svg>
+                                        الوزن الأقصى المسموح للحاوية بحسب المواصفات الفنية للنوع
+                                    </div>
+                                </div>
+
+                            </div>
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+                @* TAB 2 - الملكية والحالة *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="btab-label">
+                            <div class="btab-icon btab-green" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                </svg>
+                            </div>
+                            <span>الملكية والوضع التشغيلي</span>
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+                        <div class="tab-section">
+
+                            <div class="tab-section-head">
+                                <div class="tab-section-icon green" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                        <circle cx="12" cy="7" r="4"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="tab-section-title">تحديد التبعية والحالة الجارية للحاوية</div>
+                                    <div class="tab-section-sub">جهة الملكية وبيان المالك والوضع التشغيلي الحالي</div>
+                                </div>
+                            </div>
+
+                            <div class="bk-form-grid">
+
+                                @* جهة الملكية *@
+                                <div class="form-field">
+                                    <label class="field-label" for="ownerType">جهة الملكية</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                        </svg>
+                                        <select id="ownerType" class="field-input field-select" @bind="_f.OwnerType">
+                                            <option value="ShippingLine">🚢 خط ملاحي دولي</option>
+                                            <option value="Customer">👤 عميل خارجي</option>
+                                            <option value="Leased">📋 مستأجرة من مورد</option>
+                                            <option value="Company">🏢 ملكية داخلية للشركة</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                @* اسم المالك *@
+                                <div class="form-field">
+                                    <label class="field-label" for="ownerName">اسم الجهة المالكة</label>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                                <path d="M14 2v6h6"/>
+                                            </svg>
+                                        </span>
+                                        <input id="ownerName"
+                                               class="field-input with-prefix"
+                                               @bind="_f.OwnerName"
+                                               maxlength="150"
+                                               placeholder="MSC، Maersk، شركة النقل الفلانية..." />
+                                    </div>
+                                    <div class="field-hint">
+                                        <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                            <circle cx="8" cy="8" r="6"/>
+                                            <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                        </svg>
+                                        اسم الخط الملاحي أو العميل أو المورد المالك للحاوية
+                                    </div>
+                                </div>
+
+                                @* الحالة *@
+                                <div class="form-field">
+                                    <label class="field-label" for="status">الوضع التشغيلي الحالي</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                            <circle cx="12" cy="12" r="10"/>
+                                            <path d="M12 6v6l4 2" stroke-linecap="round"/>
+                                        </svg>
+                                        <select id="status" class="field-input field-select" @bind="_f.CurrentStatus">
+                                            <option value="Available">✅ متاحة للتشغيل</option>
+                                            <option value="InTransit">🚛 في الطريق</option>
+                                            <option value="AtPort">⚓ في الميناء</option>
+                                            <option value="AtDepot">🏭 في المخزن</option>
+                                            <option value="Delivered">📦 تم التسليم</option>
+                                            <option value="Returned">↩️ مرتجعة</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            @* ملاحظات *@
+                            <div class="tab-section-sub-head">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                                </svg>
+                                ملاحظات إدارية إضافية
+                            </div>
+
+                            <div class="form-field">
+                                <textarea class="field-input field-textarea"
+                                          rows="3"
+                                          maxlength="500"
+                                          placeholder="أي بيان فني أو ملاحظات إدارية خاصة بحالة الحاوية أو وضعها الحالي..."
+                                          @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
+                            </div>
+
+                        </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+            </MudTabs>
+        </div>
+
+
+        @* ── Bottom Actions ── *@
+        <div class="bk-bottom-actions">
+
+            <button type="button" class="bk-bottom-back" @onclick="GoBack">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                رجوع للقائمة
+            </button>
+
+            @if (CanSave)
             {
-                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined" Class="mb-4">@_msg</MudAlert>
+                <div class="bk-bottom-right">
+                    @if (_activeTab == 0)
+                    {
+                        <button type="button" class="bk-next-btn" @onclick="() => _activeTab = 1">
+                            التالي: الملكية والحالة
+                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    }
+
+                    <button type="button" class="bk-bottom-save" @onclick="SaveAsync" disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="btn-spinner sm" aria-hidden="true"></span>
+                            <span>جاري الحفظ...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>@(_id is null ? "تسجيل الحاوية" : "حفظ التعديلات")</span>
+                        }
+                    </button>
+                </div>
             }
 
-            @* ══════════ 1. التعريف ══════════ *@
-            <div class="fc-panel-sub" style="margin-bottom:14px">التعريف</div>
-            <div class="fc-form-grid">
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">رقم الحاوية *</div>
-                    <input class="fc-sel fc-sel-lg" @bind="_f.ContainerNumber" maxlength="11" dir="ltr"
-                           placeholder="MSCU1234567" style="text-align:right" />
-                    <div class="fc-field-hint">4 حروف + 7 أرقام · @(NumberOk ? "الشكل صح ✓" : "لسه ناقص أو غلط")</div>
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">نوع الحاوية *</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.ContainerTypeId">
-                        @foreach (var t in _types) { <option value="@t.Id">@t.Label</option> }
-                    </select>
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">الوزن (كجم)</div>
-                    <input type="number" min="0" step="1" class="fc-sel fc-sel-lg" value="@_f.WeightKg"
-                           @onchange="e => _f.WeightKg = ParseDec(e.Value)" />
-                </div>
-            </div>
+        </div>
 
-            @* ══════════ 2. الملكية ══════════ *@
-            <div class="fc-panel-sub" style="margin:26px 0 14px">الملكية</div>
-            <div class="fc-form-grid">
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">جهة الملكية</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.OwnerType">
-                        <option value="ShippingLine">خط ملاحي</option>
-                        <option value="Customer">العميل</option>
-                        <option value="Leased">مستأجرة</option>
-                        <option value="Company">الشركة</option>
-                    </select>
-                </div>
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">اسم المالك</div>
-                    <input class="fc-sel fc-sel-lg" @bind="_f.OwnerName" maxlength="150" />
-                    <div class="fc-field-hint">اسم الخط الملاحي أو العميل</div>
-                </div>
-            </div>
-
-            @* ══════════ 3. الحالة ══════════ *@
-            <div class="fc-panel-sub" style="margin:26px 0 14px">الحالة</div>
-            <div class="fc-form-grid">
-                <div>
-                    <div class="fc-panel-sub" style="margin-bottom:6px">الحالة الحالية</div>
-                    <select class="fc-sel fc-sel-lg" @bind="_f.CurrentStatus">
-                        <option value="Available">متاحة</option>
-                        <option value="InTransit">في الطريق</option>
-                        <option value="AtPort">في الميناء</option>
-                        <option value="AtDepot">في المخزن</option>
-                        <option value="Delivered">تم التسليم</option>
-                        <option value="Returned">مرتجعة</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="fc-panel-sub" style="margin:26px 0 8px">ملاحظات</div>
-            <textarea class="fc-sel" rows="3" maxlength="500"
-                      @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
-
-            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:26px">
-                <MudButton Variant="Variant.Outlined" OnClick="GoBack">رجوع</MudButton>
-                @if (CanSave)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
-                               OnClick="SaveAsync">حفظ</MudButton>
-                }
-            </div>
-
-        </div></div>
     }
 </div>
+
+
+@* ── GLOW FAB ── *@
+@if (CanSave && !_loading)
+{
+    <div class="glow-fab-wrap @(_fabOpen ? "is-open" : "")">
+
+        <div class="glow-fab-menu" role="menu" aria-label="الإجراءات السريعة">
+            <button type="button" class="glow-fab-item" role="menuitem" @onclick="SaveAsync" disabled="@_saving">
+                <span class="glow-fab-item-ic">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                        <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </span>
+                <span>@(_saving ? "جاري الحفظ..." : "حفظ الحاوية")</span>
+            </button>
+            <button type="button" class="glow-fab-item" role="menuitem" @onclick="GoBack">
+                <span class="glow-fab-item-ic">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </span>
+                <span>إلغاء والعودة للقائمة</span>
+            </button>
+        </div>
+
+        <div class="glow-fab-container">
+            <span class="glow-ring glow-ring-1" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-2" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-3" aria-hidden="true"></span>
+            <span class="glow-halo" aria-hidden="true"></span>
+
+            <button type="button" class="glow-fab-btn" @onclick="ToggleFab" aria-label="لوحة التحكم" aria-expanded="@(_fabOpen ? "true" : "false")">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.8" class="glow-fab-icon" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+
+    </div>
+}
+
+@if (_fabOpen)
+{
+    <div class="glow-fab-scrim" @onclick="ToggleFab" aria-hidden="true"></div>
+}
+
+
+@* ═══════════════════════════════════════════
+   CSS STYLES
+═══════════════════════════════════════════ *@
+<style>
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ── Hero ── */
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px; margin: 0 auto; width: 100%;
+        box-sizing: border-box; position: relative; z-index: 1;
+    }
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important; overflow: hidden;
+        box-shadow: 0 12px 32px rgba(13, 38, 84, 0.15), 0 4px 12px rgba(13, 38, 84, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .hero-wrapper .fc-hero.fc-hero-slim { padding-top: 18px !important; padding-bottom: 22px !important; }
+
+    .bk-hero-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .bk-hero-left { flex: 1; min-width: 200px; }
+    .bk-hero-crumb { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: rgba(255,255,255,.55); margin-bottom: 6px; }
+    .bk-hero-sub { font-size: 13px; color: rgba(255,255,255,.55); }
+    .bk-hero-right { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+    .bk-hero-chip {
+        display: flex; align-items: center; gap: 6px;
+        padding: 6px 12px; border-radius: 20px;
+        background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .2);
+        font-size: 11.5px; color: #fff;
+    }
+
+    .bk-hero-summary {
+        display: flex; align-items: stretch;
+        background: rgba(0,0,0,.15); border: 1px solid rgba(255,255,255,.10);
+        border-radius: 12px; overflow: hidden; backdrop-filter: blur(8px); margin-top: 14px;
+    }
+    .bk-sum-item { flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 16px; }
+    .bk-sum-div { width: 1px; background: rgba(255,255,255,.10); align-self: stretch; }
+    .bk-sum-icon {
+        width: 32px; height: 32px; flex: 0 0 32px; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(255,255,255,.10); color: rgba(255,255,255,.7);
+    }
+    .bk-sum-label { font-size: 9.5px; color: rgba(255,255,255,.5); font-weight: 600; }
+    .bk-sum-val { font-size: 13px; font-weight: 800; color: #fff; margin-top: 2px; }
+    .bk-sum-val.font-mono { font-family: "Inter", "Consolas", monospace; letter-spacing: 0.5px; }
+    .total-highlight { color: #86efac !important; font-size: 13px; }
+
+    /* ── Body ── */
+    .bk-body {
+        background: var(--fc-bg); min-height: calc(100vh - 180px);
+        padding: 18px clamp(16px, 3vw, 40px) 96px;
+        max-width: 1440px; width: 100%; margin: 0 auto;
+        box-sizing: border-box; position: relative; z-index: 2;
+        display: flex; flex-direction: column; gap: 14px;
+    }
+
+    /* ── States & Banners ── */
+    .bk-state-box {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 280px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .bk-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .bk-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+    .bk-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .bk-state-box p { margin: 0; font-size: 13px; color: var(--fc-muted); }
+    .bk-state-back {
+        margin-top: 8px; padding: 9px 20px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-text);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+    }
+    .bk-state-back:hover { background: #f0f4fa; }
+
+    .bk-loading-wrap {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 14px; min-height: 260px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .bk-spinner {
+        width: 36px; height: 36px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: bk-spin .75s linear infinite;
+    }
+    @@keyframes bk-spin { to { transform: rotate(360deg); } }
+    .bk-loading-text { font-size: 13px; font-weight: 600; color: var(--fc-muted); }
+
+    .bk-banner {
+        display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 600;
+        animation: sp-banner-in .25s ease;
+    }
+    @@keyframes sp-banner-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    .banner-success { background: #e9f8f0; color: #0e7a43; border: 1px solid #b5e8d0; }
+    .banner-error { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8d0; }
+    .banner-close { margin-right: auto; background: none; border: none; color: inherit; opacity: .6; cursor: pointer; font-size: 13px; padding: 2px 6px; border-radius: 5px; }
+
+    /* ── Tabs ── */
+    .bk-tabs-wrap {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden; flex: 1;
+    }
+    .bk-mud-tabs .mud-tabs-toolbar {
+        background: linear-gradient(180deg, #f9fafd 0%, #f3f6fb 100%);
+        border-bottom: 2px solid #e8edf5; padding: 0 16px; min-height: 54px;
+    }
+    .bk-mud-tabs .mud-tab { font-family: inherit; font-size: 12px; font-weight: 700; color: var(--fc-muted); padding: 0 6px; min-width: unset; transition: color .15s ease; }
+    .bk-mud-tabs .mud-tab.mud-tab-active { color: var(--fc-blue) !important; font-weight: 800; }
+    .bk-mud-tabs .mud-tab-slider { background: var(--fc-blue) !important; height: 3px; border-radius: 3px 3px 0 0; }
+    .bk-tab-panel { padding: 0; }
+
+    .btab-label { display: flex; align-items: center; gap: 7px; padding: 0 4px; white-space: nowrap; }
+    .btab-icon { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 7px; }
+    .btab-blue { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .btab-green { background: var(--fc-green-lt); color: var(--fc-green); }
+    .btab-err-dot {
+        width: 7px; height: 7px; border-radius: 50%; background: var(--fc-red); flex: 0 0 7px;
+        animation: bk-pulse 1.5s ease infinite;
+    }
+    @@keyframes bk-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.4); } 50% { box-shadow: 0 0 0 5px rgba(224,48,72,0); } }
+
+    /* ── Tab Sections & Forms ── */
+    .tab-section { padding: 24px clamp(16px, 3vw, 40px) 28px; max-width: 1440px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+    .tab-section-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid #edf1f7; }
+    .tab-section-icon { width: 42px; height: 42px; flex: 0 0 42px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+    .tab-section-icon.blue { background: var(--fc-blue-lt); color: var(--fc-blue); border: 1px solid #bdd4fc; }
+    .tab-section-icon.green { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .tab-section-title { font-size: 15px; font-weight: 800; color: #1c2b43; line-height: 1.2; }
+    .tab-section-sub { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
+
+    .tab-section-sub-head { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 800; color: #344258; margin: 22px 0 12px; padding-top: 18px; border-top: 1px solid #edf1f7; }
+
+    .bk-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; width: 100%; }
+    .form-field { display: flex; flex-direction: column; gap: 6px; position: relative; }
+    .field-label { font-size: 12px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 4px; }
+    .field-required { color: var(--fc-red); font-size: 14px; line-height: 1; }
+
+    .field-input {
+        height: 42px; width: 100%; border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text); font-family: inherit; font-size: 13px; padding: 0 12px;
+        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; outline: none; box-sizing: border-box;
+    }
+    .field-input.font-mono { font-family: "Inter", "Consolas", monospace; letter-spacing: 1px; font-weight: 700; }
+    .field-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); background: #fff; }
+    .field-input:disabled { opacity: .7; background: #f3f5f8; cursor: not-allowed; }
+    .field-input.field-error { border-color: var(--fc-red); box-shadow: 0 0 0 3px rgba(224,48,72,.08); }
+    .field-textarea { height: auto; padding: 10px 12px; resize: vertical; min-height: 70px; font-family: inherit; }
+
+    .field-select-wrap { position: relative; display: flex; align-items: center; width: 100%; }
+    .field-select-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; z-index: 1; }
+    .field-select { padding-right: 36px; cursor: pointer; -webkit-appearance: none; appearance: none; }
+
+    .field-input-group { position: relative; display: flex; align-items: center; width: 100%; }
+    .field-prefix { position: absolute; right: 12px; display: flex; align-items: center; font-size: 11px; font-weight: 700; color: #9aaabb; pointer-events: none; z-index: 1; }
+    .field-input.with-prefix { padding-right: 36px; }
+
+    /* ── Container Number Live Validation Badge ── */
+    .field-check-badge {
+        position: absolute; left: 12px; z-index: 2;
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 22px; height: 22px; border-radius: 50%;
+        border: none; cursor: help;
+        transition: all .15s ease;
+        pointer-events: auto;
+    }
+    .field-check-badge.check-valid {
+        background: var(--fc-green); color: #fff;
+        box-shadow: 0 0 0 3px rgba(22, 163, 91, 0.15);
+        animation: check-pop .3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .field-check-badge.check-warning {
+        background: var(--fc-amber); color: #fff;
+        box-shadow: 0 0 0 3px rgba(224, 154, 16, 0.12);
+    }
+    @@keyframes check-pop { 0% { transform: scale(0); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+
+    .field-hint { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--fc-muted); font-weight: 500; }
+    .field-hint.hint-valid { color: var(--fc-green); font-weight: 700; }
+    .field-err-msg { font-size: 10.5px; color: var(--fc-red); font-weight: 700; }
+
+    /* ── Bottom Actions ── */
+    .bk-bottom-actions {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 14px 20px; background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); box-shadow: 0 2px 8px rgba(15,41,82,.04);
+    }
+    .bk-bottom-back {
+        display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s ease;
+    }
+    .bk-bottom-back:hover { background: #f0f4fa; color: var(--fc-text); }
+    .bk-bottom-back svg { transform: rotate(180deg); }
+    .bk-bottom-right { display: flex; align-items: center; gap: 10px; }
+
+    .bk-next-btn {
+        display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer; transition: all .15s ease;
+    }
+    .bk-next-btn:hover { background: var(--fc-blue); color: #fff; }
+    .bk-next-btn svg { transform: rotate(180deg); }
+
+    .bk-bottom-save {
+        display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 22px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #1e6ef5, #1558d6);
+        color: #fff; font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(30,110,245,.30); transition: all .15s ease;
+    }
+    .bk-bottom-save:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(30,110,245,.38); }
+    .bk-bottom-save:disabled { opacity: .6; cursor: not-allowed; }
+    .btn-spinner { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: bk-spin .7s linear infinite; }
+    .btn-spinner.sm { width: 13px; height: 13px; }
+
+    /* ── FAB ── */
+    .glow-fab-wrap { position: fixed; left: 28px; bottom: 28px; z-index: 1299; width: 60px; height: 60px; }
+    .glow-fab-container { position: relative; z-index: 2; width: 60px; height: 60px; }
+    .glow-fab-btn {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        width: 58px; height: 58px; border-radius: 50%;
+        background: linear-gradient(135deg, #1e6ef5, #0d47a1);
+        border: 2.5px solid #fbbf24; color: #fff; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 16px rgba(30, 110, 245, .4); transition: transform .2s; z-index: 2;
+    }
+    .glow-fab-btn:hover { transform: translate(-50%, -50%) scale(1.05); }
+    .glow-fab-icon { transition: transform .3s; }
+    .glow-fab-wrap.is-open .glow-fab-icon { transform: rotate(130deg); }
+
+    .glow-halo, .glow-ring { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
+    .glow-halo { width: 58px; height: 58px; background: radial-gradient(circle, rgba(30, 110, 245, .3) 0%, transparent 70%); animation: glow-breath 2s ease-in-out infinite; }
+    .glow-ring { width: 58px; height: 58px; border: 2px solid rgba(30, 110, 245, .4); animation: glow-expand 2s ease-out infinite; }
+    .glow-ring-2 { animation-delay: .3s; }
+    .glow-ring-3 { animation-delay: .6s; }
+    @@keyframes glow-breath { 0%, 100% { opacity: .5; transform: translate(-50%, -50%) scale(1); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } }
+    @@keyframes glow-expand { 0% { opacity: .8; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.5); } }
+
+    .glow-fab-menu { position: absolute; bottom: 74px; left: 0; z-index: 3; display: flex; flex-direction: column; gap: 8px; opacity: 0; pointer-events: none; transform: translateY(10px); transition: opacity .2s, transform .2s; }
+    .glow-fab-wrap.is-open .glow-fab-menu { opacity: 1; pointer-events: auto; transform: translateY(0); }
+    .glow-fab-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 12px; background: #fff; border: 1px solid #dde5f0; box-shadow: 0 4px 12px rgba(0, 0, 0, .1); cursor: pointer; font-size: 13px; color: #1c2c44; white-space: nowrap; }
+    .glow-fab-item:hover { background: #f4f7fb; border-color: var(--fc-blue); }
+    .glow-fab-item-ic { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: #eaf1ff; color: var(--fc-blue); }
+    .glow-fab-scrim { position: fixed; inset: 0; background: rgba(9, 18, 35, .45); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 1298; }
+
+    /* ── Responsive ── */
+    @@media (max-width: 992px) {
+        .bk-hero-summary { flex-wrap: wrap; }
+        .bk-sum-item { flex: 0 0 50%; }
+        .bk-sum-div:nth-child(4) { display: none; }
+    }
+    @@media (max-width: 768px) {
+        .bk-body { padding: 12px 12px 90px; }
+        .bk-form-grid { grid-template-columns: 1fr; }
+        .bk-bottom-actions { flex-direction: column; }
+        .bk-bottom-back, .bk-bottom-save, .bk-next-btn { width: 100%; justify-content: center; }
+        .bk-bottom-right { width: 100%; flex-direction: column; }
+        .bk-sum-item { flex: 0 0 100%; }
+        .bk-sum-div { display: none; }
+        .glow-fab-wrap { left: 18px; bottom: 18px; }
+    }
+</style>
+
 
 @code {
     [Parameter] public long? Id { get; set; }
@@ -130,22 +836,28 @@
     private AuthUser? _user;
     private bool CanSave => _user?.Can("MASTERDATA.MANAGE") ?? false;
 
-    private bool _loading; private bool _saving;
-    private string? _msg; private bool _ok = true;
+    private bool _loading; 
+    private bool _saving;
+    private bool _fabOpen;
+    private bool _triedSave;
+    private int _activeTab = 0;
+    private string? _msg; 
+    private bool _ok = true;
 
     private List<Opt> _types = new();
     private Form _f = new();
 
-    /* ISO 6346 — 4 حروف كبيرة + 7 أرقام. بننبّه بس، مانمنعش
-       (السيرفر هو اللي بيقرر). */
     private bool NumberOk =>
         !string.IsNullOrWhiteSpace(_f.ContainerNumber) &&
         System.Text.RegularExpressions.Regex.IsMatch(
             _f.ContainerNumber.Trim(), "^[A-Z]{4}[0-9]{7}$");
 
-    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+    public class Opt 
+    { 
+        public int Id { get; set; } 
+        public string Label { get; set; } = ""; 
+    }
 
-    /// <summary>مطابق لـ <c>ContainersController.Upsert</c> — 7 حقول.</summary>
     public class Form
     {
         public string ContainerNumber { get; set; } = "";
@@ -157,7 +869,6 @@
         public string? Notes { get; set; }
     }
 
-    /// <summary>مطابق لـ <c>ContainersController.Detail</c> — 8 حقول.</summary>
     public class Detail
     {
         public long ContainerId { get; set; }
@@ -170,7 +881,16 @@
         public string? Notes { get; set; }
     }
 
-    // ═══════════════ Init ═══════════════
+    private static string StatusAr(string s) => s switch
+    {
+        "Available" => "متاحة للتشغيل", 
+        "InTransit" => "في الطريق", 
+        "AtPort" => "في الميناء",
+        "AtDepot" => "في المخزن", 
+        "Delivered" => "تم التسليم", 
+        "Returned" => "مرتجعة", 
+        _ => s
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -182,7 +902,7 @@
         try
         {
             _types = await SafeGetT<Opt>("api/options/container-types");
-            if (_types.Count > 0) _f.ContainerTypeId = _types[0].Id;
+            if (_types.Count > 0 && _id is null) _f.ContainerTypeId = _types[0].Id;
             if (_id is not null) await LoadAsync(_id.Value);
         }
         catch (Exception ex) { _msg = "فشل التحميل: " + ex.Message; _ok = false; }
@@ -207,24 +927,35 @@
         };
     }
 
-    // ═══════════════ Save ═══════════════
-
     private async Task SaveAsync()
     {
         if (_saving) return;
-        _saving = true; _msg = null;
+        _triedSave = true;
+        _saving = true; 
+        _msg = null;
         try
         {
             if (string.IsNullOrWhiteSpace(_f.ContainerNumber))
-            { _msg = "رقم الحاوية مطلوب"; _ok = false; return; }
+            { 
+                _msg = "رقم الحاوية مطلوب لإكمال التسجيل"; 
+                _ok = false;
+                _activeTab = 0;
+                return; 
+            }
             if (_f.ContainerTypeId <= 0)
-            { _msg = "اختار نوع الحاوية"; _ok = false; return; }
+            { 
+                _msg = "يرجى اختيار نوع الحاوية"; 
+                _ok = false;
+                _activeTab = 0;
+                return; 
+            }
 
             var res = _id is null
                 ? await Http.PostAsJsonAsync("api/containers", _f)
                 : await Http.PutAsJsonAsync($"api/containers/{_id}", _f);
 
-            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            _msg = await MsgOf(res); 
+            _ok = res.IsSuccessStatusCode;
             Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
             if (res.IsSuccessStatusCode) GoBack();
         }
@@ -232,9 +963,8 @@
         finally { _saving = false; }
     }
 
-    // ═══════════════ Helpers ═══════════════
-
     private void GoBack() => Nav.NavigateTo("/containers");
+    private void ToggleFab() => _fabOpen = !_fabOpen;
 
     private static decimal? ParseDec(object? v) =>
         decimal.TryParse(v?.ToString(), out var n) && n > 0 ? n : null;
@@ -253,6 +983,6 @@
             var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
             return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
         }
-        catch { return res.IsSuccessStatusCode ? "✅ تم الحفظ" : "حصل خطأ — حاول تاني"; }
+        catch { return res.IsSuccessStatusCode ? "تم الحفظ بنجاح" : "حدث خطأ — يرجى المحاولة مرة أخرى"; }
     }
 }

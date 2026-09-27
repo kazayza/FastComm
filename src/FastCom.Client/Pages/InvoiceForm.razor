@@ -1,5 +1,5 @@
-@page "/supplier-invoices/new"
-@page "/supplier-invoices/new/{Id:long}"
+@page "/invoices/new"
+@page "/invoices/new/{Id:long}"
 @attribute [Authorize]
 @using System.Net.Http.Json
 @using FastCom.Client.Auth
@@ -8,7 +8,7 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
-<PageTitle>@(_id is null ? "فاتورة مورد جديدة" : $"تعديل {_number}") — فاست كوم</PageTitle>
+<PageTitle>@(_id is null ? "فاتورة عميل جديدة" : $"تعديل {_number}") — فاست كوم</PageTitle>
 
 
 @* ═══════════════════════════════════════════
@@ -25,12 +25,12 @@
                             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
                             <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
                         </svg>
-                        <span>المالية · الذمم الدائنة</span>
+                        <span>المالية · فواتير العملاء</span>
                     </div>
                     <h1 class="fc-hero-title fc-hero-title-slim">
                         @if (_id is null)
                         {
-                            <span>فاتورة مورد جديدة</span>
+                            <span>فاتورة عميل جديدة</span>
                         }
                         else
                         {
@@ -38,7 +38,7 @@
                         }
                     </h1>
                     <span class="bk-hero-sub">
-                        @(_id is null ? "تسجيل فاتورة مورد جديدة — الرقم يتولد تلقائياً (SINV-)" : $"تعديل بيانات وبنود فاتورة المورد {_number}")
+                        @(_id is null ? "إصدار فاتورة رسمية من بنود العمليات أو إضافة بنود يدوية" : $"تعديل بيانات وبنود الفاتورة رقم {_number}")
                     </span>
                 </div>
 
@@ -65,7 +65,8 @@
 
         </div>
 
-        @if (!_loading && _f.SupplierId > 0)
+        @* ── ملخص الفاتورة ── *@
+        @if (!_loading && _f.CustomerId > 0)
         {
             <div class="bk-hero-summary">
 
@@ -77,8 +78,8 @@
                         </svg>
                     </div>
                     <div class="bk-sum-text">
-                        <div class="bk-sum-label">المورد</div>
-                        <div class="bk-sum-val">@(_suppliers.FirstOrDefault(s => s.Id == _f.SupplierId)?.Label ?? _supplierSearch)</div>
+                        <div class="bk-sum-label">العميل</div>
+                        <div class="bk-sum-val">@(_customers.FirstOrDefault(c => c.Id == _f.CustomerId)?.Label ?? _customerSearch)</div>
                     </div>
                 </div>
 
@@ -87,13 +88,13 @@
                 <div class="bk-sum-item">
                     <div class="bk-sum-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-                            <path d="M9 22V12h6v10"/>
+                            <path d="M9 11l3 3L22 4"/>
+                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
                         </svg>
                     </div>
                     <div class="bk-sum-text">
-                        <div class="bk-sum-label">الفرع</div>
-                        <div class="bk-sum-val">@(_branches.FirstOrDefault(b => b.Id == _f.BranchId)?.Label ?? "—")</div>
+                        <div class="bk-sum-label">عدد البنود</div>
+                        <div class="bk-sum-val">@_f.Items.Count بند</div>
                     </div>
                 </div>
 
@@ -108,7 +109,7 @@
                     </div>
                     <div class="bk-sum-text">
                         <div class="bk-sum-label">تاريخ الاستحقاق</div>
-                        <div class="bk-sum-val">@(_f.DueDate ?? "غير محدد")</div>
+                        <div class="bk-sum-val">@(_f.DueDate ?? "حسب شروط الدفع")</div>
                     </div>
                 </div>
 
@@ -123,7 +124,7 @@
                     </div>
                     <div class="bk-sum-text">
                         <div class="bk-sum-label">الإجمالي المستحق</div>
-                        <div class="bk-sum-val total-highlight">@Money(SubTotal + TaxTotal) ج.م</div>
+                        <div class="bk-sum-val total-highlight">@Money(FormTotal) ج.م</div>
                     </div>
                 </div>
 
@@ -139,7 +140,8 @@
 ═══════════════════════════════════════════ *@
 <div class="bk-body">
 
-    @if (!CanSave && !(_id is not null && CanEdit))
+    @* No Permission *@
+    @if (!CanSave)
     {
         <div class="bk-state-box">
             <div class="bk-state-icon perm" aria-hidden="true">
@@ -149,19 +151,24 @@
                 </svg>
             </div>
             <h3>ليس لديك صلاحية</h3>
-            <p>@(_id is null ? "ليس لديك صلاحية إضافة فاتورة مورد جديدة." : "ليس لديك صلاحية تعديل هذه الفاتورة.")</p>
-            <button class="bk-state-back" @onclick="GoBack">العودة لقائمة فواتير الموردين</button>
+            <p>@(_id is null ? "ليس لديك صلاحية إنشاء فاتورة عميل جديدة." : "ليس لديك صلاحية تعديل هذه الفاتورة.")</p>
+            <button class="bk-state-back" @onclick="GoBack">العودة لقائمة الفواتير</button>
         </div>
     }
+
+    @* Loading *@
     else if (_loading)
     {
         <div class="bk-loading-wrap">
             <div class="bk-spinner" aria-label="جاري التحميل"></div>
-            <div class="bk-loading-text">جاري تحميل بيانات فاتورة المورد...</div>
+            <div class="bk-loading-text">جاري تحميل بيانات الفاتورة...</div>
         </div>
     }
+
+    @* MAIN CONTENT *@
     else
     {
+        @* Locked Banner *@
         @if (Locked)
         {
             <div class="bk-locked-banner" role="alert">
@@ -174,12 +181,13 @@
                 <div class="locked-text">
                     <strong>الفاتورة مقفلة للتعديل</strong>
                     <span>
-                        الفاتورة <b>@_number</b> بحالة «@StatusAr(_status)» — التعديل متاح فقط في حالة «مسودة».
+                        الفاتورة <b>@_number</b> بحالة «@StatusAr(_status)» — التعديل متاح فقط في حالتي «مسودة» أو «معتمدة».
                     </span>
                 </div>
             </div>
         }
 
+        @* Error/Success Banner *@
         @if (_msg is not null)
         {
             <div class="bk-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
@@ -204,6 +212,7 @@
             </div>
         }
 
+        @* ═══════ TABS ═══════ *@
         <div class="bk-tabs-wrap">
 
             <MudTabs Elevation="0"
@@ -213,7 +222,9 @@
                      @bind-ActivePanelIndex="_activeTab"
                      Class="bk-mud-tabs">
 
-                @* TAB 1 - بيانات الفاتورة *@
+                @* ══════════════════════════════════════
+                   TAB 1 — بيانات الفاتورة الأساسية
+                ══════════════════════════════════════ *@
                 <MudTabPanel>
                     <TabContent>
                         <div class="btab-label">
@@ -223,7 +234,7 @@
                                     <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
                                 </svg>
                             </div>
-                            <span>بيانات الفاتورة والمورد</span>
+                            <span>بيانات الفاتورة والعميل</span>
                             @if (HasTabError(1))
                             {
                                 <span class="btab-err-dot" aria-label="يوجد خطأ"></span>
@@ -242,17 +253,17 @@
                                     </svg>
                                 </div>
                                 <div>
-                                    <div class="tab-section-title">بيانات المورد والفاتورة</div>
-                                    <div class="tab-section-sub">تحديد المورد، الفرع، تواريخ الإصدار والاستحقاق، ورقم الفاتورة الأصلي</div>
+                                    <div class="tab-section-title">بيانات العميل والفاتورة</div>
+                                    <div class="tab-section-sub">تحديد العميل، تواريخ الإصدار والاستحقاق، والملاحظات الإدارية</div>
                                 </div>
                             </div>
 
                             <div class="bk-form-grid">
 
-                                @* المورد *@
+                                @* العميل — بحث *@
                                 <div class="form-field">
-                                    <label class="field-label" for="supplier">
-                                        المورد
+                                    <label class="field-label" for="customer">
+                                        العميل
                                         <span class="field-required" aria-label="مطلوب">*</span>
                                     </label>
                                     <div class="field-input-group">
@@ -262,42 +273,43 @@
                                                 <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
                                             </svg>
                                         </span>
-                                        <input id="supplier"
-                                               class="field-input with-prefix @(_f.SupplierId == 0 && _triedSave ? "field-error" : "")"
-                                               value="@_supplierSearch"
+                                        <input id="customer"
+                                               class="field-input with-prefix @(_f.CustomerId == 0 && _triedSave ? "field-error" : "")"
+                                               value="@_customerSearch"
                                                disabled="@Locked"
-                                               placeholder="ابحث باسم المورد..."
-                                               @oninput="OnSupplierSearch"
-                                               @onkeydown="OnSupplierInputKeyDown"
-                                               @onfocus="OnSupplierInputFocus"
-                                               @onblur="OnSupplierInputBlur"
+                                               placeholder="ابحث باسم العميل أو الكود..."
+                                               @oninput="OnCustomerSearch"
+                                               @onkeydown="OnCustomerInputKeyDown"
+                                               @onfocus="OnCustomerInputFocus"
+                                               @onblur="OnCustomerInputBlur"
                                                aria-required="true"
                                                autocomplete="off" />
 
-                                        @if (!string.IsNullOrEmpty(_supplierSearch) && !Locked)
+                                        @if (!string.IsNullOrEmpty(_customerSearch) && !Locked)
                                         {
-                                            <button type="button" class="field-clear-btn" @onclick="ClearSupplierSelection" title="مسح الاختيار">
+                                            <button type="button" class="field-clear-btn" @onclick="ClearCustomerSelection" title="مسح الاختيار">
                                                 ✕
                                             </button>
                                         }
                                     </div>
-                                    @if (_showSupplierDropdown && _filteredSuppliers.Count > 0)
+                                    @if (_showCustomerDropdown && _filteredCustomers.Count > 0)
                                     {
                                         <div class="field-dropdown">
-                                            @for (int i = 0; i < _filteredSuppliers.Count; i++)
+                                            @for (int i = 0; i < _filteredCustomers.Count; i++)
                                             {
-                                                var s = _filteredSuppliers[i];
+                                                var c = _filteredCustomers[i];
                                                 var index = i;
-                                                <div class="field-dropdown-item @(index == _focusedSupplierIndex ? "is-focused" : "")"
-                                                     @mousedown="() => PickSupplier(s)">
-                                                    <span>@s.Label</span>
+                                                <div class="field-dropdown-item @(index == _focusedItemIndex ? "is-focused" : "")" 
+                                                     @mousedown="() => PickCustomer(c)">
+                                                    <span>@c.Label</span>
+                                                    <span class="invf-code">(@c.Code)</span>
                                                 </div>
                                             }
                                         </div>
                                     }
-                                    @if (_f.SupplierId == 0 && _triedSave)
+                                    @if (_f.CustomerId == 0 && _triedSave)
                                     {
-                                        <div class="field-err-msg" role="alert">اختيار المورد مطلوب</div>
+                                        <div class="field-err-msg" role="alert">اختيار العميل مطلوب</div>
                                     }
                                     else
                                     {
@@ -306,36 +318,8 @@
                                                 <circle cx="8" cy="8" r="6"/>
                                                 <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
                                             </svg>
-                                            البحث ذكي — يتجاوز الهمزات والتاء المربوطة والتشكيل
+                                            البحث ذكي وسريع
                                         </div>
-                                    }
-                                </div>
-
-                                @* الفرع *@
-                                <div class="form-field">
-                                    <label class="field-label" for="branch">
-                                        الفرع
-                                        <span class="field-required" aria-label="مطلوب">*</span>
-                                    </label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-                                            <path d="M9 22V12h6v10"/>
-                                        </svg>
-                                        <select id="branch"
-                                                class="field-input field-select @(_f.BranchId == 0 && _triedSave ? "field-error" : "")"
-                                                @bind="_f.BranchId"
-                                                disabled="@Locked">
-                                            <option value="0">— اختر الفرع —</option>
-                                            @foreach (var b in _branches)
-                                            {
-                                                <option value="@b.Id">@b.Label</option>
-                                            }
-                                        </select>
-                                    </div>
-                                    @if (_f.BranchId == 0 && _triedSave)
-                                    {
-                                        <div class="field-err-msg" role="alert">اختيار الفرع مطلوب</div>
                                     }
                                 </div>
 
@@ -381,51 +365,26 @@
                                             <circle cx="8" cy="8" r="6"/>
                                             <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
                                         </svg>
-                                        التاريخ اللي بيتحسب عليه أعمار الديون
-                                    </div>
-                                </div>
-
-                                @* رقم فاتورة المورد *@
-                                <div class="form-field">
-                                    <label class="field-label" for="suppref">رقم فاتورة المورد</label>
-                                    <div class="field-input-group">
-                                        <span class="field-prefix" aria-hidden="true">
-                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                                                <path d="M4 7V4h16v3M9 20h6M12 4v16"/>
-                                            </svg>
-                                        </span>
-                                        <input id="suppref"
-                                               class="field-input with-prefix"
-                                               value="@_f.SupplierRefNumber"
-                                               disabled="@Locked"
-                                               maxlength="100"
-                                               placeholder="الرقم عند المورد — للمطابقة"
-                                               @onchange="e => _f.SupplierRefNumber = OptStr(e.Value)" />
-                                    </div>
-                                    <div class="field-hint">
-                                        <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                                            <circle cx="8" cy="8" r="6"/>
-                                            <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
-                                        </svg>
-                                        الرقم الأصلي الصادر من المورد نفسه
+                                        اترك الفراغ ليتم حسابه تلقائياً بناءً على شروط دفع العميل المحددة مسبقاً
                                     </div>
                                 </div>
 
                             </div>
 
+                            @* ملاحظات الفاتورة *@
                             <div class="tab-section-sub-head">
                                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
                                 </svg>
-                                ملاحظات الفاتورة
+                                ملاحظات وتوجيهات الفاتورة
                             </div>
 
                             <div class="form-field">
                                 <textarea class="field-input field-textarea"
                                           rows="3"
-                                          maxlength="500"
+                                          maxlength="1000"
                                           disabled="@Locked"
-                                          placeholder="أي ملاحظات إدارية أو تعليمات دفع خاصة..."
+                                          placeholder="أدخل أي شروط دفع خاصة أو ملاحظات تظهر في المطبوعة..."
                                           @onchange="e => _f.Notes = OptStr(e.Value)">@_f.Notes</textarea>
                             </div>
 
@@ -434,7 +393,9 @@
                 </MudTabPanel>
 
 
-                @* TAB 2 - البنود *@
+                @* ══════════════════════════════════════
+                   TAB 2 — بنود الفاتورة والخدمات
+                ══════════════════════════════════════ *@
                 <MudTabPanel>
                     <TabContent>
                         <div class="btab-label">
@@ -448,10 +409,10 @@
                                     <line x1="3" y1="18" x2="3.01" y2="18"></line>
                                 </svg>
                             </div>
-                            <span>البنود</span>
-                            @if (_lines.Count > 0)
+                            <span>بنود الفاتورة</span>
+                            @if (_f.Items.Count > 0)
                             {
-                                <span class="btab-count">@_lines.Count</span>
+                                <span class="btab-count">@_f.Items.Count</span>
                             }
                             @if (HasTabError(2))
                             {
@@ -471,46 +432,162 @@
                                     </svg>
                                 </div>
                                 <div style="flex:1">
-                                    <div class="tab-section-title">بنود فاتورة المورد</div>
+                                    <div class="tab-section-title">بنود وإيرادات الفاتورة</div>
                                     <div class="tab-section-sub">
                                         إجمالي
-                                        <strong>@_lines.Count</strong>
+                                        <strong>@_f.Items.Count</strong>
                                         بند بقيمة
-                                        <strong>@Money(SubTotal + TaxTotal) ج.م</strong>
+                                        <strong>@Money(FormTotal) ج.م</strong>
                                     </div>
                                 </div>
-                                @if (!Locked)
-                                {
-                                    <button class="bk-add-line-btn" @onclick="AddLine">
-                                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-                                            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
-                                        </svg>
-                                        إضافة بند
-                                    </button>
-                                }
                             </div>
 
-                            @if (_lines.Count == 0)
+                            @* ── إدراج من العمليات الجاهزة ── *@
+                            @if (_f.CustomerId > 0 && !Locked)
+                            {
+                                <div class="inv-op-selector-box">
+                                    <div class="inv-op-icon" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                                        </svg>
+                                    </div>
+                                    <div class="inv-op-content">
+                                        <div class="inv-op-title">إدراج بنود من العمليات المكتملة للعميل</div>
+                                        <div class="field-select-wrap mt-2">
+                                            <svg class="field-select-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                            </svg>
+                                            <select class="field-input field-select"
+                                                    value="@_pickOp"
+                                                    @onchange="OnPickOp">
+                                                <option value="0">— اختر عملية لإضافة بنود إيراداتها تلقائياً —</option>
+                                                @foreach (var o in _ops)
+                                                {
+                                                    <option value="@o.OperationId">
+                                                        @o.OperationNumber — صافي: @Money(o.RevenueNet) ج.م
+                                                        @(o.InvoiceNumber is null ? " (جاهزة للفوترة)" : " · مفوترة سابقاً في " + o.InvoiceNumber)
+                                                    </option>
+                                                }
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                            @* ── إضافة سطر يدوي ── *@
+                            @if (!Locked)
+                            {
+                                <div class="inv-manual-card">
+                                    <div class="inv-manual-head">
+                                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                        </svg>
+                                        <span>إضافة بند يدوي جديد</span>
+                                    </div>
+
+                                    <div class="inv-manual-grid">
+                                        @* الخدمة *@
+                                        <div class="form-field span-2">
+                                            <label class="field-label">الخدمة</label>
+                                            <div class="field-select-wrap">
+                                                <svg class="field-select-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                                    <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
+                                                </svg>
+                                                <select class="field-input field-select"
+                                                        value="@_manual.ServiceId"
+                                                        @onchange="OnManualService">
+                                                    <option value="0">— اختر خدمة —</option>
+                                                    @foreach (var s in _services)
+                                                    {
+                                                        <option value="@s.Id">@s.Label</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        @* الكمية *@
+                                        <div class="form-field">
+                                            <label class="field-label">الكمية</label>
+                                            <input type="number" step="0.001" min="0" class="field-input"
+                                                   placeholder="1" value="@_manual.Quantity"
+                                                   @onchange="e => _manual.Quantity = ParseDec(e.Value)" />
+                                        </div>
+
+                                        @* السعر *@
+                                        <div class="form-field">
+                                            <label class="field-label">السعر</label>
+                                            <div class="field-input-group">
+                                                <span class="field-prefix">ج.م</span>
+                                                <input type="number" step="0.01" min="0" class="field-input with-prefix"
+                                                       placeholder="0.00" value="@_manual.UnitPrice"
+                                                       @onchange="e => _manual.UnitPrice = ParseDec(e.Value)" />
+                                            </div>
+                                        </div>
+
+                                        @* الخصم *@
+                                        <div class="form-field">
+                                            <label class="field-label">الخصم</label>
+                                            <div class="field-input-group">
+                                                <span class="field-prefix">ج.م</span>
+                                                <input type="number" step="0.01" min="0" class="field-input with-prefix"
+                                                       placeholder="0.00" value="@_manual.Discount"
+                                                       @onchange="e => _manual.Discount = ParseDec(e.Value)" />
+                                            </div>
+                                        </div>
+
+                                        @* الضريبة *@
+                                        <div class="form-field">
+                                            <label class="field-label">الضريبة</label>
+                                            <div class="field-select-wrap">
+                                                <select class="field-input field-select"
+                                                        value="@_manual.TaxRateId"
+                                                        @onchange="e => _manual.TaxRateId = ParseInt(e.Value) == 0 ? null : ParseInt(e.Value)">
+                                                    <option value="0">بدون ضريبة</option>
+                                                    @foreach (var t in _taxRates)
+                                                    {
+                                                        <option value="@t.Id">@t.Label</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        @* زر الإضافة *@
+                                        <div class="form-field" style="align-self:flex-end">
+                                            <button type="button" class="inv-add-btn" @onclick="AddManual">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                                                    <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                                </svg>
+                                                إدراج البند
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                            @* ── جدول البنود الفعلي ── *@
+                            <div class="tab-section-sub-head" style="margin-top:28px">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                    <path d="M14 2v6h6"/>
+                                </svg>
+                                قائمة بنود الفاتورة (@_f.Items.Count)
+                            </div>
+
+                            @if (!_f.Items.Any())
                             {
                                 <div class="bk-containers-empty">
                                     <div class="containers-empty-icon" aria-hidden="true">
                                         <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.4">
-                                            <line x1="8" y1="6" x2="21" y2="6"></line>
-                                            <line x1="8" y1="12" x2="21" y2="12"></line>
-                                            <line x1="8" y1="18" x2="21" y2="18"></line>
+                                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
                                         </svg>
                                     </div>
-                                    <div class="containers-empty-title">لا توجد بنود في الفاتورة</div>
-                                    <div class="containers-empty-sub">أضف بند واحد على الأقل (بيان + كمية + سعر)</div>
-                                    @if (!Locked)
-                                    {
-                                        <button class="bk-add-line-btn mt-10" @onclick="AddLine">
-                                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-                                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
-                                            </svg>
-                                            إضافة بند
-                                        </button>
-                                    }
+                                    <div class="containers-empty-title">لا توجد بنود في الفاتورة حتى الآن</div>
+                                    <div class="containers-empty-sub">اختر عملية لجلب بنودها أو استخدم نموذج الإضافة اليدوية بالأعلى</div>
                                 </div>
                             }
                             else
@@ -520,45 +597,54 @@
                                         <thead>
                                             <tr>
                                                 <th style="width:35px">#</th>
-                                                <th>البيان</th>
+                                                <th>بيان الخدمة / البند</th>
                                                 <th style="width:110px">الكمية</th>
-                                                <th style="width:130px">سعر الوحدة (ج.م)</th>
-                                                <th style="width:130px">الضريبة</th>
+                                                <th style="width:130px">السعر (ج.م)</th>
+                                                <th style="width:120px">الخصم (ج.م)</th>
+                                                <th style="width:140px">معدل الضريبة</th>
                                                 <th style="width:130px; text-align:left">الإجمالي</th>
                                                 <th style="width:50px"></th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach (var l in _lines)
+                                            @foreach (var l in _f.Items)
                                             {
-                                                var idx = _lines.IndexOf(l) + 1;
+                                                var idx = _f.Items.IndexOf(l) + 1;
                                                 <tr>
                                                     <td class="inv-td-num">@idx</td>
                                                     <td>
-                                                        <input class="inv-tbl-input"
-                                                               value="@l.Description"
-                                                               maxlength="300"
-                                                               disabled="@Locked"
-                                                               placeholder="وصف البند..."
-                                                               @onchange="@(e => l.Description = e.Value?.ToString() ?? string.Empty)" />
+                                                        <div class="invf-desc">@l.Description</div>
+                                                        @if (l.OperationNumber is not null)
+                                                        {
+                                                            <span class="invf-op-tag">
+                                                                <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                                    <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                                                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                                                                </svg>
+                                                                @l.OperationNumber
+                                                            </span>
+                                                        }
                                                     </td>
                                                     <td>
-                                                        <input type="number" min="0" step="0.01" class="inv-tbl-input"
-                                                               value="@l.Quantity"
-                                                               disabled="@Locked"
-                                                               @onchange="e => l.Quantity = ParseDec(e.Value) ?? 0m" />
+                                                        <input type="number" step="0.001" min="0" class="inv-tbl-input"
+                                                               value="@l.Quantity" disabled="@Locked"
+                                                               @onchange="e => l.Quantity = ParseDec(e.Value)" />
                                                     </td>
                                                     <td>
-                                                        <input type="number" min="0" step="0.01" class="inv-tbl-input"
-                                                               value="@l.UnitPrice"
-                                                               disabled="@Locked"
-                                                               @onchange="e => l.UnitPrice = ParseDec(e.Value) ?? 0m" />
+                                                        <input type="number" step="0.01" min="0" class="inv-tbl-input"
+                                                               value="@l.UnitPrice" disabled="@Locked"
+                                                               @onchange="e => l.UnitPrice = ParseDec(e.Value)" />
                                                     </td>
                                                     <td>
-                                                        <select class="inv-tbl-input"
-                                                                @bind="l.TaxRateId"
-                                                                disabled="@Locked">
-                                                            <option value="">0%</option>
+                                                        <input type="number" step="0.01" min="0" class="inv-tbl-input"
+                                                               value="@l.Discount" disabled="@Locked"
+                                                               @onchange="e => l.Discount = ParseDec(e.Value)" />
+                                                    </td>
+                                                    <td>
+                                                        <select class="inv-tbl-input" value="@(l.TaxRateId ?? 0)"
+                                                                disabled="@Locked"
+                                                                @onchange="e => OnLineTax(l, e)">
+                                                            <option value="0">بدون ضريبة</option>
                                                             @foreach (var t in _taxRates)
                                                             {
                                                                 <option value="@t.Id">@t.Label</option>
@@ -572,7 +658,7 @@
                                                         @if (!Locked)
                                                         {
                                                             <button class="bk-cc-del"
-                                                                    @onclick="() => _lines.Remove(l)"
+                                                                    @onclick="() => _f.Items.Remove(l)"
                                                                     title="حذف البند">
                                                                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
                                                                     <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
@@ -586,18 +672,7 @@
                                     </table>
                                 </div>
 
-                                @if (!Locked)
-                                {
-                                    <div style="margin-top:12px">
-                                        <button class="bk-add-line-btn" @onclick="AddLine">
-                                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-                                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
-                                            </svg>
-                                            إضافة بند جديد
-                                        </button>
-                                    </div>
-                                }
-
+                                @* ── Financial Stats Summary Cards ── *@
                                 <div class="inv-summary-cards">
                                     <div class="inv-sum-card">
                                         <div class="inv-sum-card-head">
@@ -627,7 +702,7 @@
 
                                     <div class="inv-sum-card highlight">
                                         <div class="inv-sum-card-head">
-                                            <span class="inv-sum-card-icon red">
+                                            <span class="inv-sum-card-icon green">
                                                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                                                     <line x1="12" y1="1" x2="12" y2="23"></line>
                                                     <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
@@ -635,7 +710,7 @@
                                             </span>
                                             <span class="inv-sum-card-title">صافي الفاتورة المستحق</span>
                                         </div>
-                                        <div class="inv-sum-card-val expense">@Money(SubTotal + TaxTotal) <small>ج.م</small></div>
+                                        <div class="inv-sum-card-val primary">@Money(FormTotal) <small>ج.م</small></div>
                                     </div>
                                 </div>
                             }
@@ -648,13 +723,14 @@
         </div>
 
 
+        @* ── Bottom Actions ── *@
         <div class="bk-bottom-actions">
 
             <button class="bk-bottom-back" @onclick="GoBack">
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                رجوع لقائمة فواتير الموردين
+                رجوع لقائمة الفواتير
             </button>
 
             @if (CanSave && !Locked)
@@ -664,7 +740,7 @@
                     @if (_activeTab == 0)
                     {
                         <button class="bk-next-btn" @onclick="() => _activeTab = 1">
-                            التالي: البنود
+                            التالي: بنود الفاتورة
                             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                 <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
@@ -696,6 +772,7 @@
 </div>
 
 
+@* ── FAB (زر عائم للحفظ السريع) ── *@
 @if (CanSave && !Locked)
 {
     <div class="glow-fab-wrap @(_fabOpen ? "is-open" : "")">
@@ -742,6 +819,9 @@
 }
 
 
+@* ═══════════════════════════════════════════
+   CSS STYLES
+═══════════════════════════════════════════ *@
 <style>
     :root {
         --fc-blue:      #1e6ef5;
@@ -752,6 +832,8 @@
         --fc-red-lt:    #fff0f2;
         --fc-amber:     #e09a10;
         --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
         --fc-text:      #1c2c44;
         --fc-muted:     #6b7d95;
         --fc-border:    #dde5f0;
@@ -760,33 +842,67 @@
         --fc-radius:    14px;
     }
 
+    /* ── Hero Wrapper ── */
     .hero-wrapper {
         padding: 16px clamp(16px, 3vw, 40px) 0;
-        max-width: 1440px; margin: 0 auto; width: 100%;
-        box-sizing: border-box; position: relative; z-index: 1;
+        max-width: 1440px;
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 1;
     }
+
     .hero-wrapper .fc-hero {
-        border-radius: 20px !important; overflow: hidden;
+        border-radius: 20px !important;
+        overflow: hidden;
         box-shadow: 0 12px 32px rgba(13, 38, 84, 0.15), 0 4px 12px rgba(13, 38, 84, 0.08);
         border: 1px solid rgba(255, 255, 255, 0.08);
     }
-    .hero-wrapper .fc-hero.fc-hero-slim { padding-top: 18px !important; padding-bottom: 22px !important; }
 
-    .bk-hero-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .hero-wrapper .fc-hero.fc-hero-slim {
+        padding-top: 18px !important;
+        padding-bottom: 22px !important;
+    }
+
+    .bk-hero-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
     .bk-hero-left { flex: 1; min-width: 200px; }
-    .bk-hero-crumb { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: rgba(255,255,255,.55); margin-bottom: 6px; }
-    .bk-hero-sub { font-size: 13px; color: rgba(255,255,255,.55); }
+
+    .bk-hero-crumb {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        color: rgba(255, 255, 255, 0.55);
+        margin-bottom: 6px;
+    }
+
+    .bk-hero-sub { font-size: 13px; color: rgba(255, 255, 255, 0.55); }
     .bk-hero-right { display: flex; gap: 8px; flex-wrap: wrap; }
 
     .bk-hero-chip {
-        display: flex; align-items: center; gap: 6px;
-        padding: 6px 12px; border-radius: 20px;
-        background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
-        font-size: 11.5px; color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, .1);
+        border: 1px solid rgba(255, 255, 255, .2);
+        font-size: 11.5px;
+        color: #fff;
     }
 
     .badge-draft     { background: rgba(255,255,255,.12); color: rgba(255,255,255,.8); border: 1px solid rgba(255,255,255,.2); }
     .badge-approved  { background: rgba(59,130,246,.25); color: #93c5fd; border: 1px solid rgba(59,130,246,.3); }
+    .badge-issued    { background: rgba(168,85,247,.25); color: #d8b4fe; border: 1px solid rgba(168,85,247,.3); }
+    .badge-sent      { background: rgba(234,179,8,.25); color: #fde68a; border: 1px solid rgba(234,179,8,.3); }
     .badge-paid      { background: rgba(34,197,94,.25); color: #86efac; border: 1px solid rgba(34,197,94,.3); }
     .badge-partpaid  { background: rgba(249,115,22,.25); color: #fdba74; border: 1px solid rgba(249,115,22,.3); }
     .badge-cancelled { background: rgba(239,68,68,.25); color: #fca5a5; border: 1px solid rgba(239,68,68,.3); }
@@ -794,8 +910,10 @@
     .bk-hero-summary {
         display: flex; align-items: stretch;
         background: rgba(0,0,0,.15); border: 1px solid rgba(255,255,255,.10);
-        border-radius: 12px; overflow: hidden; backdrop-filter: blur(8px); margin-top: 14px;
+        border-radius: 12px; overflow: hidden; backdrop-filter: blur(8px);
+        margin-top: 14px;
     }
+
     .bk-sum-item { flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 16px; }
     .bk-sum-div { width: 1px; background: rgba(255,255,255,.10); align-self: stretch; }
     .bk-sum-icon {
@@ -804,41 +922,54 @@
         background: rgba(255,255,255,.10); color: rgba(255,255,255,.7);
     }
     .bk-sum-label { font-size: 9.5px; color: rgba(255,255,255,.5); font-weight: 600; }
-    .bk-sum-val { font-size: 13px; font-weight: 800; color: #fff; margin-top: 2px; }
-    .total-highlight { color: #fca5a5 !important; font-size: 14px; }
+    .bk-sum-val   { font-size: 13px; font-weight: 800; color: #fff; margin-top: 2px; }
+    .total-highlight { color: #86efac !important; font-size: 14px; }
 
+    /* ── Body ── */
     .bk-body {
-        background: var(--fc-bg); min-height: calc(100vh - 180px);
+        background: var(--fc-bg);
+        min-height: calc(100vh - 180px);
         padding: 18px clamp(16px, 3vw, 40px) 96px;
-        max-width: 1440px; width: 100%; margin: 0 auto;
-        box-sizing: border-box; position: relative; z-index: 2;
+        max-width: 1440px; width: 100%;
+        margin: 0 auto;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 2;
         display: flex; flex-direction: column; gap: 14px;
     }
 
+    /* ── States & Banners ── */
     .bk-state-box {
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
         gap: 12px; min-height: 280px;
         background: var(--fc-card); border: 1px solid var(--fc-border);
         border-radius: var(--fc-radius); padding: 40px; text-align: center;
         box-shadow: 0 4px 20px rgba(15,41,82,.06);
     }
-    .bk-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .bk-state-icon {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
     .bk-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
     .bk-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
-    .bk-state-box p { margin: 0; font-size: 13px; color: var(--fc-muted); }
+    .bk-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
     .bk-state-back {
         margin-top: 8px; padding: 9px 20px;
         border: 1px solid var(--fc-border); border-radius: 9px;
         background: var(--fc-card); color: var(--fc-text);
         font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: background .15s ease;
     }
     .bk-state-back:hover { background: #f0f4fa; }
 
     .bk-loading-wrap {
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
         gap: 14px; min-height: 260px;
         background: var(--fc-card); border: 1px solid var(--fc-border);
-        border-radius: var(--fc-radius); box-shadow: 0 4px 20px rgba(15,41,82,.06);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
     }
     .bk-spinner {
         width: 36px; height: 36px;
@@ -849,28 +980,36 @@
     .bk-loading-text { font-size: 13px; font-weight: 600; color: var(--fc-muted); }
 
     .bk-locked-banner {
-        display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-radius: 12px;
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px; border-radius: 12px;
         background: linear-gradient(135deg, #fffbeb, #fff8e0);
-        border: 1px solid #fde68a; box-shadow: 0 2px 10px rgba(234,179,8,.10);
+        border: 1px solid #fde68a;
+        box-shadow: 0 2px 10px rgba(234,179,8,.10);
     }
     .locked-icon { flex: 0 0 auto; color: #d97706; }
     .locked-text { display: flex; flex-direction: column; gap: 2px; }
     .locked-text strong { font-size: 13px; font-weight: 800; color: #92400e; }
-    .locked-text span { font-size: 11.5px; color: #b45309; }
+    .locked-text span   { font-size: 11.5px; color: #b45309; }
 
     .bk-banner {
-        display: flex; align-items: center; gap: 10px; padding: 12px 16px;
-        border-radius: 10px; font-size: 13px; font-weight: 600;
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 16px; border-radius: 10px;
+        font-size: 13px; font-weight: 600;
         animation: bk-banner-in .25s ease;
     }
-    @@keyframes bk-banner-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    @@keyframes bk-banner-in {
+        from { opacity: 0; transform: translateY(-6px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
     .banner-success { background: #e9f8f0; color: #0e7a43; border: 1px solid #b5e8d0; }
-    .banner-error { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8d0; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8d0; }
     .banner-close {
         margin-right: auto; background: none; border: none;
-        color: inherit; opacity: .6; cursor: pointer; font-size: 13px; padding: 2px 6px; border-radius: 5px;
+        color: inherit; opacity: .6; cursor: pointer; font-size: 13px;
+        padding: 2px 6px; border-radius: 5px;
     }
 
+    /* ── Tabs ── */
     .bk-tabs-wrap {
         background: var(--fc-card); border: 1px solid var(--fc-border);
         border-radius: var(--fc-radius);
@@ -879,7 +1018,8 @@
     }
     .bk-mud-tabs .mud-tabs-toolbar {
         background: linear-gradient(180deg, #f9fafd 0%, #f3f6fb 100%);
-        border-bottom: 2px solid #e8edf5; padding: 0 16px; min-height: 54px;
+        border-bottom: 2px solid #e8edf5;
+        padding: 0 16px; min-height: 54px;
     }
     .bk-mud-tabs .mud-tab {
         font-family: inherit; font-size: 12px; font-weight: 700; color: var(--fc-muted);
@@ -890,49 +1030,81 @@
     .bk-tab-panel { padding: 0; }
 
     .btab-label { display: flex; align-items: center; gap: 7px; padding: 0 4px; white-space: nowrap; }
-    .btab-icon { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 7px; }
-    .btab-blue { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .btab-icon {
+        width: 26px; height: 26px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 7px;
+    }
+    .btab-blue  { background: var(--fc-blue-lt);  color: var(--fc-blue); }
     .btab-green { background: var(--fc-green-lt); color: var(--fc-green); }
     .btab-count {
-        min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
-        border-radius: 5px; padding: 0 4px; background: var(--fc-green-lt); color: var(--fc-green);
+        min-width: 18px; height: 18px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 5px; padding: 0 4px;
+        background: var(--fc-green-lt); color: var(--fc-green);
         font-size: 10px; font-weight: 900;
     }
     .btab-err-dot {
-        width: 7px; height: 7px; border-radius: 50%; background: var(--fc-red); flex: 0 0 7px;
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--fc-red); flex: 0 0 7px;
         animation: bk-pulse 1.5s ease infinite;
     }
-    @@keyframes bk-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.4); } 50% { box-shadow: 0 0 0 5px rgba(224,48,72,0); } }
+    @@keyframes bk-pulse {
+        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.4); }
+        50%      { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
+    }
 
-    .tab-section { padding: 24px clamp(16px, 3vw, 40px) 28px; max-width: 1440px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+    /* ── Tab Sections & Forms ── */
+    .tab-section {
+        padding: 24px clamp(16px, 3vw, 40px) 28px;
+        max-width: 1440px; margin: 0 auto; width: 100%;
+        box-sizing: border-box;
+    }
     .tab-section-head {
         display: flex; align-items: flex-start; gap: 12px;
-        margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid #edf1f7;
+        margin-bottom: 22px; padding-bottom: 18px;
+        border-bottom: 1px solid #edf1f7;
     }
-    .tab-section-icon { width: 42px; height: 42px; flex: 0 0 42px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
-    .tab-section-icon.blue { background: var(--fc-blue-lt); color: var(--fc-blue); border: 1px solid #bdd4fc; }
+    .tab-section-icon {
+        width: 42px; height: 42px; flex: 0 0 42px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 12px;
+    }
+    .tab-section-icon.blue  { background: var(--fc-blue-lt);  color: var(--fc-blue);  border: 1px solid #bdd4fc; }
     .tab-section-icon.green { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
     .tab-section-title { font-size: 15px; font-weight: 800; color: #1c2b43; line-height: 1.2; }
-    .tab-section-sub { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
+    .tab-section-sub   { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
+
     .tab-section-sub-head {
         display: flex; align-items: center; gap: 7px;
         font-size: 12.5px; font-weight: 800; color: #344258;
         margin: 22px 0 12px; padding-top: 18px; border-top: 1px solid #edf1f7;
     }
 
-    .bk-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; width: 100%; }
+    .bk-form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 18px; width: 100%;
+    }
+
     .form-field { display: flex; flex-direction: column; gap: 6px; position: relative; }
+    .form-field.span-2 { grid-column: span 2; }
     .field-label { font-size: 12px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 4px; }
     .field-required { color: var(--fc-red); font-size: 14px; line-height: 1; }
 
     .field-input {
-        height: 42px; width: 100%; border: 1px solid #d8e2f0; border-radius: 9px;
+        height: 42px; width: 100%;
+        border: 1px solid #d8e2f0; border-radius: 9px;
         background: #fafcff; color: var(--fc-text);
         font-family: inherit; font-size: 13px; padding: 0 12px;
         transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
         outline: none; box-sizing: border-box;
     }
-    .field-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); background: #fff; }
+    .field-input:focus {
+        border-color: var(--fc-blue);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.10);
+        background: #fff;
+    }
     .field-input:disabled { opacity: .7; background: #f3f5f8; cursor: not-allowed; }
     .field-input.field-error { border-color: var(--fc-red); box-shadow: 0 0 0 3px rgba(224,48,72,.08); }
     .field-textarea { height: auto; padding: 10px 12px; resize: vertical; min-height: 70px; }
@@ -949,10 +1121,15 @@
     }
     .field-input.with-prefix { padding-right: 36px; }
 
+    /* زر الحذف السريع لفلتر العميل */
     .field-clear-btn {
-        position: absolute; left: 12px; background: none; border: none;
-        color: #9aaabb; cursor: pointer; display: flex; align-items: center; justify-content: center;
-        padding: 4px; border-radius: 50%; transition: background .15s, color .15s; font-size: 11px; font-weight: bold;
+        position: absolute; left: 12px;
+        background: none; border: none;
+        color: #9aaabb; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        padding: 4px; border-radius: 50%;
+        transition: background .15s, color .15s;
+        font-size: 11px; font-weight: bold;
     }
     .field-clear-btn:hover { background: rgba(0,0,0,0.05); color: var(--fc-red); }
 
@@ -966,20 +1143,48 @@
         padding: 10px 12px; font-size: 13px; color: var(--fc-text); cursor: pointer; transition: background .1s;
     }
     .field-dropdown-item:hover, .field-dropdown-item.is-focused { background: #eaf1ff; color: var(--fc-blue); font-weight: 600; }
+    .invf-code { color: var(--fc-muted); font-size: 11px; font-weight: 600; }
     .field-hint { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--fc-muted); font-weight: 500; }
     .field-err-msg { font-size: 10.5px; color: var(--fc-red); font-weight: 700; }
 
-    .bk-add-line-btn {
-        display: inline-flex; align-items: center; gap: 6px;
-        height: 36px; padding: 0 14px;
-        border: 1.5px solid var(--fc-amber); border-radius: 9px;
-        background: var(--fc-amber-lt); color: #9a6d08;
-        font-family: inherit; font-size: 12px; font-weight: 800;
-        cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: all .15s ease;
+    /* ── Operations Box & Manual Line Adder ── */
+    .inv-op-selector-box {
+        display: flex; align-items: center; gap: 14px;
+        background: linear-gradient(135deg, #f0f7ff, #e6f1fc);
+        border: 1px solid #cce2fa; border-radius: 12px;
+        padding: 16px 18px; margin-bottom: 20px;
     }
-    .bk-add-line-btn:hover { background: var(--fc-amber); color: #fff; }
-    .bk-add-line-btn.mt-10 { margin-top: 10px; }
+    .inv-op-icon {
+        width: 42px; height: 42px; border-radius: 10px;
+        background: #dbeafe; color: var(--fc-blue);
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .inv-op-content { flex: 1; }
+    .inv-op-title { font-size: 12.5px; font-weight: 800; color: #1e3a8a; }
 
+    .inv-manual-card {
+        background: #fbfcfe; border: 1px solid #e3eaf3;
+        border-radius: 12px; padding: 16px 18px; margin-bottom: 22px;
+    }
+    .inv-manual-head {
+        display: flex; align-items: center; gap: 6px;
+        font-size: 12.5px; font-weight: 800; color: #1c2b43; margin-bottom: 12px;
+    }
+    .inv-manual-grid {
+        display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1.2fr auto;
+        gap: 12px; align-items: flex-end;
+    }
+    .inv-add-btn {
+        height: 42px; padding: 0 16px;
+        background: var(--fc-blue); color: #fff;
+        border: none; border-radius: 9px; font-family: inherit;
+        font-size: 12px; font-weight: 800; cursor: pointer;
+        display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+        box-shadow: 0 3px 10px rgba(30,110,245,.25); transition: all .15s ease;
+    }
+    .inv-add-btn:hover { background: #155cd0; transform: translateY(-1px); }
+
+    /* ── Items Table ── */
     .inv-table-wrap {
         background: #fff; border: 1px solid #e4edf8; border-radius: 12px;
         overflow-x: auto; box-shadow: 0 2px 8px rgba(15,41,82,.03); margin-top: 10px;
@@ -990,12 +1195,22 @@
         font-size: 11.5px; font-weight: 800; color: #475569;
         border-bottom: 2px solid #e8edf5; white-space: nowrap;
     }
-    .inv-table td { padding: 10px 14px; border-bottom: 1px solid #f0f4f9; font-size: 12.5px; vertical-align: middle; }
+    .inv-table td {
+        padding: 10px 14px; border-bottom: 1px solid #f0f4f9;
+        font-size: 12.5px; vertical-align: middle;
+    }
     .inv-td-num { font-weight: 800; color: var(--fc-muted); font-size: 11px; text-align: center; }
+    .invf-desc { font-weight: 700; color: var(--fc-text); }
+    .invf-op-tag {
+        display: inline-flex; align-items: center; gap: 4px;
+        margin-top: 4px; padding: 2px 8px; font-size: 10px; font-weight: 700;
+        border-radius: 20px; background: rgba(30,110,245,.10); color: var(--fc-blue);
+    }
     .inv-tbl-input {
-        height: 36px; width: 100%; border: 1px solid #d8e2f0; border-radius: 7px;
+        height: 36px; width: 100%;
+        border: 1px solid #d8e2f0; border-radius: 7px;
         background: #fafcff; font-family: inherit; font-size: 12.5px;
-        padding: 0 8px; outline: none; transition: border-color .15s ease; box-sizing: border-box;
+        padding: 0 8px; outline: none; transition: border-color .15s ease;
     }
     .inv-tbl-input:focus { border-color: var(--fc-blue); background: #fff; }
     .inv-line-tot { font-weight: 800; color: #0f172a; font-size: 13px; }
@@ -1008,7 +1223,8 @@
     .bk-cc-del:hover { background: var(--fc-red-lt); border-color: #ffc8cf; }
 
     .bk-containers-empty {
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
         gap: 10px; min-height: 180px;
         border: 2px dashed #d8e8f8; border-radius: 12px;
         background: #f8fbff; text-align: center; padding: 30px;
@@ -1019,34 +1235,50 @@
         background: #edf3fb; color: #b0c4d8;
     }
     .containers-empty-title { font-size: 14px; font-weight: 800; color: var(--fc-text); }
-    .containers-empty-sub { font-size: 12px; color: var(--fc-muted); }
+    .containers-empty-sub   { font-size: 12px; color: var(--fc-muted); }
 
-    .inv-summary-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; }
+    /* ── Summary Financial Cards ── */
+    .inv-summary-cards {
+        display: grid; grid-template-columns: repeat(3, 1fr);
+        gap: 16px; margin-top: 24px;
+    }
     .inv-sum-card {
         background: #fff; border: 1px solid #e2e8f0;
-        border-radius: 12px; padding: 16px 18px; box-shadow: 0 2px 6px rgba(0,0,0,.02);
+        border-radius: 12px; padding: 16px 18px;
+        box-shadow: 0 2px 6px rgba(0,0,0,.02);
     }
-    .inv-sum-card.highlight { background: linear-gradient(135deg, #fef2f2, #fee2e2); border-color: #fecaca; }
+    .inv-sum-card.highlight {
+        background: linear-gradient(135deg, #f0fdf4, #e8f9ee);
+        border-color: #bbf7d0;
+    }
     .inv-sum-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-    .inv-sum-card-icon { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; }
-    .inv-sum-card-icon.blue { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .inv-sum-card-icon {
+        width: 28px; height: 28px; border-radius: 7px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .inv-sum-card-icon.blue  { background: var(--fc-blue-lt);  color: var(--fc-blue); }
     .inv-sum-card-icon.amber { background: var(--fc-amber-lt); color: var(--fc-amber); }
-    .inv-sum-card-icon.red { background: #fee2e2; color: var(--fc-red); }
+    .inv-sum-card-icon.green { background: #dcfce7; color: var(--fc-green); }
     .inv-sum-card-title { font-size: 11.5px; font-weight: 700; color: #64748b; }
     .inv-sum-card-val { font-size: 18px; font-weight: 900; color: #1e293b; }
-    .inv-sum-card-val.expense { color: var(--fc-red); font-size: 20px; }
+    .inv-sum-card-val.primary { color: var(--fc-green); font-size: 20px; }
     .inv-sum-card-val small { font-size: 11px; font-weight: 700; color: #94a3b8; }
 
+    /* ── Bottom Actions ── */
     .bk-bottom-actions {
-        display: flex; align-items: center; justify-content: space-between; gap: 12px;
-        padding: 14px 20px; background: var(--fc-card); border: 1px solid var(--fc-border);
-        border-radius: var(--fc-radius); box-shadow: 0 2px 8px rgba(15,41,82,.04);
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; padding: 14px 20px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 8px rgba(15,41,82,.04);
     }
     .bk-bottom-back {
-        display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px;
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 16px;
         border: 1px solid var(--fc-border); border-radius: 9px;
         background: var(--fc-card); color: var(--fc-muted);
-        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s ease;
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
     }
     .bk-bottom-back:hover { background: #f0f4fa; color: var(--fc-text); }
     .bk-bottom-back svg { transform: rotate(180deg); }
@@ -1075,6 +1307,7 @@
     .bk-bottom-save:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(30,110,245,.38); }
     .bk-bottom-save:disabled { opacity: .6; cursor: not-allowed; }
 
+    /* ── FAB ── */
     .glow-fab-wrap { position: fixed; left: 28px; bottom: 28px; z-index: 1299; }
     .glow-fab-container { position: relative; z-index: 2; width: 64px; height: 64px; }
     .glow-fab-btn {
@@ -1140,7 +1373,10 @@
     }
     .btn-spinner.sm { width: 13px; height: 13px; }
 
+    /* ── Responsive ── */
     @@media (max-width: 992px) {
+        .inv-manual-grid { grid-template-columns: 1fr 1fr; }
+        .inv-manual-grid .span-2 { grid-column: 1 / -1; }
         .inv-summary-cards { grid-template-columns: 1fr; }
         .bk-hero-summary { flex-wrap: wrap; }
         .bk-sum-item { flex: 0 0 50%; }
@@ -1150,6 +1386,7 @@
     @@media (max-width: 768px) {
         .bk-body { padding: 12px 12px 90px; }
         .bk-form-grid { grid-template-columns: 1fr; }
+        .inv-manual-grid { grid-template-columns: 1fr; }
         .bk-bottom-actions { flex-direction: column; }
         .bk-bottom-back, .bk-bottom-save, .bk-next-btn { width: 100%; justify-content: center; }
         .bk-bottom-right { width: 100%; flex-direction: column; }
@@ -1169,10 +1406,11 @@
     private bool    _fabOpen;
 
     private AuthUser? _user;
-    private bool CanCreate => (_user?.Can("SUPPLIER.CREATE") ?? false);
-    private bool CanEdit   => (_user?.Can("SUPPLIER.EDIT")   ?? false);
+    private bool CanCreate => _user?.Can("INVOICE.CREATE") ?? false;
+    private bool CanEdit   => _user?.Can("INVOICE.EDIT")   ?? false;
     private bool CanSave   => _id is null ? CanCreate : CanEdit;
-    private bool Locked    => _id is not null && _status != "Draft";
+
+    private bool Locked => _id is not null && _status is not ("Draft" or "Approved");
 
     private bool    _loading = true;
     private bool    _saving;
@@ -1180,29 +1418,35 @@
     private string? _msg;
     private bool    _ok = true;
 
-    private Form       _f     = new();
-    private List<Line> _lines = new();
+    private Form     _f      = new();
+    private LineForm _manual = new();
+    private long     _pickOp;
 
-    private List<Opt> _suppliers          = new();
-    private List<Opt> _filteredSuppliers  = new();
-    private List<Opt> _branches           = new();
-    private List<Opt> _taxRates           = new();
+    private List<Cust>  _customers         = new();
+    private List<Cust>  _filteredCustomers = new();
+    private List<Svc>   _services          = new();
+    private List<Tax>   _taxRates          = new();
+    private List<OpRef> _ops               = new();
 
-    private string _supplierSearch = "";
-    private bool   _showSupplierDropdown;
-    private int    _focusedSupplierIndex = -1;
+    private string _customerSearch = "";
+    private bool   _showCustomerDropdown;
+    private int    _focusedItemIndex = -1; // لتتبع العنصر المختار بالأسهم
 
+    /* ── Validation Feedback ── */
     private bool HasTabError(int tab) => _triedSave && tab switch
     {
-        1 => _f.SupplierId == 0 || _f.BranchId == 0 || string.IsNullOrWhiteSpace(_f.InvoiceDate),
-        2 => !_lines.Any(l => l.Quantity > 0 && !string.IsNullOrWhiteSpace(l.Description)),
+        1 => _f.CustomerId == 0 || string.IsNullOrWhiteSpace(_f.InvoiceDate),
+        2 => !_f.Items.Any(),
         _ => false
     };
 
+    /* ── Status Arabic & Colors ── */
     private static string StatusAr(string s) => s switch
     {
         "Draft"         => "مسودة",
         "Approved"      => "معتمدة",
+        "Issued"        => "مصدّرة",
+        "Sent"          => "مُرسلة",
         "PartiallyPaid" => "مدفوعة جزئياً",
         "Paid"          => "مدفوعة بالكامل",
         "Cancelled"     => "ملغاة",
@@ -1213,23 +1457,24 @@
     {
         "Draft"         => "badge-draft",
         "Approved"      => "badge-approved",
+        "Issued"        => "badge-issued",
+        "Sent"          => "badge-sent",
         "Paid"          => "badge-paid",
         "PartiallyPaid" => "badge-partpaid",
         "Cancelled"     => "badge-cancelled",
         _               => "badge-draft"
     };
 
+    /* ── Init ── */
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
         _id = Id;
-        if (!CanSave && !(_id is not null && CanEdit)) { _loading = false; return; }
+        if (!CanSave) { _loading = false; return; }
 
-        _suppliers = await SafeOpts("api/options/suppliers");
-        _branches  = await SafeOpts("api/options/branches");
-
-        try { _taxRates = await Http.GetFromJsonAsync<List<Opt>>("api/options/tax-rates") ?? new(); }
-        catch { _taxRates = new(); }
+        _customers = await SafeGetT<Cust>("api/invoices/customers");
+        _services  = await SafeGetT<Svc>("api/invoices/services");
+        _taxRates  = await SafeGetT<Tax>("api/invoices/tax-rates");
 
         if (_id is not null)
         {
@@ -1238,8 +1483,6 @@
         else
         {
             _f.InvoiceDate = DateTime.Today.ToString("yyyy-MM-dd");
-            if (_branches.Count > 0) _f.BranchId = _branches[0].Id;
-            AddLine();
             _loading = false;
         }
     }
@@ -1249,309 +1492,385 @@
         _loading = true;
         try
         {
-            var d = await Http.GetFromJsonAsync<Detail>($"api/supplier-invoices/{id}");
-            if (d is null) { _ok = false; _msg = "الفاتورة مش موجودة"; return; }
+            var e = await Http.GetFromJsonAsync<Envelope>($"api/invoices/{id}");
+            if (e is null) { _ok = false; _msg = "الفاتورة غير موجودة بالسجلات"; return; }
 
-            _number = d.SupplierInvoiceNumber;
-            _status = d.Status;
-
+            _number = e.Invoice.InvoiceNumber;
+            _status = e.Invoice.Status;
             _f = new Form
             {
-                SupplierId        = d.SupplierId,
-                BranchId          = d.BranchId,
-                InvoiceDate       = d.InvoiceDate,
-                DueDate           = d.DueDate,
-                SupplierRefNumber = d.SupplierRefNumber,
-                Notes             = d.Notes
+                CustomerId  = e.Invoice.CustomerId,
+                InvoiceDate = e.Invoice.InvoiceDate,
+                DueDate     = e.Invoice.DueDate,
+                Notes       = e.Invoice.Notes,
+                Items       = e.Items.Select(x => x.ToForm()).ToList()
             };
-
-            _supplierSearch = d.SupplierName;
-
-            _lines = d.Lines.Select(l => new Line
-            {
-                Description = l.Description,
-                Quantity    = l.Quantity,
-                UnitPrice   = l.UnitPrice,
-                TaxRateId   = MatchTax(l.TaxRate)
-            }).ToList();
-
-            if (_lines.Count == 0) AddLine();
+            _customerSearch = e.Invoice.CustomerName;
+            _ops = await SafeGetT<OpRef>($"api/invoices/billable-operations?customerId={_f.CustomerId}");
         }
-        catch (Exception ex) { _ok = false; _msg = "فشل التحميل: " + ex.Message; }
+        catch (Exception ex) { _ok = false; _msg = "فشل في تحميل الفاتورة: " + ex.Message; }
         finally { _loading = false; }
     }
 
-    private int? MatchTax(decimal rate)
+    /* ── Autocomplete Search (معالجة الأحداث الذكية) ── */
+    private void OnCustomerSearch(ChangeEventArgs e)
     {
-        if (rate <= 0m) return null;
-        var hit = _taxRates.FirstOrDefault(t => TaxValue(t.Id) == rate);
-        return hit?.Id;
+        _customerSearch = e.Value?.ToString() ?? "";
+        _showCustomerDropdown = true;
+        _focusedItemIndex = -1; // إعادة تصفير السهم عند الكتابة الجديدة
+        FilterCustomers(_customerSearch);
     }
 
-    private async Task<List<Opt>> SafeOpts(string url)
-    {
-        try { return await Http.GetFromJsonAsync<List<Opt>>(url) ?? new(); }
-        catch (Exception ex)
-        {
-            _ok = false;
-            _msg = $"تعذّر تحميل القوائم ({url}): {ex.Message}";
-            return new();
-        }
-    }
-
-    /* ── بحث المورد الذكي ── */
-    private void OnSupplierSearch(ChangeEventArgs e)
-    {
-        _supplierSearch = e.Value?.ToString() ?? "";
-        _showSupplierDropdown = true;
-        _focusedSupplierIndex = -1;
-        FilterSuppliers(_supplierSearch);
-    }
-
-    private void FilterSuppliers(string search)
+    private void FilterCustomers(string search)
     {
         if (string.IsNullOrWhiteSpace(search))
         {
-            _filteredSuppliers = _suppliers.Take(20).ToList();
+            _filteredCustomers = _customers.Take(20).ToList();
             return;
         }
 
         var normalized = NormalizeArabic(search.Trim());
-        _filteredSuppliers = _suppliers
-            .Where(s => NormalizeArabic(s.Label).Contains(normalized))
+        _filteredCustomers = _customers
+            .Where(c => NormalizeArabic(c.Label).Contains(normalized) ||
+                        NormalizeArabic(c.Code).Contains(normalized))
             .Take(20)
             .ToList();
     }
 
-    private void OnSupplierInputKeyDown(KeyboardEventArgs e)
+    private async Task OnCustomerInputKeyDown(KeyboardEventArgs e)
     {
-        if (!_showSupplierDropdown || !_filteredSuppliers.Any())
+        if (!_showCustomerDropdown || !_filteredCustomers.Any())
         {
-            if (e.Key == "ArrowDown") _showSupplierDropdown = true;
+            if (e.Key == "ArrowDown") _showCustomerDropdown = true;
             return;
         }
 
         if (e.Key == "ArrowDown")
-            _focusedSupplierIndex = (_focusedSupplierIndex + 1) % _filteredSuppliers.Count;
+        {
+            _focusedItemIndex = (_focusedItemIndex + 1) % _filteredCustomers.Count;
+        }
         else if (e.Key == "ArrowUp")
-            _focusedSupplierIndex = _focusedSupplierIndex <= 0 ? _filteredSuppliers.Count - 1 : _focusedSupplierIndex - 1;
+        {
+            _focusedItemIndex = _focusedItemIndex <= 0 ? _filteredCustomers.Count - 1 : _focusedItemIndex - 1;
+        }
         else if (e.Key == "Enter")
         {
-            if (_focusedSupplierIndex >= 0 && _focusedSupplierIndex < _filteredSuppliers.Count)
-                PickSupplier(_filteredSuppliers[_focusedSupplierIndex]);
+            if (_focusedItemIndex >= 0 && _focusedItemIndex < _filteredCustomers.Count)
+            {
+                await PickCustomer(_filteredCustomers[_focusedItemIndex]);
+            }
         }
         else if (e.Key == "Escape")
         {
-            _showSupplierDropdown = false;
-            _focusedSupplierIndex = -1;
+            _showCustomerDropdown = false;
+            _focusedItemIndex = -1;
         }
     }
 
-    private void OnSupplierInputFocus()
+    private void OnCustomerInputFocus()
     {
-        _showSupplierDropdown = true;
-        _focusedSupplierIndex = -1;
-        FilterSuppliers(_supplierSearch);
+        _showCustomerDropdown = true;
+        _focusedItemIndex = -1;
+        FilterCustomers(_customerSearch);
     }
 
-    private async Task OnSupplierInputBlur()
+    private async Task OnCustomerInputBlur()
     {
+        // ننتظر قليلاً للسماح لـ mousedown بتسجيل الاختيار قبل إخفاء القائمة
         await Task.Delay(200);
-        _showSupplierDropdown = false;
-
-        if (_f.SupplierId > 0)
+        _showCustomerDropdown = false;
+        
+        // إذا خرج المستخدم ولم يثبت عميل حقيقي، نعيد إرجاع القيمة السابقة أو تصفيرها
+        if (_f.CustomerId > 0)
         {
-            var current = _suppliers.FirstOrDefault(s => s.Id == _f.SupplierId);
-            if (current != null) _supplierSearch = current.Label;
+            var current = _customers.FirstOrDefault(c => c.Id == _f.CustomerId);
+            if (current != null) _customerSearch = current.Label;
         }
         else
         {
-            _supplierSearch = "";
+            _customerSearch = "";
         }
     }
 
-    private void PickSupplier(Opt s)
+    private async Task PickCustomer(Cust c)
     {
         if (Locked) return;
-        _f.SupplierId = s.Id;
-        _supplierSearch = s.Label;
-        _showSupplierDropdown = false;
-        _focusedSupplierIndex = -1;
+        _f.CustomerId = c.Id;
+        _customerSearch = c.Label;
+        _showCustomerDropdown = false;
+        _focusedItemIndex = -1;
+        _f.Items = new();
+        _ops = await SafeGetT<OpRef>($"api/invoices/billable-operations?customerId={_f.CustomerId}");
         StateHasChanged();
     }
 
-    private void ClearSupplierSelection()
+    private void ClearCustomerSelection()
     {
-        _f.SupplierId = 0;
-        _supplierSearch = "";
-        _focusedSupplierIndex = -1;
-        _filteredSuppliers = _suppliers.Take(20).ToList();
+        _f.CustomerId = 0;
+        _customerSearch = "";
+        _focusedItemIndex = -1;
+        _filteredCustomers = _customers.Take(20).ToList();
+        _f.Items = new();
+        _ops = new();
     }
 
+    /* ── التطبيع الفائق للغة العربية ── */
     private static string NormalizeArabic(string s)
     {
         if (string.IsNullOrEmpty(s)) return s;
 
+        // إزالة الحركات والتشكيل تماماً لعدم التشويش على المطابقة
         string[] diacritics = new[] { "َ", "ُ", "ِ", "ّ", "ً", "ٌ", "ٍ", "ْ", "ـ" };
         foreach (var d in diacritics)
+        {
             s = s.Replace(d, "");
+        }
 
         return s
-            .Replace('أ', 'ا').Replace('إ', 'ا').Replace('آ', 'ا').Replace('ٱ', 'ا').Replace('ء', 'ا')
+            .Replace('أ', 'ا')
+            .Replace('إ', 'ا')
+            .Replace('آ', 'ا')
+            .Replace('ٱ', 'ا')
+            .Replace('ء', 'ا')
             .Replace('ة', 'ه')
             .Replace('ى', 'ي')
             .Replace('ؤ', 'و')
             .Replace('ئ', 'ي')
-            .Replace("  ", " ")
+            .Replace("  ", " ") // معالجة المسافات الثنائية
             .ToLowerInvariant()
             .Trim();
     }
 
-    private void AddLine() => _lines.Add(new Line { Quantity = 1m });
+    /* ── Operations Lines Import ── */
+    private async Task OnPickOp(ChangeEventArgs e)
+    {
+        var id = long.TryParse(e.Value?.ToString(), out var v) && v > 0 ? v : 0;
+        if (id == 0) return;
+        try
+        {
+            var lines = await Http.GetFromJsonAsync<List<LineForm>>($"api/invoices/operations/{id}/lines");
+            if (lines is null || lines.Count == 0)
+            { 
+                Snackbar.Add("هذه العملية لا تحتوي على بنود إيرادات", Severity.Warning); 
+                return; 
+            }
+            _f.Items.AddRange(lines);
+            Snackbar.Add($"تم إدراج {lines.Count} بنود بنجاح من العملية", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add("فشل استيراد العملية: " + ex.Message, Severity.Error); }
+    }
 
-    private decimal TaxValue(int? id) =>
-        id is null ? 0m : _taxRates.FirstOrDefault(t => t.Id == id.Value)?.Value ?? 0m;
+    /* ── Manual Lines ── */
+    private void OnManualService(ChangeEventArgs e)
+    {
+        var n = ParseInt(e.Value);
+        _manual.ServiceId = n > 0 ? n : null;
+        var s = _services.FirstOrDefault(x => x.Id == _manual.ServiceId);
+        if (s is null) return;
+        _manual.Description = s.Label;
+        _manual.TaxRateId ??= s.TaxRateId;
+    }
 
-    private decimal LineSub(Line l) => Math.Round(l.Quantity * l.UnitPrice, 4);
-    private decimal LineTax(Line l) => Math.Round(LineSub(l) * TaxValue(l.TaxRateId) / 100m, 4);
-    private decimal LineTotal(Line l) => LineSub(l) + LineTax(l);
-    private decimal SubTotal => _lines.Sum(LineSub);
-    private decimal TaxTotal => _lines.Sum(LineTax);
+    private void AddManual()
+    {
+        if (string.IsNullOrWhiteSpace(_manual.Description))
+        { 
+            Snackbar.Add("يرجى اختيار الخدمة أولاً", Severity.Warning); 
+            return; 
+        }
+        _f.Items.Add(new LineForm
+        {
+            ServiceId   = _manual.ServiceId, 
+            Description = _manual.Description,
+            Quantity    = _manual.Quantity == 0 ? 1 : _manual.Quantity,
+            UnitPrice   = _manual.UnitPrice, 
+            Discount    = _manual.Discount, 
+            TaxRateId   = _manual.TaxRateId
+        });
+        _manual = new LineForm();
+    }
 
-    private static string Req(object? v) => v?.ToString() ?? "";
+    private void OnLineTax(LineForm l, ChangeEventArgs e)
+    {
+        var n = ParseInt(e.Value);
+        l.TaxRateId = n > 0 ? n : null;
+    }
 
+    /* ── Computed Calculations ── */
+    private decimal RateOf(int id) => _taxRates.FirstOrDefault(t => t.Id == id)?.Rate ?? 0m;
+    private decimal LineSub(LineForm l) => l.Quantity * l.UnitPrice - l.Discount;
+    private decimal LineTax(LineForm l) =>
+        Math.Round(LineSub(l) * (l.TaxRateId is null ? 0m : RateOf(l.TaxRateId.Value)) / 100m, 4);
+    private decimal LineTotal(LineForm l) => LineSub(l) + LineTax(l);
+    private decimal SubTotal  => _f.Items.Sum(LineSub);
+    private decimal TaxTotal  => _f.Items.Sum(LineTax);
+    private decimal FormTotal => _f.Items.Sum(LineTotal);
+
+    /* ── Save ── */
+    private async Task SaveAsync()
+    {
+        _triedSave = true;
+        _msg = null;
+
+        if (_f.CustomerId <= 0) 
+        { 
+            _ok = false; 
+            _msg = "يرجى اختيار العميل أولاً"; 
+            _activeTab = 0;
+            return; 
+        }
+
+        if (!_f.Items.Any())    
+        { 
+            _ok = false; 
+            _msg = "يرجى إضافة بند واحد على الأقل للفاتورة"; 
+            _activeTab = 1;
+            return; 
+        }
+
+        _saving = true;
+        try
+        {
+            var payload = new
+            {
+                customerId   = _f.CustomerId, 
+                invoiceDate  = _f.InvoiceDate, 
+                dueDate      = _f.DueDate,
+                notes        = _f.Notes,
+                items = _f.Items.Select(l => new
+                {
+                    operationId = l.OperationId, 
+                    serviceId   = l.ServiceId, 
+                    priceRuleId = l.PriceRuleId,
+                    description = l.Description, 
+                    quantity    = l.Quantity, 
+                    unitPrice   = l.UnitPrice,
+                    discount    = l.Discount, 
+                    taxRateId   = l.TaxRateId
+                }).ToList(),
+                operationIds = _f.Items.Where(l => l.OperationId is not null)
+                                       .Select(l => l.OperationId!.Value).Distinct().ToList()
+            };
+
+            var res = _id is null
+                ? await Http.PostAsJsonAsync("api/invoices", payload)
+                : await Http.PutAsJsonAsync($"api/invoices/{_id}", payload);
+
+            _msg = await MsgOf(res); 
+            _ok = res.IsSuccessStatusCode;
+
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(_msg, Severity.Success);
+                Nav.NavigateTo("/invoices");
+            }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل في حفظ الفاتورة: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private void GoBack() => Nav.NavigateTo("/invoices");
+    private void ToggleFab() => _fabOpen = !_fabOpen;
+
+    private async Task<List<T>> SafeGetT<T>(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<T>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم الحفظ بنجاح" : $"حدث خطأ {(int)res.StatusCode}"; }
+    }
+
+    private static string Money(decimal v) => v.ToString("N2");
+    private static decimal ParseDec(object? v) => decimal.TryParse(v?.ToString(), out var n) ? n : 0m;
+    private static int ParseInt(object? v)     => int.TryParse(v?.ToString(), out var n) ? n : 0;
+    private static string Req(object? v)       => v?.ToString() ?? "";
     private static string? OptStr(object? v)
     {
         var t = v?.ToString();
         return string.IsNullOrWhiteSpace(t) ? null : t;
     }
 
-    private static decimal? ParseDec(object? v) =>
-        decimal.TryParse(v?.ToString(), out var d) ? d : null;
-
-    private static string Money(decimal v) => v.ToString("N2");
-
-    private async Task SaveAsync()
-    {
-        _triedSave = true;
-        _msg = null;
-
-        if (_f.SupplierId <= 0) { _ok = false; _msg = "لازم تختار المورد"; _activeTab = 0; return; }
-        if (_f.BranchId   <= 0) { _ok = false; _msg = "لازم تختار الفرع"; _activeTab = 0; return; }
-
-        var lines = _lines.Where(l => l.Quantity > 0 && !string.IsNullOrWhiteSpace(l.Description)).ToList();
-        if (lines.Count == 0) { _ok = false; _msg = "ضيف بند واحد على الأقل (بيان + كمية)"; _activeTab = 1; return; }
-
-        var payload = new
-        {
-            supplierId        = _f.SupplierId,
-            branchId          = _f.BranchId,
-            invoiceDate       = _f.InvoiceDate,
-            dueDate           = _f.DueDate,
-            supplierRefNumber = _f.SupplierRefNumber,
-            notes             = _f.Notes,
-            lines             = lines.Select(l => new
-            {
-                tripId        = (long?)null,
-                operationId   = (long?)null,
-                expenseTypeId = (int?)null,
-                description   = l.Description.Trim(),
-                quantity      = l.Quantity,
-                unitPrice     = l.UnitPrice,
-                taxRate       = TaxValue(l.TaxRateId)
-            }).ToList()
-        };
-
-        _saving = true;
-        try
-        {
-            var res = _id is null
-                ? await Http.PostAsJsonAsync("api/supplier-invoices", payload)
-                : await Http.PutAsJsonAsync($"api/supplier-invoices/{_id}", payload);
-
-            _msg = Msg(await res.Content.ReadAsStringAsync(), res.IsSuccessStatusCode ? "تم الحفظ بنجاح" : "فشل الحفظ");
-            _ok = res.IsSuccessStatusCode;
-            Snackbar.Add(_msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
-
-            if (res.IsSuccessStatusCode) GoBack();
-        }
-        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
-        finally { _saving = false; }
-    }
-
-    private void GoBack() => Nav.NavigateTo("/supplier-invoices");
-    private void ToggleFab() => _fabOpen = !_fabOpen;
-
-    private static string Msg(string body, string fallback)
-    {
-        if (string.IsNullOrWhiteSpace(body) || body.TrimStart().StartsWith("<")) return fallback;
-        try
-        {
-            using var d = System.Text.Json.JsonDocument.Parse(body);
-            if (d.RootElement.TryGetProperty("message", out var m)) return m.GetString() ?? fallback;
-        }
-        catch { }
-        return fallback;
-    }
-
+    /* ── DTOs ── */
     public class Form
     {
-        public int     SupplierId        { get; set; }
-        public int     BranchId          { get; set; }
-        public string  InvoiceDate       { get; set; } = "";
-        public string? DueDate           { get; set; }
-        public string? SupplierRefNumber { get; set; }
-        public string? Notes             { get; set; }
+        public int            CustomerId  { get; set; }
+        public string?        InvoiceDate { get; set; }
+        public string?        DueDate     { get; set; }
+        public string?        Notes       { get; set; }
+        public List<LineForm> Items       { get; set; } = new();
     }
 
-    public class Line
+    public class LineForm
     {
-        public string  Description { get; set; } = "";
-        public decimal Quantity    { get; set; }
-        public decimal UnitPrice   { get; set; }
-        public int?    TaxRateId   { get; set; }
+        public long?   OperationId     { get; set; }
+        public string? OperationNumber { get; set; }
+        public int?    ServiceId       { get; set; }
+        public long?   PriceRuleId     { get; set; }
+        public string  Description     { get; set; } = "";
+        public decimal Quantity        { get; set; } = 1;
+        public decimal UnitPrice       { get; set; }
+        public decimal Discount        { get; set; }
+        public int?    TaxRateId       { get; set; }
     }
+
+    public class LineOut
+    {
+        public long    InvoiceItemId   { get; set; }
+        public long?   OperationId     { get; set; }
+        public string? OperationNumber { get; set; }
+        public int?    ServiceId       { get; set; }
+        public string  Description     { get; set; } = "";
+        public decimal Quantity        { get; set; }
+        public decimal UnitPrice       { get; set; }
+        public decimal Discount        { get; set; }
+        public int?    TaxRateId       { get; set; }
+        public decimal TaxRate         { get; set; }
+        public decimal LineSubtotal    { get; set; }
+        public decimal LineTax         { get; set; }
+        public decimal LineTotal       { get; set; }
+
+        public LineForm ToForm() => new()
+        {
+            OperationId     = OperationId, 
+            OperationNumber = OperationNumber, 
+            ServiceId       = ServiceId,
+            Description     = Description, 
+            Quantity        = Quantity, 
+            UnitPrice       = UnitPrice,
+            Discount        = Discount, 
+            TaxRateId       = TaxRateId
+        };
+    }
+
+    public class Cust  { public int Id { get; set; } public string Label { get; set; } = ""; public string Code { get; set; } = ""; public int? PaymentTermId { get; set; } }
+    public class Svc   { public int Id { get; set; } public string Label { get; set; } = ""; public string Unit { get; set; } = ""; public int? TaxRateId { get; set; } }
+    public class Tax   { public int Id { get; set; } public string Label { get; set; } = ""; public decimal Rate { get; set; } }
+    public class OpRef { public long OperationId { get; set; } public string OperationNumber { get; set; } = ""; public string CustomerName { get; set; } = ""; public decimal RevenueNet { get; set; } public string? InvoiceNumber { get; set; } }
 
     public class Detail
     {
-        public long    SupplierInvoiceId     { get; set; }
-        public string  SupplierInvoiceNumber { get; set; } = "";
-        public string? SupplierRefNumber     { get; set; }
-        public int     SupplierId            { get; set; }
-        public string  SupplierName          { get; set; } = "";
-        public int     BranchId              { get; set; }
-        public string  InvoiceDate           { get; set; } = "";
-        public string? DueDate               { get; set; }
-        public string  CurrencyCode          { get; set; } = "";
-        public decimal SubTotal              { get; set; }
-        public decimal TaxTotal              { get; set; }
-        public decimal GrandTotal            { get; set; }
-        public decimal PaidAmount            { get; set; }
-        public string  Status                { get; set; } = "";
-        public string  PaymentStatus         { get; set; } = "";
-        public string? Notes                 { get; set; }
-        public List<LineRes> Lines           { get; set; } = new();
+        public long    InvoiceId     { get; set; }
+        public string  InvoiceNumber { get; set; } = "";
+        public int     CustomerId    { get; set; }
+        public string  CustomerName  { get; set; } = "";
+        public string? InvoiceDate   { get; set; }
+        public string? DueDate       { get; set; }
+        public string  Status        { get; set; } = "";
+        public string? Notes         { get; set; }
     }
 
-    public class LineRes
+    public class Envelope
     {
-        public long?   SupplierInvoiceItemId { get; set; }
-        public long?   TripId                { get; set; }
-        public long?   OperationId           { get; set; }
-        public int?    ExpenseTypeId         { get; set; }
-        public string  Description           { get; set; } = "";
-        public decimal Quantity              { get; set; }
-        public decimal UnitPrice             { get; set; }
-        public decimal TaxRate               { get; set; }
-        public decimal LineSubtotal          { get; set; }
-        public decimal LineTax               { get; set; }
-        public decimal LineTotal             { get; set; }
-    }
-
-    public class Opt
-    {
-        public int     Id    { get; set; }
-        public string  Label { get; set; } = "";
-        public decimal Value { get; set; }
+        public Detail        Invoice { get; set; } = new();
+        public List<LineOut> Items   { get; set; } = new();
     }
 }

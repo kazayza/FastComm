@@ -6,66 +6,125 @@
 @inject AuthService Auth
 @inject ISnackbar Snackbar
 
-<PageTitle>الخزينة — فاست كوم</PageTitle>
+<PageTitle>الخزينة وصناديق النقد — فاست كوم</PageTitle>
 
+@* ═══════════════════════════════════════════
+   HERO SECTION
+═══════════════════════════════════════════ *@
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
 
-<div class="fc-hero">
-    <div class="fc-hero-inner">
-        <div class="fc-page-head">
-            <div>
-                <div class="fc-crumb">المالية · الخزينة</div>
-                <h1 class="fc-hero-title">الخزينة</h1>
-                <p class="fc-hero-sub">الصناديق النقدية وحركاتها — الأرصدة بتتحدّث أوتوماتيك من الحركات</p>
+            <div class="si-hero-row">
+                <div class="si-hero-left">
+                    <div class="si-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                            <line x1="9" y1="3" x2="9" y2="21"/>
+                        </svg>
+                        <span>المالية · الخزينة وصناديق النقد</span>
+                    </div>
+                    <h1 class="fc-hero-title fc-hero-title-slim">الخزينة وصناديق النقد</h1>
+                    <span class="si-hero-sub">متابعة الأرصدة النقدية والسيولة — تحديث فوري ولحظي لحركات الصرف والقبض والتحويل</span>
+                </div>
+
+                <div class="si-hero-right">
+                    <button class="si-hero-refresh" @onclick="Reload" title="تحديث البيانات">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 4v6h-6"/>
+                            <path d="M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                        </svg>
+                    </button>
+                    <span class="si-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                </div>
             </div>
-            <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
-                               OnClick="Reload" Style="color:#9FB4CC" />
-            </div>
+
+            @* ── KPI Cards (Rounded Glass & Filterable) ── *@
+            @if (CanView && !_loading)
+            {
+                <div class="tr-kpis-grid">
+
+                    <div class="tr-kpi-card @(_kpi == "" ? "tr-kpi-active" : "")" @onclick='() => SetKpi("")' role="button" tabindex="0" title="عرض كل الحركات">
+                        <div class="tr-kpi-icon kpi-blue" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 21h18M3 10h18M5 6h14M10 10v11M14 10v11" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="tr-kpi-info">
+                            <div class="tr-kpi-num">@Money(TotalBalance) <small>ج.م</small></div>
+                            <div class="tr-kpi-label">إجمالي الأرصدة القائمة</div>
+                        </div>
+                    </div>
+
+                    <div class="tr-kpi-card @(_kpi == "Receipt" ? "tr-kpi-active" : "")" @onclick='() => SetKpi("Receipt")' role="button" tabindex="0" title="فلترة الواردات اليومية">
+                        <div class="tr-kpi-icon kpi-green" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                        </div>
+                        <div class="tr-kpi-info">
+                            <div class="tr-kpi-num val-green">@Money(TodayIn) <small>ج.م</small></div>
+                            <div class="tr-kpi-label">الواردات اليومية</div>
+                        </div>
+                    </div>
+
+                    <div class="tr-kpi-card @(_kpi == "Payment" ? "tr-kpi-active" : "")" @onclick='() => SetKpi("Payment")' role="button" tabindex="0" title="فلترة الصادرات اليومية">
+                        <div class="tr-kpi-icon kpi-red" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="1" x2="12" y2="23"></line>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                        </div>
+                        <div class="tr-kpi-info">
+                            <div class="tr-kpi-num val-red">@Money(TodayOut) <small>ج.م</small></div>
+                            <div class="tr-kpi-label">الصادرات اليومية</div>
+                        </div>
+                    </div>
+
+                    <div class="tr-kpi-card @(_kpi == "posted" ? "tr-kpi-active" : "")" @onclick='() => SetKpi("posted")' role="button" tabindex="0" title="عرض المعاملات السارية">
+                        <div class="tr-kpi-icon kpi-amber" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
+                                <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="tr-kpi-info">
+                            <div class="tr-kpi-num val-amber">@_txs.Count(t => t.Status == "Posted")</div>
+                            <div class="tr-kpi-label">المعاملات السارية</div>
+                        </div>
+                    </div>
+
+                </div>
+            }
+
         </div>
-
-        @if (CanView)
-        {
-            <div class="fc-kpis fc-kpis-glass">
-                <div class="fc-kpi fc-kpi-click @(_kpi == "" ? "fc-kpi-active" : "")" role="button" tabindex="0"
-                     @onclick='() => SetKpi("")' title="عرض كل الحركات">
-                    <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.AccountBalance" /></div>
-                    <div><div class="fc-kpi-num">@Money(TotalBalance)</div><div class="fc-kpi-lb">إجمالي الأرصدة</div></div>
-                </div>
-                <div class="fc-kpi fc-kpi-click @(_kpi == "Receipt" ? "fc-kpi-active" : "")" role="button" tabindex="0"
-                     @onclick='() => SetKpi("Receipt")' title="وارد النهاردة">
-                    <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Payments" /></div>
-                    <div><div class="fc-kpi-num">@Money(TodayIn)</div><div class="fc-kpi-lb">وارد النهاردة</div></div>
-                </div>
-                <div class="fc-kpi fc-kpi-click @(_kpi == "Payment" ? "fc-kpi-active" : "")" role="button" tabindex="0"
-                     @onclick='() => SetKpi("Payment")' title="صادر النهاردة">
-                    <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
-                    <div><div class="fc-kpi-num">@Money(TodayOut)</div><div class="fc-kpi-lb">صادر النهاردة</div></div>
-                </div>
-                <div class="fc-kpi fc-kpi-click @(_kpi == "posted" ? "fc-kpi-active" : "")" role="button" tabindex="0"
-                     @onclick='() => SetKpi("posted")' title="الحركات السارية">
-                    <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.FactCheck" /></div>
-                    <div><div class="fc-kpi-num">@_txs.Count(t => t.Status == "Posted")</div><div class="fc-kpi-lb">حركة سارية</div></div>
-                </div>
-            </div>
-        }
     </div>
 </div>
 
 
-<div class="tr-body">
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="bk-body">
 
     @if (!CanView)
     {
-        <div class="tr-state-box">
-            <div class="tr-state-icon perm" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="34" height="34"
-                     fill="none" stroke="currentColor" stroke-width="1.7">
+        <div class="si-state-box">
+            <div class="si-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.7">
                     <rect x="3" y="11" width="18" height="11" rx="2"/>
                     <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
                 </svg>
             </div>
             <h3>ليس لديك صلاحية</h3>
-            <p>ليس لديك صلاحية عرض الخزينة</p>
+            <p>ليست لديك الصلاحية الأمنية الكافية لعرض سجلات وبيانات الخزينة.</p>
         </div>
     }
     else
@@ -78,8 +137,7 @@
                 {
                     <div class="tr-box-card @(b.Status == "Closed" ? "box-closed" : "")">
                         <div class="tr-box-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" width="22" height="22"
-                                 fill="none" stroke="currentColor" stroke-width="2">
+                            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
                                 <rect x="2" y="7" width="20" height="14" rx="2"/>
                                 <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
                                 <circle cx="12" cy="14" r="2"/>
@@ -90,19 +148,18 @@
                                 @b.NameAr
                                 @if (b.Code == _defaultBoxCode)
                                 {
-                                    <span class="tr-box-badge badge-main">رئيسية</span>
+                                    <span class="tr-box-badge badge-main">الرئيسية</span>
                                 }
                                 @if (b.Status == "Closed")
                                 {
-                                    <span class="tr-box-badge badge-closed">مقفولة</span>
+                                    <span class="tr-box-badge badge-closed">مغلقة</span>
                                 }
                             </div>
-                            <div class="tr-box-code">@b.Code · @b.TxCount حركة</div>
+                            <div class="tr-box-code">@b.Code · @b.TxCount معاملة</div>
                             @if (!string.IsNullOrEmpty(b.ResponsibleEmployeeName))
                             {
                                 <div class="tr-box-emp">
-                                    <svg viewBox="0 0 24 24" width="11" height="11" fill="none"
-                                         stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                         <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
                                         <circle cx="12" cy="7" r="4"/>
                                     </svg>
@@ -121,20 +178,14 @@
                             <div class="tr-box-actions">
                                 @if (b.Status == "Open" && b.Code != _defaultBoxCode)
                                 {
-                                    <a class="tr-box-act" href="/treasury/boxes/new/@b.CashBoxId"
-                                       title="تعديل الخزينة" aria-label="تعديل @b.NameAr">
-                                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
-                                             stroke="currentColor" stroke-width="2">
+                                    <a class="tr-box-act" href="/treasury/boxes/new/@b.CashBoxId" title="تعديل بيانات الخزينة">
+                                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                                             <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
                                             <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
                                         </svg>
                                     </a>
-                                    <button class="tr-box-act act-settle"
-                                            title="تسوية وإقفال"
-                                            aria-label="تسوية @b.NameAr"
-                                            @onclick="() => OpenSettle(b)">
-                                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
-                                             stroke="currentColor" stroke-width="2">
+                                    <button type="button" class="tr-box-act act-settle" title="تسوية وإقفال" @onclick="() => OpenSettle(b)">
+                                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                                             <rect x="3" y="11" width="18" height="11" rx="2"/>
                                             <path d="M7 11V7a5 5 0 0110 0v4"/>
                                         </svg>
@@ -142,12 +193,8 @@
                                 }
                                 @if (b.Status == "Closed")
                                 {
-                                    <button class="tr-box-act act-reopen"
-                                            title="إعادة فتح"
-                                            aria-label="إعادة فتح @b.NameAr"
-                                            @onclick="() => OpenReopen(b)">
-                                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
-                                             stroke="currentColor" stroke-width="2">
+                                    <button type="button" class="tr-box-act act-reopen" title="إعادة فتح الخزينة" @onclick="() => OpenReopen(b)">
+                                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                                             <rect x="3" y="11" width="18" height="11" rx="2"/>
                                             <path d="M7 11V7a5 5 0 019.9-1"/>
                                         </svg>
@@ -159,16 +206,15 @@
                 }
                 @if (CanManage)
                 {
-                    <a class="tr-box-card tr-box-add" href="/treasury/boxes/new" aria-label="خزينة جديدة">
+                    <a class="tr-box-card tr-box-add" href="/treasury/boxes/new">
                         <div class="tr-box-add-plus" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none"
-                                 stroke="currentColor" stroke-width="2.2">
+                            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2">
                                 <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
                             </svg>
                         </div>
                         <div class="tr-box-info">
                             <div class="tr-box-name">خزينة جديدة</div>
-                            <div class="tr-box-code">درج موظف أو خزينة فرعية</div>
+                            <div class="tr-box-code">درج مبيعات أو عهدة فرعية</div>
                         </div>
                     </a>
                 }
@@ -177,26 +223,24 @@
 
 
         @* ── Transactions Card ── *@
-        <div class="tr-card">
+        <div class="si-card">
 
             @* ── Toolbar ── *@
-            <div class="tr-toolbar">
+            <div class="si-toolbar">
 
-                <div class="tr-search-wrap">
-                    <svg class="tr-search-icon" viewBox="0 0 24 24" width="16" height="16"
-                         fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <div class="si-search-wrap">
+                    <svg class="si-search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <circle cx="11" cy="11" r="8"/>
                         <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
                     </svg>
-                    <input class="tr-search-input"
-                           placeholder="ابحث بالبيان أو المرجع أو العميل..."
+                    <input class="si-search-input"
+                           placeholder="البحث بالبيان، المرجع، أو اسم العميل..."
                            @bind="_search" @bind:event="oninput"
-                           aria-label="بحث" />
+                           aria-label="البحث في المعاملات" />
                     @if (!string.IsNullOrWhiteSpace(_search))
                     {
-                        <button class="tr-search-clear" @onclick="() => _search = string.Empty">
-                            <svg viewBox="0 0 24 24" width="14" height="14"
-                                 fill="none" stroke="currentColor" stroke-width="2.5">
+                        <button class="si-search-clear" @onclick="() => _search = string.Empty" title="مسح البحث">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
                                 <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
                             </svg>
                         </button>
@@ -204,14 +248,13 @@
                 </div>
 
                 @* Box Filter *@
-                <div class="tr-box-filter-wrap">
-                    <svg class="tr-box-icon-sel" viewBox="0 0 24 24" width="13" height="13"
-                         fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <div class="si-sup-filter-wrap">
+                    <svg class="si-sup-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <rect x="2" y="7" width="20" height="14" rx="2"/>
                         <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
                     </svg>
-                    <select class="tr-box-select" @bind="_boxFilter">
-                        <option value="0">كل الخزائن</option>
+                    <select class="si-sup-select" @bind="_boxFilter">
+                        <option value="0">جميع الصناديق</option>
                         @foreach (var b in _boxes)
                         {
                             <option value="@b.CashBoxId">@b.NameAr</option>
@@ -222,50 +265,33 @@
                 @* Date Range *@
                 <div class="tr-date-range">
                     <div class="tr-date-field">
-                        <svg viewBox="0 0 16 16" width="11" height="11"
-                             fill="none" stroke="currentColor" stroke-width="1.7"
-                             aria-hidden="true">
-                            <rect x="2" y="3" width="12" height="11" rx="2"/>
-                            <path d="M5 1v3M11 1v3M2 7h12" stroke-linecap="round"/>
-                        </svg>
-                        <input type="date" class="tr-date-input"
-                               value="@_from"
-                               @onchange="e => _from = e.Value?.ToString()"
-                               aria-label="من تاريخ" />
+                        <input type="date" class="tr-date-input" value="@_from" @onchange="e => _from = e.Value?.ToString()" aria-label="من تاريخ" />
                     </div>
                     <span class="tr-date-sep" aria-hidden="true">—</span>
                     <div class="tr-date-field">
-                        <svg viewBox="0 0 16 16" width="11" height="11"
-                             fill="none" stroke="currentColor" stroke-width="1.7"
-                             aria-hidden="true">
-                            <circle cx="8" cy="8" r="6"/>
-                            <path d="M8 5v3l2 2" stroke-linecap="round"/>
-                        </svg>
-                        <input type="date" class="tr-date-input"
-                               value="@_to"
-                               @onchange="e => _to = e.Value?.ToString()"
-                               aria-label="إلى تاريخ" />
+                        <input type="date" class="tr-date-input" value="@_to" @onchange="e => _to = e.Value?.ToString()" aria-label="إلى تاريخ" />
                     </div>
-                    <button class="tr-apply-btn" @onclick="LoadAsync">
-                        <svg viewBox="0 0 24 24" width="14" height="14"
-                             fill="none" stroke="currentColor" stroke-width="2"
-                             aria-hidden="true">
+                    <button type="button" class="tr-apply-btn" @onclick="LoadAsync" title="تطبيق الفلترة">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <circle cx="11" cy="11" r="8"/>
                             <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
                         </svg>
                     </button>
                 </div>
 
-                <div class="tr-results-badge">
-                    عرض <strong>@Filtered.Count()</strong> من <strong>@_txs.Count</strong>
+                <div class="si-results-badge">
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>
+                    </svg>
+                    عرض <strong>@Filtered.Count()</strong> من <strong>@_txs.Count</strong> معاملة
                 </div>
 
             </div>
 
 
             @* ── Status Tabs ── *@
-            <div class="tr-status-bar">
-                <div class="tr-status-tabs" role="group" aria-label="فلتر النوع">
+            <div class="si-status-bar">
+                <div class="si-status-tabs" role="group" aria-label="فلتر النوع">
                     @foreach (var t in _tabItems)
                     {
                         var cnt = t.Key == "all"
@@ -274,57 +300,56 @@
                                 ? _txs.Count(x => x.Status == "Void")
                                 : _txs.Count(x => x.Status == "Posted" && x.TransactionType == t.Key);
 
-                        <button class="tr-status-tab @(_tab == t.Key ? "active" : "")"
+                        <button class="si-status-tab @(_tab == t.Key ? "active" : "")"
                                 @onclick="() => SetTab(t.Key)"
                                 aria-pressed="@(_tab == t.Key)">
-                            <span class="tr-tab-dot @TabDotColor(t.Key)" aria-hidden="true"></span>
+                            <span class="si-tab-dot @TabDotColor(t.Key)" aria-hidden="true"></span>
                             <span>@t.Value</span>
-                            <span class="tr-tab-count">@cnt</span>
+                            <span class="si-tab-count">@cnt</span>
                         </button>
                     }
                 </div>
             </div>
 
 
-            @* ── Content ── *@
+            @* ── Table ── *@
             @if (_loading)
             {
-                <div class="tr-loading">
-                    <div class="tr-spinner" aria-label="جاري التحميل"></div>
-                    <span>جاري تحميل الحركات...</span>
+                <div class="si-loading">
+                    <div class="si-spinner" aria-label="جاري التحميل"></div>
+                    <span>جاري تحميل المعاملات النقدية...</span>
                 </div>
             }
             else if (!Filtered.Any())
             {
-                <div class="tr-empty">
-                    <div class="tr-empty-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="42" height="42"
-                             fill="none" stroke="currentColor" stroke-width="1.4">
+                <div class="si-empty">
+                    <div class="si-empty-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.4">
                             <rect x="2" y="7" width="20" height="14" rx="2"/>
                             <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
                             <circle cx="12" cy="14" r="2"/>
                         </svg>
                     </div>
-                    <div class="tr-empty-title">لا توجد حركات</div>
-                    <div class="tr-empty-sub">جرّب فلتر مختلف أو غيّر نطاق التاريخ</div>
+                    <div class="si-empty-title">لا توجد حركات مالية مسجلة</div>
+                    <div class="si-empty-sub">حاول تغيير معايير التصفية أو تعديل نطاق التاريخ</div>
                 </div>
             }
             else
             {
-                <div class="tr-table-wrap">
-                    <table class="tr-table" aria-label="حركات الخزينة">
+                <div class="si-table-wrap">
+                    <table class="si-table" aria-label="سجلات حركات الخزينة">
                         <thead>
                             <tr>
-                                <th scope="col" class="th-start">الحركة</th>
-                                <th scope="col">الخزينة</th>
-                                <th scope="col">المبلغ</th>
-                                <th scope="col">الطريقة</th>
-                                <th scope="col">الطرف</th>
-                                <th scope="col">المرجع</th>
-                                <th scope="col">الحالة</th>
+                                <th scope="col" class="th-start">نوع المعاملة</th>
+                                <th scope="col">صندوق الصرف</th>
+                                <th scope="col">المبلغ المالي</th>
+                                <th scope="col">الوعاء المالي</th>
+                                <th scope="col">طرف المعاملة</th>
+                                <th scope="col">المرجع المالي</th>
+                                <th scope="col">حالة القيد</th>
                                 @if (CanVoid)
                                 {
-                                    <th scope="col" style="width:90px">إجراءات</th>
+                                    <th scope="col" style="width:100px">إجراءات</th>
                                 }
                             </tr>
                         </thead>
@@ -333,14 +358,10 @@
                             {
                                 <tr class="@(t.Status == "Void" ? "row-void" : "")">
 
-                                    @* ── الحركة: نوع + تاريخ ── *@
                                     <td class="td-start">
                                         <div class="tr-tx-cell">
-                                            <div class="tr-tx-avatar @TxAvatarClass(t.TransactionType)"
-                                                 aria-hidden="true">
-                                                <svg viewBox="0 0 24 24" width="16" height="16"
-                                                     fill="none" stroke="currentColor" stroke-width="2.1"
-                                                     stroke-linecap="round" stroke-linejoin="round">
+                                            <div class="tr-tx-avatar @TxAvatarClass(t.TransactionType)" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
                                                     @if (t.TransactionType == "Receipt")
                                                     {
                                                         <path d="M12 3v13M6 11l6 6 6-6" />
@@ -373,7 +394,6 @@
                                         </div>
                                     </td>
 
-                                    @* ── الخزينة ── *@
                                     <td>
                                         <div class="tr-box-tag">@t.CashBoxName</div>
                                         @if (t.CounterpartName is not null)
@@ -382,18 +402,15 @@
                                         }
                                     </td>
 
-                                    @* ── المبلغ ── *@
                                     <td>
                                         <div class="tr-amount-cell @(t.TransactionType == "Receipt" || t.TransactionType == "TransferIn" ? "amount-in" : "amount-out")">
                                             @(t.TransactionType == "Payment" || t.TransactionType == "TransferOut" ? "−" : "+")
-                                            @Money(t.Amount)
+                                            @Money(t.Amount) ج.م
                                         </div>
                                     </td>
 
-                                    @* ── الطريقة ── *@
                                     <td class="td-muted">@(t.MethodName ?? "—")</td>
 
-                                    @* ── الطرف ── *@
                                     <td>
                                         @if (t.CustomerName is not null || t.SupplierName is not null)
                                         {
@@ -407,15 +424,14 @@
                                         }
                                         @if (t.InvoiceNumber is not null)
                                         {
-                                            <span class="tr-ref-tag tag-inv">ف @t.InvoiceNumber</span>
+                                            <span class="tr-ref-tag tag-inv">فاتورة رقم: @t.InvoiceNumber</span>
                                         }
                                         @if (t.CustodyNumber is not null)
                                         {
-                                            <span class="tr-ref-tag tag-cust">ع @t.CustodyNumber</span>
+                                            <span class="tr-ref-tag tag-cust">عهدة رقم: @t.CustodyNumber</span>
                                         }
                                     </td>
 
-                                    @* ── المرجع ── *@
                                     <td>
                                         @if (!string.IsNullOrWhiteSpace(t.ReferenceNumber) || !string.IsNullOrWhiteSpace(t.Description))
                                         {
@@ -430,18 +446,15 @@
                                         @if (t.ChequeNumber is not null)
                                         {
                                             <div class="tr-cheque-tag">
-                                                <svg viewBox="0 0 16 16" width="9" height="9"
-                                                     fill="none" stroke="currentColor" stroke-width="1.8"
-                                                     aria-hidden="true">
+                                                <svg viewBox="0 0 16 16" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                                                     <rect x="2" y="4" width="12" height="9" rx="1"/>
                                                     <path d="M5 8h6M5 11h4" stroke-linecap="round"/>
                                                 </svg>
-                                                @t.ChequeNumber
+                                                شيك رقم: @t.ChequeNumber
                                             </div>
                                         }
                                     </td>
 
-                                    @* ── الحالة ── *@
                                     <td>
                                         @if (t.Status == "Posted")
                                         {
@@ -454,12 +467,11 @@
                                         {
                                             <span class="tr-chip chip-void">
                                                 <span class="tr-chip-dot dot-red" aria-hidden="true"></span>
-                                                ملغية
+                                                ملغاة
                                             </span>
                                         }
                                     </td>
 
-                                    @* ── إجراءات ── *@
                                     @if (CanVoid)
                                     {
                                         <td>
@@ -467,19 +479,14 @@
                                             {
                                                 @if (_confirmId == t.CashTransactionId)
                                                 {
-                                                    <button class="tr-confirm-void"
-                                                            @onclick="() => Void(t)">
-                                                        إلغاء؟
+                                                    <button type="button" class="tr-confirm-void" @onclick="() => Void(t)">
+                                                        تأكيد؟
                                                     </button>
                                                 }
                                                 else
                                                 {
-                                                    <button class="tr-act-btn act-void"
-                                                            @onclick="() => _confirmId = t.CashTransactionId"
-                                                            title="إلغاء الحركة"
-                                                            aria-label="إلغاء @t.CashTransactionId">
-                                                        <svg viewBox="0 0 24 24" width="14" height="14"
-                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                    <button type="button" class="tr-act-btn act-void" @onclick="() => _confirmId = t.CashTransactionId" title="إلغاء الحركة">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
                                                             <circle cx="12" cy="12" r="10"/>
                                                             <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
                                                         </svg>
@@ -502,39 +509,34 @@
 
 
 @* ═══════════════════════════════════════════
-   MODAL — حركة جديدة
+   MODAL — حركة جديدة (صرف / قبض)
 ═══════════════════════════════════════════ *@
 @if (_postOpen && CanPost)
 {
-    <div class="tr-modal-backdrop" @onclick="ClosePost"
-         role="dialog" aria-modal="true" aria-label="حركة خزينة جديدة">
+    <div class="tr-modal-backdrop" @onclick="ClosePost" role="dialog" aria-modal="true" aria-label="حركة خزينة جديدة">
         <div class="tr-modal tr-modal-xl" @onclick:stopPropagation="true">
 
             <div class="tr-modal-head">
-                <div class="tr-modal-icon @(_pf.Type == "Receipt" ? "icon-green" : "icon-red")"
-                     aria-hidden="true">
+                <div class="tr-modal-icon @(_pf.Type == "Receipt" ? "icon-green" : "icon-red")" aria-hidden="true">
                     @if (_pf.Type == "Receipt")
                     {
-                        <svg viewBox="0 0 24 24" width="22" height="22"
-                             fill="none" stroke="currentColor" stroke-width="2">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 2v20M2 12l10-10 10 10" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                     }
                     else
                     {
-                        <svg viewBox="0 0 24 24" width="22" height="22"
-                             fill="none" stroke="currentColor" stroke-width="2">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 22V2M22 12l-10 10L2 12" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                     }
                 </div>
                 <div style="flex:1; min-width:0">
-                    <div class="tr-modal-title">حركة خزينة جديدة</div>
-                    <div class="tr-modal-sub">الرصيد بيتحدّث أوتوماتيك بعد الحفظ</div>
+                    <div class="tr-modal-title">تسجيل حركة مالية جديدة</div>
+                    <div class="tr-modal-sub">يتم تحديث وإيداع الأرصدة تلقائياً في وعاء الصندوق المختار فور الحفظ</div>
                 </div>
                 <button class="tr-modal-close" @onclick="ClosePost" aria-label="إغلاق">
-                    <svg viewBox="0 0 24 24" width="18" height="18"
-                         fill="none" stroke="currentColor" stroke-width="2.5">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
                         <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
                     </svg>
                 </button>
@@ -544,10 +546,8 @@
             {
                 <div class="tr-modal-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
                     <span>@_msg</span>
-                    <button class="tr-banner-close" @onclick="() => _msg = null"
-                            aria-label="إغلاق التنبيه">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
-                             stroke="currentColor" stroke-width="2.4" aria-hidden="true">
+                    <button class="tr-banner-close" @onclick="() => _msg = null" aria-label="إغلاق التنبيه">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true">
                             <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
                         </svg>
                     </button>
@@ -556,48 +556,34 @@
 
             <div class="tr-modal-body">
 
-                @* ── نوع الحركة ── *@
-                <div class="tr-type-toggle" role="group" aria-label="نوع الحركة">
-                    <button type="button"
-                            class="tr-type-btn @(_pf.Type == "Receipt" ? "type-receipt" : "")"
-                            @onclick='() => { _pf.Type = "Receipt"; _pf.CustomerId = 0; _openInvoices = new(); }'
-                            aria-pressed="@(_pf.Type == "Receipt")">
-                        <svg viewBox="0 0 24 24" width="18" height="18"
-                             fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <div class="tr-type-toggle" role="group" aria-label="نوع الحركة المالية">
+                    <button type="button" class="tr-type-btn @(_pf.Type == "Receipt" ? "type-receipt" : "")" @onclick='() => { _pf.Type = "Receipt"; _pf.CustomerId = 0; _openInvoices = new(); }' aria-pressed="@(_pf.Type == "Receipt")">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <path d="M12 2v20M2 12l10-10 10 10" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
-                        قبض (وارد)
+                        سند قبض (إيداع/وارد)
                     </button>
-                    <button type="button"
-                            class="tr-type-btn @(_pf.Type == "Payment" ? "type-payment" : "")"
-                            @onclick='() => { _pf.Type = "Payment"; _pf.CustomerId = 0; _openInvoices = new(); }'
-                            aria-pressed="@(_pf.Type == "Payment")">
-                        <svg viewBox="0 0 24 24" width="18" height="18"
-                             fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <button type="button" class="tr-type-btn @(_pf.Type == "Payment" ? "type-payment" : "")" @onclick='() => { _pf.Type = "Payment"; _pf.CustomerId = 0; _openInvoices = new(); }' aria-pressed="@(_pf.Type == "Payment")">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <path d="M12 22V2M22 12l-10 10L2 12" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
-                        صرف (صادر)
+                        سند صرف (خصم/صادر)
                     </button>
                 </div>
 
-                @* ── البيانات ── *@
                 <div class="tr-modal-grid">
 
                     <div class="tr-mfield">
                         <label class="tr-mlabel">
-                            الخزينة <span class="tr-mrequired">*</span>
+                            صندوق الصرف المستهدف <span class="tr-mrequired">*</span>
                         </label>
                         <div class="tr-mselect-wrap">
-                            <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14"
-                                 fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                 <rect x="2" y="7" width="20" height="14" rx="2"/>
                                 <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
                             </svg>
-                            <select class="tr-minput tr-msel"
-                                    value="@_pf.CashBoxId"
-                                    @onchange="e => _pf.CashBoxId = ParseInt(e.Value)"
-                                    aria-required="true">
-                                <option value="0">— اختر الخزينة —</option>
+                            <select class="tr-minput tr-msel" value="@_pf.CashBoxId" @onchange="e => _pf.CashBoxId = ParseInt(e.Value)" aria-required="true">
+                                <option value="0">— اختر صندوق الصرف —</option>
                                 @foreach (var b in _boxes)
                                 {
                                     <option value="@b.CashBoxId">@b.NameAr (@Money(b.CurrentBalance))</option>
@@ -608,46 +594,36 @@
 
                     <div class="tr-mfield">
                         <label class="tr-mlabel">
-                            المبلغ <span class="tr-mrequired">*</span>
+                            مبلغ الحركة المالي <span class="tr-mrequired">*</span>
                         </label>
                         <div class="tr-mfield-group">
                             <span class="tr-mprefix" aria-hidden="true">ج.م</span>
-                            <input type="number" min="0.01" step="0.01"
-                                   class="tr-minput with-prefix"
-                                   value="@_pf.Amount"
-                                   placeholder="0.00"
-                                   @onchange="e => _pf.Amount = ParseDec(e.Value)" />
+                            <input type="number" min="0.01" step="0.01" class="tr-minput with-prefix" value="@_pf.Amount" placeholder="0.00" @onchange="e => _pf.Amount = ParseDec(e.Value)" />
                         </div>
                     </div>
 
                     <div class="tr-mfield">
-                        <label class="tr-mlabel">التاريخ</label>
+                        <label class="tr-mlabel">تاريخ الحركة</label>
                         <div class="tr-mfield-group">
                             <span class="tr-mprefix" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" width="13" height="13"
-                                     fill="none" stroke="currentColor" stroke-width="2">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                                     <circle cx="12" cy="12" r="10"/>
                                     <path d="M12 6v6l4 2" stroke-linecap="round"/>
                                 </svg>
                             </span>
-                            <input type="datetime-local" class="tr-minput with-prefix"
-                                   value="@_pf.TxDate"
-                                   @onchange="e => _pf.TxDate = e.Value?.ToString()" />
+                            <input type="datetime-local" class="tr-minput with-prefix" value="@_pf.TxDate" @onchange="e => _pf.TxDate = e.Value?.ToString()" />
                         </div>
                     </div>
 
                     <div class="tr-mfield">
-                        <label class="tr-mlabel">طريقة الدفع</label>
+                        <label class="tr-mlabel">طريقة السداد</label>
                         <div class="tr-mselect-wrap">
-                            <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14"
-                                 fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                 <rect x="1" y="4" width="22" height="16" rx="2"/>
                                 <path d="M1 10h22"/>
                             </svg>
-                            <select class="tr-minput tr-msel"
-                                    value="@_pf.PaymentMethodId"
-                                    @onchange="e => _pf.PaymentMethodId = ParseInt(e.Value)">
-                                <option value="0">—</option>
+                            <select class="tr-minput tr-msel" value="@_pf.PaymentMethodId" @onchange="e => _pf.PaymentMethodId = ParseInt(e.Value)">
+                                <option value="0">— نقد كاش —</option>
                                 @foreach (var m in _methods)
                                 {
                                     <option value="@m.Id">@m.Label</option>
@@ -658,22 +634,19 @@
 
                     <div class="tr-mfield">
                         <label class="tr-mlabel">
-                            @(_pf.Type == "Receipt" ? "العميل" : "العميل (اختياري)")
+                            @(_pf.Type == "Receipt" ? "العميل المسدد" : "العميل المستفيد (اختياري)")
                             @if (_pf.Type == "Receipt")
                             {
                                 <span class="tr-mrequired">*</span>
                             }
                         </label>
                         <div class="tr-mselect-wrap">
-                            <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14"
-                                 fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                 <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
                                 <circle cx="12" cy="7" r="4"/>
                             </svg>
-                            <select class="tr-minput tr-msel"
-                                    value="@_pf.CustomerId"
-                                    @onchange="OnCustomerChanged">
-                                <option value="0">—</option>
+                            <select class="tr-minput tr-msel" value="@_pf.CustomerId" @onchange="OnCustomerChanged">
+                                <option value="0">— حدد اسم العميل —</option>
                                 @foreach (var c in _customers)
                                 {
                                     <option value="@c.Id">@c.Label</option>
@@ -685,15 +658,12 @@
                     <div class="tr-mfield">
                         <label class="tr-mlabel">المورد</label>
                         <div class="tr-mselect-wrap">
-                            <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14"
-                                 fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                 <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
                                 <path d="M9 22V12h6v10"/>
                             </svg>
-                            <select class="tr-minput tr-msel"
-                                    value="@_pf.SupplierId"
-                                    @onchange="e => _pf.SupplierId = ParseInt(e.Value)">
-                                <option value="0">—</option>
+                            <select class="tr-minput tr-msel" value="@_pf.SupplierId" @onchange="e => _pf.SupplierId = ParseInt(e.Value)">
+                                <option value="0">— حدد اسم المورد —</option>
                                 @foreach (var s in _suppliers)
                                 {
                                     <option value="@s.Id">@s.Label</option>
@@ -703,23 +673,20 @@
                     </div>
 
                     <div class="tr-mfield">
-                        <label class="tr-mlabel">فاتورة مرتبطة</label>
+                        <label class="tr-mlabel">فاتورة المبيعات المرتبطة</label>
                         @if (_pf.CustomerId > 0 && _openInvoices.Any())
                         {
                             <div class="tr-mselect-wrap">
-                                <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14"
-                                     fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
                                     <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
                                 </svg>
-                                <select class="tr-minput tr-msel"
-                                        value="@_pf.InvoiceId"
-                                        @onchange="e => _pf.InvoiceId = ParseLong(e.Value)">
-                                    <option value="0">—</option>
+                                <select class="tr-minput tr-msel" value="@_pf.InvoiceId" @onchange="e => _pf.InvoiceId = ParseLong(e.Value)">
+                                    <option value="0">— اختر الفاتورة المراد سدادها —</option>
                                     @foreach (var i in _openInvoices)
                                     {
                                         <option value="@i.InvoiceId">
-                                            @i.InvoiceNumber — متبقي @Money(i.Due)
+                                            @i.InvoiceNumber — متبقي عليها: @Money(i.Due) ج.م
                                         </option>
                                     }
                                 </select>
@@ -728,33 +695,23 @@
                         else
                         {
                             <div class="tr-field-hint">
-                                <svg viewBox="0 0 16 16" width="10" height="10"
-                                     fill="none" stroke="currentColor" stroke-width="1.8"
-                                     aria-hidden="true">
+                                <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                                     <circle cx="8" cy="8" r="6"/>
                                     <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
                                 </svg>
-                                اختار العميل الأول
+                                يرجى اختيار العميل أولاً لفلترة فواتيره غير المسددة
                             </div>
                         }
                     </div>
 
                     <div class="tr-mfield">
-                        <label class="tr-mlabel">المرجع</label>
-                        <input class="tr-minput"
-                               value="@_pf.ReferenceNumber"
-                               maxlength="100"
-                               placeholder="رقم مرجعي..."
-                               @onchange="e => _pf.ReferenceNumber = e.Value?.ToString()" />
+                        <label class="tr-mlabel">رقم المرجع المالي</label>
+                        <input class="tr-minput" value="@_pf.ReferenceNumber" maxlength="100" placeholder="رقم الشيك أو الحوالة البنكية..." @onchange="e => _pf.ReferenceNumber = e.Value?.ToString()" />
                     </div>
 
                     <div class="tr-mfield tr-mfield-full">
-                        <label class="tr-mlabel">البيان</label>
-                        <input class="tr-minput"
-                               value="@_pf.Description"
-                               maxlength="500"
-                               placeholder="وصف الحركة..."
-                               @onchange="e => _pf.Description = e.Value?.ToString()" />
+                        <label class="tr-mlabel">البيان الوصفي للحركة</label>
+                        <input class="tr-minput" value="@_pf.Description" maxlength="500" placeholder="وصف الحركة بالتفصيل..." @onchange="e => _pf.Description = e.Value?.ToString()" />
                     </div>
 
                 </div>
@@ -762,10 +719,8 @@
             </div>
 
             <div class="tr-modal-foot">
-                <button class="tr-modal-cancel" @onclick="ClosePost">إلغاء</button>
-                <button class="tr-modal-save @(_pf.Type == "Receipt" ? "save-green" : "save-red")"
-                        @onclick="SavePost"
-                        disabled="@_saving">
+                <button class="tr-modal-cancel" @onclick="ClosePost">تراجع</button>
+                <button class="tr-modal-save @(_pf.Type == "Receipt" ? "save-green" : "save-red")" @onclick="SavePost" disabled="@_saving">
                     @if (_saving)
                     {
                         <span class="btn-spinner sm" aria-hidden="true"></span>
@@ -773,14 +728,12 @@
                     }
                     else
                     {
-                        <svg viewBox="0 0 24 24" width="15" height="15"
-                             fill="none" stroke="currentColor" stroke-width="2"
-                             aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <rect x="2" y="7" width="20" height="14" rx="2"/>
                             <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
                             <circle cx="12" cy="14" r="2"/>
                         </svg>
-                        <span>تسجيل الحركة</span>
+                        <span>تسجيل الحركة المادية</span>
                     }
                 </button>
             </div>
@@ -791,29 +744,25 @@
 
 
 @* ═══════════════════════════════════════════
-   MODAL — تحويل بين خزينتين
+   MODAL — تحويل مالي بين خزينتين
 ═══════════════════════════════════════════ *@
 @if (_transferOpen && CanTransfer)
 {
-    <div class="tr-modal-backdrop" @onclick="CloseTransfer"
-         role="dialog" aria-modal="true" aria-label="تحويل بين خزينتين">
+    <div class="tr-modal-backdrop" @onclick="CloseTransfer" role="dialog" aria-modal="true" aria-label="تحويل بين خزينتين">
         <div class="tr-modal tr-modal-sm" @onclick:stopPropagation="true">
 
             <div class="tr-modal-head">
                 <div class="tr-modal-icon icon-blue" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="22" height="22"
-                         fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"
-                              stroke-linecap="round" stroke-linejoin="round"/>
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                 </div>
                 <div>
-                    <div class="tr-modal-title">تحويل بين خزينتين</div>
-                    <div class="tr-modal-sub">بيتسجّل كحركتين مربوطتين — الإلغاء بيلغيهم مع بعض</div>
+                    <div class="tr-modal-title">إجراء تحويل مالي متقابل</div>
+                    <div class="tr-modal-sub">يتم قيد العملية كحركتين مربوطتين — إلغاء أحدهما يعكس الآخر فوراً</div>
                 </div>
                 <button class="tr-modal-close" @onclick="CloseTransfer" aria-label="إغلاق">
-                    <svg viewBox="0 0 24 24" width="18" height="18"
-                         fill="none" stroke="currentColor" stroke-width="2.5">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
                         <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
                     </svg>
                 </button>
@@ -823,10 +772,8 @@
             {
                 <div class="tr-modal-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
                     <span>@_msg</span>
-                    <button class="tr-banner-close" @onclick="() => _msg = null"
-                            aria-label="إغلاق التنبيه">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
-                             stroke="currentColor" stroke-width="2.4" aria-hidden="true">
+                    <button class="tr-banner-close" @onclick="() => _msg = null" aria-label="إغلاق التنبيه">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true">
                             <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
                         </svg>
                     </button>
@@ -837,14 +784,13 @@
 
                 <div class="tr-transfer-visual">
                     <div class="tr-transfer-box from-box">
-                        <div class="tr-tb-label">من</div>
+                        <div class="tr-tb-label">من صندوق</div>
                         <div class="tr-tb-name">
-                            @(_boxes.FirstOrDefault(b => b.CashBoxId == _tf.FromCashBoxId)?.NameAr ?? "اختر خزينة")
+                            @(_boxes.FirstOrDefault(b => b.CashBoxId == _tf.FromCashBoxId)?.NameAr ?? "اختر الخزينة")
                         </div>
                     </div>
                     <div class="tr-transfer-arrow" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="20" height="20"
-                             fill="none" stroke="currentColor" stroke-width="2">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M5 12h14M12 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                         @if (_tf.Amount > 0)
@@ -853,9 +799,9 @@
                         }
                     </div>
                     <div class="tr-transfer-box to-box">
-                        <div class="tr-tb-label">إلى</div>
+                        <div class="tr-tb-label">إلى صندوق</div>
                         <div class="tr-tb-name">
-                            @(_boxes.FirstOrDefault(b => b.CashBoxId == _tf.ToCashBoxId)?.NameAr ?? "اختر خزينة")
+                            @(_boxes.FirstOrDefault(b => b.CashBoxId == _tf.ToCashBoxId)?.NameAr ?? "اختر الخزينة")
                         </div>
                     </div>
                 </div>
@@ -864,19 +810,15 @@
 
                     <div class="tr-mfield">
                         <label class="tr-mlabel">
-                            من خزينة <span class="tr-mrequired">*</span>
+                            من صندوق (مصدر النقد) <span class="tr-mrequired">*</span>
                         </label>
                         <div class="tr-mselect-wrap">
-                            <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14"
-                                 fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                 <rect x="2" y="7" width="20" height="14" rx="2"/>
                                 <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
                             </svg>
-                            <select class="tr-minput tr-msel"
-                                    value="@_tf.FromCashBoxId"
-                                    @onchange="e => _tf.FromCashBoxId = ParseInt(e.Value)"
-                                    aria-required="true">
-                                <option value="0">— اختر —</option>
+                            <select class="tr-minput tr-msel" value="@_tf.FromCashBoxId" @onchange="e => _tf.FromCashBoxId = ParseInt(e.Value)" aria-required="true">
+                                <option value="0">— اختر صندوق المصدر —</option>
                                 @foreach (var b in _boxes)
                                 {
                                     <option value="@b.CashBoxId">@b.NameAr (@Money(b.CurrentBalance))</option>
@@ -887,19 +829,15 @@
 
                     <div class="tr-mfield">
                         <label class="tr-mlabel">
-                            إلى خزينة <span class="tr-mrequired">*</span>
+                            إلى صندوق (المستلم للعهد) <span class="tr-mrequired">*</span>
                         </label>
                         <div class="tr-mselect-wrap">
-                            <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14"
-                                 fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                 <rect x="2" y="7" width="20" height="14" rx="2"/>
                                 <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
                             </svg>
-                            <select class="tr-minput tr-msel"
-                                    value="@_tf.ToCashBoxId"
-                                    @onchange="e => _tf.ToCashBoxId = ParseInt(e.Value)"
-                                    aria-required="true">
-                                <option value="0">— اختر —</option>
+                            <select class="tr-minput tr-msel" value="@_tf.ToCashBoxId" @onchange="e => _tf.ToCashBoxId = ParseInt(e.Value)" aria-required="true">
+                                <option value="0">— اختر صندوق المستلم —</option>
                                 @foreach (var b in _boxes)
                                 {
                                     <option value="@b.CashBoxId">@b.NameAr</option>
@@ -910,41 +848,30 @@
 
                     <div class="tr-mfield">
                         <label class="tr-mlabel">
-                            المبلغ <span class="tr-mrequired">*</span>
+                            قيمة التحويل <span class="tr-mrequired">*</span>
                         </label>
                         <div class="tr-mfield-group">
                             <span class="tr-mprefix" aria-hidden="true">ج.م</span>
-                            <input type="number" min="0.01" step="0.01"
-                                   class="tr-minput with-prefix"
-                                   value="@_tf.Amount"
-                                   placeholder="0.00"
-                                   @onchange="e => _tf.Amount = ParseDec(e.Value)" />
+                            <input type="number" min="0.01" step="0.01" class="tr-minput with-prefix" value="@_tf.Amount" placeholder="0.00" @onchange="e => _tf.Amount = ParseDec(e.Value)" />
                         </div>
                     </div>
 
                     <div class="tr-mfield">
-                        <label class="tr-mlabel">التاريخ</label>
+                        <label class="tr-mlabel">تاريخ التحويل</label>
                         <div class="tr-mfield-group">
                             <span class="tr-mprefix" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" width="13" height="13"
-                                     fill="none" stroke="currentColor" stroke-width="2">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                                     <circle cx="12" cy="12" r="10"/>
                                     <path d="M12 6v6l4 2" stroke-linecap="round"/>
                                 </svg>
                             </span>
-                            <input type="datetime-local" class="tr-minput with-prefix"
-                                   value="@_tf.TxDate"
-                                   @onchange="e => _tf.TxDate = e.Value?.ToString()" />
+                            <input type="datetime-local" class="tr-minput with-prefix" value="@_tf.TxDate" @onchange="e => _tf.TxDate = e.Value?.ToString()" />
                         </div>
                     </div>
 
                     <div class="tr-mfield tr-mfield-full">
-                        <label class="tr-mlabel">البيان</label>
-                        <input class="tr-minput"
-                               value="@_tf.Description"
-                               maxlength="500"
-                               placeholder="سبب التحويل..."
-                               @onchange="e => _tf.Description = e.Value?.ToString()" />
+                        <label class="tr-mlabel">الغرض والبيان من التحويل</label>
+                        <input class="tr-minput" value="@_tf.Description" maxlength="500" placeholder="مثال: تسوية عهد كاشير جارية، تحويل نقدية للفرع الرئيسي..." @onchange="e => _tf.Description = e.Value?.ToString()" />
                     </div>
 
                 </div>
@@ -952,24 +879,20 @@
             </div>
 
             <div class="tr-modal-foot">
-                <button class="tr-modal-cancel" @onclick="CloseTransfer">إلغاء</button>
-                <button class="tr-modal-save save-blue"
-                        @onclick="SaveTransfer"
-                        disabled="@_saving">
+                <button class="tr-modal-cancel" @onclick="CloseTransfer">تراجع</button>
+                <button class="tr-modal-save save-blue" @onclick="SaveTransfer" disabled="@_saving">
                     @if (_saving)
                     {
                         <span class="btn-spinner sm" aria-hidden="true"></span>
+                        <span>جاري التحويل...</span>
                     }
                     else
                     {
-                        <svg viewBox="0 0 24 24" width="15" height="15"
-                             fill="none" stroke="currentColor" stroke-width="2"
-                             aria-hidden="true">
-                            <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"
-                                  stroke-linecap="round" stroke-linejoin="round"/>
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
+                        <span>تنفيذ التحويل</span>
                     }
-                    تحويل
                 </button>
             </div>
 
@@ -978,93 +901,32 @@
 }
 
 
-@* ══════════════ FAB — الإجراءات السريعة ══════════════ *@
-@if (CanView && (CanPost || CanTransfer || CanManage))
-{
-    <div class="fc-fab-container">
-        <div class="fc-fab-menu @(_fabOpen ? "is-open" : "")">
-            @if (CanManage)
-            {
-                <a class="fc-fab-item" href="/treasury/boxes/new" @onclick="() => _fabOpen = false">
-                    <span class="fc-fab-icon">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
-                             stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <rect x="2" y="7" width="20" height="14" rx="2"/>
-                            <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
-                            <circle cx="12" cy="14" r="2"/>
-                        </svg>
-                    </span>
-                    <span class="fc-fab-label">خزينة جديدة</span>
-                </a>
-            }
-            @if (CanTransfer)
-            {
-                <button class="fc-fab-item" @onclick="() => { _fabOpen = false; OpenTransfer(); }">
-                    <span class="fc-fab-icon">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
-                             stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <path d="M17 1l4 4-4 4"/>
-                            <path d="M3 11V9a4 4 0 014-4h14"/>
-                            <path d="M7 23l-4-4 4-4"/>
-                            <path d="M21 13v2a4 4 0 01-4 4H3"/>
-                        </svg>
-                    </span>
-                    <span class="fc-fab-label">تحويل بين خزينتين</span>
-                </button>
-            }
-            @if (CanPost)
-            {
-                <button class="fc-fab-item" @onclick="() => { _fabOpen = false; OpenPost(); }">
-                    <span class="fc-fab-icon">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
-                             stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <rect x="2" y="5" width="20" height="14" rx="2"/>
-                            <path d="M2 10h20"/>
-                        </svg>
-                    </span>
-                    <span class="fc-fab-label">حركة جديدة</span>
-                </button>
-            }
-        </div>
-        <button class="fc-fab-main @(_fabOpen ? "is-open" : "")"
-                @onclick="() => _fabOpen = !_fabOpen"
-                aria-label="إجراءات سريعة" aria-expanded="@_fabOpen">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none"
-                 stroke="currentColor" stroke-width="2.4" aria-hidden="true">
-                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
-            </svg>
-        </button>
-    </div>
-}
-
-@* ══════════════ مودال تسوية خزينة ══════════════ *@
+@* ══════════════ MODAL — تسوية الخزينة وإقفالها ══════════════ *@
 @if (_settleTarget is not null)
 {
-    <div class="tr-modal-backdrop" @onclick="() => _settleTarget = null"
-         role="dialog" aria-modal="true" aria-label="تسوية خزينة">
+    <div class="tr-modal-backdrop" @onclick="() => _settleTarget = null" role="dialog" aria-modal="true" aria-label="تسوية وإقفال الخزينة">
         <div class="tr-modal" @onclick:stopPropagation="true">
             <div class="tr-modal-head">
                 <div class="tr-modal-icon icon-red" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
-                         stroke="currentColor" stroke-width="2">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="11" width="18" height="11" rx="2"/>
                         <path d="M7 11V7a5 5 0 0110 0v4"/>
                     </svg>
                 </div>
                 <div style="flex:1; min-width:0">
                     <div class="tr-modal-title">تسوية وإقفال @_settleTarget.NameAr</div>
-                    <div class="tr-modal-sub">الرصيد هيتحوّل كامل للخزينة الرئيسية (@_defaultBoxCode)</div>
+                    <div class="tr-modal-sub">سيتم تحويل كامل الرصيد القائم إلى الخزينة الرئيسية المعتمدة (@_defaultBoxCode)</div>
                 </div>
             </div>
             <div class="tr-modal-body">
                 <div class="tr-settle-box">
-                    <div class="tr-settle-label">رصيد الخزينة الحالي</div>
+                    <div class="tr-settle-label">الرصيد القابل للترحيل والخصم</div>
                     <div class="tr-settle-amount @(_settleTarget.CurrentBalance >= 0 ? "bal-pos" : "bal-neg")">
                         @Money(_settleTarget.CurrentBalance) @_settleTarget.CurrencyCode
                     </div>
                 </div>
                 <p class="tr-settle-note">
-                    الحركات والأرشيف هيفضلوا محفوظين — وممكن تعيد فتح الخزينة في أي وقت برصيد افتتاحي جديد.
+                    تنبيه: سيتم حفظ الحركات التاريخية كاملة بالأرشيف — ويمكنك إعادة تفعيل وفتح هذه الخزينة لاحقاً ببدء رصيد افتتاحي جديد في أي وقت.
                 </p>
             </div>
             <div class="tr-modal-foot">
@@ -1073,11 +935,11 @@
                     @if (_saving)
                     {
                         <span class="btn-spinner sm" aria-hidden="true"></span>
-                        <span>جاري التسوية...</span>
+                        <span>جاري ترحيل الرصيد...</span>
                     }
                     else
                     {
-                        <span>تسوية وإقفال</span>
+                        <span>تسوية وإقفال الصندوق</span>
                     }
                 </button>
             </div>
@@ -1085,32 +947,29 @@
     </div>
 }
 
-@* ══════════════ مودال إعادة فتح خزينة ══════════════ *@
+
+@* ══════════════ MODAL — إعادة فتح الخزينة ══════════════ *@
 @if (_reopenTarget is not null)
 {
-    <div class="tr-modal-backdrop" @onclick="() => _reopenTarget = null"
-         role="dialog" aria-modal="true" aria-label="إعادة فتح خزينة">
+    <div class="tr-modal-backdrop" @onclick="() => _reopenTarget = null" role="dialog" aria-modal="true" aria-label="إعادة فتح الخزينة">
         <div class="tr-modal" @onclick:stopPropagation="true">
             <div class="tr-modal-head">
                 <div class="tr-modal-icon icon-green" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
-                         stroke="currentColor" stroke-width="2">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="11" width="18" height="11" rx="2"/>
                         <path d="M7 11V7a5 5 0 019.9-1"/>
                     </svg>
                 </div>
                 <div style="flex:1; min-width:0">
                     <div class="tr-modal-title">إعادة فتح @_reopenTarget.NameAr</div>
-                    <div class="tr-modal-sub">الرصيد = الافتتاحي + الحركات السارية</div>
+                    <div class="tr-modal-sub">قيمة الرصيد المتاح = الرصيد الافتتاحي الجديد + المعاملات السارية</div>
                 </div>
             </div>
             <div class="tr-modal-body">
                 <div class="tr-mfield">
-                    <label class="tr-mlabel">الرصيد الافتتاحي الجديد</label>
-                    <input type="number" min="0" step="0.01" class="tr-minput"
-                           value="@_reopenOpening"
-                           @onchange="e => _reopenOpening = ParseDec(e.Value)" />
-                    <div class="fc-field-hint">الفلوس اللي هتتحط في الدرج كبداية</div>
+                    <label class="tr-mlabel">الرصيد الافتتاحي التأسيسي الجديد</label>
+                    <input type="number" min="0" step="0.01" class="tr-minput" value="@_reopenOpening" @onchange="e => _reopenOpening = ParseDec(e.Value)" />
+                    <div class="tr-field-hint">العُهدة أو النقدية المتوفرة لحظة استئناف النشاط في الصندوق</div>
                 </div>
             </div>
             <div class="tr-modal-foot">
@@ -1119,11 +978,11 @@
                     @if (_saving)
                     {
                         <span class="btn-spinner sm" aria-hidden="true"></span>
-                        <span>جاري الفتح...</span>
+                        <span>جاري استئناف الصندوق...</span>
                     }
                     else
                     {
-                        <span>إعادة فتح</span>
+                        <span>إعادة تفعيل الخزينة</span>
                     }
                 </button>
             </div>
@@ -1131,8 +990,80 @@
     </div>
 }
 
-<style>
 
+@* ══════════════ GLOW FAB — الإجراءات السريعة ══════════════ *@
+@if (CanView && (CanPost || CanTransfer || CanManage))
+{
+    <div class="glow-fab-wrap @(_fabOpen ? "is-open" : "")">
+
+        <div class="glow-fab-menu" role="menu" aria-label="الإجراءات السريعة">
+            @if (CanManage)
+            {
+                <a class="glow-fab-item" role="menuitem" href="/treasury/boxes/new" @onclick="() => _fabOpen = false">
+                    <span class="glow-fab-item-ic">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="2" y="7" width="20" height="14" rx="2"/>
+                            <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
+                            <circle cx="12" cy="14" r="2"/>
+                        </svg>
+                    </span>
+                    <span>خزينة جديدة</span>
+                </a>
+            }
+            @if (CanTransfer)
+            {
+                <button type="button" class="glow-fab-item" role="menuitem" @onclick="() => { _fabOpen = false; OpenTransfer(); }">
+                    <span class="glow-fab-item-ic">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M17 1l4 4-4 4"/>
+                            <path d="M3 11V9a4 4 0 014-4h14"/>
+                            <path d="M7 23l-4-4 4-4"/>
+                            <path d="M21 13v2a4 4 0 01-4 4H3"/>
+                        </svg>
+                    </span>
+                    <span>تحويل مالي بين صناديق النقد</span>
+                </button>
+            }
+            @if (CanPost)
+            {
+                <button type="button" class="glow-fab-item" role="menuitem" @onclick="() => { _fabOpen = false; OpenPost(); }">
+                    <span class="glow-fab-item-ic">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="2" y="5" width="20" height="14" rx="2"/>
+                            <path d="M2 10h20"/>
+                        </svg>
+                    </span>
+                    <span>تسجيل حركة صرف / قبض</span>
+                </button>
+            }
+        </div>
+
+        <div class="glow-fab-container">
+            <span class="glow-ring glow-ring-1" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-2" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-3" aria-hidden="true"></span>
+            <span class="glow-halo" aria-hidden="true"></span>
+
+            <button type="button" class="glow-fab-btn" @onclick="ToggleFab" aria-label="لوحة التحكم" aria-expanded="@(_fabOpen ? "true" : "false")">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" class="glow-fab-icon" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+
+    </div>
+}
+
+@if (_fabOpen)
+{
+    <div class="glow-fab-scrim" @onclick="ToggleFab" aria-hidden="true"></div>
+}
+
+
+@* ═══════════════════════════════════════════
+   CSS STYLES
+═══════════════════════════════════════════ *@
+<style>
     :root {
         --fc-blue:      #1e6ef5;
         --fc-blue-lt:   #eaf1ff;
@@ -1142,8 +1073,6 @@
         --fc-red-lt:    #fff0f2;
         --fc-amber:     #e09a10;
         --fc-amber-lt:  #fff8e6;
-        --fc-purple:    #7c4dbd;
-        --fc-purple-lt: #f3eeff;
         --fc-text:      #1c2c44;
         --fc-muted:     #6b7d95;
         --fc-border:    #dde5f0;
@@ -1152,429 +1081,317 @@
         --fc-radius:    14px;
     }
 
-    /* ================================================================
-       BODY
-    ================================================================ */
-    .tr-body {
-        background: var(--fc-bg);
-        min-height: calc(100vh - 200px);
-        padding: 16px 20px 32px;
-        max-width: 1400px; width: 100%;
-        margin: 0 auto;
+    /* ── Hero ── */
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px; margin: 0 auto; width: 100%;
+        box-sizing: border-box; position: relative; z-index: 1;
+    }
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important; overflow: hidden;
+        box-shadow: 0 12px 32px rgba(13,38,84,.15), 0 4px 12px rgba(13,38,84,.08);
+        border: 1px solid rgba(255,255,255,.08);
+    }
+    .hero-wrapper .fc-hero.fc-hero-slim { padding-top: 18px !important; padding-bottom: 22px !important; }
+
+    .si-hero-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .si-hero-left { flex: 1; min-width: 200px; }
+    .si-hero-crumb { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: rgba(255,255,255,.55); margin-bottom: 6px; }
+    .si-hero-sub { font-size: 13px; color: rgba(255,255,255,.55); }
+    .si-hero-right { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+    .si-hero-chip {
+        display: flex; align-items: center; gap: 6px;
+        padding: 6px 12px; border-radius: 20px;
+        background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+        font-size: 11.5px; color: #fff;
+    }
+
+    .si-hero-refresh {
+        width: 36px; height: 36px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.08);
+        color: rgba(255,255,255,.75); cursor: pointer; transition: background .15s;
+    }
+    .si-hero-refresh:hover { background: rgba(255,255,255,.14); }
+
+    /* ── KPIs (Rounded Glass Grid) ── */
+    .tr-kpis-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+    }
+
+    .tr-kpi-card {
+        display: flex; align-items: center; gap: 14px;
+        padding: 14px 18px; border-radius: 14px;
+        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+        cursor: pointer;
+        transition: transform .18s ease, background .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+    .tr-kpi-card:hover {
+        transform: translateY(-2px);
+        background: rgba(255, 255, 255, 0.18);
+        border-color: rgba(255, 255, 255, 0.3);
+    }
+    .tr-kpi-card.tr-kpi-active {
+        background: rgba(30, 110, 245, 0.25);
+        border-color: #93c5fd;
+        box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.5), 0 6px 20px rgba(30, 110, 245, 0.3);
+    }
+
+    .tr-kpi-icon {
+        width: 42px; height: 42px; flex: 0 0 42px; border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .kpi-blue  { background: rgba(30,110,245,.25); color: #93c5fd; }
+    .kpi-green { background: rgba(34,197,94,.25); color: #86efac; }
+    .kpi-red   { background: rgba(239,68,68,.25); color: #fca5a5; }
+    .kpi-amber { background: rgba(234,179,8,.25); color: #fde68a; }
+
+    .tr-kpi-info { flex: 1; min-width: 0; }
+    .tr-kpi-num { font-size: 16px; font-weight: 900; color: #fff; line-height: 1.2; font-family: "Inter", Arial, sans-serif; }
+    .tr-kpi-num small { font-size: 10px; font-weight: 700; opacity: .8; }
+    .val-green { color: #86efac !important; }
+    .val-red   { color: #fca5a5 !important; }
+    .val-amber { color: #fde68a !important; }
+    .tr-kpi-label { font-size: 10.5px; color: rgba(255,255,255,.7); font-weight: 600; margin-top: 3px; }
+
+    /* ── Body ── */
+    .bk-body {
+        background: var(--fc-bg); min-height: calc(100vh - 180px);
+        padding: 18px clamp(16px, 3vw, 40px) 96px;
+        max-width: 1440px; width: 100%; margin: 0 auto;
+        box-sizing: border-box; position: relative; z-index: 2;
         display: flex; flex-direction: column; gap: 14px;
     }
 
-    /* State */
-    .tr-state-box {
+    /* ── States ── */
+    .si-state-box {
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         gap: 12px; min-height: 300px;
         background: var(--fc-card); border: 1px solid var(--fc-border);
         border-radius: var(--fc-radius); padding: 40px; text-align: center;
         box-shadow: 0 4px 20px rgba(15,41,82,.06);
     }
-    .tr-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-    .tr-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
-    .tr-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
-    .tr-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+    .si-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .si-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+    .si-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .si-state-box p { margin: 0; font-size: 13px; color: var(--fc-muted); }
 
-    /* ================================================================
-       BOX CARDS
-    ================================================================ */
-    .tr-boxes-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 12px;
-    }
-
+    /* ── Boxes Grid ── */
+    .tr-boxes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
     .tr-box-card {
-        display: flex; align-items: center; gap: 14px;
-        padding: 16px 18px; border-radius: 14px;
+        display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 14px;
         background: var(--fc-card); border: 1px solid var(--fc-border);
         box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 6px 18px rgba(15,41,82,.05);
-        transition: all .18s ease;
+        transition: all .18s ease; position: relative;
     }
     .tr-box-card:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(15,41,82,.08); }
+    .tr-box-card.box-closed { opacity: .62; }
+    .tr-box-card.box-closed:hover { opacity: 1; }
 
     .tr-box-icon {
         width: 46px; height: 46px; flex: 0 0 46px; border-radius: 13px;
         display: flex; align-items: center; justify-content: center;
-        background: var(--fc-amber-lt); color: #9a6d08;
-        border: 1px solid #f0d898;
+        background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898;
     }
-
     .tr-box-info { flex: 1; min-width: 0; }
     .tr-box-name { font-size: 13px; font-weight: 800; color: #1c2b43; }
     .tr-box-code { font-size: 10px; color: #9aaabb; font-weight: 600; margin-top: 2px; }
 
-    .tr-box-balance { text-align: center; flex: 0 0 auto; }
-    .tr-box-amount {
-        font-family: "Inter", Arial, sans-serif;
-        font-size: 17px; font-weight: 900;
-    }
+    .tr-box-badge { display: inline-block; font-size: 9px; font-weight: 800; padding: 1px 7px; border-radius: 999px; margin-inline-start: 6px; vertical-align: middle; }
+    .badge-main { background: #eaf1ff; color: var(--fc-blue); border: 1px solid #bdd4fc; }
+    .badge-closed { background: #f0f4fa; color: #6b7d94; border: 1px solid #dbe4ee; }
+
+    .tr-box-emp { display: flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; color: #5c6e85; margin-top: 5px; }
+
+    .tr-box-balance { text-align: left; flex: 0 0 auto; }
+    .tr-box-amount { font-family: "Inter", Arial, sans-serif; font-size: 16px; font-weight: 900; }
     .bal-pos { color: var(--fc-green); }
     .bal-neg { color: var(--fc-red); }
-    .tr-box-currency { font-size: 9px; color: #9aaabb; font-weight: 600; text-align: center; margin-top: 2px; }
+    .tr-box-currency { font-size: 9px; color: #9aaabb; font-weight: 600; text-align: left; margin-top: 2px; }
 
-    /* ================================================================
-       MAIN CARD
-    ================================================================ */
-    .tr-card {
-        background: var(--fc-card); border: 1px solid var(--fc-border);
-        border-radius: var(--fc-radius);
-        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
-        overflow: hidden;
+    .tr-box-actions {
+        position: absolute; top: 8px; left: 8px; display: flex; gap: 5px; opacity: 0; transition: opacity .18s ease;
     }
+    .tr-box-card:hover .tr-box-actions { opacity: 1; }
 
-    /* ================================================================
-       TOOLBAR
-    ================================================================ */
-    .tr-toolbar {
-        display: flex; align-items: center; gap: 10px;
-        padding: 14px 18px;
-        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
-        border-bottom: 1px solid #edf1f7; flex-wrap: wrap;
+    .tr-box-act {
+        width: 26px; height: 26px; border-radius: 8px; display: inline-flex;
+        align-items: center; justify-content: center; cursor: pointer;
+        background: #fff; border: 1px solid var(--fc-border); color: #5c6e85;
+        transition: all .15s ease;
     }
+    .tr-box-act:hover { border-color: var(--fc-blue); color: var(--fc-blue); }
+    .tr-box-act.act-settle:hover { border-color: var(--fc-red); color: var(--fc-red); }
+    .tr-box-act.act-reopen:hover { border-color: var(--fc-green); color: var(--fc-green); }
 
-    .tr-search-wrap {
-        position: relative; display: flex; align-items: center;
-        flex: 1; min-width: 180px; max-width: 320px;
-    }
-    .tr-search-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; }
-    .tr-search-input {
-        width: 100%; height: 36px; padding: 0 34px 0 10px;
-        border: 1px solid #d8e2f0; border-radius: 8px;
-        background: #fafcff; color: var(--fc-text);
-        font-family: inherit; font-size: 12px; outline: none;
-        transition: border-color .15s ease;
-    }
-    .tr-search-input:focus { border-color: var(--fc-blue); }
-    .tr-search-input::placeholder { color: #b0bcc8; }
-    .tr-search-clear {
-        position: absolute; left: 8px;
-        display: flex; align-items: center; justify-content: center;
-        width: 20px; height: 20px; border-radius: 50%;
-        border: none; background: #edf1f7; color: #8899ae; cursor: pointer;
+    .tr-box-add { border-style: dashed; justify-content: center; text-decoration: none; color: var(--fc-blue); gap: 12px; }
+    .tr-box-add:hover { border-color: var(--fc-blue); background: #f5f9ff; }
+    .tr-box-add-plus {
+        width: 40px; height: 40px; border-radius: 12px; flex: 0 0 auto;
+        background: #eaf1ff; color: var(--fc-blue); display: flex; align-items: center; justify-content: center;
     }
 
-    .tr-box-filter-wrap {
-        position: relative; display: flex; align-items: center;
-        min-width: 140px; max-width: 180px;
+    /* ── Main Card ── */
+    .si-card { background: var(--fc-card); border: 1px solid var(--fc-border); border-radius: var(--fc-radius); box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06); overflow: hidden; }
+
+    /* ── Toolbar ── */
+    .si-toolbar { display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: linear-gradient(180deg, #fff 0%, #fafbfd 100%); border-bottom: 1px solid #edf1f7; flex-wrap: wrap; }
+    
+    .si-search-wrap { position: relative; display: flex; align-items: center; flex: 1; min-width: 200px; max-width: 320px; }
+    .si-search-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; }
+    .si-search-input {
+        width: 100%; height: 42px; padding: 0 36px 0 12px; border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text); font-family: inherit; font-size: 13px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
     }
-    .tr-box-icon-sel { position: absolute; right: 10px; color: #9aaabb; pointer-events: none; z-index: 1; }
-    .tr-box-select {
-        width: 100%; height: 36px; padding: 0 30px 0 8px;
-        border: 1px solid #d8e2f0; border-radius: 8px;
-        background: #fafcff; color: var(--fc-text);
-        font-family: inherit; font-size: 11px; outline: none; cursor: pointer;
+    .si-search-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .si-search-input::placeholder { color: #b0bcc8; }
+    .si-search-clear { position: absolute; left: 10px; display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; border: none; background: #edf1f7; color: #8899ae; cursor: pointer; }
+
+    .si-sup-filter-wrap { position: relative; display: flex; align-items: center; min-width: 160px; max-width: 220px; }
+    .si-sup-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; z-index: 1; }
+    .si-sup-select {
+        width: 100%; height: 42px; padding: 0 32px 0 10px; border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text); font-family: inherit; font-size: 13px; outline: none; cursor: pointer;
         -webkit-appearance: none; appearance: none;
-        transition: border-color .15s ease;
     }
-    .tr-box-select:focus { border-color: var(--fc-blue); }
 
     .tr-date-range { display: flex; align-items: center; gap: 6px; }
-    .tr-date-field { display: flex; align-items: center; gap: 5px; }
+    .tr-date-field { display: flex; align-items: center; }
     .tr-date-input {
-        height: 36px; padding: 0 8px;
-        border: 1px solid #d8e2f0; border-radius: 8px;
-        background: #fafcff; color: var(--fc-text);
-        font-family: inherit; font-size: 11px; outline: none;
-        transition: border-color .15s ease; max-width: 140px;
+        height: 42px; padding: 0 10px; border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text); font-family: inherit; font-size: 12.5px; outline: none;
+        transition: border-color .15s ease; max-width: 130px; box-sizing: border-box;
     }
     .tr-date-input:focus { border-color: var(--fc-blue); }
-    .tr-date-sep { color: #c0ccd8; font-weight: 700; }
+    .tr-date-sep { color: #c0ccd8; font-weight: 700; margin: 0 2px; }
 
     .tr-apply-btn {
-        display: flex; align-items: center; justify-content: center;
-        width: 34px; height: 34px;
-        border: 1px solid var(--fc-blue); border-radius: 8px;
-        background: var(--fc-blue-lt); color: var(--fc-blue);
-        cursor: pointer; transition: all .12s ease; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center; width: 42px; height: 42px;
+        border: 1px solid var(--fc-blue); border-radius: 9px; background: var(--fc-blue-lt); color: var(--fc-blue);
+        cursor: pointer; transition: all .12s ease; flex-shrink: 0; box-sizing: border-box;
     }
     .tr-apply-btn:hover { background: var(--fc-blue); color: #fff; }
 
-    .tr-results-badge {
-        display: flex; align-items: center; gap: 5px;
-        margin-right: auto; font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap;
-    }
-    .tr-results-badge strong { color: #5a6e88; }
+    .si-results-badge { display: flex; align-items: center; gap: 5px; margin-right: auto; font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap; }
+    .si-results-badge strong { color: #5a6e88; }
 
-    /* ================================================================
-       STATUS TABS
-    ================================================================ */
-    .tr-status-bar {
-        padding: 10px 18px; background: #f9fafd;
-        border-bottom: 1px solid #edf1f7; overflow-x: auto;
-    }
-
-    .tr-status-tabs {
-        display: flex; gap: 3px; padding: 3px;
-        border-radius: 10px; background: #f0f3f8; width: fit-content;
-    }
-
-    .tr-status-tab {
-        display: flex; align-items: center; gap: 5px;
-        height: 30px; padding: 0 9px;
-        border: none; border-radius: 7px;
-        background: transparent; color: #6b7d95;
-        font-family: inherit; font-size: 10.5px; font-weight: 700;
+    /* ── Status Bar ── */
+    .si-status-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 18px; background: #f9fafd; border-bottom: 1px solid #edf1f7; overflow-x: auto; }
+    .si-status-tabs { display: flex; gap: 4px; padding: 3px; border-radius: 10px; background: #f0f3f8; }
+    .si-status-tab {
+        display: flex; align-items: center; gap: 5px; height: 32px; padding: 0 10px; border: none; border-radius: 7px;
+        background: transparent; color: #6b7d95; font-family: inherit; font-size: 10.5px; font-weight: 700;
         cursor: pointer; white-space: nowrap; transition: all .15s ease;
     }
-    .tr-status-tab:hover:not(.active) { color: var(--fc-text); background: rgba(255,255,255,.6); }
-    .tr-status-tab.active {
-        background: var(--fc-card); color: var(--fc-text);
-        box-shadow: 0 1px 4px rgba(15,41,82,.10); font-weight: 800;
+    .si-status-tab:hover:not(.active) { color: var(--fc-text); background: rgba(255,255,255,.6); }
+    .si-status-tab.active { background: var(--fc-card); color: var(--fc-text); box-shadow: 0 1px 4px rgba(15,41,82,.10); font-weight: 800; }
+    .si-tab-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px; }
+    .si-tab-count { min-width: 16px; height: 16px; border-radius: 4px; padding: 0 3px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 900; }
+    .si-status-tab.active .si-tab-count { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .si-status-tab:not(.active) .si-tab-count { background: #e4eaf3; color: #8899ae; }
+
+    /* ── Table Layout ── */
+    .si-table-wrap { overflow-x: auto; }
+    .si-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .si-table thead th {
+        padding: 12px 14px; background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 10.5px; font-weight: 800; text-align: center; border-bottom: 2px solid #e4eaf3; white-space: nowrap;
     }
-
-    .tr-tab-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px; }
-
-    .tr-tab-count {
-        min-width: 15px; height: 15px; border-radius: 4px; padding: 0 3px;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 9px; font-weight: 900; font-family: "Inter", Arial, sans-serif;
-    }
-    .tr-status-tab.active .tr-tab-count { background: var(--fc-blue-lt); color: var(--fc-blue); }
-    .tr-status-tab:not(.active) .tr-tab-count { background: #e4eaf3; color: #8899ae; }
-
-    /* Tab Dot Colors */
-    .tdot-all  { background: var(--fc-blue); }
-    .tdot-in   { background: var(--fc-green); }
-    .tdot-out  { background: var(--fc-red); }
-    .tdot-tin  { background: var(--fc-blue); }
-    .tdot-tout { background: var(--fc-purple); }
-    .tdot-void { background: #9aaabb; }
-
-    /* ================================================================
-       LOADING / EMPTY
-    ================================================================ */
-    .tr-loading {
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 12px; min-height: 200px; color: var(--fc-muted); font-size: 12px; font-weight: 600;
-    }
-    .tr-spinner {
-        width: 32px; height: 32px;
-        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
-        border-radius: 50%; animation: tr-spin .75s linear infinite;
-    }
-    @@keyframes tr-spin { to { transform: rotate(360deg); } }
-
-    .tr-empty {
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 10px; min-height: 200px; padding: 40px; text-align: center;
-    }
-    .tr-empty-icon { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #f0f4fa; color: #b0c4d8; }
-    .tr-empty-title { font-size: 15px; font-weight: 800; color: var(--fc-text); }
-    .tr-empty-sub   { font-size: 12px; color: var(--fc-muted); }
-
-    /* ================================================================
-       TABLE
-    ================================================================ */
-    .tr-table-wrap { overflow-x: auto; }
-    .tr-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-
-    .tr-table thead th {
-        padding: 10px 12px;
-        background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
-        color: #4a5a74; font-size: 10.5px; font-weight: 800;
-        text-align: center; border-bottom: 2px solid #e4eaf3;
-        white-space: nowrap; position: sticky; top: 0; z-index: 1;
-    }
-    .tr-table .th-start { text-align: right; }
-
-    .tr-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background .12s ease; }
-    .tr-table tbody tr:last-child { border-bottom: none; }
-    .tr-table tbody tr:hover { background: #fafcff; }
-    .tr-table tbody tr.row-void { opacity: .55; }
-
-    .tr-table tbody td { padding: 10px 12px; color: #526070; text-align: center; vertical-align: middle; }
+    .si-table .th-start { text-align: right; }
+    .si-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background .12s ease; }
+    .si-table tbody tr:last-child { border-bottom: none; }
+    .si-table tbody tr:hover { background: #fafcff; }
+    .si-table tbody tr.row-void { opacity: .55; }
+    .si-table tbody td { padding: 11px 12px; color: #526070; text-align: center; vertical-align: middle; }
     .td-start { text-align: right !important; }
-    .td-muted  { color: #8899ae; font-size: 11px; }
+    .td-muted { color: #8899ae; font-size: 11px; }
 
-    /* TX Cell */
     .tr-tx-cell { display: flex; align-items: center; gap: 10px; }
-
-    .tr-tx-avatar {
-        width: 34px; height: 34px; flex: 0 0 34px; border-radius: 9px;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 15px;
-    }
-
-    .av-receipt    { background: var(--fc-green-lt); border: 1px solid #b0e0c5; color: var(--fc-green); }
-    .av-payment    { background: var(--fc-red-lt);   border: 1px solid #ffc8cf; color: var(--fc-red); }
-    .av-transferin  { background: var(--fc-blue-lt); border: 1px solid #c0d4fb; color: var(--fc-blue); }
-    .av-transferout { background: var(--fc-purple-lt); border: 1px solid #d0bfef; color: #7c5cd6; }
+    .tr-tx-avatar { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+    .av-receipt { background: var(--fc-green-lt); border: 1px solid #b0e0c5; color: var(--fc-green); }
+    .av-payment { background: var(--fc-red-lt); border: 1px solid #ffc8cf; color: var(--fc-red); }
+    .av-transferin { background: var(--fc-blue-lt); border: 1px solid #c0d4fb; color: var(--fc-blue); }
+    .av-transferout { background: var(--fc-purple-lt); border: 1px solid #d0bfef; color: var(--fc-purple); }
 
     .tr-tx-info { display: flex; flex-direction: column; gap: 3px; }
-
-    .tr-tx-chip {
-        display: inline-flex; padding: 2px 8px; border-radius: 6px;
-        font-size: 10px; font-weight: 800; white-space: nowrap;
-    }
-
-    .chip-receipt     { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
-    .chip-payment     { background: var(--fc-red-lt);   color: var(--fc-red);   border: 1px solid #ffc8cf; }
-    .chip-transferin  { background: var(--fc-blue-lt);  color: var(--fc-blue);  border: 1px solid #c0d4fb; }
+    .tr-tx-chip { display: inline-flex; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; white-space: nowrap; }
+    .chip-receipt { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .chip-payment { background: var(--fc-red-lt); color: var(--fc-red); border: 1px solid #ffc8cf; }
+    .chip-transferin { background: var(--fc-blue-lt); color: var(--fc-blue); border: 1px solid #c0d4fb; }
     .chip-transferout { background: var(--fc-purple-lt); color: var(--fc-purple); border: 1px solid #d0bfef; }
-
     .tr-tx-date { font-size: 10px; color: #9aaabb; font-family: "Inter", Arial, sans-serif; }
 
-    .tr-box-tag {
-        display: inline-flex; padding: 3px 8px; border-radius: 6px;
-        background: var(--fc-amber-lt); border: 1px solid #f0d898;
-        color: #9a6d08; font-size: 10.5px; font-weight: 800;
-    }
-
+    .tr-box-tag { display: inline-flex; padding: 3px 8px; border-radius: 6px; background: var(--fc-amber-lt); border: 1px solid #f0d898; color: #9a6d08; font-size: 10.5px; font-weight: 800; }
     .tr-counterpart { font-size: 10px; color: #9aaabb; margin-top: 3px; }
 
-    .tr-amount-cell {
-        font-family: "Inter", Arial, sans-serif;
-        font-size: 13px; font-weight: 900;
-    }
-    .amount-in  { color: var(--fc-green); }
+    .tr-amount-cell { font-family: "Inter", Arial, sans-serif; font-size: 13px; font-weight: 900; }
+    .amount-in { color: var(--fc-green); }
     .amount-out { color: var(--fc-red); }
 
     .tr-party-name { font-size: 12px; font-weight: 700; color: #344563; }
-
-    .tr-ref-tag {
-        display: inline-flex; padding: 1px 6px; border-radius: 4px;
-        font-size: 9.5px; font-weight: 700; margin-top: 3px;
-    }
-    .tag-inv  { background: var(--fc-blue-lt); color: var(--fc-blue); border: 1px solid #c0d4fb; }
+    .tr-ref-tag { display: inline-flex; padding: 1px 6px; border-radius: 4px; font-size: 9.5px; font-weight: 700; margin-top: 3px; margin-inline-end: 3px; }
+    .tag-inv { background: var(--fc-blue-lt); color: var(--fc-blue); border: 1px solid #c0d4fb; }
     .tag-cust { background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898; }
-
     .tr-ref-desc { font-size: 11px; color: #6b7d95; }
-
-    .tr-cheque-tag {
-        display: flex; align-items: center; gap: 3px;
-        font-size: 9.5px; color: #8899ae; margin-top: 3px;
-    }
+    .tr-cheque-tag { display: flex; align-items: center; gap: 3px; font-size: 9.5px; color: #8899ae; margin-top: 3px; }
 
     .tr-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 7px; font-size: 10.5px; font-weight: 800; }
     .tr-chip-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
-
     .chip-posted { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
-    .chip-void   { background: #f0f3f8; color: #6b7d95; border: 1px solid #dde5f0; }
-
+    .chip-void { background: #f0f3f8; color: #6b7d95; border: 1px solid #dde5f0; }
     .dot-green { background: var(--fc-green); }
-    .dot-red   { background: var(--fc-red); }
-
-    /* Actions */
-    .tr-act-btn {
-        width: 28px; height: 28px; border-radius: 7px;
-        display: flex; align-items: center; justify-content: center;
-        border: 1px solid transparent; cursor: pointer;
-        transition: all .15s ease; background: transparent;
-    }
-    .act-void { color: var(--fc-red); }
-    .act-void:hover { background: var(--fc-red-lt); border-color: #ffc8cf; }
+    .dot-red { background: var(--fc-red); }
 
     .tr-confirm-void {
-        height: 26px; padding: 0 9px;
-        border: none; border-radius: 6px;
-        background: linear-gradient(135deg, #e03048, #c0182e);
-        color: #fff; font-family: inherit;
-        font-size: 9.5px; font-weight: 800; cursor: pointer;
+        height: 26px; padding: 0 9px; border: none; border-radius: 6px;
+        background: linear-gradient(135deg, #e03048, #c0182e); color: #fff;
+        font-family: inherit; font-size: 9.5px; font-weight: 800; cursor: pointer;
         animation: tr-pulse 1s ease infinite;
     }
     @@keyframes tr-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.35); } 50% { box-shadow: 0 0 0 5px rgba(224,48,72,0); } }
 
-    /* ================================================================
-       MODALS
-    ================================================================ */
+    /* ── Modals ── */
     .tr-modal-backdrop {
-        position: fixed; inset: 0; z-index: 9999;
-        background: rgba(10,20,40,.58); backdrop-filter: blur(5px);
-        display: flex; align-items: center; justify-content: center;
-        padding: 20px; animation: tr-fade-in .2s ease;
+        position: fixed; inset: 0; z-index: 9999; background: rgba(10,20,40,.58); backdrop-filter: blur(5px);
+        display: flex; align-items: center; justify-content: center; padding: 20px; animation: tr-fade-in .2s ease;
     }
     @@keyframes tr-fade-in { from { opacity: 0; } to { opacity: 1; } }
 
     .tr-modal {
-        width: 100%; max-width: 620px;
-        background: var(--fc-card); border: 1px solid rgba(0,0,0,.08);
-        border-radius: 20px;
-        box-shadow: 0 10px 40px rgba(10,20,50,.18), 0 30px 80px rgba(10,20,50,.22);
-        overflow: hidden;
-        animation: tr-modal-in .28s cubic-bezier(.34,1.3,.64,1);
-        max-height: calc(100vh - 40px);
-        display: flex; flex-direction: column;
+        width: 100%; max-width: 620px; background: var(--fc-card); border: 1px solid rgba(0,0,0,.08); border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(10,20,50,.18), 0 30px 80px rgba(10,20,50,.22); overflow: hidden;
+        animation: tr-modal-in .28s cubic-bezier(.34,1.3,.64,1); max-height: calc(100vh - 40px); display: flex; flex-direction: column;
     }
     .tr-modal-sm { max-width: 480px; }
     .tr-modal-xl { max-width: 760px; }
+    @@keyframes tr-modal-in { from { opacity: 0; transform: scale(.94) translateY(12px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 
-    @@keyframes tr-modal-in {
-        from { opacity: 0; transform: scale(.94) translateY(12px); }
-        to   { opacity: 1; transform: scale(1) translateY(0); }
-    }
-
-    /* STICKY Header */
-    .tr-modal-head {
-        display: flex; align-items: center; gap: 14px;
-        padding: 18px 22px; flex: 0 0 auto;
-        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
-        border-bottom: 1px solid #edf1f7;
-        box-shadow: 0 2px 8px rgba(15,41,82,.05);
-    }
-
-    .tr-modal-icon {
-        width: 48px; height: 48px; flex: 0 0 48px; border-radius: 14px;
-        display: flex; align-items: center; justify-content: center;
-    }
-
+    .tr-modal-head { display: flex; align-items: center; gap: 14px; padding: 18px 22px; flex: 0 0 auto; background: linear-gradient(180deg, #fff 0%, #fafbfd 100%); border-bottom: 1px solid #edf1f7; box-shadow: 0 2px 8px rgba(15,41,82,.05); }
+    .tr-modal-icon { width: 48px; height: 48px; flex: 0 0 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; }
     .icon-green { background: linear-gradient(135deg, #e9f8f0, #d4f0e0); color: var(--fc-green); border: 1px solid #b0e0c5; }
     .icon-red   { background: linear-gradient(135deg, #fff0f2, #ffe8ec); color: var(--fc-red);   border: 1px solid #ffc8cf; }
     .icon-blue  { background: linear-gradient(135deg, #eaf1ff, #dde8ff); color: var(--fc-blue);  border: 1px solid #bdd4fc; }
-
     .tr-modal-title { font-size: 15px; font-weight: 900; color: #1c2b43; }
-    .tr-modal-sub   { font-size: 10.5px; color: var(--fc-muted); margin-top: 2px; }
-
-    .tr-modal-close {
-        margin-right: auto; width: 34px; height: 34px;
-        display: flex; align-items: center; justify-content: center;
-        border: 1px solid #e4eaf2; border-radius: 9px;
-        background: none; color: #9aaabb; cursor: pointer;
-        transition: all .15s ease;
-    }
+    .tr-modal-sub { font-size: 10.5px; color: var(--fc-muted); margin-top: 2px; }
+    .tr-modal-close { margin-right: auto; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border: 1px solid #e4eaf2; border-radius: 9px; background: none; color: #9aaabb; cursor: pointer; transition: all .15s ease; }
     .tr-modal-close:hover { background: #f0f4fa; color: var(--fc-text); }
 
-    .tr-modal-banner {
-        display: flex; align-items: center; justify-content: space-between;
-        gap: 10px; padding: 10px 22px; font-size: 12px; font-weight: 600; flex: 0 0 auto;
-    }
-    .tr-modal-banner button { background: none; border: none; cursor: pointer; opacity: .6; }
-    .banner-success { background: #e9f8f0; color: #0e7a43; }
-    .banner-error   { background: #fff0f2; color: var(--fc-red); }
+    .tr-modal-banner { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 22px; font-size: 12px; font-weight: 600; flex: 0 0 auto; }
+    .tr-banner-close { background: none; border: none; cursor: pointer; padding: 4px; display: inline-flex; align-items: center; justify-content: center; color: inherit; opacity: .7; }
+    .tr-modal-body { padding: 20px 22px; overflow-y: auto; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 16px; }
 
-    /* SCROLLABLE Body */
-    .tr-modal-body {
-        padding: 20px 22px; overflow-y: auto; flex: 1 1 auto; min-height: 0;
-        display: flex; flex-direction: column; gap: 16px;
-    }
-
-    /* STICKY Footer */
-    .tr-modal-foot {
-        display: flex; align-items: center; justify-content: flex-end; gap: 10px;
-        padding: 14px 22px; flex: 0 0 auto;
-        background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%);
-        border-top: 1px solid #edf1f7;
-    }
-
-    .tr-modal-cancel {
-        height: 40px; padding: 0 18px;
-        border: 1px solid var(--fc-border); border-radius: 10px;
-        background: var(--fc-card); color: var(--fc-muted);
-        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
-        transition: all .15s ease;
-    }
+    .tr-modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 22px; flex: 0 0 auto; background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%); border-top: 1px solid #edf1f7; }
+    .tr-modal-cancel { height: 40px; padding: 0 18px; border: 1px solid var(--fc-border); border-radius: 10px; background: var(--fc-card); color: var(--fc-muted); font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s ease; }
     .tr-modal-cancel:hover { background: #f0f4fa; color: var(--fc-text); }
-
-    .tr-modal-save {
-        display: inline-flex; align-items: center; gap: 7px;
-        height: 40px; padding: 0 20px;
-        border: 0; border-radius: 10px;
-        color: #fff; font-family: inherit;
-        font-size: 12px; font-weight: 800; cursor: pointer;
-        transition: all .15s ease;
-    }
+    .tr-modal-save { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 20px; border: 0; border-radius: 10px; color: #fff; font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer; transition: all .15s ease; }
     .tr-modal-save:hover:not(:disabled) { transform: translateY(-1px); }
     .tr-modal-save:disabled { opacity: .6; cursor: not-allowed; }
 
@@ -1582,240 +1399,116 @@
     .save-red   { background: linear-gradient(135deg, #e03048, #c0182e); box-shadow: 0 4px 14px rgba(224,48,72,.28); }
     .save-blue  { background: linear-gradient(135deg, #1e6ef5, #1558d6); box-shadow: 0 4px 14px rgba(30,110,245,.28); }
 
-    /* ================================================================
-       MODAL FORM
-    ================================================================ */
-    /* Type Toggle */
+    /* ── Modal Forms ── */
     .tr-type-toggle { display: flex; gap: 10px; }
-
-    .tr-type-btn {
-        flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
-        height: 50px; border: 2px solid #d8e2f0; border-radius: 11px;
-        background: #fafcff; color: var(--fc-muted);
-        font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
-        transition: all .18s ease;
-    }
-    .tr-type-btn:hover:not(.type-receipt):not(.type-payment) { border-color: #b0c4e0; color: var(--fc-text); }
-
+    .tr-type-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; height: 50px; border: 2px solid #d8e2f0; border-radius: 11px; background: #fafcff; color: var(--fc-muted); font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; transition: all .18s ease; }
     .type-receipt { border-color: var(--fc-green); background: var(--fc-green-lt); color: var(--fc-green); box-shadow: 0 0 0 3px rgba(22,163,91,.10); font-weight: 800; }
     .type-payment { border-color: var(--fc-red);   background: var(--fc-red-lt);   color: var(--fc-red);   box-shadow: 0 0 0 3px rgba(224,48,72,.08); font-weight: 800; }
 
     .tr-modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-
     .tr-mfield { display: flex; flex-direction: column; gap: 6px; }
     .tr-mfield-full { grid-column: 1 / -1; }
-
     .tr-mlabel { font-size: 11.5px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 3px; }
     .tr-mrequired { color: var(--fc-red); font-size: 13px; }
 
-    .tr-minput {
-        height: 42px; width: 100%;
-        border: 1.5px solid #d8e2f0; border-radius: 9px;
-        background: #fff; color: var(--fc-text);
-        font-family: inherit; font-size: 13px; padding: 0 12px;
-        outline: none;
-        transition: border-color .15s ease, box-shadow .15s ease;
-    }
+    .tr-minput { height: 42px; width: 100%; border: 1.5px solid #d8e2f0; border-radius: 9px; background: #fff; color: var(--fc-text); font-family: inherit; font-size: 13px; padding: 0 12px; outline: none; transition: border-color .15s ease, box-shadow .15s ease; box-sizing: border-box; }
     .tr-minput:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
-    .tr-minput::placeholder { color: #b0bcc8; }
-
     .tr-mselect-wrap { position: relative; }
     .tr-msel-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: #9aaabb; pointer-events: none; z-index: 1; }
     .tr-msel { padding-right: 36px; cursor: pointer; -webkit-appearance: none; appearance: none; }
-
     .tr-mfield-group { position: relative; display: flex; align-items: center; }
-    .tr-mprefix {
-        position: absolute; right: 12px;
-        display: flex; align-items: center;
-        color: #9aaabb; pointer-events: none; z-index: 1;
-        font-size: 11px; font-weight: 700;
-    }
+    .tr-mprefix { position: absolute; right: 12px; display: flex; align-items: center; color: #9aaabb; pointer-events: none; z-index: 1; font-size: 11px; font-weight: 700; }
     .tr-minput.with-prefix { padding-right: 36px; }
 
     .tr-field-hint { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--fc-muted); font-weight: 500; padding: 8px 0; }
 
-    /* ================================================================
-       TRANSFER VISUAL
-    ================================================================ */
-    .tr-transfer-visual {
-        display: flex; align-items: center; gap: 0;
-        padding: 16px 18px; border-radius: 12px;
-        background: linear-gradient(135deg, #f5f8ff, #eef4ff);
-        border: 1px solid #c8d8fb;
-    }
-
-    .tr-transfer-box {
-        flex: 1; text-align: center; padding: 10px;
-        border-radius: 10px;
-    }
+    /* ── Transfer Visual ── */
+    .tr-transfer-visual { display: flex; align-items: center; gap: 0; padding: 16px 18px; border-radius: 12px; background: linear-gradient(135deg, #f5f8ff, #eef4ff); border: 1px solid #c8d8fb; }
+    .tr-transfer-box { flex: 1; text-align: center; padding: 10px; border-radius: 10px; }
     .from-box { background: rgba(224,48,72,.06); border: 1px solid #ffc8cf; }
     .to-box   { background: rgba(22,163,91,.06);  border: 1px solid #b0e0c5; }
-
     .tr-tb-label { font-size: 9px; font-weight: 700; color: #9aaabb; text-transform: uppercase; margin-bottom: 4px; }
     .tr-tb-name  { font-size: 13px; font-weight: 800; color: #1c2b43; }
+    .tr-transfer-arrow { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 16px; color: var(--fc-blue); }
+    .tr-transfer-amount { font-family: "Inter", Arial, sans-serif; font-size: 12px; font-weight: 900; color: var(--fc-blue); background: var(--fc-blue-lt); border: 1px solid #c0d4fb; padding: 2px 8px; border-radius: 6px; }
 
-    .tr-transfer-arrow {
-        display: flex; flex-direction: column; align-items: center; gap: 4px;
-        padding: 0 16px; color: var(--fc-blue);
-    }
-
-    .tr-transfer-amount {
-        font-family: "Inter", Arial, sans-serif;
-        font-size: 12px; font-weight: 900; color: var(--fc-blue);
-        background: var(--fc-blue-lt); border: 1px solid #c0d4fb;
-        padding: 2px 8px; border-radius: 6px;
-    }
-
-    /* Spinner */
-    .btn-spinner { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: tr-spin .7s linear infinite; }
-    .btn-spinner.sm { width: 13px; height: 13px; }
-
-    /* ================================================================
-       RESPONSIVE
-    ================================================================ */
-    @@media (max-width: 1100px) {
-        .tr-boxes-grid { grid-template-columns: repeat(2, 1fr); }
-    }
-
-    @@media (max-width: 900px) {
-        .tr-toolbar { flex-direction: column; align-items: stretch; }
-        .tr-search-wrap { max-width: 100%; }
-        .tr-results-badge { margin-right: 0; }
-        .tr-modal-grid { grid-template-columns: 1fr; }
-        .tr-type-toggle { flex-direction: column; }
-        .tr-date-range { flex-wrap: wrap; }
-    }
-
-    @@media (max-width: 680px) {
-        .tr-body { padding: 10px 12px 24px; }
-        .tr-toolbar { padding: 10px 12px; }
-        .tr-boxes-grid { grid-template-columns: 1fr; }
-        .tr-status-tabs { flex-wrap: wrap; }
-        .tr-modal-backdrop { padding: 10px; }
-        .tr-modal { border-radius: 16px; }
-        .tr-transfer-visual { flex-direction: column; gap: 10px; }
-        .tr-transfer-arrow { flex-direction: row; }
-    }
-
-    @@media (max-width: 480px) {
-        .tr-status-tab { padding: 0 7px; font-size: 9.5px; }
-        .tr-tab-dot { display: none; }
-    }
-
-    /* ═══ المرحلة 2 — خزائن + FAB + كروت فلاتر ═══ */
-    .tr-box-card { position: relative; }
-    .tr-box-card.box-closed { opacity: .62; }
-    .tr-box-card.box-closed:hover { opacity: 1; }
-
-    .tr-box-badge {
-        display: inline-block; font-size: 9px; font-weight: 800; padding: 1px 7px;
-        border-radius: 999px; margin-right: 6px; vertical-align: middle;
-    }
-    .badge-main   { background: #eaf1ff; color: var(--fc-blue); border: 1px solid #bdd4fc; }
-    .badge-closed { background: #f0f4fa; color: #6b7d94; border: 1px solid #dbe4ee; }
-
-    .tr-box-emp {
-        display: flex; align-items: center; gap: 4px;
-        font-size: 10px; font-weight: 700; color: #5c6e85; margin-top: 3px;
-    }
-
-    .tr-box-actions {
-        position: absolute; top: 8px; left: 8px;
-        display: flex; gap: 5px; opacity: 0; transition: opacity .18s ease;
-    }
-    .tr-box-card:hover .tr-box-actions,
-    .tr-box-card:focus-within .tr-box-actions { opacity: 1; }
-
-    .tr-box-act {
-        width: 26px; height: 26px; border-radius: 8px; display: inline-flex;
-        align-items: center; justify-content: center; cursor: pointer;
-        background: #fff; border: 1px solid var(--fc-line, #e3e9f0); color: #5c6e85;
-        transition: all .15s ease;
-    }
-    .tr-box-act:hover { border-color: var(--fc-blue); color: var(--fc-blue); }
-    .tr-box-act.act-settle:hover { border-color: var(--fc-red); color: var(--fc-red); }
-    .tr-box-act.act-reopen:hover { border-color: var(--fc-green); color: var(--fc-green); }
-
-    .tr-box-add {
-        border-style: dashed; justify-content: center; text-decoration: none;
-        color: var(--fc-blue); gap: 12px;
-    }
-    .tr-box-add:hover { border-color: var(--fc-blue); background: #f5f9ff; }
-    .tr-box-add-plus {
-        width: 40px; height: 40px; border-radius: 12px; flex: 0 0 auto;
-        background: #eaf1ff; color: var(--fc-blue);
-        display: flex; align-items: center; justify-content: center;
-    }
-
-    .tr-settle-box {
-        background: #f5f8fb; border: 1px solid var(--fc-line, #e3e9f0);
-        border-radius: 12px; padding: 14px; text-align: center;
-    }
+    .tr-settle-box { background: #f5f8fb; border: 1px solid #dde5f0; border-radius: 12px; padding: 14px; text-align: center; }
     .tr-settle-label { font-size: 11px; font-weight: 800; color: #5c6e85; }
     .tr-settle-amount { font-size: 22px; font-weight: 900; margin-top: 4px; }
     .tr-settle-note { font-size: 11.5px; color: #5c6e85; line-height: 1.7; margin: 0; }
 
-    .tr-banner-close {
-        background: none; border: none; cursor: pointer; padding: 4px;
-        display: inline-flex; align-items: center; justify-content: center;
-        color: inherit; opacity: .7; transition: opacity .15s ease;
+    /* ── Precise Scoped FAB ── */
+    .glow-fab-wrap {
+        position: fixed; left: 28px; bottom: 28px; z-index: 1299;
+        width: 60px; height: 60px;
     }
-    .tr-banner-close:hover { opacity: 1; }
+    .glow-fab-container { position: relative; z-index: 2; width: 60px; height: 60px; }
+    .glow-fab-btn {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        width: 58px; height: 58px; border-radius: 50%;
+        background: linear-gradient(135deg, #1e6ef5, #0d47a1);
+        border: 2.5px solid #fbbf24; color: #fff; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 16px rgba(30, 110, 245, .4); transition: transform .2s; z-index: 2;
+    }
+    .glow-fab-btn:hover { transform: translate(-50%, -50%) scale(1.05); }
+    .glow-fab-icon { transition: transform .3s; }
+    .glow-fab-wrap.is-open .glow-fab-icon { transform: rotate(130deg); }
 
-    /* كروت KPI — فلترة */
-    .fc-kpi-click { cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
-    .fc-kpi-click:hover { transform: translateY(-2px); }
-    .fc-kpi-active {
-        outline: 2px solid var(--fc-blue);
-        outline-offset: -2px;
-        box-shadow: 0 4px 14px rgba(30,110,245,.18);
-    }
+    .glow-halo, .glow-ring { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
+    .glow-halo { width: 58px; height: 58px; background: radial-gradient(circle, rgba(30, 110, 245, .3) 0%, transparent 70%); animation: glow-breath 2s ease-in-out infinite; }
+    .glow-ring { width: 58px; height: 58px; border: 2px solid rgba(30, 110, 245, .4); animation: glow-expand 2s ease-out infinite; }
+    .glow-ring-2 { animation-delay: .3s; }
+    .glow-ring-3 { animation-delay: .6s; }
 
-    /* FAB */
-    .fc-fab-container {
-        position: fixed; bottom: 24px; left: 24px; z-index: 1000;
-        display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 12px;
-    }
-    .fc-fab-main {
-        width: 56px; height: 56px; border-radius: 50%; border: none;
-        background: linear-gradient(135deg, #1e6ef5, #1558d6); color: #fff;
-        cursor: pointer; display: flex; align-items: center; justify-content: center;
-        box-shadow: 0 4px 16px rgba(30,110,245,.4);
-        transition: all .25s cubic-bezier(.34,1.3,.64,1);
-    }
-    .fc-fab-main:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(30,110,245,.5); }
-    .fc-fab-main.is-open { transform: rotate(45deg); }
-    .fc-fab-menu {
-        display: flex; flex-direction: column; gap: 10px;
-        opacity: 0; visibility: hidden; transform: translateY(10px);
-        transition: all .25s cubic-bezier(.34,1.3,.64,1);
-    }
-    .fc-fab-menu.is-open { opacity: 1; visibility: visible; transform: translateY(0); }
-    .fc-fab-item {
-        display: flex; align-items: center; gap: 10px; padding: 10px 16px;
-        background: #fff; border: 1px solid #e4eaf2; border-radius: 12px;
-        cursor: pointer; box-shadow: 0 2px 12px rgba(10,20,50,.12);
-        transition: all .2s ease; white-space: nowrap; text-decoration: none;
-    }
-    .fc-fab-item:hover { background: #f5f8fb; border-color: #c8d8f0; transform: translateX(-4px); }
-    .fc-fab-icon {
-        width: 36px; height: 36px; border-radius: 10px;
-        background: var(--fc-blue-lt, #e8f1ff); color: var(--fc-blue, #1e6ef5);
-        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-    }
-    .fc-fab-label { font-size: 13px; font-weight: 700; color: #344258; }
+    @@keyframes glow-breath { 0%, 100% { opacity: .5; transform: translate(-50%, -50%) scale(1); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } }
+    @@keyframes glow-expand { 0% { opacity: .8; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.5); } }
 
+    .glow-fab-menu {
+        position: absolute; bottom: 74px; left: 0; z-index: 3;
+        display: flex; flex-direction: column; gap: 8px;
+        opacity: 0; pointer-events: none; transform: translateY(10px); transition: opacity .2s, transform .2s;
+    }
+    .glow-fab-wrap.is-open .glow-fab-menu { opacity: 1; pointer-events: auto; transform: translateY(0); }
+    .glow-fab-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 16px; border-radius: 12px; background: #fff;
+        border: 1px solid #dde5f0; box-shadow: 0 4px 12px rgba(0, 0, 0, .1);
+        cursor: pointer; font-size: 13px; color: #1c2c44; white-space: nowrap;
+    }
+    .glow-fab-item:hover { background: #f4f7fb; border-color: #1e6ef5; }
+    .glow-fab-item-ic { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: #eaf1ff; color: #1e6ef5; }
+    .glow-fab-scrim { position: fixed; inset: 0; background: rgba(9, 18, 35, .45); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 1298; }
+
+    /* ── Responsive ── */
+    @@media (max-width: 992px) {
+        .tr-transfer-visual { flex-direction: column; gap: 12px; }
+        .tr-transfer-arrow { flex-direction: row; }
+    }
+    @@media (max-width: 900px) {
+        .si-toolbar { flex-direction: column; align-items: stretch; }
+        .si-search-wrap, .si-sup-filter-wrap { max-width: 100%; }
+        .tr-date-range { width: 100%; justify-content: space-between; }
+        .tr-date-input { max-width: 45%; }
+        .si-results-badge { margin-right: 0; }
+    }
     @@media (max-width: 768px) {
-        .fc-fab-container { bottom: 16px; left: 16px; }
-        .fc-fab-main { width: 48px; height: 48px; }
-        .fc-fab-item { padding: 8px 12px; }
-        .fc-fab-label { font-size: 12px; }
+        .si-hero-row { flex-direction: column; align-items: flex-start; }
+        .si-hero-right { width: 100%; justify-content: flex-start; }
     }
-
-    @@media print {
-        .fc-fab-container { display: none !important; }
+    @@media (max-width: 680px) {
+        .bk-body { padding: 12px 12px 90px; }
+        .si-toolbar { padding: 10px 12px; }
+        .tr-modal-backdrop { padding: 10px; }
+        .tr-modal { border-radius: 16px; }
+        .glow-fab-wrap { left: 18px; bottom: 18px; }
     }
-
+    @@media (max-width: 480px) {
+        .si-status-tabs { flex-wrap: wrap; }
+        .si-status-tab { padding: 0 8px; font-size: 10px; }
+        .si-tab-dot { display: none; }
+        .tr-kpis-grid { grid-template-columns: 1fr; }
+    }
 </style>
 
 
@@ -1830,11 +1523,11 @@
     private static readonly (string Key, string Value)[] _tabItems =
     {
         ("all",         "الكل"),
-        ("Receipt",     "وارد"),
-        ("Payment",     "صادر"),
-        ("TransferIn",  "تحويل وارد"),
-        ("TransferOut", "تحويل صادر"),
-        ("Void",        "ملغية")
+        ("Receipt",     "الواردات"),
+        ("Payment",     "الصادرات"),
+        ("TransferIn",  "تحويلات واردة"),
+        ("TransferOut", "تحويلات صادرة"),
+        ("Void",        "الملغاة")
     };
 
     private List<Box>     _boxes        = new();
@@ -1860,7 +1553,6 @@
     private bool         _transferOpen;
     private TransferForm _tf = new();
 
-    /* ── المرحلة 2: خزائن متعددة ── */
     private bool    _fabOpen;
     private string  _kpi = "";
     private string  _defaultBoxCode = "MAIN";
@@ -1868,23 +1560,22 @@
     private Box?    _reopenTarget;
     private decimal _reopenOpening;
 
-    /* ── DTOs ── */
-    public class Opt    { public int Id { get; set; } public string Label { get; set; } = ""; }
-    public class Cust   { public int Id { get; set; } public string Label { get; set; } = ""; }
-    public class Method { public int Id { get; set; } public string Label { get; set; } = ""; public bool RequiresChequeNo { get; set; } }
+    public class Opt     { public int Id { get; set; } public string Label { get; set; } = ""; }
+    public class Cust    { public int Id { get; set; } public string Label { get; set; } = ""; }
+    public class Method  { public int Id { get; set; } public string Label { get; set; } = ""; public bool RequiresChequeNo { get; set; } }
     public class OpenInv { public long InvoiceId { get; set; } public string InvoiceNumber { get; set; } = ""; public decimal GrandTotal { get; set; } public decimal PaidAmount { get; set; } public decimal Due { get; set; } }
 
     public class Box
     {
-        public int     CashBoxId       { get; set; }
-        public string  Code            { get; set; } = "";
-        public string  NameAr          { get; set; } = "";
-        public decimal OpeningBalance  { get; set; }
-        public decimal CurrentBalance  { get; set; }
-        public string  CurrencyCode    { get; set; } = "EGP";
-        public int     TxCount         { get; set; }
-        public bool    IsActive        { get; set; }
-        public string  Status          { get; set; } = "Open";
+        public int     CashBoxId               { get; set; }
+        public string  Code                    { get; set; } = "";
+        public string  NameAr                  { get; set; } = "";
+        public decimal OpeningBalance          { get; set; }
+        public decimal CurrentBalance          { get; set; }
+        public string  CurrencyCode            { get; set; } = "EGP";
+        public int     TxCount                 { get; set; }
+        public bool    IsActive                { get; set; }
+        public string  Status                  { get; set; } = "Open";
         public int?    ResponsibleEmployeeId   { get; set; }
         public string? ResponsibleEmployeeName { get; set; }
     }
@@ -1935,9 +1626,7 @@
         public string? Description   { get; set; }
     }
 
-    /* ── Computed ── */
     private decimal TotalBalance => _boxes.Sum(b => b.CurrentBalance);
-
     private IEnumerable<Tx> Posted => _txs.Where(t => t.Status == "Posted");
 
     private decimal TodayIn => Posted
@@ -1957,18 +1646,28 @@
         }) &&
         (_boxFilter == 0 || t.CashBoxId == _boxFilter) &&
         (string.IsNullOrWhiteSpace(_search) ||
-         (t.Description    ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-         (t.ReferenceNumber ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-         (t.ChequeNumber   ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-         (t.CustomerName   ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase)));
+         NormalizeArabic(t.Description ?? "").Contains(NormalizeArabic(_search)) ||
+         NormalizeArabic(t.ReferenceNumber ?? "").Contains(NormalizeArabic(_search)) ||
+         NormalizeArabic(t.ChequeNumber ?? "").Contains(NormalizeArabic(_search)) ||
+         NormalizeArabic(t.CustomerName ?? "").Contains(NormalizeArabic(_search))));
 
-    /* ── Helpers ── */
+    private static string NormalizeArabic(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        string[] diacritics = new[] { "َ", "ُ", "ِ", "ّ", "ً", "ٌ", "ٍ", "ْ", "ـ" };
+        foreach (var d in diacritics) s = s.Replace(d, "");
+        return s
+            .Replace('أ', 'ا').Replace('إ', 'ا').Replace('آ', 'ا').Replace('ٱ', 'ا').Replace('ء', 'ا')
+            .Replace('ة', 'ه').Replace('ى', 'ي').Replace('ؤ', 'و').Replace('ئ', 'ي')
+            .Replace("  ", " ").ToLowerInvariant().Trim();
+    }
+
     private static string TxAr(string t) => t switch
     {
-        "Receipt"     => "وارد",
-        "Payment"     => "صادر",
-        "TransferIn"  => "تحويل وارد",
-        "TransferOut" => "تحويل صادر",
+        "Receipt"     => "قبض وارد",
+        "Payment"     => "صرف صادر",
+        "TransferIn"  => "تحويل مالي وارد",
+        "TransferOut" => "تحويل مالي صادر",
         _             => t
     };
 
@@ -1992,13 +1691,13 @@
 
     private static string TabDotColor(string t) => t switch
     {
-        "all"         => "tdot-all",
-        "Receipt"     => "tdot-in",
-        "Payment"     => "tdot-out",
-        "TransferIn"  => "tdot-tin",
-        "TransferOut" => "tdot-tout",
-        "Void"        => "tdot-void",
-        _             => "tdot-all"
+        "all"         => "sdot-all",
+        "Receipt"     => "sdot-posted",
+        "Payment"     => "sdot-cancelled",
+        "TransferIn"  => "sdot-all",
+        "TransferOut" => "sdot-returned",
+        "Void"        => "sdot-draft",
+        _             => "sdot-all"
     };
 
     private static string Money(decimal v)     => v.ToString("N2");
@@ -2006,7 +1705,6 @@
     private static int    ParseInt(object? v)  => int.TryParse(v?.ToString(), out var n) ? n : 0;
     private static long   ParseLong(object? v) => long.TryParse(v?.ToString(), out var n) ? n : 0;
 
-    /* ── Init ── */
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
@@ -2020,7 +1718,7 @@
             var db = await Http.GetFromJsonAsync<DefaultBoxRes>("api/treasury/default-box");
             if (db is not null && !string.IsNullOrWhiteSpace(db.Code)) _defaultBoxCode = db.Code;
         }
-        catch { /* الافتراضي MAIN */ }
+        catch { }
     }
 
     private async Task<List<T>> SafeGetT<T>(string url)
@@ -2030,7 +1728,6 @@
     }
 
     private async Task Reload() { await LoadAsync(); }
-
     private void SetTab(string t) { _tab = t; _confirmId = null; }
 
     private async Task LoadAsync()
@@ -2049,7 +1746,8 @@
         finally { _loading = false; }
     }
 
-    /* ── حركة جديدة ── */
+    private void ToggleFab() => _fabOpen = !_fabOpen;
+
     private void OpenPost()
     {
         _pf = new PostForm
@@ -2073,10 +1771,10 @@
 
     private async Task SavePost()
     {
-        if (_pf.CashBoxId <= 0) { _ok = false; _msg = "اختار الخزينة"; return; }
-        if (_pf.Amount <= 0)    { _ok = false; _msg = "اكتب مبلغ"; return; }
+        if (_pf.CashBoxId <= 0) { _ok = false; _msg = "يرجى تحديد وعاء الصندوق المالي أولاً"; return; }
+        if (_pf.Amount <= 0)    { _ok = false; _msg = "يرجى إدخال مبلغ مالي صحيح"; return; }
         if (_pf.Type == "Receipt" && _pf.CustomerId <= 0)
-        { _ok = false; _msg = "القبض لازم يكون من عميل"; return; }
+        { _ok = false; _msg = "معاملات القبض تتطلب تحديد العميل المسدد"; return; }
 
         _saving = true; _msg = null;
         try
@@ -2101,11 +1799,10 @@
             _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
             if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); ClosePost(); await LoadAsync(); }
         }
-        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        catch (Exception ex) { _ok = false; _msg = "تعذر التسجيل: " + ex.Message; }
         finally { _saving = false; }
     }
 
-    /* ── تحويل ── */
     private void OpenTransfer()
     {
         _tf = new TransferForm { TxDate = DateTime.Now.ToString("yyyy-MM-ddTHH:mm") };
@@ -2116,8 +1813,9 @@
 
     private async Task SaveTransfer()
     {
-        if (_tf.FromCashBoxId <= 0 || _tf.ToCashBoxId <= 0) { _ok = false; _msg = "اختار الخزينتين"; return; }
-        if (_tf.Amount <= 0) { _ok = false; _msg = "اكتب مبلغ"; return; }
+        if (_tf.FromCashBoxId <= 0 || _tf.ToCashBoxId <= 0) { _ok = false; _msg = "يرجى تحديد الصناديق بدقة"; return; }
+        if (_tf.FromCashBoxId == _tf.ToCashBoxId) { _ok = false; _msg = "لا يمكن التحويل المالي لنفس الصندوق"; return; }
+        if (_tf.Amount <= 0) { _ok = false; _msg = "يرجى إدخال قيمة مالية صحيحة"; return; }
 
         _saving = true; _msg = null;
         try
@@ -2133,11 +1831,10 @@
             _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
             if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); CloseTransfer(); await LoadAsync(); }
         }
-        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        catch (Exception ex) { _ok = false; _msg = "تعذر التحويل: " + ex.Message; }
         finally { _saving = false; }
     }
 
-    /* ── إلغاء ── */
     private async Task Void(Tx t)
     {
         try
@@ -2147,20 +1844,19 @@
             _confirmId = null;
             if (res.IsSuccessStatusCode) await LoadAsync();
         }
-        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        catch (Exception ex) { Snackbar.Add("فشل إلغاء الحركة: " + ex.Message, Severity.Error); }
     }
 
-    /* ── فلترة بالكروت ── */
     private async Task SetKpi(string k)
     {
-        _kpi = _kpi == k ? "" : k;          // الضغط تاني بيلغي الفلتر
+        _kpi = _kpi == k ? "" : k;
         if (_kpi is "" or "posted")
         {
             _tab = "all"; _from = null; _to = null;
         }
         else
         {
-            _tab = _kpi;                     // Receipt / Payment
+            _tab = _kpi;
             _from = DateTime.Now.ToString("yyyy-MM-dd");
             _to   = _from;
         }
@@ -2168,9 +1864,7 @@
         await LoadAsync();
     }
 
-    /* ── تسوية / إعادة فتح خزينة ── */
     private void OpenSettle(Box b) { _settleTarget = b; }
-
     private void OpenReopen(Box b) { _reopenTarget = b; _reopenOpening = 0m; }
 
     private async Task DoSettle()
@@ -2184,7 +1878,7 @@
             if (res.IsSuccessStatusCode) { Snackbar.Add(m, Severity.Success); _settleTarget = null; await LoadAsync(); }
             else Snackbar.Add(m, Severity.Error);
         }
-        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        catch (Exception ex) { Snackbar.Add("فشل ترحيل الرصيد والتسوية: " + ex.Message, Severity.Error); }
         finally { _saving = false; }
     }
 
@@ -2200,7 +1894,7 @@
             if (res.IsSuccessStatusCode) { Snackbar.Add(m, Severity.Success); _reopenTarget = null; await LoadAsync(); }
             else Snackbar.Add(m, Severity.Error);
         }
-        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        catch (Exception ex) { Snackbar.Add("فشل استئناف فتح الخزينة: " + ex.Message, Severity.Error); }
         finally { _saving = false; }
     }
 
@@ -2212,6 +1906,6 @@
             var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
             return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
         }
-        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+        catch { return res.IsSuccessStatusCode ? "تم بنجاح" : $"حدث خطأ برقم القيد {(int)res.StatusCode}"; }
     }
 }
