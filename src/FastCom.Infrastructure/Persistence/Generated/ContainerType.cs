@@ -25,6 +25,11 @@ public partial class ContainerType
 
     public bool IsReefer { get; set; }
 
+    /* 🔴 مبلغ الضمان الثابت لكل حاوية من النوع ده (ضمان ميناء/ثلاجة/مولد).
+       NULL = مافيش ضمان معرّف للنوع. */
+    [Column(TypeName = "decimal(19, 4)")]
+    public decimal? GuaranteeAmount { get; set; }
+
     public bool IsActive { get; set; }
 
     public bool IsDeleted { get; set; }

@@ -42,7 +42,7 @@ public class BookingsController : ControllerBase
 
     // ═══════════════ DTOs ═══════════════
 
-    public record BookingLineDto(int ContainerTypeId, int RequestedQty, decimal? WeightKg, string? Notes);
+    public record BookingLineDto(int ContainerTypeId, int RequestedQty, decimal? WeightKg, string? Notes, decimal? GuaranteePerContainer);
 
     public record ContainerDetailDto(long? ContainerId, string? ContainerNumber, string? SealNumber,
         string? ShippingLine, string? BLNumber, string? BookingReference, decimal? WeightKg, string? Notes);
@@ -50,7 +50,8 @@ public class BookingsController : ControllerBase
     public record BookingUpsert(
         int CustomerId, string? RequestedDate, int? ServiceId, int? PortId, int? DestinationId,
         int? TahteeqPortId, int? EndCustomerId, int? TripTypeId, string? CustomerReference, int? ContactId, string? Notes,
-        List<BookingLineDto>? Lines, List<ContainerDetailDto>? ContainerDetails);
+        List<BookingLineDto>? Lines, List<ContainerDetailDto>? ContainerDetails,
+        int? GuaranteeSupplierId = null, int? ShippingAgentId = null);
 
     public record ListItem(
         long BookingId, string BookingNumber, string CustomerName, string? ServiceName,
@@ -65,14 +66,15 @@ public class BookingsController : ControllerBase
     public record LineItem(
         long BookingContainerLineId, int LineNo, int ContainerTypeId, string ContainerTypeName,
         int RequestedQty, int AssignedQty, decimal? WeightKg, string Status, string? Notes,
-        List<ContainerDetailItem>? ContainerDetails);
+        List<ContainerDetailItem>? ContainerDetails, decimal? GuaranteePerContainer);
 
     public record Detail(
         long BookingId, string BookingNumber, int CustomerId, string CustomerName,
         string? RequestedDate, int? ServiceId, string? ServiceName, int? PortId, string? PortName,
         int? DestinationId, string? DestinationName, int? TahteeqPortId, string? TahteeqPortName,
         int? EndCustomerId, string? EndCustomerName, int? TripTypeId, string? TripTypeName,
-        string? CustomerReference, int? ContactId, string? Notes, string Status, DateTime CreatedAt);
+        string? CustomerReference, int? ContactId, string? Notes, string Status, DateTime CreatedAt,
+        int? ShippingAgentId, string? ShippingAgentName, int? GuaranteeSupplierId, string? GuaranteeSupplierName);
 
     public record DetailResponse(Detail Booking, List<LineItem> Lines);
 
@@ -134,7 +136,7 @@ public class BookingsController : ControllerBase
             .OrderBy(l => l.LineNo)
             .Select(l => new LineItem(
                 l.BookingContainerLineId, l.LineNo, l.ContainerTypeId, l.ContainerType.NameAr,
-                l.RequestedQty, l.AssignedQty, l.WeightKg, l.Status, l.Notes, null))
+                l.RequestedQty, l.AssignedQty, l.WeightKg, l.Status, l.Notes, null, l.GuaranteePerContainer))
             .ToListAsync(ct);
 
         /* 🔴 الحاويات الفعلية */
@@ -160,12 +162,23 @@ public class BookingsController : ControllerBase
 
         var names = await LookupNamesAsync(b, ct);
 
+        string? agentName = null, guarSupName = null;
+        if (b.ShippingAgentId is not null)
+            agentName = await _db.ShippingAgents.AsNoTracking()
+                .Where(s => s.ShippingAgentId == b.ShippingAgentId)
+                .Select(s => s.NameAr).FirstOrDefaultAsync(ct);
+        if (b.GuaranteeSupplierId is not null)
+            guarSupName = await _db.Suppliers.AsNoTracking()
+                .Where(s => s.SupplierId == b.GuaranteeSupplierId)
+                .Select(s => s.NameAr).FirstOrDefaultAsync(ct);
+
         var detail = new Detail(
             b.BookingId, b.BookingNumber, b.CustomerId, customerName,
             b.RequestedDate?.ToString("yyyy-MM-dd"), b.ServiceId, names.Service,
             b.PortId, names.Port, b.DestinationId, names.Destination,
             b.TahteeqPortId, names.TahteeqPort, b.EndCustomerId, names.EndCustomer, b.TripTypeId, names.TripType, b.CustomerReference, b.ContactId,
-            b.Notes, b.Status, b.CreatedAt);
+            b.Notes, b.Status, b.CreatedAt,
+            b.ShippingAgentId, agentName, b.GuaranteeSupplierId, guarSupName);
 
         return Ok(new DetailResponse(detail, linesWithDetails));
     }
@@ -221,6 +234,8 @@ public class BookingsController : ControllerBase
             TripTypeId      = req.TripTypeId,
             CustomerReference = B(req.CustomerReference),
             ContactId       = req.ContactId,
+            ShippingAgentId   = req.ShippingAgentId,
+            GuaranteeSupplierId = req.GuaranteeSupplierId,
             Notes           = B(req.Notes),
             Status          = "Draft",
             CreatedBy       = CurrentUserId()
@@ -278,6 +293,8 @@ public class BookingsController : ControllerBase
         b.TripTypeId      = req.TripTypeId;
         b.CustomerReference = B(req.CustomerReference);
         b.ContactId       = req.ContactId;
+        b.ShippingAgentId     = req.ShippingAgentId;
+        b.GuaranteeSupplierId = req.GuaranteeSupplierId;
         b.Notes           = B(req.Notes);
         b.UpdatedAt       = DateTime.UtcNow;
         b.UpdatedBy       = CurrentUserId();
@@ -342,6 +359,7 @@ public class BookingsController : ControllerBase
                 RequestedQty    = l.RequestedQty,
                 AssignedQty     = 0,
                 WeightKg        = l.WeightKg is > 0 ? l.WeightKg : null,
+                GuaranteePerContainer = l.GuaranteePerContainer is > 0 ? l.GuaranteePerContainer : null,
                 Status          = "Pending",
                 Notes           = B(l.Notes),
                 CreatedBy       = userId

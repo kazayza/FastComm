@@ -68,7 +68,9 @@ public class CustodiesController : ControllerBase
 
     public record CustodyCreate(long? TripId, string OwnerType, int OwnerId,
         decimal AmountIssued, string? CustodyDate, string? Notes,
-        bool IsPrimary = true, long? ParentCustodyId = null);
+        bool IsPrimary = true, long? ParentCustodyId = null,
+        /* 🔴 Freight = سلفة من نولون النقله / Road = مصاريف طريق / NULL = عامة */
+        string? AllocationType = null);
 
     public record TxRequest(string? Type, decimal Amount, string? TxDate, long? ExpenseId, string? Notes);
 
@@ -78,7 +80,8 @@ public class CustodiesController : ControllerBase
         string OwnerType, string OwnerName, long? TripId, string? TripNumber, string? DriverName,
         decimal AmountIssued, decimal AmountSpent, decimal AmountReturned, decimal AdditionalDue,
         decimal Remaining, string Status, int TxCount,
-        bool IsPrimary, long? ParentCustodyId, string? ParentCustodyNumber, int SubCount);
+        bool IsPrimary, long? ParentCustodyId, string? ParentCustodyNumber, int SubCount,
+        string? AllocationType);
 
     public record Detail(long CustodyId, string CustodyNumber, DateTime CustodyDate,
         string OwnerType, int OwnerId, string OwnerName, long? TripId, string? TripNumber,
@@ -113,7 +116,8 @@ public class CustodiesController : ControllerBase
         if (!string.IsNullOrWhiteSpace(q))
         {
             var s = q.Trim();
-            query = query.Where(c => c.CustodyNumber.Contains(s) || c.Trip.TripNumber.Contains(s));
+            query = query.Where(c => c.CustodyNumber.Contains(s) ||
+                                     (c.Trip != null && c.Trip.TripNumber.Contains(s)));
         }
 
         var rows = await query
@@ -132,7 +136,8 @@ public class CustodiesController : ControllerBase
                 _db.CustodyTransactions.Count(t => t.CustodyId == c.CustodyId),
                 c.IsPrimary, c.ParentCustodyId,
                 c.ParentCustody != null ? c.ParentCustody.CustodyNumber : null,
-                _db.DriverCustodies.Count(sc => sc.ParentCustodyId == c.CustodyId && !sc.IsDeleted)))
+                _db.DriverCustodies.Count(sc => sc.ParentCustodyId == c.CustodyId && !sc.IsDeleted),
+                c.AllocationType))
             .ToListAsync(ct);
 
         return Ok(rows);
@@ -286,7 +291,8 @@ public class CustodiesController : ControllerBase
             Notes            = B(req.Notes),
             CreatedBy        = CurrentUserId(),
             IsPrimary        = req.IsPrimary,
-            ParentCustodyId  = req.ParentCustodyId
+            ParentCustodyId  = req.ParentCustodyId,
+            AllocationType   = req.AllocationType
         };
         // 🔴 Atomicity: العهدة + سطر «صرف» في الدفتر — معاملة واحدة
         await _db.Database.BeginTransactionAsync(ct);

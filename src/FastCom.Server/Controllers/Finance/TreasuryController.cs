@@ -55,10 +55,10 @@ public class TreasuryController : ControllerBase
 
     public record BoxOut(int CashBoxId, string Code, string NameAr, decimal OpeningBalance,
         decimal CurrentBalance, string CurrencyCode, int TxCount, bool IsActive, string Status,
-        int? ResponsibleEmployeeId, string? ResponsibleEmployeeName);
+        int? ResponsibleEmployeeId, string? ResponsibleEmployeeName, string BoxKind);
 
     public record BoxUpsert(string? Code, string? NameAr, string? NameEn, int? ResponsibleEmployeeId,
-        decimal OpeningBalance, bool? IsActive);
+        decimal OpeningBalance, bool? IsActive, string? BoxKind = null);
 
     public record ReopenRequest(decimal OpeningBalance);
 
@@ -97,7 +97,8 @@ public class TreasuryController : ControllerBase
                 b.ResponsibleEmployeeId != null
                     ? _db.Employees.Where(e => e.EmployeeId == b.ResponsibleEmployeeId)
                                    .Select(e => e.FullNameAr).FirstOrDefault()
-                    : null))
+                    : null,
+                b.BoxKind))
             .ToListAsync(ct);
 
         return Ok(boxes);
@@ -487,6 +488,7 @@ public class TreasuryController : ControllerBase
             NameAr                = B(req.NameAr)!,
             NameEn                = B(req.NameEn),
             CurrencyCode          = "EGP",
+            BoxKind               = req.BoxKind == "Entity" ? "Entity" : "Cash",
             OpeningBalance        = req.OpeningBalance,
             CurrentBalance        = req.OpeningBalance,
             ResponsibleEmployeeId = req.ResponsibleEmployeeId,
@@ -520,6 +522,7 @@ public class TreasuryController : ControllerBase
         box.NameAr                = B(req.NameAr)!;
         box.NameEn                = B(req.NameEn);
         box.ResponsibleEmployeeId = req.ResponsibleEmployeeId;
+        if (req.BoxKind is "Cash" or "Entity") box.BoxKind = req.BoxKind;
         await _db.SaveChangesAsync(ct);
 
         await _audit.LogAsync(FastCom.Server.Services.AuditActions.Update, "CashBox",

@@ -9,7 +9,7 @@ namespace FastCom.Server.Controllers.Finance;
 
 /// <summary>
 /// كشف حساب العربية — زي ملف الإكسيل بالظبط.
-/// <para>اختار عربية + شهر → رصيد مُرحّل ← رحلات (نولون − عهدة) ← مصاريف ← دفعات ← رصيد آخر الشهر.</para>
+/// <para>اختار عربية + شهر → رصيد مُرحّل ← نولون النقله (أجرة السائق = مستحق له) − عهدة − مصاريف طريق − دفعات ← رصيد آخر الشهر.</para>
 /// <para>الرصيد المرحّل بيتجمع من كل الحركات من أول ما العربية اتسجلت لحد أول الشهر —
 /// مافيش جدول ترحيل، يعني مستحيل يغلط أو يتنسي.</para>
 /// </summary>
@@ -66,7 +66,7 @@ public class VehicleAccountsController : ControllerBase
         /* ── الرصيد المرحّل: كل الحركات من الأول لحد أول الشهر ── */
         var opening = await CalcBalanceAsync(vehicleId, DateTime.MinValue, start, ct);
 
-        /* ── الرحلات في الفترة (نولون + عهدة السائق) ── */
+        /* ── الرحلات في الفترة (نولون النقله = أجرة السائق + عهدة) ── */
         var trips = await _db.Trips.AsNoTracking()
             .Where(t => !t.IsDeleted && t.VehicleId == vehicleId &&
                         t.ActualEndAt != null &&
@@ -85,7 +85,8 @@ public class VehicleAccountsController : ControllerBase
 
         /* ── المصروفات في الفترة ── */
         var expenses = await _db.Expenses.AsNoTracking()
-            .Where(e => !e.IsDeleted && e.VehicleId == vehicleId &&
+            // مصروفات العهدة (CustodyId != null) مستثناة — فلوسها اتخصمت وقت صرف العهدة نفسها
+            .Where(e => !e.IsDeleted && e.VehicleId == vehicleId && e.CustodyId == null &&
                         e.ExpenseDate >= start && e.ExpenseDate < end &&
                         e.Status != "Cancelled")
             .OrderBy(e => e.ExpenseDate)
@@ -119,7 +120,7 @@ public class VehicleAccountsController : ControllerBase
         foreach (var t in trips)
         {
             if (t.Freight is > 0)
-                lines.Add(new StmtLine(t.Date, "Freight", t.TripNumber, "نولون الرحلة", t.Freight.Value, 0, 0));
+                lines.Add(new StmtLine(t.Date, "Freight", t.TripNumber, "نولون النقله (أجرة السائق)", t.Freight.Value, 0, 0));
             if (t.Custody is > 0)
                 lines.Add(new StmtLine(t.Date, "Custody", t.TripNumber, "عهدة السائق", 0, t.Custody.Value, 0));
         }
@@ -196,7 +197,7 @@ public class VehicleAccountsController : ControllerBase
 
     /* ═══════════════ HELPERS ═══════════════ */
 
-    /// <summary>الرصيد = نولون − عهدة − مصاريف − دفعات</summary>
+    /// <summary>الرصيد = نولون النقله (أجرة السائق) − عهدة − مصاريف طريق − دفعات</summary>
     private async Task<decimal> CalcBalanceAsync(int vehicleId, DateTime from, DateTime to, CancellationToken ct)
     {
         var freight = await _db.Trips.AsNoTracking()
@@ -213,7 +214,7 @@ public class VehicleAccountsController : ControllerBase
             .SumAsync(c => (decimal?)c.AmountIssued, ct) ?? 0;
 
         var expenses = await _db.Expenses.AsNoTracking()
-            .Where(e => !e.IsDeleted && e.VehicleId == vehicleId &&
+            .Where(e => !e.IsDeleted && e.VehicleId == vehicleId && e.CustodyId == null &&
                         e.ExpenseDate >= from && e.ExpenseDate < to &&
                         e.Status != "Cancelled")
             .SumAsync(e => (decimal?)e.Amount, ct) ?? 0;

@@ -13,57 +13,81 @@
 @* ═══════════════════════════════════════════
    HERO
 ═══════════════════════════════════════════ *@
-<div class="fc-hero">
-    <div class="fc-hero-inner">
-        <div class="fc-page-head">
-            <div>
-                <div class="fc-crumb">المالية · العهد</div>
-                <h1 class="fc-hero-title">العهد</h1>
-                <p class="fc-hero-sub">فلوس بتتسلّم للسائق أو الموظف على الرحلة — بيتصرف منها، والباقي يُرد، وبعدين تتسوّى وتتقفل</p>
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
+            <div class="doc-hero-row">
+                <div class="doc-hero-left">
+                    <div class="doc-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="2" y="7" width="20" height="14" rx="2"/>
+                            <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
+                            <circle cx="12" cy="14" r="2"/>
+                        </svg>
+                        <span>المالية · العهد</span>
+                    </div>
+                    <h1 class="fc-hero-title">العهد</h1>
+                    <p class="fc-hero-sub">أموال تُسلَّم للسائق أو الموظف على الرحلة — يُنفَق منها، ويُردّ المتبقي، ثم تُسوّى العهدة وتُغلق</p>
+                </div>
+                <div class="doc-hero-right">
+                    <span class="doc-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                </div>
             </div>
-            <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
-                               OnClick="Reload" Style="color:#9FB4CC" />
-            </div>
+
+            @if (CanView)
+            {
+                <div class="doc-kpis-row">
+                    <div class="doc-kpi doc-kpi-blue doc-kpi-click @(_tab == "open" ? "doc-kpi-active" : "")"
+                         role="button" tabindex="0" @onclick='() => SetTab("open")'>
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.Savings" Size="Size.Small"/></div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@_items.Count(c => c.Status != "Closed")</div>
+                                <div class="doc-kpi-label">عهد مفتوحة</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="doc-kpi doc-kpi-red doc-kpi-click @(_tab == "all" ? "doc-kpi-active" : "")"
+                         role="button" tabindex="0" @onclick='() => SetTab("all")'>
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Small"/></div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@Money(OpenRemaining)</div>
+                                <div class="doc-kpi-label">المتبقي بحوزتهم</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="doc-kpi doc-kpi-amber doc-kpi-click @(_tab == "all" ? "doc-kpi-active" : "")"
+                         role="button" tabindex="0" @onclick='() => SetTab("all")'>
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.Payments" Size="Size.Small"/></div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@Money(ThisMonth)</div>
+                                <div class="doc-kpi-label">المصروف هذا الشهر</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="doc-kpi doc-kpi-green doc-kpi-click @(_tab == "Submitted" ? "doc-kpi-active" : "")"
+                         role="button" tabindex="0" @onclick='() => SetTab("Submitted")'>
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon"><MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small"/></div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@_items.Count(c => c.Status == "Submitted")</div>
+                                <div class="doc-kpi-label">بانتظار الاعتماد</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
         </div>
-
-        @* FAB *@
-        @if (CanCreate)
-        {
-            <div class="fc-fab-container">
-                <button class="fc-fab-main" @onclick="OpenIssue" title="صرف عهدة">
-                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 5v14M5 12h14"/>
-                    </svg>
-                </button>
-            </div>
-        }
-
-        @if (CanView)
-        {
-            <div class="fc-kpis fc-kpis-glass">
-                <div class="fc-kpi fc-kpi-click @(_tab == "open" ? "fc-kpi-active" : "")" role="button" tabindex="0"
-                     @onclick='() => SetTab("open")'>
-                    <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(c => c.Status != "Closed")</div><div class="fc-kpi-lb">عهد مفتوحة</div></div>
-                </div>
-                <div class="fc-kpi fc-kpi-click @(_tab == "all" ? "fc-kpi-active" : "")" role="button" tabindex="0"
-                     @onclick='() => SetTab("all")'>
-                    <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" /></div>
-                    <div><div class="fc-kpi-num">@Money(OpenRemaining)</div><div class="fc-kpi-lb">باقي معاهم</div></div>
-                </div>
-                <div class="fc-kpi fc-kpi-click @(_tab == "all" ? "fc-kpi-active" : "")" role="button" tabindex="0"
-                     @onclick='() => SetTab("all")'>
-                    <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.Payments" /></div>
-                    <div><div class="fc-kpi-num">@Money(ThisMonth)</div><div class="fc-kpi-lb">اتصرف الشهر ده</div></div>
-                </div>
-                <div class="fc-kpi fc-kpi-click @(_tab == "Submitted" ? "fc-kpi-active" : "")" role="button" tabindex="0"
-                     @onclick='() => SetTab("Submitted")'>
-                    <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(c => c.Status == "Submitted")</div><div class="fc-kpi-lb">مستنية اعتماد</div></div>
-                </div>
-            </div>
-        }
     </div>
 </div>
 
@@ -71,7 +95,7 @@
 @* ═══════════════════════════════════════════
    BODY
 ═══════════════════════════════════════════ *@
-<div class="cu-body">
+<div class="doc-body">
 
     @if (!CanView)
     {
@@ -89,6 +113,7 @@
     }
     else
     {
+        <div class="fc-overlap">
         <div class="cu-card">
 
             @* ── Toolbar ── *@
@@ -181,8 +206,8 @@
                     </div>
                     <div class="cu-empty-sub">
                         @(string.IsNullOrWhiteSpace(_search)
-                            ? "جرّب فلتر مختلف أو اصرف عهدة جديدة"
-                            : "جرّب كلمة بحث مختلفة")
+                            ? "جرِّب فلترًا مختلفًا أو اصرف عهدة جديدة"
+                            : "جرِّب كلمة بحث مختلفة")
                     </div>
                     @if (CanCreate && string.IsNullOrWhiteSpace(_search))
                     {
@@ -205,6 +230,7 @@
                             <tr>
                                 <th scope="col" class="th-start">العهدة</th>
                                 <th scope="col">الرحلة</th>
+                                <th scope="col">النوع</th>
                                 <th scope="col">المبالغ</th>
                                 <th scope="col">التقدم</th>
                                 <th scope="col">الباقي</th>
@@ -282,6 +308,13 @@
                                                 <div class="cu-trip-driver">@c.DriverName</div>
                                             }
                                         </div>
+                                    </td>
+
+                                    @* ── نوع العهدة ── *@
+                                    <td>
+                                        <span class="cu-alloc-tag @AllocClass(c.AllocationType)">
+                                            @AllocAr(c.AllocationType)
+                                        </span>
                                     </td>
 
                                     @* ── المبالغ ── *@
@@ -482,8 +515,51 @@
             }
 
         </div>
+        </div>
     }
 </div>
+
+
+@* ═══════════════════════════════════════════
+   FAB (§7.1.b) — بعد الجسم وقبل المودال
+═══════════════════════════════════════════ *@
+@if (CanCreate && !_loading)
+{
+    @if (_fabOpen)
+    {
+        <div class="fc-fab-scrim" @onclick="ToggleFab" aria-hidden="true"></div>
+    }
+    <div class="fc-fab-container">
+        <div class="fc-fab-menu @(_fabOpen ? "fc-fab-menu--open" : "")" role="menu">
+            <button type="button" class="fc-fab-item" role="menuitem"
+                    @onclick="HandleOpenCreate">
+                <span class="fc-fab-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small"/>
+                </span>
+                <span class="fc-fab-label">صرف عهدة</span>
+            </button>
+            <button type="button" class="fc-fab-item" role="menuitem"
+                    @onclick="HandleReload">
+                <span class="fc-fab-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small"/>
+                </span>
+                <span class="fc-fab-label">تحديث البيانات</span>
+            </button>
+        </div>
+
+        <button type="button"
+                class="fc-fab-main fc-glow-gold @(_fabOpen ? "is-open" : "")"
+                @onclick="ToggleFab"
+                aria-label="التحكم"
+                aria-expanded="@(_fabOpen ? "true" : "false")">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none"
+                 stroke="currentColor" stroke-width="2.5"
+                 class="fc-fab-svg" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+            </svg>
+        </button>
+    </div>
+}
 
 
 @* ═══════════════════════════════════════════
@@ -505,7 +581,7 @@
                     </svg>
                 </div>
                 <div>
-                    <div class="cu-modal-title">صرف عهدة جديدة 💰</div>
+                    <div class="cu-modal-title">صرف عهدة جديدة</div>
                     <div class="cu-modal-sub">الرقم بيتولد تلقائياً (CUS-)</div>
                 </div>
                 <button class="cu-modal-close" @onclick="CloseIssue" aria-label="إغلاق">
@@ -674,6 +750,27 @@
                                    placeholder="0.00"
                                    @onchange="e => _nf.AmountIssued = ParseAmount(e.Value)" />
                         </div>
+                    </div>
+
+                    @* نوع العهدة (التخصيص) *@
+                    <div class="cu-mfield">
+                        <label class="cu-mlabel">نوع العهدة</label>
+                        <div class="cu-mselect-wrap">
+                            <svg class="cu-mselect-icon" viewBox="0 0 24 24"
+                                 width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
+                                <circle cx="7" cy="7" r="1.5"/>
+                            </svg>
+                            <select class="cu-minput cu-mselect"
+                                    value="@_nf.AllocationType"
+                                    @onchange="e => _nf.AllocationType = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value?.ToString()">
+                                <option value="">— عامة (بدون تخصيص) —</option>
+                                <option value="Freight">سلفة من نولون النقله</option>
+                                <option value="Road">مصاريف طريق</option>
+                            </select>
+                        </div>
+                        <div class="cu-mhint">سلفة النولون تُخصم من نولون النقله عند التسوية · مصاريف الطريق تكلفة على الرحلة</div>
                     </div>
 
                     @* ملاحظات *@
@@ -915,7 +1012,7 @@
                     </svg>
                 </div>
                 <div>
-                    <div class="cu-modal-title">اعتماد تسوية @_approveTarget.CustodyNumber ✅</div>
+                    <div class="cu-modal-title">اعتماد تسوية @_approveTarget.CustodyNumber</div>
                     <div class="cu-modal-sub danger-sub">راجع الأرقام — بعد الاعتماد مافيش تعديل</div>
                 </div>
                 <button class="cu-modal-close" @onclick="CloseApprove" aria-label="إغلاق">
@@ -1108,7 +1205,12 @@
                 <div class="cu-detail-summary">
 
                     <div class="cu-detail-card">
-                        <div class="detail-card-ring ring-issued" aria-hidden="true">💰</div>
+                        <div class="detail-card-ring ring-issued" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4">
+                                <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                <circle cx="12" cy="12" r="2.5"/>
+                            </svg>
+                        </div>
                         <div class="detail-card-data">
                             <div class="detail-card-label">إجمالي المصروف</div>
                             <div class="detail-card-val issued">
@@ -1122,7 +1224,11 @@
                     </div>
 
                     <div class="cu-detail-card">
-                        <div class="detail-card-ring ring-spent" aria-hidden="true">📤</div>
+                        <div class="detail-card-ring ring-spent" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4">
+                                <path d="M12 19V5M5 12l7-7 7 7" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
                         <div class="detail-card-data">
                             <div class="detail-card-label">المنصرف منها</div>
                             <div class="detail-card-val spent">@Money(_detail.Custody.AmountSpent)</div>
@@ -1130,7 +1236,11 @@
                     </div>
 
                     <div class="cu-detail-card">
-                        <div class="detail-card-ring ring-returned" aria-hidden="true">📥</div>
+                        <div class="detail-card-ring ring-returned" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4">
+                                <path d="M12 5v14M19 12l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
                         <div class="detail-card-data">
                             <div class="detail-card-label">المرتد منها</div>
                             <div class="detail-card-val returned">@Money(_detail.Custody.AmountReturned)</div>
@@ -1140,7 +1250,19 @@
                     <div class="cu-detail-card @(_detail.Custody.Remaining > 0 ? "card-remaining" : "card-settled")">
                         <div class="detail-card-ring @(_detail.Custody.Remaining > 0 ? "ring-remaining" : "ring-settled")"
                              aria-hidden="true">
-                            @(_detail.Custody.Remaining > 0 ? "⏳" : "✅")
+                            @if (_detail.Custody.Remaining > 0)
+                            {
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4">
+                                    <circle cx="12" cy="12" r="9"/>
+                                    <path d="M12 7v5l3 3" stroke-linecap="round"/>
+                                </svg>
+                            }
+                            else
+                            {
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4">
+                                    <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            }
                         </div>
                         <div class="detail-card-data">
                             <div class="detail-card-label">الباقي</div>
@@ -1201,7 +1323,7 @@
 
                     @if (!_detail.Transactions.Any())
                     {
-                        <div class="cu-detail-empty">مافيش حركات لسه</div>
+                        <div class="cu-detail-empty">لا توجد حركات بعد</div>
                     }
                     else
                     {
@@ -1411,15 +1533,235 @@
     }
 
     /* ================================================================
-       BODY
+       HERO + BODY + FAB — النمط المعتمد (منقول من TripTypes.razor)
     ================================================================ */
-    .cu-body {
-        background: var(--fc-bg);
-        min-height: calc(100vh - 200px);
-        padding: 16px 20px 32px;
-        max-width: 1350px; width: 100%;
+    .hero-wrapper {
+        padding: 16px clamp(14px, 2.4vw, 34px) 0;
+        max-width: var(--fc-page-w, 1440px);
         margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 1;
     }
+
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important;
+        overflow: hidden;
+        box-shadow: 0 12px 32px rgba(13,38,84,.15), 0 4px 12px rgba(13,38,84,.08);
+        border: 1px solid rgba(255,255,255,.08);
+    }
+
+    .hero-wrapper .fc-hero.fc-hero-slim {
+        padding-top: 18px !important;
+        padding-bottom: 22px !important;
+    }
+
+    .fc-overlap { margin-top: 20px !important; position: relative; z-index: 2; }
+
+    .doc-body {
+        padding: 18px clamp(16px, 3vw, 40px) 100px;
+        max-width: var(--fc-page-w, 1440px);
+        margin-inline: auto;
+        box-sizing: border-box;
+        width: 100%;
+        position: relative;
+        z-index: 2;
+    }
+
+
+    .doc-hero-row {
+        display: flex; align-items: center;
+        justify-content: space-between;
+        gap: 16px; flex-wrap: wrap;
+        margin-bottom: 10px;
+    }
+
+    .doc-hero-left  { display: flex; flex-direction: column; gap: 2px; }
+
+    .doc-hero-crumb {
+        display: flex; align-items: center; gap: 5px;
+        font-size: 10.5px; font-weight: 700;
+        color: rgba(255,255,255,.55);
+        margin-bottom: 2px;
+    }
+
+    .fc-hero-sub {
+        font-size: 10.5px;
+        color: rgba(255,255,255,.55);
+        font-weight: 600;
+    }
+
+    .doc-hero-right {
+        display: flex; align-items: center;
+        gap: 8px; flex-shrink: 0;
+    }
+
+    .doc-hero-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 5px 11px; border-radius: 8px;
+        background: rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.14);
+        color: rgba(255,255,255,.7);
+        font-size: 10.5px; font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .doc-kpis-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .doc-kpi {
+        background: rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.12);
+        backdrop-filter: blur(12px);
+        border-radius: 10px;
+        padding: 8px 11px;
+    }
+
+    .doc-kpi-inner { display: flex; align-items: center; gap: 10px; }
+
+    .doc-kpi-icon {
+        width: 34px; height: 34px; border-radius: 9px;
+        display: flex; align-items: center;
+        justify-content: center; flex-shrink: 0;
+    }
+
+    .doc-kpi-blue .doc-kpi-icon  { background: rgba(125,211,252,.15); color: #7dd3fc; }
+    .doc-kpi-green .doc-kpi-icon { background: rgba(110,231,183,.15); color: #6ee7b7; }
+    .doc-kpi-amber .doc-kpi-icon { background: rgba(251,191,36,.15);  color: #fbbf24; }
+
+    .doc-kpi-data   { flex: 1; min-width: 0; }
+
+    .doc-kpi-num {
+        font-size: 18px; font-weight: 900;
+        color: #fff; line-height: 1;
+    }
+
+    .doc-kpi-label {
+        font-size: 10.5px; font-weight: 700;
+        color: rgba(255,255,255,.6); margin-top: 3px;
+    }
+
+
+    .fc-fab-scrim {
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,.25);
+        backdrop-filter: blur(3px);
+        z-index: 1200;
+    }
+
+    .fc-fab-container {
+        position: fixed;
+        left: 28px; bottom: 28px;
+        z-index: 1300;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .fc-fab-menu {
+        display: flex; flex-direction: column; gap: 8px;
+        margin-bottom: 12px;
+        opacity: 0; visibility: hidden;
+        pointer-events: none;
+        transform: translateY(8px);
+        transition: opacity .22s ease, transform .22s ease, visibility .22s;
+    }
+
+    .fc-fab-menu--open {
+        opacity: 1; visibility: visible;
+        pointer-events: auto;
+        transform: translateY(0);
+    }
+
+    .fc-fab-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 16px; border-radius: 12px;
+        background: #fff; border: 1.5px solid #dde5f0;
+        box-shadow: 0 4px 16px rgba(0,0,0,.12);
+        cursor: pointer; font-size: 13px; font-weight: 600;
+        color: #1c2c44; font-family: inherit;
+        transition: background .15s, border-color .15s, transform .15s;
+        white-space: nowrap; width: 100%;
+    }
+
+    .fc-fab-item:hover {
+        background: #f4f7fb;
+        border-color: #0B56DF;
+        transform: translateX(2px);
+    }
+
+    .fc-fab-icon {
+        display: flex; align-items: center; justify-content: center;
+        width: 30px; height: 30px; border-radius: 8px;
+        background: #eaf1ff; color: #0B56DF; flex-shrink: 0;
+    }
+
+    .fc-fab-main {
+        width: 60px; height: 60px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; border: none;
+        transition: transform .2s, box-shadow .2s;
+        position: relative;
+    }
+
+    .fc-fab-main:hover { transform: scale(1.06); }
+
+    .fc-fab-svg {
+        transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+    }
+
+    .fc-fab-main.is-open .fc-fab-svg { transform: rotate(135deg); }
+
+    .fc-glow-gold {
+        background: linear-gradient(135deg, #0B56DF 0%, #083CA8 100%) !important;
+        border: 2px solid #FF8015 !important;
+        color: #fff;
+        box-shadow: 0 4px 16px rgba(11,86,223,.4);
+        animation: fc-gold-pulse 2.2s infinite;
+    }
+
+    .fc-glow-gold::before {
+        content: "";
+        position: absolute; inset: -2px;
+        border-radius: 50%;
+        border: 2px solid #FF8015;
+        opacity: 0; pointer-events: none;
+        animation: fc-ring-expand 2.2s cubic-bezier(.24,0,.38,1) infinite;
+    }
+
+    @@keyframes fc-gold-pulse {
+        0%,100% { box-shadow: 0 0 0 0 rgba(255,128,21,.6), 0 8px 24px rgba(11,86,223,.4); }
+        50%     { box-shadow: 0 0 0 12px rgba(255,128,21,0), 0 12px 32px rgba(11,86,223,.55); }
+    }
+
+    @@keyframes fc-ring-expand {
+        0%   { transform: scale(1); opacity: .8; border-width: 3px; }
+        100% { transform: scale(1.6); opacity: 0; border-width: 1px; }
+    }
+
+    .fc-glow-gold.is-open {
+        background: linear-gradient(135deg, #D64545 0%, #991b1b 100%) !important;
+        border-color: #fca5a5 !important;
+        animation: none !important;
+    }
+
+    .fc-glow-gold.is-open::before { animation: none !important; }
+    .doc-kpi-red .doc-kpi-icon { background: rgba(248,113,113,.15); color: #f87171; }
+
+    /* KPIs قابلة للفلترة */
+    .doc-kpi-click { cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
+    .doc-kpi-click:hover { transform: translateY(-2px); }
+    .doc-kpi-active { outline: 2px solid rgba(255,255,255,.45); outline-offset: -2px; }
+
+    @@media (max-width: 900px) {
+        .doc-kpis-row { grid-template-columns: repeat(2, 1fr); }
+    }
+
 
     /* ================================================================
        STATES
@@ -1805,8 +2147,8 @@
        MODALS — Base
     ================================================================ */
     .cu-modal-backdrop {
-        position: fixed; inset: 0; z-index: 1000;
-        background: rgba(10,20,40,.60); backdrop-filter: blur(5px);
+        position: fixed; inset: 0; z-index: 1400;
+        background: rgba(10,27,59,.62); backdrop-filter: blur(6px);
         display: flex; align-items: center; justify-content: center;
         padding: 20px; animation: cu-fade-in .2s ease;
     }
@@ -1814,12 +2156,12 @@
 
     .cu-modal {
         width: 100%; max-width: 560px;
-        background: var(--fc-card); border: 1px solid rgba(0,0,0,.08);
+        background: #fff;
         border-radius: 20px;
-        box-shadow: 0 10px 40px rgba(10,20,50,.18), 0 30px 80px rgba(10,20,50,.22);
+        box-shadow: 0 25px 60px rgba(10,27,59,.28), 0 8px 20px rgba(10,27,59,.12);
         overflow: hidden;
-        animation: cu-modal-in .28s cubic-bezier(.34,1.3,.64,1);
-        max-height: 90vh; overflow-y: auto;
+        animation: cu-modal-in .28s cubic-bezier(.22,.9,.36,1.1) both;
+        max-height: 92vh; overflow-y: auto;
     }
     .cu-modal-sm { max-width: 460px; }
     .cu-modal-xl { max-width: 760px; }
@@ -1831,35 +2173,56 @@
 
     .cu-modal-head {
         display: flex; align-items: center; gap: 14px;
-        padding: 20px 22px;
-        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
-        border-bottom: 1px solid #edf1f7;
+        padding: 20px 24px;
+        background: linear-gradient(135deg, #0A1B3B 0%, #16306B 100%);
+        color: #fff; flex: 0 0 auto;
+        position: relative; overflow: hidden;
+    }
+
+    .cu-modal-head::before {
+        content: "";
+        position: absolute; top: -50px; right: -50px;
+        width: 200px; height: 200px; border-radius: 50%;
+        background: radial-gradient(circle, rgba(255,128,21,.15) 0%, transparent 70%);
+        pointer-events: none;
     }
 
     .cu-modal-icon {
-        width: 48px; height: 48px; flex: 0 0 48px; border-radius: 14px;
+        width: 46px; height: 46px; flex: 0 0 46px; border-radius: 13px;
         display: flex; align-items: center; justify-content: center;
+        position: relative; z-index: 1;
     }
 
-    .issue-icon   { background: linear-gradient(135deg, #eaf1ff, #dde8ff); color: var(--fc-blue);  border: 1px solid #bdd4fc; }
-    .tx-icon      { background: linear-gradient(135deg, #f3eeff, #e8dfff); color: var(--fc-purple); border: 1px solid #d0bfef; }
-    .approve-icon { background: linear-gradient(135deg, #e9f8f0, #d4f0e0); color: var(--fc-green); border: 1px solid #b0e0c5; }
-    .detail-blue  { background: linear-gradient(135deg, #eaf1ff, #dde8ff); color: var(--fc-blue);  border: 1px solid #bdd4fc; }
-    .detail-amber { background: linear-gradient(135deg, #fff8e6, #ffefc0); color: #9a6d08;         border: 1px solid #f0d898; }
-    .detail-green { background: linear-gradient(135deg, #e9f8f0, #d4f0e0); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .issue-icon   { background: rgba(27,158,94,.2);   color: #6ee7b7; border: 1px solid rgba(110,231,183,.3); }
+    .tx-icon      { background: rgba(255,128,21,.2);  color: #FFD9B8; border: 1px solid rgba(255,128,21,.3); }
+    .approve-icon { background: rgba(27,158,94,.2);   color: #6ee7b7; border: 1px solid rgba(110,231,183,.3); }
+    .detail-blue  { background: rgba(59,130,246,.22); color: #93c5fd; border: 1px solid rgba(147,197,253,.3); }
+    .detail-amber { background: rgba(251,191,36,.18); color: #fcd34d; border: 1px solid rgba(252,211,77,.3); }
+    .detail-green { background: rgba(27,158,94,.2);   color: #6ee7b7; border: 1px solid rgba(110,231,183,.3); }
 
-    .cu-modal-title { font-size: 15px; font-weight: 900; color: #1c2b43; }
-    .cu-modal-sub   { font-size: 10.5px; color: var(--fc-muted); margin-top: 2px; }
-    .danger-sub     { color: var(--fc-red) !important; }
+    .cu-modal-title { font-size: 15px; font-weight: 900; color: #fff; }
+
+    /* ── نوع العهدة (التخصيص) ── */
+    .cu-alloc-tag {
+        display: inline-flex; align-items: center;
+        font-size: 10.5px; font-weight: 800; line-height: 1;
+        padding: 4px 9px; border-radius: 999px; white-space: nowrap;
+    }
+    .cu-alloc-freight { background: rgba(37, 99, 235, 0.10); color: #1d4ed8; }
+    .cu-alloc-road    { background: rgba(217, 119, 6, 0.12); color: #b45309; }
+    .cu-alloc-gen     { background: rgba(100, 116, 139, 0.12); color: #475569; }
+    .cu-modal-sub   { font-size: 10.5px; color: rgba(255,255,255,.66); margin-top: 2px; }
+    .danger-sub     { color: #ffb4b4 !important; }
 
     .cu-modal-close {
         margin-right: auto; width: 34px; height: 34px;
         display: flex; align-items: center; justify-content: center;
-        border: 1px solid #e4eaf2; border-radius: 9px;
-        background: none; color: #9aaabb; cursor: pointer;
+        border: 1px solid rgba(255,255,255,.22); border-radius: 9px;
+        background: none; color: rgba(255,255,255,.75); cursor: pointer;
         transition: all .15s ease;
+        position: relative; z-index: 1;
     }
-    .cu-modal-close:hover { background: #f0f4fa; color: var(--fc-text); border-color: #c0ccd8; }
+    .cu-modal-close:hover { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.35); }
 
     .cu-modal-banner {
         display: flex; align-items: center; justify-content: space-between;
@@ -2515,7 +2878,8 @@
     }
 
     @@media (max-width: 680px) {
-        .cu-body { padding: 10px 12px 24px; }
+        .doc-body { padding: 14px 12px 90px; }
+        .fc-overlap { margin-top: 14px !important; }
         .cu-toolbar { padding: 10px 12px; }
         .cu-avatar { display: none; }
         .cu-status-bar { padding: 8px 12px; }
@@ -2525,6 +2889,7 @@
     }
 
     @@media (max-width: 480px) {
+        .doc-kpis-row { grid-template-columns: 1fr 1fr; }
         .cu-status-tabs { flex-wrap: wrap; }
         .cu-status-tab { padding: 0 7px; font-size: 9.5px; }
         .cu-tab-dot { display: none; }
@@ -2608,6 +2973,7 @@
         public long?   ParentCustodyId { get; set; }
         public string? ParentCustodyNumber { get; set; }
         public int     SubCount        { get; set; }
+        public string? AllocationType { get; set; }
     }
 
     public class CustodyDetail
@@ -2682,6 +3048,7 @@
         public string? Notes        { get; set; }
         public bool    IsPrimary    { get; set; } = true;
         public long?   ParentCustodyId { get; set; }
+        public string? AllocationType { get; set; }
     }
 
     public class TxForm
@@ -2877,6 +3244,40 @@
     }
 
     /* ── صرف عهدة ── */
+    /* ── نوع العهدة (التخصيص) ── */
+    private static string AllocAr(string? t) => t switch
+    {
+        "Freight" => "سلفة نولون",
+        "Road"    => "مصاريف طريق",
+        _         => "عامة"
+    };
+    private static string AllocClass(string? t) => t switch
+    {
+        "Freight" => "cu-alloc-freight",
+        "Road"    => "cu-alloc-road",
+        _         => "cu-alloc-gen"
+    };
+
+    /* ── FAB (§7.4) ── */
+    private bool _fabOpen;
+    private void ToggleFab() { _fabOpen = !_fabOpen; StateHasChanged(); }
+
+    private async Task HandleReload()
+    {
+        _fabOpen = false;
+        StateHasChanged();
+        await Reload();
+        Snackbar.Add("تم تحديث البيانات", Severity.Success);
+    }
+
+    private async Task HandleOpenCreate()
+    {
+        _fabOpen = false;
+        StateHasChanged();
+        await Task.Delay(180);   // القائمة تقفل بنعومة قبل ما المودال يفتح
+        OpenIssue();
+    }
+
     private void OpenIssue()
     {
         _nf = new NewForm { CustodyDate = DateTime.Now.ToString("yyyy-MM-ddTHH:mm") };
@@ -2917,7 +3318,8 @@
                 custodyDate     = _nf.CustodyDate,
                 notes           = _nf.Notes,
                 isPrimary       = _nf.IsPrimary,
-                parentCustodyId = _nf.ParentCustodyId
+                parentCustodyId = _nf.ParentCustodyId,
+                allocationType  = _nf.AllocationType
             });
             _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
             if (res.IsSuccessStatusCode)

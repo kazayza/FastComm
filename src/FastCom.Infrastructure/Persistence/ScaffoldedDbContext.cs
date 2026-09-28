@@ -59,6 +59,8 @@ public partial class FastComDbContext
 
     public virtual DbSet<DriverCustody> DriverCustodies { get; set; }
 
+    public virtual DbSet<DriverFreightRule> DriverFreightRules { get; set; }
+
     public virtual DbSet<Employee> Employees { get; set; }
 
     public virtual DbSet<Expense> Expenses { get; set; }
@@ -100,6 +102,8 @@ public partial class FastComDbContext
     public virtual DbSet<PortalAccessLog> PortalAccessLogs { get; set; }
 
     public virtual DbSet<PriceList> PriceLists { get; set; }
+
+    public virtual DbSet<ReceiptType> ReceiptTypes { get; set; }
 
     public virtual DbSet<Service> Services { get; set; }
 
@@ -197,6 +201,8 @@ public partial class FastComDbContext
             entity.HasOne(d => d.TahteeqPort).WithMany(p => p.TahteeqBookings).HasConstraintName("FK_Bookings_TahteeqPorts");
 
             entity.HasOne(d => d.EndCustomer).WithMany(p => p.EndCustomerBookings).HasConstraintName("FK_Bookings_EndCustomers");
+
+            entity.HasOne(d => d.GuaranteeSupplier).WithMany().HasConstraintName("FK_Bookings_GuaranteeSupplier");
         });
 
         modelBuilder.Entity<BookingContainerDetail>(entity =>
@@ -217,6 +223,7 @@ public partial class FastComDbContext
         {
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysutcdatetime())");
             entity.Property(e => e.Status).HasDefaultValue("Pending");
+            entity.Property(e => e.GuaranteePerContainer).HasPrecision(18, 4);
 
             entity.HasOne(d => d.Booking).WithMany(p => p.BookingContainerLines)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -471,6 +478,28 @@ public partial class FastComDbContext
                 .HasConstraintName("FK_Custodies_Parent");
         });
 
+        modelBuilder.Entity<DriverFreightRule>(entity =>
+        {
+            entity.HasIndex(e => new { e.PortId, e.DestinationId, e.TripTypeId }, "IX_DriverFreightRules_Match").HasFilter("([IsDeleted]=(0))");
+
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.ValidFrom).HasDefaultValueSql("(CAST(sysutcdatetime() AS date))");
+            entity.Property(e => e.Priority).HasDefaultValue(0);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+
+            entity.HasOne<Port>().WithMany()
+                .HasForeignKey(d => d.PortId)
+                .HasConstraintName("FK_DFR_Ports");
+
+            entity.HasOne<Destination>().WithMany()
+                .HasForeignKey(d => d.DestinationId)
+                .HasConstraintName("FK_DFR_Destinations");
+
+            entity.HasOne<TripType>().WithMany()
+                .HasForeignKey(d => d.TripTypeId)
+                .HasConstraintName("FK_DFR_TripTypes");
+        });
+
         modelBuilder.Entity<Employee>(entity =>
         {
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysutcdatetime())");
@@ -504,6 +533,7 @@ public partial class FastComDbContext
             entity.Property(e => e.IsTaxDeductible).HasDefaultValue(true);
             entity.Property(e => e.PaymentStatus).HasDefaultValue("Unpaid");
             entity.Property(e => e.Status).HasDefaultValue("Posted");
+            entity.Property(e => e.BillableTaxRate).HasDefaultValue(0m);
 
             entity.HasOne(d => d.Branch).WithMany(p => p.Expenses)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -519,6 +549,8 @@ public partial class FastComDbContext
 
             entity.HasOne(d => d.Operation).WithMany(p => p.Expenses).HasConstraintName("FK_Expenses_Operations");
             entity.HasOne(d => d.PaymentMethod).WithMany(p => p.Expenses).HasConstraintName("FK_Expenses_Methods");
+
+            entity.HasOne(d => d.ReceiptType).WithMany(p => p.Expenses).HasConstraintName("FK_Expenses_ReceiptTypes");
 
             entity.HasOne(d => d.Supplier).WithMany(p => p.Expenses).HasConstraintName("FK_Expenses_Suppliers");
 
@@ -577,6 +609,11 @@ public partial class FastComDbContext
             entity.HasOne(d => d.Service).WithMany(p => p.InvoiceItems).HasConstraintName("FK_InvoiceItems_Services");
 
             entity.HasOne(d => d.TaxRateNavigation).WithMany(p => p.InvoiceItems).HasConstraintName("FK_InvoiceItems_TaxRates");
+
+            // 🔴 بند من مصروف قابل للتحميل — بدون nav props (ExpenseId بس)
+            entity.HasOne<Expense>().WithMany()
+                .HasForeignKey(d => d.ExpenseId)
+                .HasConstraintName("FK_InvoiceItems_Expenses");
         });
 
         modelBuilder.Entity<InvoiceOperation>(entity =>
@@ -787,6 +824,12 @@ public partial class FastComDbContext
             entity.Property(e => e.CurrencyCode)
                 .HasDefaultValue("EGP")
                 .IsFixedLength();
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+        });
+
+        modelBuilder.Entity<ReceiptType>(entity =>
+        {
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysutcdatetime())");
             entity.Property(e => e.IsActive).HasDefaultValue(true);
         });
 

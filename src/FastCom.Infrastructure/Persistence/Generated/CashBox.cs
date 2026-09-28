@@ -42,6 +42,12 @@ public partial class CashBox
     [StringLength(20)]
     public string Status { get; set; } = "Open";
 
+    /* 🔴 نوع الخزينة:
+       Cash   = خزينة نقدية (MAIN / OPS / عهد)
+       Entity = حساب جاري لجهة (الهيئة) — بتتغذى بتحويلات من MAIN */
+    [StringLength(20)]
+    public string BoxKind { get; set; } = "Cash";
+
     public bool IsDeleted { get; set; }
 
     [Precision(0)]

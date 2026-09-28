@@ -50,7 +50,9 @@ public class ExpensesController : ControllerBase
     public record ExpenseUpsert(int ExpenseTypeId, string? ExpenseDate, string? Description,
         decimal Amount, long? OperationId, long? TripId, int? DriverId, int? VehicleId, int? SupplierId,
         long? CustodyId, int? TaxRateId, bool? IsTaxDeductible, string? ReferenceNumber, string? Notes, bool AsDraft,
-        int? PaymentMethodId = null);
+        int? PaymentMethodId = null,
+        /* 🔴 القيمة المزدوجة: BillableAmount = اللي يتحمل العميل في الفاتورة (NULL = مش مفوتر) */
+        decimal? BillableAmount = null, decimal? BillableTaxRate = null, int? ReceiptTypeId = null);
 
     public record ListItem(long ExpenseId, string ExpenseNumber, string TypeName,
         string? Description, DateTime ExpenseDate, decimal Amount, decimal TaxRate,
@@ -61,7 +63,8 @@ public class ExpensesController : ControllerBase
         string? ExpenseDate, string? Description, decimal Amount, int? TaxRateId,
         bool IsTaxDeductible, long? OperationId, long? TripId, int? DriverId, int? VehicleId, int? SupplierId, long? CustodyId,
         string? ReferenceNumber, string? Notes, string PaymentStatus, string Status,
-        bool IsApproved, decimal TaxRate, int? PaymentMethodId, string? MethodName);
+        bool IsApproved, decimal TaxRate, int? PaymentMethodId, string? MethodName,
+        decimal? BillableAmount, decimal BillableTaxRate, int? ReceiptTypeId, string? ReceiptTypeName);
 
     // ═══════════════ LIST ═══════════════
 
@@ -123,10 +126,16 @@ public class ExpensesController : ControllerBase
                 .Where(m => m.PaymentMethodId == e.PaymentMethodId)
                 .Select(m => (string?)m.NameAr).FirstOrDefaultAsync(ct);
 
+        var receiptName = e.ReceiptTypeId is null ? null
+            : await _db.ReceiptTypes.AsNoTracking()
+                .Where(r => r.ReceiptTypeId == e.ReceiptTypeId)
+                .Select(r => (string?)r.NameAr).FirstOrDefaultAsync(ct);
+
         return Ok(new Detail(e.ExpenseId, e.ExpenseNumber, e.ExpenseTypeId,
             e.ExpenseDate.ToString("yyyy-MM-ddTHH:mm"), e.Description, e.Amount,
             e.TaxRateId, e.IsTaxDeductible, e.OperationId, e.TripId, e.DriverId, e.VehicleId, e.SupplierId, e.CustodyId, e.ReferenceNumber, e.Notes, e.PaymentStatus, e.Status, e.IsApproved, e.TaxRate,
-            e.PaymentMethodId, methodName));
+            e.PaymentMethodId, methodName,
+            e.BillableAmount, e.BillableTaxRate, e.ReceiptTypeId, receiptName));
     }
 
     // ═══════════════ CREATE ═══════════════
@@ -166,7 +175,11 @@ public class ExpensesController : ControllerBase
             Notes           = B(req.Notes),
             PaymentStatus   = "Unpaid",
             Status          = req.AsDraft ? "Draft" : "Posted",
-            CreatedBy       = CurrentUserId()
+            CreatedBy       = CurrentUserId(),
+            /* 🔴 القيمة المزدوجة + نوع الإيصال */
+            BillableAmount  = req.BillableAmount > 0 ? req.BillableAmount : null,
+            BillableTaxRate = req.BillableTaxRate ?? 0m,
+            ReceiptTypeId   = req.ReceiptTypeId
         };
 
         // 🔴 Atomicity + ربط العهدة: المصروف المربوط بعهدة مفتوحة بيسجّل
@@ -260,6 +273,10 @@ public class ExpensesController : ControllerBase
         e.ReferenceNumber = B(req.ReferenceNumber);
         e.PaymentMethodId = req.PaymentMethodId;
         e.Notes           = B(req.Notes);
+        /* 🔴 القيمة المزدوجة + نوع الإيصال */
+        e.BillableAmount  = req.BillableAmount > 0 ? req.BillableAmount : null;
+        e.BillableTaxRate = req.BillableTaxRate ?? 0m;
+        e.ReceiptTypeId   = req.ReceiptTypeId;
         e.UpdatedAt       = DateTime.UtcNow;
         e.UpdatedBy       = CurrentUserId();
 

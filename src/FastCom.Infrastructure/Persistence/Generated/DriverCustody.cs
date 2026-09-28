@@ -44,6 +44,13 @@ public partial class DriverCustody
     [Column(TypeName = "decimal(19, 4)")]
     public decimal AdditionalDue { get; set; }
 
+    /* 🔴 نوع توزيع العهدة الفرعية:
+       Freight = سلفة من نولون النقله (أجرة السائق)
+       Road    = مصاريف طريق
+       NULL    = عهدة عامة (القديم) */
+    [StringLength(20)]
+    public string? AllocationType { get; set; }
+
     [StringLength(30)]
     public string Status { get; set; } = null!;
 

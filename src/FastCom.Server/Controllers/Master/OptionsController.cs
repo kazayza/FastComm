@@ -159,7 +159,8 @@ public class OptionsController : ControllerBase
         return Ok(await _db.ContainerTypes.AsNoTracking()
             .Where(c => c.IsActive && !c.IsDeleted)
             .OrderBy(c => c.SizeFeet).ThenBy(c => c.Code)
-            .Select(c => new Opt(c.ContainerTypeId, c.NameAr))
+            // 🔴 guaranteeAmount إضافية — شاشة الحجوزات بتعبّي منها ضمان السطر أوتوماتيك
+            .Select(c => new { id = c.ContainerTypeId, label = c.NameAr, guaranteeAmount = c.GuaranteeAmount })
             .ToListAsync(ct));
     }
 
@@ -185,6 +186,16 @@ public class OptionsController : ControllerBase
 
     public record ExpenseTypeOpt(int Id, string Label, bool CustodyAllowed,
         bool IsOperationCost, bool IsTaxDeductible);
+
+    /// <summary>أنواع الإيصالات (هيئة/كاشير/تعتيق…) — المستخدم بيوسعها من شاشة أنواع الإيصالات.</summary>
+    [HttpGet("receipt-types")]
+    [Authorize(Policy = "PERM:EXPENSE.VIEW")]
+    public async Task<IActionResult> ReceiptTypes(CancellationToken ct) =>
+        Ok(await _db.ReceiptTypes.AsNoTracking()
+            .Where(r => r.IsActive && !r.IsDeleted)
+            .OrderBy(r => r.Code)
+            .Select(r => new Opt(r.ReceiptTypeId, r.NameAr))
+            .ToListAsync(ct));
 
     /// <summary>العهود المفتوحة على رحلة — بتظهر في فورم المصروف.</summary>
     [HttpGet("custodies")]

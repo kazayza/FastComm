@@ -41,6 +41,19 @@ public partial class Expense
     [Column(TypeName = "decimal(19, 4)")]
     public decimal Amount { get; set; }
 
+    /* 🔴 القيمة المزدوجة:
+       Amount         = القيمة الفعلية المدفوعة (تكلفة على الشركة)
+       BillableAmount = القيمة اللي هتتحمل على العميل في الفاتورة (NULL = مش مفوتر)
+       BillableTaxRate = ضريبة القيمة المفوترة (0 = من غير ضريبة — الافتراضي) */
+    [Column(TypeName = "decimal(19, 4)")]
+    public decimal? BillableAmount { get; set; }
+
+    [Column(TypeName = "decimal(5, 2)")]
+    public decimal BillableTaxRate { get; set; }
+
+    /* نوع الإيصال (للمدفوع من خزينة الهيئة) — FK → ReceiptTypes */
+    public int? ReceiptTypeId { get; set; }
+
     public int? TaxRateId { get; set; }
 
     [Column(TypeName = "decimal(9, 4)")]
@@ -113,6 +126,11 @@ public partial class Expense
 
     [ForeignKey("PaymentMethodId")]
     public virtual PaymentMethod? PaymentMethod { get; set; }
+
+    /* نوع الإيصال (خزينة الهيئة) */
+    [ForeignKey("ReceiptTypeId")]
+    [InverseProperty("Expenses")]
+    public virtual ReceiptType? ReceiptType { get; set; }
 
     [ForeignKey("SupplierId")]
     [InverseProperty("Expenses")]

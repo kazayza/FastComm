@@ -53,7 +53,9 @@ public class InvoicesController : ControllerBase
     // ═══════════════ DTOs ═══════════════
 
     public record LineIn(long? OperationId, int? ServiceId, long? PriceRuleId, string? Description,
-        decimal Quantity, decimal UnitPrice, decimal Discount, int? TaxRateId);
+        decimal Quantity, decimal UnitPrice, decimal Discount, int? TaxRateId,
+        /* 🔴 بند من مصروف قابل للتحميل — ExpenseId + نسبة الضريبة المباشرة (لو مافيش TaxRateId) */
+        long? ExpenseId = null, decimal? TaxRate = null);
 
     public record InvoiceUpsert(int CustomerId, string? InvoiceDate, string? DueDate,
         string? Notes, List<LineIn>? Items, List<long>? OperationIds);
@@ -75,7 +77,8 @@ public class InvoicesController : ControllerBase
 
     public record LineOut(long InvoiceItemId, long? OperationId, string? OperationNumber,
         int? ServiceId, string Description, decimal Quantity, decimal UnitPrice, decimal Discount,
-        int? TaxRateId, decimal TaxRate, decimal LineSubtotal, decimal LineTax, decimal LineTotal);
+        int? TaxRateId, decimal TaxRate, decimal LineSubtotal, decimal LineTax, decimal LineTotal,
+        long? ExpenseId);
 
     public record Detail(long InvoiceId, string InvoiceNumber, string DocumentTypeCode,
         string InvoiceType, int CustomerId, string CustomerName, string? CustomerTaxNumber,
@@ -153,7 +156,7 @@ public class InvoicesController : ControllerBase
                 x.Operation != null ? x.Operation.OperationNumber : null,
                 x.ServiceId, x.Description, x.Quantity, x.UnitPrice, x.Discount,
                 x.TaxRateId, x.TaxRate,
-                x.LineSubtotal ?? 0, x.LineTax ?? 0, x.LineTotal ?? 0))
+                x.LineSubtotal ?? 0, x.LineTax ?? 0, x.LineTotal ?? 0, x.ExpenseId))
             .ToListAsync(ct);
 
         var ops = await _db.InvoiceOperations.AsNoTracking()
@@ -387,6 +390,164 @@ public class InvoicesController : ControllerBase
             await _db.Database.CommitTransactionAsync(ct);
 
             return Ok(new { message = "✅ اتعدّلت الفاتورة" });
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
+    }
+
+    // ═══════════════ مصروفات قابلة للتحميل على الفاتورة ═══════════════
+
+    public record BillableExpense(long ExpenseId, string ExpenseNumber, DateTime ExpenseDate,
+        string ExpenseTypeName, string? Description, decimal ActualAmount,
+        decimal BillableAmount, decimal BillableTaxRate);
+
+    public record AddExpensesRequest(List<long> ExpenseIds);
+
+    /// <summary>مصروفات العملية اللي قيمتها المحمّلة على العميل معبّاة (BillableAmount) ومش متفوترة لسه.</summary>
+    [HttpGet("billable-expenses")]
+    [Authorize(Policy = "PERM:INVOICE.VIEW")]
+    public async Task<IActionResult> BillableExpenses(
+        [FromQuery] long operationId, CancellationToken ct = default)
+    {
+        // البند المرتبط بمصروف على فاتورة ملغية مش بيمنع إعادة التحميل
+        var billed = _db.InvoiceItems
+            .Where(i => i.ExpenseId != null && i.Invoice.Status != "Cancelled")
+            .Select(i => i.ExpenseId!.Value);
+
+        return Ok(await _db.Expenses.AsNoTracking()
+            .Where(e => !e.IsDeleted && e.Status != "Cancelled" &&
+                        e.OperationId == operationId &&
+                        e.BillableAmount != null &&
+                        !billed.Contains(e.ExpenseId))
+            .OrderBy(e => e.ExpenseDate)
+            .Select(e => new BillableExpense(e.ExpenseId, e.ExpenseNumber, e.ExpenseDate,
+                e.ExpenseType.NameAr, e.Description, e.Amount,
+                e.BillableAmount!.Value, e.BillableTaxRate))
+            .ToListAsync(ct));
+    }
+
+    /// <summary>يضيف المصروفات المختارة كبنود على الفاتورة بالقيمة القابلة للتحميل (مش القيمة الفعلية).</summary>
+    [HttpPost("{id:long}/add-expenses")]
+    [Authorize(Policy = "PERM:INVOICE.EDIT")]
+    public async Task<IActionResult> AddExpenses(long id, [FromBody] AddExpensesRequest req, CancellationToken ct)
+    {
+        if (req.ExpenseIds is null || req.ExpenseIds.Count == 0)
+            return BadRequest(new { message = "اختر مصروف واحد على الأقل" });
+
+        var inv = await _db.Invoices.FirstOrDefaultAsync(x => x.InvoiceId == id && !x.IsDeleted, ct);
+        if (inv is null) return NotFound(new { message = "الفاتورة مش موجودة" });
+        if (inv.Status is not ("Draft" or "Approved"))
+            return BadRequest(new { message = "الفاتورة اتصدرت — مافيش تعديل" });
+        if (await _db.PaymentAllocations.AnyAsync(a => a.InvoiceId == id, ct))
+            return BadRequest(new { message = "في دفعات متربطة بالفاتورة — الغِ الدفعات الأول" });
+
+        var ids = req.ExpenseIds.Distinct().ToList();
+        var expenses = await _db.Expenses.AsNoTracking()
+            .Where(e => ids.Contains(e.ExpenseId) && !e.IsDeleted && e.Status != "Cancelled" &&
+                        e.BillableAmount != null)
+            .Select(e => new
+            {
+                e.ExpenseId, e.OperationId, e.Description, e.BillableAmount, e.BillableTaxRate,
+                TypeName = e.ExpenseType.NameAr
+            })
+            .ToListAsync(ct);
+        if (expenses.Count == 0)
+            return BadRequest(new { message = "مافيش مصروفات صالحة للإضافة (لازم تكون لها قيمة محمّلة)" });
+
+        var billed = await _db.InvoiceItems
+            .Where(i => i.ExpenseId != null && ids.Contains(i.ExpenseId.Value) &&
+                        i.Invoice.Status != "Cancelled")
+            .Select(i => i.ExpenseId!.Value).Distinct().ToListAsync(ct);
+        if (billed.Count > 0)
+            return BadRequest(new { message = "فيه مصروفات متضافة على فاتورة قبل كده" });
+
+        // لازم المصروفات تكون على عمليات لنفس عميل الفاتورة
+        var opIds = expenses.Where(e => e.OperationId != null)
+                            .Select(e => e.OperationId!.Value).Distinct().ToList();
+        var foreign = await _db.Operations.AsNoTracking()
+            .CountAsync(o => opIds.Contains(o.OperationId) && o.CustomerId != inv.CustomerId, ct);
+        if (foreign > 0)
+            return BadRequest(new { message = "فيه مصروفات على عملية لعميل تاني غير عميل الفاتورة" });
+
+        // نسبة الضريبة → TaxRateId من الجدول (لو موجودة لنفس التاريخ) وإلا النسبة بتتحط مباشرة
+        var wantedRates = expenses.Where(e => e.BillableTaxRate > 0)
+                                  .Select(e => e.BillableTaxRate).Distinct().ToList();
+        var rateMap = new List<(decimal Rate, int TaxRateId)>();
+        if (wantedRates.Count > 0)
+        {
+            rateMap = (await _db.TaxRates.AsNoTracking()
+                    .Where(t => t.IsActive && wantedRates.Contains(t.Rate) &&
+                                t.ValidFrom <= inv.InvoiceDate &&
+                                (t.ValidTo == null || t.ValidTo >= inv.InvoiceDate))
+                    .Select(t => new { t.Rate, t.TaxRateId })
+                    .ToListAsync(ct))
+                .Select(t => (t.Rate, t.TaxRateId)).ToList();
+        }
+
+        // 🔴 Atomicity: البنود + ربط العمليات + المجاميع في معاملة واحدة
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            var newItems = new List<InvoiceItem>();
+            foreach (var e in expenses)
+            {
+                int? taxId = null;
+                if (e.BillableTaxRate > 0)
+                {
+                    var hit = rateMap.FirstOrDefault(r => r.Rate == e.BillableTaxRate);
+                    if (hit.TaxRateId > 0) taxId = hit.TaxRateId;
+                }
+                newItems.Add(new InvoiceItem
+                {
+                    ExpenseId   = e.ExpenseId,
+                    OperationId = e.OperationId,
+                    Description = B(e.Description) ?? e.TypeName,
+                    Quantity    = 1,
+                    UnitPrice   = e.BillableAmount!.Value,
+                    Discount    = 0,
+                    TaxRateId   = taxId,
+                    TaxRate     = e.BillableTaxRate
+                });
+            }
+            foreach (var item in newItems)
+                inv.InvoiceItems.Add(item);
+
+            var linked = await _db.InvoiceOperations.AsNoTracking()
+                .Where(x => x.InvoiceId == id).Select(x => x.OperationId).ToListAsync(ct);
+            foreach (var oid in opIds.Where(o => !linked.Contains(o)))
+                inv.InvoiceOperations.Add(new InvoiceOperation
+                {
+                    OperationId = oid,
+                    CreatedAt   = DateTime.UtcNow,
+                    CreatedBy   = CurrentUserId()
+                });
+
+            // المجاميع = البنود القديمة + الجديدة (الكولكشن مش محمّل — بنجيب القديمة استعلام)
+            var oldItems = await _db.InvoiceItems.AsNoTracking()
+                .Where(x => x.InvoiceId == id)
+                .Select(x => new { x.Quantity, x.UnitPrice, x.Discount, x.TaxRate })
+                .ToListAsync(ct);
+
+            decimal Sub(IEnumerable<(decimal Q, decimal U, decimal D)> xs) => xs.Sum(i => i.Q * i.U - i.D);
+            var oldT = oldItems.Select(i => (i.Quantity, i.UnitPrice, i.Discount)).ToList();
+            var newT = newItems.Select(i => (i.Quantity, i.UnitPrice, i.Discount)).ToList();
+            var allT = oldItems.Select(i => (i.Quantity, i.UnitPrice, i.Discount, i.TaxRate))
+                .Concat(newItems.Select(i => (i.Quantity, i.UnitPrice, i.Discount, i.TaxRate))).ToList();
+
+            inv.SubTotal      = Sub(oldT) + Sub(newT);
+            inv.DiscountTotal = oldItems.Sum(i => i.Discount) + newItems.Sum(i => i.Discount);
+            inv.TaxTotal      = allT.Sum(i => (i.Quantity * i.UnitPrice - i.Discount) * i.TaxRate / 100m);
+            inv.GrandTotal    = inv.SubTotal + inv.TaxTotal;
+            inv.InvoiceType   = inv.TaxTotal > 0 ? "Tax" : "NonTax";
+            inv.UpdatedAt     = DateTime.UtcNow;
+            inv.UpdatedBy     = CurrentUserId();
+            await _db.SaveChangesAsync(ct);
+
+            await _db.Database.CommitTransactionAsync(ct);
+            return Ok(new { message = $"اتضافت {expenses.Count} مصروف على الفاتورة", added = expenses.Count });
         }
         catch (Exception)
         {
@@ -672,7 +833,8 @@ public class InvoicesController : ControllerBase
             .Where(x => x.InvoiceId == invoiceId)
             .OrderBy(x => x.InvoiceItemId)
             .Select(x => new LineIn(null, x.ServiceId, x.PriceRuleId, "مرتجع: " + x.Description,
-                                    -x.Quantity, x.UnitPrice, -x.Discount, x.TaxRateId))
+                                    -x.Quantity, x.UnitPrice, -x.Discount, x.TaxRateId,
+                                    null, x.TaxRate))
             .ToListAsync(ct);
 
     /// <summary>بيحط السطور + بينسخ نسبة الضريبة من TaxRates (Snapshot).</summary>
@@ -690,7 +852,8 @@ public class InvoicesController : ControllerBase
                 UnitPrice   = l.UnitPrice,
                 Discount    = l.Discount,
                 TaxRateId   = l.TaxRateId,
-                TaxRate     = l.TaxRateId is not null && rates.TryGetValue(l.TaxRateId.Value, out var r) ? r : 0
+                TaxRate     = l.TaxRateId is not null && rates.TryGetValue(l.TaxRateId.Value, out var r) ? r : (l.TaxRate ?? 0),
+                ExpenseId   = l.ExpenseId
             });
         }
     }
@@ -719,7 +882,7 @@ public class InvoicesController : ControllerBase
     /// <summary>بيحسب مجاميع الفاتورة من السطور — الأعمدة دي مش محسوبة في SQL Server.</summary>
     private static void RecalcTotals(Invoice inv, List<LineIn> lines, Dictionary<int, decimal> rates)
     {
-        decimal Rate(LineIn l) => l.TaxRateId is not null && rates.TryGetValue(l.TaxRateId.Value, out var r) ? r : 0m;
+        decimal Rate(LineIn l) => l.TaxRateId is not null && rates.TryGetValue(l.TaxRateId.Value, out var r) ? r : (l.TaxRate ?? 0m);
 
         inv.SubTotal      = lines.Sum(l => l.Quantity * l.UnitPrice - l.Discount);
         inv.DiscountTotal = lines.Sum(l => l.Discount);

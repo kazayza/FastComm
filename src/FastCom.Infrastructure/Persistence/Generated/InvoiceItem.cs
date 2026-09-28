@@ -20,6 +20,9 @@ public partial class InvoiceItem
 
     public long? PriceRuleId { get; set; }
 
+    /// <summary>المصروف القابل للتحميل اللي البند متاخد منه — NULL = بند عادي (بدون nav عمداً).</summary>
+    public long? ExpenseId { get; set; }
+
     [StringLength(500)]
     public string Description { get; set; } = null!;
 

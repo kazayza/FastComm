@@ -477,6 +477,114 @@
                                 </div>
                             }
 
+                            @* ── تحميل مصروفات محمّلة على العميل ── *@
+                            @if (_f.CustomerId > 0 && !Locked)
+                            {
+                                <div class="inv-op-selector-box inv-bx-box">
+                                    <div class="inv-op-icon" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                            <path d="M14 2v6h6M9 13h6M9 17h4" stroke-linecap="round"/>
+                                        </svg>
+                                    </div>
+                                    <div class="inv-op-content">
+                                        <div class="inv-op-title">تحميل مصروفات على العميل</div>
+                                        <div class="inv-bx-sub">
+                                            المصروفات التي حُدِّدت لها قيمة محمّلة (هيئة · جمارك · شرطة · طريق…)
+                                            تُضاف للفاتورة بقيمتها المحمّلة لا بقيمتها الفعلية
+                                        </div>
+
+                                        @if (_id is null)
+                                        {
+                                            <div class="inv-bx-note">احفظ الفاتورة أولًا — ثم اختر العملية لتحميل مصروفاتها</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="field-select-wrap mt-2">
+                                                <svg class="field-select-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                    <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                                                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                                                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                                                </svg>
+                                                <select class="field-input field-select"
+                                                        value="@_pickOpBx"
+                                                        @onchange="OnPickOpBx">
+                                                    <option value="0">— اختر عملية لعرض مصروفاتها القابلة للتحميل —</option>
+                                                    @foreach (var o in _ops)
+                                                    {
+                                                        <option value="@o.OperationId">@o.OperationNumber</option>
+                                                    }
+                                                </select>
+                                            </div>
+
+                                            @if (_bxLoading)
+                                            {
+                                                <div class="inv-bx-note">جارٍ التحميل...</div>
+                                            }
+                                            else if (_pickOpBx is not null && _bxList.Count == 0)
+                                            {
+                                                <div class="inv-bx-note">لا توجد مصروفات محمّلة غير مفوترة لهذه العملية</div>
+                                            }
+                                            else if (_bxList.Count > 0)
+                                            {
+                                                <div class="inv-bx-table-wrap">
+                                                    <table class="inv-bx-table">
+                                                        <thead>
+                                                            <tr>
+                                                                <th style="width:34px"></th>
+                                                                <th>المصروف</th>
+                                                                <th>النوع</th>
+                                                                <th>الفعلي (ج.م)</th>
+                                                                <th>المحمّل (ج.م)</th>
+                                                                <th>ضريبة %</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var x in _bxList)
+                                                            {
+                                                                <tr>
+                                                                    <td>
+                                                                        <input type="checkbox"
+                                                                               checked="@_bxSel.Contains(x.ExpenseId)"
+                                                                               @onchange="e => ToggleBx(x.ExpenseId, e)"
+                                                                               aria-label="اختيار @x.ExpenseNumber" />
+                                                                    </td>
+                                                                    <td>
+                                                                        <div class="bx-num">@x.ExpenseNumber</div>
+                                                                        <div class="bx-desc">@(string.IsNullOrWhiteSpace(x.Description) ? x.ExpenseTypeName : x.Description)</div>
+                                                                    </td>
+                                                                    <td>@x.ExpenseTypeName</td>
+                                                                    <td>@Money(x.ActualAmount)</td>
+                                                                    <td><strong>@Money(x.BillableAmount)</strong></td>
+                                                                    <td>@x.BillableTaxRate.ToString("0.##")</td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                <div class="inv-bx-foot">
+                                                    <label class="inv-bx-all">
+                                                        <input type="checkbox"
+                                                               checked="@(_bxSel.Count == _bxList.Count && _bxList.Count > 0)"
+                                                               @onchange="ToggleAllBx" />
+                                                        تحديد الكل
+                                                    </label>
+                                                    <button type="button" class="inv-add-btn"
+                                                            @onclick="AddSelectedBx"
+                                                            disabled="@(_bxBusy || _bxSel.Count == 0)">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                                                            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                                        </svg>
+                                                        @(_bxBusy ? "جارٍ الإضافة..." : $"أضف المحدد ({_bxSel.Count}) إلى الفاتورة")
+                                                    </button>
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+                            }
+
                             @* ── إضافة سطر يدوي ── *@
                             @if (!Locked)
                             {
@@ -1394,6 +1502,25 @@
         .bk-sum-div { display: none; }
         .glow-fab-wrap { left: 18px; bottom: 18px; }
     }
+    /* ── تحميل مصروفات محمّلة على العميل ── */
+    .inv-bx-box { margin-top: 12px; }
+    .inv-bx-box .inv-op-icon { background: rgba(217, 119, 6, 0.10); color: #b45309; }
+    .inv-bx-sub { font-size: 11.5px; color: #64748b; margin-top: 3px; line-height: 1.7; }
+    .inv-bx-note { font-size: 12px; font-weight: 700; color: #94a3b8; margin-top: 10px; }
+    .inv-bx-table-wrap { margin-top: 10px; border: 1px solid #e6ebf3; border-radius: 10px; overflow: hidden; }
+    .inv-bx-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .inv-bx-table th {
+        background: #f6f8fb; color: #64748b;
+        font-size: 10.5px; font-weight: 800;
+        padding: 7px 10px; text-align: right;
+        border-bottom: 1px solid #e6ebf3;
+    }
+    .inv-bx-table td { padding: 8px 10px; border-bottom: 1px solid #eef2f7; color: #1c2b43; }
+    .inv-bx-table tr:last-child td { border-bottom: none; }
+    .bx-num { font-weight: 800; font-size: 11.5px; }
+    .bx-desc { font-size: 11px; color: #64748b; margin-top: 2px; }
+    .inv-bx-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+    .inv-bx-all { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #475569; cursor: pointer; }
 </style>
 
 
@@ -1854,6 +1981,68 @@
     public class Cust  { public int Id { get; set; } public string Label { get; set; } = ""; public string Code { get; set; } = ""; public int? PaymentTermId { get; set; } }
     public class Svc   { public int Id { get; set; } public string Label { get; set; } = ""; public string Unit { get; set; } = ""; public int? TaxRateId { get; set; } }
     public class Tax   { public int Id { get; set; } public string Label { get; set; } = ""; public decimal Rate { get; set; } }
+    /* ── تحميل مصروفات محمّلة على العميل ── */
+    private long? _pickOpBx;
+    private List<BxExpense> _bxList = new();
+    private HashSet<long> _bxSel = new();
+    private bool _bxLoading, _bxBusy;
+
+    public class BxExpense
+    {
+        public long     ExpenseId       { get; set; }
+        public string   ExpenseNumber   { get; set; } = "";
+        public DateTime ExpenseDate     { get; set; }
+        public string   ExpenseTypeName { get; set; } = "";
+        public string?  Description     { get; set; }
+        public decimal  ActualAmount    { get; set; }
+        public decimal  BillableAmount  { get; set; }
+        public decimal  BillableTaxRate { get; set; }
+    }
+
+    private async Task OnPickOpBx(ChangeEventArgs e)
+    {
+        _pickOpBx = long.TryParse(e.Value?.ToString(), out var v) && v > 0 ? v : null;
+        _bxSel.Clear();
+        _bxList = new();
+        if (_pickOpBx is null) return;
+        _bxLoading = true;
+        try { _bxList = await SafeGetT<BxExpense>($"api/invoices/billable-expenses?operationId={_pickOpBx.Value}"); }
+        finally { _bxLoading = false; }
+    }
+
+    private void ToggleBx(long id, ChangeEventArgs e)
+    {
+        if (e.Value is true) _bxSel.Add(id); else _bxSel.Remove(id);
+    }
+
+    private void ToggleAllBx(ChangeEventArgs e)
+    {
+        _bxSel.Clear();
+        if (e.Value is true)
+            foreach (var x in _bxList) _bxSel.Add(x.ExpenseId);
+    }
+
+    private async Task AddSelectedBx()
+    {
+        if (_id is null || _bxSel.Count == 0) return;
+        _bxBusy = true;
+        try
+        {
+            var res = await Http.PostAsJsonAsync($"api/invoices/{_id}/add-expenses",
+                new { expenseIds = _bxSel.ToList() });
+            var msg = await MsgOf(res);
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(msg, Severity.Success);
+                _pickOpBx = null; _bxList = new(); _bxSel.Clear();
+                await LoadAsync(_id.Value);
+            }
+            else { _ok = false; _msg = msg; }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل في تحميل المصروفات: " + ex.Message; }
+        finally { _bxBusy = false; }
+    }
+
     public class OpRef { public long OperationId { get; set; } public string OperationNumber { get; set; } = ""; public string CustomerName { get; set; } = ""; public decimal RevenueNet { get; set; } public string? InvoiceNumber { get; set; } }
 
     public class Detail

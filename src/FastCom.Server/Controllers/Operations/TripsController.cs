@@ -635,6 +635,41 @@ public class TripsController : ControllerBase
         return Ok(new { message = $"✅ اتوزّعت {total:N2} على {ops.Count} عملية", total });
     }
 
+    // ═══════════════ اقتراح نولون النقله (أجرة السائق — تكلفة) ═══════════════
+
+    public record FreightSuggestion(decimal Amount, long? RuleId, string Source);
+
+    [HttpGet("freight-suggest")]
+    [Authorize(Policy = "PERM:TRIP.VIEW")]
+    public async Task<IActionResult> FreightSuggest(
+        [FromQuery] int? portId, [FromQuery] int? destinationId, [FromQuery] int? tripTypeId,
+        [FromQuery] string? date, CancellationToken ct = default)
+    {
+        var on = DateOnly.TryParse(date, out var d) ? d : DateOnly.FromDateTime(DateTime.UtcNow);
+
+        // القاعدة الفاضية (NULL) = "أي قيمة" — نفس منطق قواعد تسعير العميل
+        var rules = await _db.DriverFreightRules.AsNoTracking()
+            .Where(r => !r.IsDeleted && r.IsActive &&
+                        r.ValidFrom <= on && (r.ValidTo == null || r.ValidTo >= on))
+            .ToListAsync(ct);
+
+        var match = rules
+            .Where(r => portId == null || r.PortId == null || r.PortId == portId)
+            .Where(r => destinationId == null || r.DestinationId == null || r.DestinationId == destinationId)
+            .Where(r => tripTypeId == null || r.TripTypeId == null || r.TripTypeId == tripTypeId)
+            // الأخص يكسب، وبعدين الأولوية (الأصغر أعلى)، وبعدين الأحدث
+            .OrderByDescending(r => (r.PortId is not null ? 1 : 0) + (r.DestinationId is not null ? 1 : 0)
+                                  + (r.TripTypeId is not null ? 1 : 0))
+            .ThenBy(r => r.Priority)
+            .ThenByDescending(r => r.ValidFrom)
+            .FirstOrDefault();
+
+        if (match is null)
+            return Ok(new FreightSuggestion(0m, null, "لا توجد قاعدة مطابقة — أدخل النولون يدويًا"));
+
+        return Ok(new FreightSuggestion(match.Amount, match.DriverFreightRuleId, "جدول نوالين السائقين"));
+    }
+
     // ═══════════════ DELETE (ناعم) ═══════════════
 
     [HttpDelete("{id:long}")]

@@ -26,6 +26,8 @@ public partial class BookingContainerLine
     [Column(TypeName = "decimal(18, 3)")]
     public decimal? WeightKg { get; set; }
 
+    public decimal? GuaranteePerContainer { get; set; }
+
     [StringLength(30)]
     public string Status { get; set; } = null!;
 

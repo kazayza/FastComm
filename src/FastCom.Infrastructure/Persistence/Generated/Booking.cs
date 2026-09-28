@@ -43,6 +43,8 @@ public partial class Booking
 
     public int? ShippingAgentId { get; set; }
 
+    public int? GuaranteeSupplierId { get; set; }
+
     [StringLength(30)]
     public string Status { get; set; } = null!;
 
@@ -111,4 +113,7 @@ public partial class Booking
     [ForeignKey("TripTypeId")]
     [InverseProperty("Bookings")]
     public virtual TripType? TripType { get; set; }
+
+    [ForeignKey("GuaranteeSupplierId")]
+    public virtual Supplier? GuaranteeSupplier { get; set; }
 }

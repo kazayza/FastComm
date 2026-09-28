@@ -241,6 +241,82 @@ public class OperationsController : ControllerBase
         return Ok(new PriceSuggestion(unit, cost, taxId, rate, ruleId, source));
     }
 
+    // ═══════════════ ضمان الحاويات (تكلفة على الشركة — غير مسترد) ═══════════════
+
+    public record GuaranteeLine(int ContainerTypeId, string ContainerTypeName, int Qty,
+        decimal? GuaranteePerContainer, decimal LineTotal);
+    public record GuaranteeEstimate(decimal Total, List<GuaranteeLine> Lines,
+        int? ExpenseTypePortId, int? ExpenseTypeReeferId, int? ExpenseTypeGenId,
+        int? SupplierId, string? SupplierName);
+
+    [HttpGet("guarantee-estimate")]
+    [Authorize(Policy = "PERM:OPERATION.VIEW")]
+    public async Task<IActionResult> GuaranteeEstimateCalc(
+        [FromQuery] long operationId, CancellationToken ct = default)
+    {
+        // 🔴 الضمان = لكل حاوية خارجة على البوكينج — المبلغ من سطر الحجز (وافتراضيه من نوع الحاوية)
+        //    خدمة من مورد (Bookings.GuaranteeSupplierId) — تكلفة على الشركة، غير مستردة
+        var bookingId = await _db.Operations.AsNoTracking()
+            .Where(o => o.OperationId == operationId && !o.IsDeleted)
+            .Select(o => o.BookingId)
+            .FirstOrDefaultAsync(ct);
+        if (bookingId is null) return NotFound(new { message = "العملية مش موجودة أو بدون حجز" });
+
+        /* مورد الضمان من البوكينج */
+        var booking = await _db.Bookings.AsNoTracking()
+            .Where(x => x.BookingId == bookingId.Value)
+            .Select(x => new { x.GuaranteeSupplierId })
+            .FirstOrDefaultAsync(ct);
+        string? supplierName = null;
+        if (booking?.GuaranteeSupplierId is not null)
+            supplierName = await _db.Suppliers.AsNoTracking()
+                .Where(s => s.SupplierId == booking.GuaranteeSupplierId)
+                .Select(s => s.NameAr).FirstOrDefaultAsync(ct);
+
+        var lines = await _db.BookingContainerLines.AsNoTracking()
+            .Where(l => l.BookingId == bookingId.Value)
+            .Select(l => new
+            {
+                l.ContainerTypeId,
+                Qty = l.AssignedQty > 0 ? l.AssignedQty : l.RequestedQty,
+                l.GuaranteePerContainer
+            })
+            .ToListAsync(ct);
+
+        var types = await _db.ContainerTypes.AsNoTracking()
+            .Select(c => new { c.ContainerTypeId, c.NameAr, c.GuaranteeAmount })
+            .ToListAsync(ct);
+
+        /* ضمان السطر = المحفوظ على السطر، ولو فاضي يرجع لافتراضي نوع الحاوية */
+        var result = lines
+            .Select(l =>
+            {
+                var t = types.FirstOrDefault(x => x.ContainerTypeId == l.ContainerTypeId);
+                var per = l.GuaranteePerContainer ?? t?.GuaranteeAmount;
+                return new { l.ContainerTypeId, Name = t?.NameAr ?? "—", l.Qty, Per = per };
+            })
+            .GroupBy(x => new { x.ContainerTypeId, x.Name, x.Per })
+            .Select(g => new GuaranteeLine(g.Key.ContainerTypeId, g.Key.Name,
+                g.Sum(x => x.Qty), g.Key.Per,
+                g.Key.Per.HasValue ? g.Key.Per.Value * g.Sum(x => x.Qty) : 0m))
+            .OrderByDescending(x => x.LineTotal)
+            .ToList();
+
+        // أنواع مصروف الضمان الجاهزة — الشاشة تختار منهم عند إنشاء المصروف
+        var guarTypes = await _db.ExpenseTypes.AsNoTracking()
+            .Where(e => e.IsActive && !e.IsDeleted &&
+                        (e.Code == "GUAR-PORT" || e.Code == "GUAR-REEFER" || e.Code == "GUAR-GEN"))
+            .Select(e => new { e.ExpenseTypeId, e.Code })
+            .ToListAsync(ct);
+
+        return Ok(new GuaranteeEstimate(
+            result.Sum(x => x.LineTotal), result,
+            guarTypes.FirstOrDefault(x => x.Code == "GUAR-PORT")?.ExpenseTypeId,
+            guarTypes.FirstOrDefault(x => x.Code == "GUAR-REEFER")?.ExpenseTypeId,
+            guarTypes.FirstOrDefault(x => x.Code == "GUAR-GEN")?.ExpenseTypeId,
+            booking?.GuaranteeSupplierId, supplierName));
+    }
+
     private async Task<decimal> RateOfAsync(int? taxRateId, DateOnly on, CancellationToken ct)
     {
         if (taxRateId is null) return 0m;

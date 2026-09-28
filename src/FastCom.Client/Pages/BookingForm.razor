@@ -651,6 +651,32 @@
                                     </div>
                                 </div>
 
+                                @* مورد الضمان *@
+                                <div class="form-field">
+                                    <label class="field-label" for="guarsup">مورد الضمان</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                        </svg>
+                                        <select id="guarsup"
+                                                class="field-input field-select"
+                                                @bind="_f.GuaranteeSupplierId"
+                                                disabled="@_locked">
+                                            <option value="">— اختار المورد —</option>
+                                            @foreach (var s in _suppliers)
+                                            {
+                                                <option value="@s.Id">@s.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="field-hint">
+                                        الجهة التي تقدّم خدمة ضمان الحاويات لهذا الحجز
+                                    </div>
+                                </div>
+
                             </div>
 
                             @* Route Visual *@
@@ -845,8 +871,9 @@
                                                             <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
                                                         </svg>
                                                         <select class="field-input field-select"
-                                                                @bind="ln.TypeId"
-                                                                disabled="@_locked">
+                                                                value="@ln.TypeId"
+                                                                disabled="@_locked"
+                                                                @onchange="e => OnTypeChange(ln, e)">
                                                             @foreach (var t in _containerTypes)
                                                             {
                                                                 <option value="@t.Id">@t.Label</option>
@@ -897,6 +924,28 @@
                                                                disabled="@_locked"
                                                                placeholder="اختياري"
                                                                @onchange="e => ln.WeightKg = ParseDec(e.Value)" />
+                                                    </div>
+                                                </div>
+
+                                                @* ضمان الحاوية الواحدة — من نوع الحاوية، يتعدّل *@
+                                                <div class="form-field">
+                                                    <label class="field-label">ضمان الحاوية الواحدة (ج.م)</label>
+                                                    <div class="field-input-group">
+                                                        <span class="field-prefix" aria-hidden="true">
+                                                            <svg viewBox="0 0 24 24" width="13" height="13"
+                                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                                            </svg>
+                                                        </span>
+                                                        <input type="number" min="0" step="0.01"
+                                                               class="field-input with-prefix"
+                                                               value="@ln.Guarantee"
+                                                               disabled="@_locked"
+                                                               placeholder="غير محدد"
+                                                               @onchange="e => ln.Guarantee = ParseDec(e.Value)" />
+                                                    </div>
+                                                    <div class="field-hint">
+                                                        يتعبأ تلقائيًا من نوع الحاوية — يمكن تعديله لهذا الحجز
                                                     </div>
                                                 </div>
 
@@ -2138,7 +2187,8 @@
     private List<Opt> _destinations   = new();
     private List<Opt> _shippingAgents = new();
     private List<Opt> _tripTypes      = new();
-    private List<Opt> _containerTypes = new();
+    private List<TypeOpt> _containerTypes = new();
+    private List<Opt>     _suppliers      = new();
 
     private List<LineRow> _lines = new();
     private Form          _f     = new();
@@ -2181,12 +2231,20 @@
         public string Label { get; set; } = "";
     }
 
+    public class TypeOpt
+    {
+        public int      Id              { get; set; }
+        public string   Label           { get; set; } = "";
+        public decimal? GuaranteeAmount { get; set; }
+    }
+
     public class LineRow
     {
-        public int      TypeId   { get; set; }
-        public int      Qty      { get; set; } = 1;
-        public decimal? WeightKg { get; set; }
-        public string?  Notes    { get; set; }
+        public int      TypeId    { get; set; }
+        public int      Qty       { get; set; } = 1;
+        public decimal? WeightKg  { get; set; }
+        public decimal? Guarantee { get; set; }
+        public string?  Notes     { get; set; }
         public List<ContainerDetailRow> Details { get; set; } = new();
     }
 
@@ -2214,6 +2272,7 @@
         public int?    EndCustomerId     { get; set; }
         public int?    TripTypeId        { get; set; }
         public int?    ShippingAgentId   { get; set; }
+        public int?    GuaranteeSupplierId { get; set; }
         public string? CustomerReference { get; set; }
         public string? BookingReference  { get; set; }
         public string? BLNumber          { get; set; }
@@ -2225,6 +2284,7 @@
         public int      ContainerTypeId { get; set; }
         public int      RequestedQty    { get; set; }
         public decimal? WeightKg        { get; set; }
+        public decimal? GuaranteePerContainer { get; set; }
         public string?  Notes           { get; set; }
         public List<ContainerDetailItem>? ContainerDetails { get; set; }
     }
@@ -2256,6 +2316,8 @@
         public int?    TripTypeId         { get; set; }
         public string? CustomerReference  { get; set; }
         public int?    ContactId          { get; set; }
+        public int?    ShippingAgentId    { get; set; }
+        public int?    GuaranteeSupplierId { get; set; }
         public string? Notes              { get; set; }
         public string  Status             { get; set; } = "Draft";
     }
@@ -2290,7 +2352,9 @@
             _destinations   = await SafeGet("api/options/destinations");
             _shippingAgents = await SafeGet("api/shipping-agents/options");
             _tripTypes      = await SafeGet("api/options/trip-types");
-            _containerTypes = await SafeGet("api/options/container-types");
+            try { _containerTypes = await Http.GetFromJsonAsync<List<TypeOpt>>("api/options/container-types") ?? new(); }
+            catch { _containerTypes = new(); }
+            _suppliers      = await SafeGet("api/options/suppliers");
 
             if (_id is not null) await LoadBookingAsync(_id.Value);
             else AddLine();
@@ -2326,15 +2390,18 @@
             EndCustomerId     = d.Booking.EndCustomerId,
             TripTypeId        = d.Booking.TripTypeId,
             CustomerReference = d.Booking.CustomerReference,
+            ShippingAgentId     = d.Booking.ShippingAgentId,
+            GuaranteeSupplierId = d.Booking.GuaranteeSupplierId,
             Notes             = d.Booking.Notes
         };
 
         _lines = d.Lines.Select(l => new LineRow
         {
-            TypeId   = l.ContainerTypeId,
-            Qty      = l.RequestedQty,
-            WeightKg = l.WeightKg,
-            Notes    = l.Notes,
+            TypeId    = l.ContainerTypeId,
+            Qty       = l.RequestedQty,
+            WeightKg  = l.WeightKg,
+            Guarantee = l.GuaranteePerContainer,
+            Notes     = l.Notes,
             Details  = l.ContainerDetails?.Select(cd => new ContainerDetailRow
             {
                 ContainerId      = cd.ContainerId,
@@ -2356,8 +2423,9 @@
     {
         _lines.Add(new LineRow
         {
-            TypeId = _containerTypes.FirstOrDefault()?.Id ?? 0,
-            Qty    = 1
+            TypeId    = _containerTypes.FirstOrDefault()?.Id ?? 0,
+            Qty       = 1,
+            Guarantee = _containerTypes.FirstOrDefault()?.GuaranteeAmount
         });
     }
 
@@ -2380,6 +2448,14 @@
             if (detailIdx >= 0 && detailIdx < details.Count)
                 details.RemoveAt(detailIdx);
         }
+    }
+
+    /// <summary>تغيير نوع الحاوية — يعبّي ضمان الحاوية من افتراضي النوع.</summary>
+    private void OnTypeChange(LineRow ln, ChangeEventArgs e)
+    {
+        ln.TypeId = ParseInt(e.Value, 0);
+        var t = _containerTypes.FirstOrDefault(x => x.Id == ln.TypeId);
+        if (t?.GuaranteeAmount is not null) ln.Guarantee = t.GuaranteeAmount;
     }
 
     private async Task OnCustomerChanged(ChangeEventArgs e)
@@ -2510,13 +2586,16 @@
             tripTypeId        = _f.TripTypeId,
             customerReference = _f.CustomerReference,
             contactId         = _f.ContactId,
+            shippingAgentId     = _f.ShippingAgentId,
+            guaranteeSupplierId = _f.GuaranteeSupplierId,
             notes             = _f.Notes,
             lines             = lines.Select(l => new
             {
-                containerTypeId = l.TypeId,
-                requestedQty    = l.Qty,
-                weightKg        = l.WeightKg,
-                notes           = l.Notes
+                containerTypeId        = l.TypeId,
+                requestedQty           = l.Qty,
+                weightKg               = l.WeightKg,
+                guaranteePerContainer  = l.Guarantee,
+                notes                  = l.Notes
             }),
             containerDetails    = lines.SelectMany(l => l.Details.Select(d => new
             {
