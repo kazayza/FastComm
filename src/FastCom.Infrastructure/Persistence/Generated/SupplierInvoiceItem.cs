@@ -41,6 +41,9 @@ public partial class SupplierInvoiceItem
     [Column(TypeName = "decimal(19, 4)")]
     public decimal? LineTotal { get; set; }
 
+    /* 🔴 #35 — بند من ضمان حاوية: رابط سطر الحاوية يمنع الفوترة المزدوجة */
+    public long? BookingContainerLineId { get; set; }
+
     [ForeignKey("ExpenseTypeId")]
     [InverseProperty("SupplierInvoiceItems")]
     public virtual ExpenseType? ExpenseType { get; set; }
@@ -56,4 +59,7 @@ public partial class SupplierInvoiceItem
     [ForeignKey("TripId")]
     [InverseProperty("SupplierInvoiceItems")]
     public virtual Trip? Trip { get; set; }
+
+    [ForeignKey("BookingContainerLineId")]
+    public virtual BookingContainerLine? BookingContainerLine { get; set; }
 }

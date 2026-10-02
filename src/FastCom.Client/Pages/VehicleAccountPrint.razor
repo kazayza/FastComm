@@ -1,0 +1,413 @@
+@page "/vehicles/print/{VehicleId:int}"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject CompanyService Company
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<PageTitle>طباعة كشف حساب مركبة — فاست كوم</PageTitle>
+
+@* ── Toolbar (No Print) ── *@
+<div class="print-toolbar no-print">
+    <button class="tb-back-btn" @onclick="Back">
+        <svg viewBox="0 0 24 24" width="16" height="16"
+             fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        رجوع
+    </button>
+    <div class="tb-info">
+        @if (_s is not null)
+        {
+            <span class="tb-inv-num">@_s.PlateNumber</span>
+            <span class="tb-sep">·</span>
+            <span class="tb-cust">من @From.ToString("dd/MM/yyyy") حتى @To.AddDays(-1).ToString("dd/MM/yyyy")</span>
+        }
+    </div>
+    <button class="tb-print-btn" @onclick="Print">
+        <svg viewBox="0 0 24 24" width="16" height="16"
+             fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 6 2 18 2 18 9"/>
+            <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+            <rect x="6" y="14" width="12" height="8"/>
+        </svg>
+        طباعة الكشف
+    </button>
+</div>
+
+@* ── Main Content ── *@
+@if (_loading)
+{
+    <div class="print-loading no-print">
+        <div class="print-spinner"></div>
+        <span>جاري تحميل كشف الحساب...</span>
+    </div>
+}
+else if (_s is null)
+{
+    <div class="print-error no-print">
+        <p>تعذر تحميل كشف الحساب لهذه المركبة</p>
+    </div>
+}
+else
+{
+    <div class="stmt-sheet" dir="rtl">
+
+        @* ── HEADER ── *@
+        <div class="inv-header">
+            <div class="inv-company-block">
+                <div class="inv-company-name">@_co.DisplayName</div>
+                <div class="inv-company-details">
+                    @if (!string.IsNullOrWhiteSpace(_co.TaxNumber) && _co.TaxNumber != "000000000")
+                    {
+                        <div class="inv-co-row">
+                            <span class="inv-co-label">الرقم الضريبي</span>
+                            <span class="inv-co-val" dir="ltr">@_co.TaxNumber</span>
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(_co.AddressAr))
+                    {
+                        <div class="inv-co-row">
+                            <span class="inv-co-label">العنوان</span>
+                            <span class="inv-co-val">@_co.AddressAr</span>
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(_co.Phone))
+                    {
+                        <div class="inv-co-row">
+                            <span class="inv-co-label">التليفون</span>
+                            <span class="inv-co-val" dir="ltr">@_co.Phone</span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="inv-title-block">
+                <div class="inv-doc-title">كشف حساب مركبة</div>
+                <div class="inv-doc-number">@_s.PlateNumber</div>
+                <div class="inv-tax-badge badge-non">حركة مالية وتفصيلية</div>
+            </div>
+
+            <div class="inv-logo-block">
+                @if (!string.IsNullOrWhiteSpace(_co.LogoPath))
+                {
+                    <img src="@_co.LogoPath" alt="@_co.DisplayName" class="inv-logo-img" />
+                }
+                else
+                {
+                    <div class="inv-logo-placeholder">
+                        <svg viewBox="0 0 48 48" width="48" height="48"
+                             fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="4" y="4" width="40" height="40" rx="6"/>
+                            <circle cx="17" cy="18" r="4"/>
+                            <path d="M44 34L32 22 20 34 12 26 4 34"/>
+                        </svg>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="inv-header-divider">
+            <div class="inv-divider-line"></div>
+        </div>
+
+        @* ── META ── *@
+        <div class="inv-meta-row">
+            <div class="inv-meta-block">
+                <div class="inv-meta-title">المركبة</div>
+                <div class="inv-meta-customer">@_s.PlateNumber</div>
+            </div>
+            <div class="inv-meta-block">
+                <div class="inv-meta-title">الفترة</div>
+                <div class="inv-meta-val" dir="ltr">@From.ToString("dd/MM/yyyy") — @To.AddDays(-1).ToString("dd/MM/yyyy")</div>
+            </div>
+            <div class="inv-meta-block">
+                <div class="inv-meta-title">الرصيد المُرحّل</div>
+                <div class="inv-meta-val" dir="ltr">@Money(_s.Opening) ج.م</div>
+            </div>
+            <div class="inv-meta-block">
+                <div class="inv-meta-title">تاريخ الإصدار</div>
+                <div class="inv-meta-val" dir="ltr">@DateTime.Now.ToString("dd/MM/yyyy")</div>
+            </div>
+        </div>
+
+        @* ── TABLE ── *@
+        <table class="stmt-table">
+            <thead>
+                <tr>
+                    <th style="width:8%">التاريخ</th>
+                    <th style="width:11%">نوع الحركة</th>
+                    <th style="width:9%">الوجهة</th>
+                    <th style="width:10%">السائق</th>
+                    <th style="width:12%">المرجع</th>
+                    <th>البيان</th>
+                    <th style="width:10%">مدين</th>
+                    <th style="width:10%">دائن</th>
+                    <th style="width:11%">الرصيد</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="opening-row">
+                    <td>@From.ToString("dd/MM/yyyy")</td>
+                    <td colspan="5">رصيد مُرحّل من فترات سابقة</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td class="num">@Money(_s.Opening)</td>
+                </tr>
+                @foreach (var l in _s.Lines)
+                {
+                    <tr>
+                        <td>@l.Date.ToString("dd/MM/yyyy")</td>
+                        <td>@KindAr(l.Kind)</td>
+                        <td>@(string.IsNullOrWhiteSpace(l.Dest) ? "—" : l.Dest)</td>
+                        <td>@(string.IsNullOrWhiteSpace(l.Driver) ? "—" : l.Driver)</td>
+                        <td>
+                            @l.Ref
+                            @if (!string.IsNullOrWhiteSpace(l.SubRef))
+                            {
+                                <div class="ref-sub">@l.SubRef</div>
+                            }
+                        </td>
+                        <td>@(l.Description ?? "—")</td>
+                        <td class="num debit">@Money(l.Debit)</td>
+                        <td class="num credit">@Money(l.Credit)</td>
+                        <td class="num">@Money(l.Balance)</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="6">إجمالي الحركة المالية للفترة</td>
+                    <td class="num debit">@Money(_s.TotalDebit)</td>
+                    <td class="num credit">@Money(_s.TotalCredit)</td>
+                    <td class="num closing">@Money(_s.Closing)</td>
+                </tr>
+            </tfoot>
+        </table>
+
+        @* ── SIGNATURES ── *@
+        <div class="stmt-sign-row">
+            <div class="stmt-sign-box">
+                <div class="stmt-sign-line"></div>
+                <div class="stmt-sign-label">توقيع المحاسب</div>
+            </div>
+            <div class="stmt-sign-box">
+                <div class="stmt-sign-line"></div>
+                <div class="stmt-sign-label">توقيع المستلم</div>
+            </div>
+            <div class="stmt-sign-box">
+                <div class="stmt-sign-line"></div>
+                <div class="stmt-sign-label">اعتماد المدير</div>
+            </div>
+        </div>
+
+        @* ── FOOTER ── *@
+        <div class="inv-footer">
+            <div class="inv-footer-left">
+                <div class="inv-footer-company">@_co.DisplayName</div>
+                @if (!string.IsNullOrWhiteSpace(_co.AddressAr))
+                {
+                    <div class="inv-footer-detail">@_co.AddressAr</div>
+                }
+            </div>
+            <div class="inv-footer-center">
+                @if (!string.IsNullOrWhiteSpace(_co.LogoPath))
+                {
+                    <img src="@_co.LogoPath" class="inv-footer-logo" alt="" aria-hidden="true" />
+                }
+            </div>
+            <div class="inv-footer-right">
+                <div class="inv-footer-detail">طُبعت في @DateTime.Now.ToString("yyyy-MM-dd HH:mm")</div>
+                <div class="inv-footer-detail">كشف حساب — @_s.PlateNumber</div>
+            </div>
+        </div>
+
+    </div>
+}
+
+@code {
+    [Parameter] public int VehicleId { get; set; }
+
+    private Stmt? _s;
+    private CompanyInfo _co = new();
+    private bool _loading = true;
+    private DateTime From { get; set; }
+    private DateTime To   { get; set; }
+
+    public class Line
+    {
+        public DateTime Date      { get; set; }
+        public string   Kind      { get; set; } = "";
+        public string   Ref       { get; set; } = "";
+        public string?  SubRef    { get; set; }
+        public string?  Dest      { get; set; }
+        public string?  Driver    { get; set; }
+        public string?  Description { get; set; }
+        public decimal  Debit     { get; set; }
+        public decimal  Credit    { get; set; }
+        public decimal  Balance   { get; set; }
+    }
+
+    public class Stmt
+    {
+        public string     PlateNumber { get; set; } = "";
+        public decimal    Opening     { get; set; }
+        public List<Line> Lines       { get; set; } = new();
+        public decimal    TotalDebit  { get; set; }
+        public decimal    TotalCredit { get; set; }
+        public decimal    Closing     { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        /* الفترة من الـ query — ونفس منطق الافتراضي في الشاشة (أول الشهر) */
+        From = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        To   = From.AddMonths(1);
+        var qs = new Uri(Nav.Uri).Query.TrimStart('?');
+        foreach (var part in qs.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var kv = part.Split('=', 2);
+            if (kv.Length != 2) continue;
+            if (kv[0] == "from" && DateTime.TryParse(kv[1], out var f)) From = f;
+            if (kv[0] == "to"   && DateTime.TryParse(kv[1], out var t)) To   = t;
+        }
+
+        _co = await Company.GetAsync();
+        _loading = true;
+        try
+        {
+            _s = await Http.GetFromJsonAsync<Stmt>(
+                $"api/vehicle-accounts/{VehicleId}/statement?from={From:yyyy-MM-dd}&to={To:yyyy-MM-dd}");
+        }
+        catch (Exception ex) { Snackbar.Add("فشل تحميل الكشف: " + ex.Message, Severity.Error); }
+        finally { _loading = false; }
+    }
+
+    private static string KindAr(string k) => k switch
+    {
+        "Freight"        => "نولون النقله",
+        "CustodyFreight" => "سلفة نولون",
+        "CustodyRoad"    => "مصاريف طريق",
+        "Custody"        => "عهدة نقدية",
+        "Expense"        => "مصروف تشغيلي",
+        "Payment"        => "دفعة سداد",
+        _ => k
+    };
+
+    private static string Money(decimal v) => v.ToString("#,##0.00");
+
+    private async Task Print()
+    {
+        try { await JS.InvokeAsync<bool>("fastcom.printPage"); }
+        catch { Snackbar.Add("تعذرت الطباعة من المتصفح", Severity.Warning); }
+    }
+
+    private void Back() => Nav.NavigateTo("/vehicle-account");
+}
+
+<style>
+    /* ═══ Toolbar (no print) ═══ */
+    .print-toolbar {
+        position: sticky; top: 0; z-index: 50;
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; padding: 10px 16px;
+        background: rgba(255,255,255,.92); backdrop-filter: blur(8px);
+        border-bottom: 1px solid #e4eaf3;
+    }
+    .tb-back-btn, .tb-print-btn {
+        display: inline-flex; align-items: center; gap: 7px;
+        border: 1px solid #d6e0ee; background: #fff; color: #2c3e5d;
+        border-radius: 9px; padding: 8px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+    }
+    .tb-print-btn { background: var(--fc-blue); border-color: var(--fc-blue); color: #fff; }
+    .tb-info { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #526070; font-weight: 700; }
+    .tb-inv-num { color: var(--fc-blue); font-weight: 900; }
+    .tb-sep { color: #b9c5d6; }
+
+    .print-loading { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 80px 0; color: #526070; font-size: 13px; }
+    .print-spinner { width: 34px; height: 34px; border: 3px solid #e4eaf3; border-top-color: var(--fc-blue); border-radius: 50%; animation: spin .8s linear infinite; }
+    @@keyframes spin { to { transform: rotate(360deg); } }
+    .print-error { padding: 60px 0; text-align: center; color: #b03a48; font-size: 14px; }
+
+    /* ═══ Sheet — A4 ═══ */
+    .stmt-sheet {
+        width: 210mm; min-height: 296mm; margin: 18px auto; padding: 12mm 12mm 10mm;
+        background: #fff; box-shadow: 0 8px 40px rgba(10,27,59,.14);
+        font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; color: #1c2b43;
+        box-sizing: border-box;
+    }
+
+    /* ── Header ── */
+    .inv-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+    .inv-company-block { flex: 1.2; }
+    .inv-company-name { font-size: 17px; font-weight: 900; color: #0a1b3b; margin-bottom: 5px; }
+    .inv-company-details { display: flex; flex-direction: column; gap: 2px; }
+    .inv-co-row { display: flex; gap: 6px; font-size: 9.5px; color: #5b6b84; }
+    .inv-co-label { font-weight: 800; color: #8494ab; min-width: 62px; }
+    .inv-co-val { color: #3d4d68; }
+    .inv-title-block { text-align: center; flex: 1; }
+    .inv-doc-title { font-size: 19px; font-weight: 900; color: #0a1b3b; letter-spacing: .3px; }
+    .inv-doc-number { font-size: 12px; font-weight: 800; color: var(--fc-blue); margin-top: 3px; font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; }
+    .inv-tax-badge { display: inline-block; margin-top: 6px; font-size: 9.5px; font-weight: 800; padding: 3px 10px; border-radius: 20px; }
+    .badge-non { background: #eef3fa; color: #526070; border: 1px solid #d9e3f0; }
+    .inv-logo-block { flex: .7; display: flex; justify-content: flex-end; }
+    .inv-logo-img { max-height: 62px; max-width: 130px; object-fit: contain; }
+    .inv-logo-placeholder { width: 54px; height: 54px; border: 1.5px dashed #c4d0e2; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #a8b6cb; }
+
+    .inv-header-divider { margin: 12px 0 10px; }
+    .inv-divider-line { height: 3px; background: linear-gradient(90deg, var(--fc-blue), #7fb0f5 60%, transparent); border-radius: 2px; }
+
+    /* ── Meta ── */
+    .inv-meta-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .inv-meta-block { flex: 1; border: 1px solid #e4eaf3; border-radius: 8px; padding: 7px 10px; background: #fafcff; }
+    .inv-meta-title { font-size: 9px; font-weight: 800; color: #8494ab; margin-bottom: 3px; }
+    .inv-meta-customer { font-size: 12.5px; font-weight: 900; color: #0a1b3b; }
+    .inv-meta-val { font-size: 11px; font-weight: 800; color: #1c2b43; font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; }
+
+    /* ── Table ── */
+    .stmt-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    .stmt-table thead th {
+        background: #0a1b3b; color: #fff; font-size: 9.5px; font-weight: 800;
+        padding: 7px 6px; text-align: center; border: 1px solid #0a1b3b;
+    }
+    .stmt-table tbody td { padding: 6px; border: 1px solid #e4eaf3; text-align: center; color: #3d4d68; vertical-align: middle; }
+    .stmt-table tbody tr:nth-child(even) { background: #fafcff; }
+    .stmt-table .num { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; font-weight: 800; white-space: nowrap; }
+    .stmt-table .debit  { color: #15803d; }
+    .stmt-table .credit { color: #b03a48; }
+    .stmt-table .opening-row td { background: #eef3fa; font-weight: 800; color: #0a1b3b; }
+    .stmt-table .ref-sub { font-size: 8.5px; color: #7b8aa3; font-weight: 700; }
+    .stmt-table tfoot td {
+        background: #f0f3f8; font-weight: 900; font-size: 10.5px; color: #0a1b3b;
+        padding: 8px 6px; border: 1px solid #d9e3f0; text-align: center;
+    }
+    .stmt-table tfoot .closing { color: #0d8a48; font-size: 11.5px; }
+
+    /* ── Signatures ── */
+    .stmt-sign-row { display: flex; gap: 22px; margin-top: 34px; }
+    .stmt-sign-box { flex: 1; text-align: center; }
+    .stmt-sign-line { border-bottom: 1.4px solid #3d4d68; margin-bottom: 5px; height: 26px; }
+    .stmt-sign-label { font-size: 9.5px; font-weight: 800; color: #526070; }
+
+    /* ── Footer ── */
+    .inv-footer {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        margin-top: 26px; padding-top: 9px; border-top: 1.5px solid #e4eaf3;
+    }
+    .inv-footer-company { font-size: 10px; font-weight: 900; color: #0a1b3b; }
+    .inv-footer-detail { font-size: 8.5px; color: #8494ab; }
+    .inv-footer-logo { max-height: 26px; object-fit: contain; }
+
+    /* ═══ Print ═══ */
+    @@media print {
+        .no-print { display: none !important; }
+        body { background: #fff !important; }
+        .stmt-sheet { margin: 0; box-shadow: none; width: auto; min-height: auto; padding: 0; }
+        .stmt-table thead th { background: #0a1b3b !important; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .stmt-table tbody tr:nth-child(even) { background: #fafcff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .stmt-table tfoot td { background: #f0f3f8 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .inv-divider-line, .inv-tax-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+</style>

@@ -217,7 +217,7 @@ public class DashboardController : ControllerBase
         {
             var done = d.LicenseExpiryDate < today;
             list.Add(new AlertItem("رخصة سائق", d.FullName, d.LicenseExpiryDate!.Value.ToString(),
-                done ? "الرخصة خلصت" : "بتخلص قريب",
+                done ? "الرخصة انتهت" : "تنتهى الرخصه قريبا",
                 done ? DaysBetween(d.LicenseExpiryDate.Value, today) : 0,
                 done ? "bad" : "warn", "/drivers"));
         }
@@ -232,7 +232,7 @@ public class DashboardController : ControllerBase
         {
             var done = v.InsuranceExpiryDate < today;
             list.Add(new AlertItem("تأمين سيارة", v.PlateNumber, v.InsuranceExpiryDate!.Value.ToString(),
-                done ? "التأمين خلص" : "بيخلص قريب",
+                done ? "التأمين انتهى" : "سينتهى قريبا",
                 done ? DaysBetween(v.InsuranceExpiryDate.Value, today) : 0,
                 done ? "bad" : "warn", "/vehicles"));
         }

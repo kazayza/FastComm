@@ -258,13 +258,13 @@ public class PaymentsController : ControllerBase
 
             var left = req.Amount - allocated;
             var baseMsg = left > 0
-                ? $"✅ اتسجّلت الدفعة {p.PaymentNumber} — فاضل {left:N2} مش متوزّع على فواتير"
-                : $"✅ اتسجّلت الدفعة {p.PaymentNumber}";
+                ? $"✅ تم تسجيل الدفعة {p.PaymentNumber} — فاضل {left:N2} مش متوزّع على فواتير"
+                : $"✅ تم تسجيل الدفعة {p.PaymentNumber}";
             return Ok(new
             {
                 id = p.PaymentId,
                 number = p.PaymentNumber,
-                message = toTreasury ? baseMsg + " — واتسجل إيض في الخزينة" : baseMsg
+                message = toTreasury ? baseMsg + " — واتسجل أيضا في الخزينة" : baseMsg
             });
         }
         catch (Exception)

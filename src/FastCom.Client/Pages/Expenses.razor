@@ -13,59 +13,70 @@
 @* ═══════════════════════════════════════════
    HERO
 ═══════════════════════════════════════════ *@
-<div class="fc-hero">
-    <div class="fc-hero-inner">
-        <div class="fc-page-head">
-            <div>
-                <div class="fc-crumb">المالية · المصروفات</div>
-                <h1 class="fc-hero-title">المصروفات</h1>
-                <p class="fc-hero-sub">وقود ورسوم ميناء ونش وغرامات — المصروف المرتبط بعملية أو رحلة بيدخل في تكلفتها</p>
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
+
+            <div class="ex-hero-row">
+                <div class="ex-hero-left">
+                    <div class="ex-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                        </svg>
+                        <span>المالية · المصروفات</span>
+                    </div>
+                    <h1 class="fc-hero-title">المصروفات</h1>
+                    <p class="fc-hero-sub">وقود ورسوم ميناء ونش وغرامات — المصروف المرتبط بعملية أو رحلة بيدخل في تكلفتها</p>
+                </div>
+
+                <div class="ex-hero-right">
+                    <span class="ex-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 6v6l4 2" stroke-linecap="round"/>
+                        </svg>
+                        مصروفات الشهر: @Money(ThisMonth) ج.م
+                    </span>
+                    <span class="ex-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                </div>
             </div>
-            <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
-                               OnClick="Reload" Style="color:#9FB4CC" />
-                @if (CanManageTypes)
-                {
-                    <MudButton Variant="Variant.Outlined"
-                               StartIcon="@Icons.Material.Filled.LocalOffer"
-                               OnClick="OpenTypes"
-                               Style="color:#9FB4CC">
-                        أنواع المصروفات
-                    </MudButton>
-                }
-                @if (CanCreate)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add"
-                               OnClick="GoNew">مصروف جديد</MudButton>
-                }
-            </div>
-        </div>
 
         @if (CanView)
         {
             <div class="fc-kpis fc-kpis-glass">
-                <div class="fc-kpi">
+                <div class="fc-kpi fc-kpi-click @(_tab == "all" ? "fc-kpi-active" : "")"
+                     @onclick='() => SetTab("all")' role="button" aria-pressed="@(_tab == "all")">
                     <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.ReceiptLong" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">عدد المصروفات</div></div>
+                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي المصروفات</div></div>
                 </div>
-                <div class="fc-kpi">
-                    <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
-                    <div><div class="fc-kpi-num">@Money(Active.Sum(e => e.Amount))</div><div class="fc-kpi-lb">إجمالي غير الملغي</div></div>
-                </div>
-                <div class="fc-kpi">
+                <div class="fc-kpi fc-kpi-click @(_tab == "Draft" ? "fc-kpi-active" : "")"
+                     @onclick='() => SetTab("Draft")' role="button" aria-pressed="@(_tab == "Draft")">
                     <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.HourglassTop" /></div>
-                    <div><div class="fc-kpi-num">@Money(ThisMonth)</div><div class="fc-kpi-lb">مصروفات الشهر</div></div>
+                    <div><div class="fc-kpi-num">@_items.Count(e => e.Status == "Draft")</div><div class="fc-kpi-lb">مسودة</div></div>
                 </div>
-                <div class="fc-kpi">
-                    <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
-                    <div>
-                        <div class="fc-kpi-num">@_items.Count(e => e.Status == "Posted" && !e.IsApproved)</div>
-                        <div class="fc-kpi-lb">لم تُعتمد</div>
-                    </div>
+                <div class="fc-kpi fc-kpi-click @(_tab == "Posted" ? "fc-kpi-active" : "")"
+                     @onclick='() => SetTab("Posted")' role="button" aria-pressed="@(_tab == "Posted")">
+                    <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.TaskAlt" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(e => e.Status == "Posted")</div><div class="fc-kpi-lb">مؤكد</div></div>
+                </div>
+                <div class="fc-kpi fc-kpi-click @(_tab == "Cancelled" ? "fc-kpi-active" : "")"
+                     @onclick='() => SetTab("Cancelled")' role="button" aria-pressed="@(_tab == "Cancelled")">
+                    <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Block" /></div>
+                    <div><div class="fc-kpi-num">@_items.Count(e => e.Status == "Cancelled")</div><div class="fc-kpi-lb">ملغي</div></div>
                 </div>
             </div>
-        }
+            }
+        </div>
     </div>
 </div>
 
@@ -276,7 +287,7 @@
                                                          aria-hidden="true">
                                                         <path d="M14 11V5a1 1 0 00-.5-.87l-5-3a1 1 0 00-1 0l-5 3A1 1 0 002 5v6a1 1 0 00.5.87l5 3a1 1 0 001 0l5-3A1 1 0 0014 11z"/>
                                                     </svg>
-                                                    @e.OperationNumber
+                                                    عملية @e.OperationNumber
                                                 </span>
                                             }
                                             @if (e.TripNumber is not null)
@@ -290,7 +301,7 @@
                                                         <circle cx="3.5" cy="12" r="1.5"/>
                                                         <circle cx="12.5" cy="12" r="1.5"/>
                                                     </svg>
-                                                    @e.TripNumber
+                                                    رحلة @e.TripNumber
                                                 </span>
                                             }
                                             @if (e.SupplierName is not null)
@@ -492,6 +503,56 @@
 @* ═══════════════════════════════════════════
    MODAL — أنواع المصروفات
 ═══════════════════════════════════════════ *@
+@* ═══════════════════════════════════════════
+   GLOW FAB — نفس نمط الحجوزات والعمليات والرحلات
+═══════════════════════════════════════════ *@
+@if (!_loading && (CanCreate || CanManageTypes))
+{
+    @if (_fabOpen)
+    {
+        <div class="ex-fab-scrim" @onclick="CloseFab"></div>
+    }
+
+    <div class="fc-fab-container">
+        <div class="fc-fab-menu @(_fabOpen ? "is-open" : "")" role="menu">
+            @if (CanCreate)
+            {
+                <button type="button" class="fc-fab-item" role="menuitem" @onclick="GoNewFromFab">
+                    <span class="fc-fab-icon" style="background: rgba(30,110,245,.1); color: var(--fc-blue);">
+                        <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+                    </span>
+                    <span class="fc-fab-label">مصروف جديد</span>
+                </button>
+            }
+            <button type="button" class="fc-fab-item" role="menuitem" @onclick="ReloadFromFab">
+                <span class="fc-fab-icon" style="background: rgba(22,163,91,.1); color: var(--fc-green);">
+                    <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" />
+                </span>
+                <span class="fc-fab-label">تحديث البيانات</span>
+            </button>
+            @if (CanManageTypes)
+            {
+                <button type="button" class="fc-fab-item" role="menuitem" @onclick="OpenTypesFromFab">
+                    <span class="fc-fab-icon" style="background: rgba(224,101,32,.1); color: var(--fc-orange);">
+                        <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" />
+                    </span>
+                    <span class="fc-fab-label">أنواع المصروفات</span>
+                </button>
+            }
+        </div>
+
+        <button type="button" class="fc-fab-main fc-glow-gold @(_fabOpen ? "is-open" : "")"
+                @onclick="ToggleFab"
+                title="إجراءات المصروفات" aria-label="إجراءات المصروفات"
+                aria-expanded="@(_fabOpen ? "true" : "false")">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none"
+                 stroke="currentColor" stroke-width="2.8" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+            </svg>
+        </button>
+    </div>
+}
+
 @if (_typesOpen && CanManageTypes)
 {
     <div class="exl-modal-backdrop" @onclick="CloseTypes"
@@ -769,6 +830,120 @@
 ═══════════════════════════════════════════ *@
 <style>
 
+    /* ================================================================
+       HERO — كارت دائري مستقل (نفس نمط الحجوزات والعمليات والرحلات)
+    ================================================================ */
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px;
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 1;
+    }
+
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important;
+        overflow: hidden;
+        box-shadow:
+            0 12px 32px rgba(13, 38, 84, 0.15),
+            0 4px 12px rgba(13, 38, 84, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .hero-wrapper .fc-hero.fc-hero-slim {
+        padding-top: 18px !important;
+        padding-bottom: 22px !important;
+    }
+
+    .hero-wrapper .fc-hero-sub { font-size: 13px; color: rgba(255, 255, 255, .55); }
+
+    .ex-hero-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+
+    .ex-hero-left { flex: 1; min-width: 200px; }
+
+    .ex-hero-crumb {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10.5px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.55);
+        margin-bottom: 6px;
+    }
+
+    .ex-hero-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    .ex-hero-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, .1);
+        border: 1px solid rgba(255, 255, 255, .2);
+        font-size: 11.5px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, .85);
+        white-space: nowrap;
+    }
+
+    /* ================================================================
+       FAB — زر عائم بوميض ذهبي (نفس نمط باقي الشاشات)
+    ================================================================ */
+    .ex-fab-scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 998;
+        background: rgba(10, 20, 40, .28);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+    }
+
+    .fc-fab-container {
+        z-index: 1000 !important;
+        flex-direction: column;
+    }
+
+    .fc-fab-menu { gap: 10px; }
+    /* pointer-events اتظبطت عالميًا في app.css (إصلاح #13) */
+
+    .fc-glow-gold {
+        position: relative;
+        background: linear-gradient(135deg, #0B56DF 0%, #083CA8 100%) !important;
+        border: 2px solid #FF8015 !important;
+        color: #fff;
+        box-shadow: 0 4px 16px rgba(11, 86, 223, .4);
+        animation: fc-gold-pulse-ex 2.2s infinite;
+    }
+
+    .fc-glow-gold::before {
+        content: "";
+        position: absolute; inset: -2px;
+        border-radius: 50%;
+        border: 2px solid #FF8015;
+        opacity: 0; pointer-events: none;
+        animation: fc-ring-expand-ex 2.2s cubic-bezier(.24,0,.38,1) infinite;
+    }
+
+    @@keyframes fc-gold-pulse-ex {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(255,128,21,.6), 0 8px 24px rgba(11,86,223,.4); }
+        50%      { box-shadow: 0 0 0 12px rgba(255,128,21,0), 0 12px 32px rgba(11,86,223,.55); }
+    }
+
+    @@keyframes fc-ring-expand-ex {
+        0%   { transform: scale(1); opacity: .8; border-width: 3px; }
+        100% { transform: scale(1.6); opacity: 0; border-width: 1px; }
+    }
+
     :root {
         --fc-blue:      #1e6ef5;
         --fc-blue-lt:   #eaf1ff;
@@ -796,9 +971,12 @@
     .ex-list-body {
         background: var(--fc-bg);
         min-height: calc(100vh - 200px);
-        padding: 16px 20px 32px;
-        max-width: 1400px; width: 100%;
+        padding: 18px clamp(16px, 3vw, 40px) 96px;
+        max-width: 1440px; width: 100%;
         margin: 0 auto;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 2;
     }
 
     /* ================================================================
@@ -1540,6 +1718,14 @@
     }
 
     private void GoNew()        => Nav.NavigateTo("/expenses/new");
+
+    /* ── FAB (قواعد التصميم #29) ── */
+    private bool _fabOpen;
+    private void ToggleFab() => _fabOpen = !_fabOpen;
+    private void CloseFab()  => _fabOpen = false;
+    private void GoNewFromFab() { _fabOpen = false; GoNew(); }
+    private async Task ReloadFromFab() { _fabOpen = false; await Reload(); }
+    private async Task OpenTypesFromFab() { _fabOpen = false; await OpenTypes(); }
     private void GoEdit(Item e) => Nav.NavigateTo($"/expenses/new/{e.ExpenseId}");
 
     private async Task Reload() { await LoadAsync(); }

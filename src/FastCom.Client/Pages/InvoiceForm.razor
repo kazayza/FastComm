@@ -294,13 +294,13 @@
                                     </div>
                                     @if (_showCustomerDropdown && _filteredCustomers.Count > 0)
                                     {
-                                        <div class="field-dropdown">
+                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
                                             @for (int i = 0; i < _filteredCustomers.Count; i++)
                                             {
                                                 var c = _filteredCustomers[i];
                                                 var index = i;
                                                 <div class="field-dropdown-item @(index == _focusedItemIndex ? "is-focused" : "")" 
-                                                     @mousedown="() => PickCustomer(c)">
+                                                     @onmousedown="() => PickCustomer(c)">
                                                     <span>@c.Label</span>
                                                     <span class="invf-code">(@c.Code)</span>
                                                 </div>
@@ -494,13 +494,7 @@
                                             تُضاف للفاتورة بقيمتها المحمّلة لا بقيمتها الفعلية
                                         </div>
 
-                                        @if (_id is null)
-                                        {
-                                            <div class="inv-bx-note">احفظ الفاتورة أولًا — ثم اختر العملية لتحميل مصروفاتها</div>
-                                        }
-                                        else
-                                        {
-                                            <div class="field-select-wrap mt-2">
+                                        <div class="field-select-wrap mt-2">
                                                 <svg class="field-select-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                                     <rect x="1" y="3" width="15" height="13" rx="2"/>
                                                     <path d="M16 8h4l3 3v5h-7V8z"/>
@@ -579,7 +573,6 @@
                                                         @(_bxBusy ? "جارٍ الإضافة..." : $"أضف المحدد ({_bxSel.Count}) إلى الفاتورة")
                                                     </button>
                                                 </div>
-                                            }
                                         }
                                     </div>
                                 </div>
@@ -730,6 +723,16 @@
                                                                     <path d="M16 8h4l3 3v5h-7V8z"/>
                                                                 </svg>
                                                                 @l.OperationNumber
+                                                            </span>
+                                                        }
+                                                        @if (l.ExpenseId is not null)
+                                                        {
+                                                            <span class="invf-exp-tag">
+                                                                <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                                                    <path d="M14 2v6h6"/>
+                                                                </svg>
+                                                                من مصروف@(l.TaxRate is > 0 ? $" · ضريبة {l.TaxRate:0.##}٪" : "")
                                                             </span>
                                                         }
                                                     </td>
@@ -1314,6 +1317,7 @@
         margin-top: 4px; padding: 2px 8px; font-size: 10px; font-weight: 700;
         border-radius: 20px; background: rgba(30,110,245,.10); color: var(--fc-blue);
     }
+        .invf-exp-tag { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 10px; font-weight: 600; color: #b45309; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 5px; padding: 1px 6px; }
     .inv-tbl-input {
         height: 36px; width: 100%;
         border: 1px solid #d8e2f0; border-radius: 7px;
@@ -1775,6 +1779,11 @@
         if (id == 0) return;
         try
         {
+            if (_f.Items.Any(l => l.OperationId == id))
+            {
+                Snackbar.Add("بنود هذه العملية مُدرجة بالفعل — احذفها من الجدول أولاً لإعادة إدراجها", Severity.Warning);
+                return;
+            }
             var lines = await Http.GetFromJsonAsync<List<LineForm>>($"api/invoices/operations/{id}/lines");
             if (lines is null || lines.Count == 0)
             { 
@@ -1827,7 +1836,7 @@
     private decimal RateOf(int id) => _taxRates.FirstOrDefault(t => t.Id == id)?.Rate ?? 0m;
     private decimal LineSub(LineForm l) => l.Quantity * l.UnitPrice - l.Discount;
     private decimal LineTax(LineForm l) =>
-        Math.Round(LineSub(l) * (l.TaxRateId is null ? 0m : RateOf(l.TaxRateId.Value)) / 100m, 4);
+        Math.Round(LineSub(l) * (l.TaxRateId is not null ? RateOf(l.TaxRateId.Value) : (l.TaxRate ?? 0m)) / 100m, 4);
     private decimal LineTotal(LineForm l) => LineSub(l) + LineTax(l);
     private decimal SubTotal  => _f.Items.Sum(LineSub);
     private decimal TaxTotal  => _f.Items.Sum(LineTax);
@@ -1873,7 +1882,9 @@
                     quantity    = l.Quantity, 
                     unitPrice   = l.UnitPrice,
                     discount    = l.Discount, 
-                    taxRateId   = l.TaxRateId
+                    taxRateId   = l.TaxRateId,
+                    expenseId   = l.ExpenseId,
+                    taxRate     = l.TaxRate
                 }).ToList(),
                 operationIds = _f.Items.Where(l => l.OperationId is not null)
                                        .Select(l => l.OperationId!.Value).Distinct().ToList()
@@ -1947,6 +1958,9 @@
         public decimal UnitPrice       { get; set; }
         public decimal Discount        { get; set; }
         public int?    TaxRateId       { get; set; }
+        /* 🔴 بند من مصروف محمّل على العميل — يُحفظ برقم المصروف ونسبة ضريبته المباشرة */
+        public long?    ExpenseId      { get; set; }
+        public decimal? TaxRate        { get; set; }
     }
 
     public class LineOut
@@ -1964,6 +1978,7 @@
         public decimal LineSubtotal    { get; set; }
         public decimal LineTax         { get; set; }
         public decimal LineTotal       { get; set; }
+        public long?   ExpenseId       { get; set; }
 
         public LineForm ToForm() => new()
         {
@@ -1974,7 +1989,9 @@
             Quantity        = Quantity, 
             UnitPrice       = UnitPrice,
             Discount        = Discount, 
-            TaxRateId       = TaxRateId
+            TaxRateId       = TaxRateId,
+            ExpenseId       = ExpenseId,
+            TaxRate         = TaxRate
         };
     }
 
@@ -2006,7 +2023,13 @@
         _bxList = new();
         if (_pickOpBx is null) return;
         _bxLoading = true;
-        try { _bxList = await SafeGetT<BxExpense>($"api/invoices/billable-expenses?operationId={_pickOpBx.Value}"); }
+        try
+        {
+            _bxList = await SafeGetT<BxExpense>($"api/invoices/billable-expenses?operationId={_pickOpBx.Value}");
+            /* المصروفات الموجودة كبنود في الجدول (حتى لو لسه ما اتحفظتش) مش بتظهر تاني */
+            var already = _f.Items.Where(l => l.ExpenseId is not null).Select(l => l.ExpenseId!.Value).ToHashSet();
+            _bxList.RemoveAll(x => already.Contains(x.ExpenseId));
+        }
         finally { _bxLoading = false; }
     }
 
@@ -2022,25 +2045,30 @@
             foreach (var x in _bxList) _bxSel.Add(x.ExpenseId);
     }
 
-    private async Task AddSelectedBx()
+    /* 🔴 خطوة واحدة: المصروفات المحددة تتحول لبنود في الجدول محليًا —
+       وتُحفظ مع الفاتورة (ExpenseId + TaxRate) في نفس الطلب. السيرفر جاهز. */
+    private void AddSelectedBx()
     {
-        if (_id is null || _bxSel.Count == 0) return;
-        _bxBusy = true;
-        try
+        if (_bxSel.Count == 0) return;
+        var existing = _f.Items.Where(l => l.ExpenseId is not null).Select(l => l.ExpenseId!.Value).ToHashSet();
+        var picked = _bxList.Where(x => _bxSel.Contains(x.ExpenseId) && !existing.Contains(x.ExpenseId)).ToList();
+        foreach (var x in picked)
         {
-            var res = await Http.PostAsJsonAsync($"api/invoices/{_id}/add-expenses",
-                new { expenseIds = _bxSel.ToList() });
-            var msg = await MsgOf(res);
-            if (res.IsSuccessStatusCode)
+            _f.Items.Add(new LineForm
             {
-                Snackbar.Add(msg, Severity.Success);
-                _pickOpBx = null; _bxList = new(); _bxSel.Clear();
-                await LoadAsync(_id.Value);
-            }
-            else { _ok = false; _msg = msg; }
+                OperationId = _pickOpBx,
+                Description = string.IsNullOrWhiteSpace(x.Description)
+                    ? x.ExpenseTypeName
+                    : x.ExpenseTypeName + " — " + x.Description,
+                Quantity  = 1,
+                UnitPrice = x.BillableAmount,
+                TaxRate   = x.BillableTaxRate,
+                ExpenseId = x.ExpenseId
+            });
+            _bxList.Remove(x);
         }
-        catch (Exception ex) { _ok = false; _msg = "فشل في تحميل المصروفات: " + ex.Message; }
-        finally { _bxBusy = false; }
+        _bxSel.Clear();
+        Snackbar.Add($"أُضيف {picked.Count} بند من المصروفات — راجعه ثم احفظ الفاتورة", Severity.Success);
     }
 
     public class OpRef { public long OperationId { get; set; } public string OperationNumber { get; set; } = ""; public string CustomerName { get; set; } = ""; public decimal RevenueNet { get; set; } public string? InvoiceNumber { get; set; } }

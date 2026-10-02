@@ -617,7 +617,7 @@ public class TreasuryController : ControllerBase
     public async Task<IActionResult> ReopenBox(int id, [FromBody] ReopenRequest? req, CancellationToken ct)
     {
         var box = await _db.CashBoxes.FirstOrDefaultAsync(b => b.CashBoxId == id && !b.IsDeleted, ct);
-        if (box is null) return NotFound(new { message = "الخزينة مش موجودة" });
+        if (box is null) return NotFound(new { message = "الخزينة غير موجودة" });
         if (box.Status != "Closed") return BadRequest(new { message = "الخزينة مفتوحة أصلًا" });
 
         var opening = req?.OpeningBalance ?? 0m;

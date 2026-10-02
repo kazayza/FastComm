@@ -13,52 +13,69 @@
 @* ═══════════════════════════════════════════
    HERO
 ═══════════════════════════════════════════ *@
-<div class="fc-hero">
-    <div class="fc-hero-inner">
-        <div class="fc-page-head">
-            <div>
-                <div class="fc-crumb">التشغيل · العمليات</div>
-                <h1 class="fc-hero-title">العمليات</h1>
-                <p class="fc-hero-sub">كل عملية نقل بإيرادها وتكلفتها وربحها — من الحجز أو مستقلة</p>
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
+
+            <div class="op-hero-row">
+                <div class="op-hero-left">
+                    <div class="op-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="1" y="3" width="15" height="13" rx="2"/>
+                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                        </svg>
+                        <span>التشغيل · العمليات</span>
+                    </div>
+                    <h1 class="fc-hero-title">العمليات</h1>
+                    <p class="fc-hero-sub">كل عملية نقل بإيرادها وتكلفتها وربحها — من الحجز أو مستقلة</p>
+                </div>
+
+                <div class="op-hero-right">
+                    <span class="op-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                </div>
             </div>
-            <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث"
-                               OnClick="Reload" Style="color:#9FB4CC" />
-                @if (CanCreate)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add"
-                               OnClick="GoNew">عملية جديدة</MudButton>
-                }
-            </div>
-        </div>
 
         @if (CanView)
         {
             <div class="fc-kpis fc-kpis-glass">
-                <div class="fc-kpi">
+                <div class="fc-kpi fc-kpi-click @(_tab == "all" ? "fc-kpi-active" : "")"
+                     @onclick='() => SetTab("all")' role="button" aria-pressed="@(_tab == "all")">
                     <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.LocalShipping" /></div>
                     <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي العمليات</div></div>
                 </div>
-                <div class="fc-kpi">
+                <div class="fc-kpi fc-kpi-click @(_tab == "open" ? "fc-kpi-active" : "")"
+                     @onclick='() => SetTab("open")' role="button" aria-pressed="@(_tab == "open")">
                     <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.HourglassTop" /></div>
-                    <div><div class="fc-kpi-num">@Open.Count()</div><div class="fc-kpi-lb">لسه شغالة</div></div>
+                    <div><div class="fc-kpi-num">@Open.Count()</div><div class="fc-kpi-lb">جارية</div></div>
                 </div>
-                <div class="fc-kpi">
+                <div class="fc-kpi fc-kpi-click @(_tab == "Closed" ? "fc-kpi-active" : "")"
+                     @onclick='() => SetTab("Closed")' role="button" aria-pressed="@(_tab == "Closed")">
                     <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(o => o.Status == "Closed")</div><div class="fc-kpi-lb">مقفولة</div></div>
+                    <div><div class="fc-kpi-num">@_items.Count(o => o.Status == "Closed")</div><div class="fc-kpi-lb">مغلقة</div></div>
                 </div>
-                <div class="fc-kpi">
+                <div class="fc-kpi fc-kpi-click @(_tab == "loss" ? "fc-kpi-active" : "")"
+                     @onclick='() => SetTab("loss")' role="button" aria-pressed="@(_tab == "loss")">
                     <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
                     <div>
                         <div class="fc-kpi-num @(_items.Sum(o => o.RevenueNet - o.ActualCost) >= 0 ? "" : "kpi-negative")">
                             @Money(_items.Sum(o => o.RevenueNet - o.ActualCost))
                         </div>
-                        <div class="fc-kpi-lb">صافي الربح</div>
+                        <div class="fc-kpi-lb">صافي الربح — اضغط لفلترة الخسائر</div>
                     </div>
                 </div>
             </div>
-        }
+            }
+        </div>
     </div>
 </div>
 
@@ -114,6 +131,45 @@
                     }
                 </div>
 
+                @* ── شيبس الحالة — بجوار البحث في نفس السطر ── *@
+                <div class="op-status-tabs" role="group" aria-label="فلتر الحالة">
+                    @foreach (var t in _statusTabs)
+                    {
+                        var count = t.Key == "all"
+                            ? _items.Count
+                            : _items.Count(o => o.Status == t.Key);
+
+                        <button class="op-status-tab @(_tab == t.Key ? "active" : "")"
+                                @onclick="() => SetTab(t.Key)"
+                                aria-pressed="@(_tab == t.Key)">
+                            <span class="op-tab-dot @StatusDotColor(t.Key)"
+                                  aria-hidden="true"></span>
+                            <span>@t.Value</span>
+                            <span class="op-tab-count">@count</span>
+                        </button>
+                    }
+                </div>
+
+                @* ── شيبس فلترة الحجز — من الرابط المباشر في شاشة الحجوزات ── *@
+                @if (_bookingNo is not null)
+                {
+                    <div class="op-booking-filter">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        <span>عمليات الحجز <strong>@_bookingNo</strong></span>
+                        <button class="op-bf-clear" @onclick="ClearBookingFilter"
+                                title="إلغاء الفلترة على الحجز" aria-label="إلغاء الفلترة على الحجز">
+                            <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                                 stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                }
+
                 @* ── Financial Summary ── *@
                 @if (_items.Any() && !_loading)
                 {
@@ -148,28 +204,6 @@
                     عرض <strong>@Filtered.Count()</strong> من <strong>@_items.Count</strong>
                 </div>
 
-            </div>
-
-
-            @* ── Status Filter Tabs ── *@
-            <div class="op-status-bar">
-                <div class="op-status-tabs" role="group" aria-label="فلتر الحالة">
-                    @foreach (var t in _statusTabs)
-                    {
-                        var count = t.Key == "all"
-                            ? _items.Count
-                            : _items.Count(o => o.Status == t.Key);
-
-                        <button class="op-status-tab @(_tab == t.Key ? "active" : "")"
-                                @onclick="() => SetTab(t.Key)"
-                                aria-pressed="@(_tab == t.Key)">
-                            <span class="op-tab-dot @StatusDotColor(t.Key)"
-                                  aria-hidden="true"></span>
-                            <span>@t.Value</span>
-                            <span class="op-tab-count">@count</span>
-                        </button>
-                    }
-                </div>
             </div>
 
 
@@ -291,6 +325,19 @@
                                                     </svg>
                                                 </span>
                                                 <span class="op-route-to">@(o.DestinationName ?? "—")</span>
+                                                @if (o.TahteeqPortName is not null)
+                                                {
+                                                    <span class="op-route-arrow" aria-hidden="true">
+                                                        <svg viewBox="0 0 24 24" width="11" height="11"
+                                                             fill="none" stroke="currentColor" stroke-width="2.5">
+                                                            <path d="M5 12h14M12 5l7 7-7 7"
+                                                                  stroke-linecap="round" stroke-linejoin="round"/>
+                                                        </svg>
+                                                    </span>
+                                                    <span class="op-route-tah" title="ميناء التعتيق">
+                                                        <span class="op-route-tah-tag">تعتيق</span>@o.TahteeqPortName
+                                                    </span>
+                                                }
                                             </div>
                                         }
                                         else
@@ -362,6 +409,24 @@
                                     <td>
                                         <div class="op-actions">
 
+                                            @* رحلة — فتح الموجودة أو إضافة جديدة *@
+                                            @if ((o.TripId is not null && CanTripView) ||
+                                                 (o.TripId is null && CanTripCreate))
+                                            {
+                                                <button class="op-act-btn act-trip"
+                                                        @onclick="() => GoTrip(o)"
+                                                        title="@(o.TripId is not null ? $"فتح الرحلة {o.TripNumber}" : "إضافة رحلة للعملية")"
+                                                        aria-label="@(o.TripId is not null ? "فتح رحلة العملية" : "إضافة رحلة للعملية")">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                                        <path d="M16 8h4l3 3v5h-7V8z"/>
+                                                        <circle cx="5.5" cy="18.5" r="2.5"/>
+                                                        <circle cx="18.5" cy="18.5" r="2.5"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
                                             @* تعديل *@
                                             @if (o.Status is not ("Closed" or "Cancelled") && CanEdit)
                                             {
@@ -414,8 +479,8 @@
                                             {
                                                 <button class="op-act-btn act-reopen"
                                                         @onclick="() => Reopen(o)"
-                                                        title="فتح تاني"
-                                                        aria-label="فتح @o.OperationNumber">
+                                                        title="إعادة فتح"
+                                                        aria-label="إعادة فتح @o.OperationNumber">
                                                     <svg viewBox="0 0 24 24" width="14" height="14"
                                                          fill="none" stroke="currentColor" stroke-width="2">
                                                         <rect x="3" y="11" width="18" height="11" rx="2"/>
@@ -476,7 +541,7 @@
 
                                             @if (o.Status == "Closed" && !CanReopen)
                                             {
-                                                <span class="td-muted" style="font-size:10px">مقفولة</span>
+                                                <span class="td-muted" style="font-size:10px">مغلقة</span>
                                             }
 
                                         </div>
@@ -492,6 +557,66 @@
         </div>
     }
 </div>
+
+
+@* ═══════════════════════════════════════════
+   FAB — زر الإجراءات العائم (نفس نمط شاشة الحجوزات)
+═══════════════════════════════════════════ *@
+@if (!_loading && (CanCreate || CanView))
+{
+    @if (_fabOpen)
+    {
+        <div class="op-fab-scrim" @onclick="CloseFab"></div>
+    }
+
+    <div class="fc-fab-container">
+        <div class="fc-fab-menu @(_fabOpen ? "is-open" : "")" role="menu">
+            @if (CanCreate)
+            {
+                <button type="button" class="fc-fab-item" role="menuitem" @onclick="GoNewFromFab">
+                    <span class="fc-fab-icon" style="background: rgba(30,110,245,.1); color: var(--fc-blue);">
+                        <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+                    </span>
+                    <span class="fc-fab-label">عملية جديدة</span>
+                </button>
+            }
+            <button type="button" class="fc-fab-item" role="menuitem" @onclick="ReloadFromFab">
+                <span class="fc-fab-icon" style="background: rgba(22,163,91,.1); color: var(--fc-green);">
+                    <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" />
+                </span>
+                <span class="fc-fab-label">تحديث البيانات</span>
+            </button>
+            @if (CanTripView)
+            {
+                <button type="button" class="fc-fab-item" role="menuitem" @onclick="GoTripsFromFab">
+                    <span class="fc-fab-icon" style="background: rgba(124,77,189,.1); color: var(--fc-purple);">
+                        <MudIcon Icon="@Icons.Material.Filled.DirectionsCar" Size="Size.Small" />
+                    </span>
+                    <span class="fc-fab-label">شاشة الرحلات</span>
+                </button>
+            }
+            @if (CanTripCreate)
+            {
+                <button type="button" class="fc-fab-item" role="menuitem" @onclick="GoNewTripFromFab">
+                    <span class="fc-fab-icon" style="background: rgba(224,101,32,.1); color: var(--fc-orange);">
+                        <MudIcon Icon="@Icons.Material.Filled.AddCircle" Size="Size.Small" />
+                    </span>
+                    <span class="fc-fab-label">رحلة جديدة</span>
+                </button>
+            }
+        </div>
+
+        <button type="button" class="fc-fab-main fc-glow-gold @(_fabOpen ? "is-open" : "")"
+                @onclick="ToggleFab"
+                title="إجراءات العمليات" aria-label="إجراءات العمليات"
+                aria-expanded="@(_fabOpen ? "true" : "false")">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none"
+                 stroke="currentColor" stroke-width="2.8" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+            </svg>
+        </button>
+    </div>
+}
 
 
 @* ═══════════════════════════════════════════
@@ -528,14 +653,162 @@
     .kpi-negative { color: #fca5a5 !important; }
 
     /* ================================================================
+       HERO — كارت دائري مستقل (نفس نمط شاشة الحجوزات)
+       عرض الهيرو والجسم لازم يبقى نفس القيمة عشان يبقوا على خط واحد
+    ================================================================ */
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px;
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 1;
+    }
+
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important;
+        overflow: hidden;
+        box-shadow:
+            0 12px 32px rgba(13, 38, 84, 0.15),
+            0 4px 12px rgba(13, 38, 84, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .hero-wrapper .fc-hero.fc-hero-slim {
+        padding-top: 18px !important;
+        padding-bottom: 22px !important;
+    }
+
+    .hero-wrapper .fc-hero-sub { font-size: 13px; color: rgba(255, 255, 255, .55); }
+
+    .op-hero-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+
+    .op-hero-left { flex: 1; min-width: 200px; }
+
+    .op-hero-crumb {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10.5px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.55);
+        margin-bottom: 6px;
+    }
+
+    .op-hero-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    .op-hero-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, .1);
+        border: 1px solid rgba(255, 255, 255, .2);
+        font-size: 11.5px;
+        color: #fff;
+    }
+
+    /* ================================================================
+       شيبس فلترة الحجز — الرابط المباشر من شاشة الحجوزات
+    ================================================================ */
+    .op-booking-filter {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 10px 6px 8px;
+        border-radius: 20px;
+        background: var(--fc-amber-lt);
+        border: 1px solid #f0d9a8;
+        color: #8a5a06;
+        font-size: 11.5px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .op-booking-filter strong { color: #6b4404; }
+    .op-bf-clear {
+        display: flex; align-items: center; justify-content: center;
+        width: 18px; height: 18px; border-radius: 50%;
+        border: none; background: rgba(138, 90, 6, .12); color: #8a5a06;
+        cursor: pointer; transition: all .12s ease;
+    }
+    .op-bf-clear:hover { background: rgba(138, 90, 6, .25); }
+
+    /* ================================================================
+       FAB — زر عائم أسفل يسار (نفس وميض شاشة الحجوزات)
+    ================================================================ */
+    .op-fab-scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 998;
+        background: rgba(10, 20, 40, .28);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        animation: op-scrim-fade .18s ease;
+    }
+    @@keyframes op-scrim-fade {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+
+    .fc-fab-container {
+        z-index: 1000 !important;
+        /* القائمة فوق الزر (بدل column-reverse في app.css) */
+        flex-direction: column;
+    }
+
+    .fc-fab-menu { gap: 10px; }
+    /* ملاحظة: pointer-events اتظبطت عالميًا في app.css (إصلاح #13) —
+       ما نكررهوش هنا عشان ما نكسرش نفاذ الكليكات لآخر سطر */
+
+    .fc-glow-gold {
+        position: relative;
+        background: linear-gradient(135deg, #0B56DF 0%, #083CA8 100%) !important;
+        border: 2px solid #FF8015 !important;
+        color: #fff;
+        box-shadow: 0 4px 16px rgba(11, 86, 223, .4);
+        animation: fc-gold-pulse-op 2.2s infinite;
+    }
+
+    .fc-glow-gold::before {
+        content: "";
+        position: absolute; inset: -2px;
+        border-radius: 50%;
+        border: 2px solid #FF8015;
+        opacity: 0; pointer-events: none;
+        animation: fc-ring-expand-op 2.2s cubic-bezier(.24,0,.38,1) infinite;
+    }
+
+    @@keyframes fc-gold-pulse-op {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(255,128,21,.6), 0 8px 24px rgba(11,86,223,.4); }
+        50%      { box-shadow: 0 0 0 12px rgba(255,128,21,0), 0 12px 32px rgba(11,86,223,.55); }
+    }
+
+    @@keyframes fc-ring-expand-op {
+        0%   { transform: scale(1); opacity: .8; border-width: 3px; }
+        100% { transform: scale(1.6); opacity: 0; border-width: 1px; }
+    }
+
+    /* ================================================================
        BODY
     ================================================================ */
     .op-body {
         background: var(--fc-bg);
         min-height: calc(100vh - 200px);
-        padding: 16px 20px 32px;
-        max-width: 1400px; width: 100%;
+        padding: 18px clamp(16px, 3vw, 40px) 96px;
+        max-width: 1440px; width: 100%;
         margin: 0 auto;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 2;
     }
 
     /* ================================================================
@@ -645,12 +918,6 @@
     /* ================================================================
        STATUS TABS
     ================================================================ */
-    .op-status-bar {
-        padding: 10px 18px;
-        background: #f9fafd; border-bottom: 1px solid #edf1f7;
-        overflow-x: auto;
-    }
-
     .op-status-tabs {
         display: flex; gap: 4px;
         padding: 3px; border-radius: 10px; background: #f0f3f8;
@@ -834,6 +1101,17 @@
     .op-route-from { font-size: 11px; font-weight: 700; color: var(--fc-blue); }
     .op-route-to   { font-size: 11px; font-weight: 700; color: var(--fc-green); }
     .op-route-arrow { color: #c0ccd8; display: flex; }
+    .op-route-tah  { font-size: 11px; font-weight: 700; color: #b45309; display: inline-flex; align-items: center; gap: 3px; }
+    .op-route-tah-tag {
+        background: rgba(217, 119, 6, .12);
+        border: 1px solid rgba(217, 119, 6, .28);
+        color: #b45309;
+        font-size: 9px;
+        font-weight: 800;
+        padding: 1px 4px;
+        border-radius: 4px;
+        letter-spacing: .2px;
+    }
 
     /* ── Date Cell ── */
     .op-date-cell {
@@ -908,6 +1186,7 @@
         transition: all .15s ease; background: transparent;
     }
 
+    .act-trip    { color: var(--fc-orange); }
     .act-edit    { color: var(--fc-blue); }
     .act-deliver { color: var(--fc-teal); }
     .act-close   { color: var(--fc-purple); }
@@ -915,6 +1194,7 @@
     .act-cancel  { color: var(--fc-red); }
     .act-delete  { color: var(--fc-red); }
 
+    .act-trip:hover    { background: var(--fc-orange-lt); border-color: #f2c9ad; }
     .act-edit:hover    { background: var(--fc-blue-lt);   border-color: #c0d4fb; }
     .act-deliver:hover { background: var(--fc-teal-lt);   border-color: #b0e0dc; }
     .act-close:hover   { background: var(--fc-purple-lt); border-color: #d0bfef; }
@@ -952,7 +1232,12 @@
     }
 
     @@media (max-width: 680px) {
-        .op-body { padding: 10px 12px 24px; }
+        .hero-wrapper { padding: 12px 12px 0; }
+        .hero-wrapper .fc-hero { border-radius: 16px !important; }
+        .op-hero-row { flex-direction: column; align-items: flex-start; }
+        .op-hero-right { width: 100%; justify-content: flex-start; }
+        .op-body { padding: 10px 12px 88px; }
+        .fc-fab-container { left: 16px; bottom: 16px; }
         .op-toolbar { padding: 10px 12px; }
         .op-avatar { display: none; }
         .op-status-bar { padding: 8px 12px; }
@@ -983,10 +1268,10 @@
     {
         ("all",        "الكل"),
         ("Pending",    "قيد الانتظار"),
-        ("Assigned",   "متعين"),
+        ("Assigned",   "مُعيّنة"),
         ("InTransit",  "في الطريق"),
-        ("Delivered",  "اتسلّمت"),
-        ("Closed",     "مقفولة"),
+        ("Delivered",  "مُسلّمة"),
+        ("Closed",     "مغلقة"),
         ("Cancelled",  "ملغاة")
     };
 
@@ -1001,6 +1286,8 @@
     private string _search = "";
     private string _tab    = "all";
     private long?  _confirmId;
+    private bool    _fabOpen;
+    private string? _bookingNo;   /* فلترة على حجز — من الرابط المباشر (?booking=BK-...) */
 
     public class Item
     {
@@ -1011,6 +1298,7 @@
         public string?   ServiceName     { get; set; }
         public string?   PortName        { get; set; }
         public string?   DestinationName { get; set; }
+        public string?   TahteeqPortName { get; set; }
         public DateTime? PlannedDate     { get; set; }
         public string    Status          { get; set; } = "";
         public decimal   RevenueNet      { get; set; }
@@ -1018,13 +1306,15 @@
         public decimal   EstimatedCost   { get; set; }
         public decimal   ActualCost      { get; set; }
         public DateTime  CreatedAt       { get; set; }
+        public long?     TripId          { get; set; }
+        public string?   TripNumber      { get; set; }
     }
 
     /* ── Helpers ── */
     private static string StatusAr(string s) => s switch
     {
         "Pending"         => "قيد الانتظار",
-        "Assigned"        => "تم التعيين",
+        "Assigned"        => "مُعيّنة",
         "DriverReceived"  => "استلم السائق",
         "InTransit"       => "في الطريق",
         "Delivered"       => "تم التسليم",
@@ -1098,9 +1388,18 @@
     private IEnumerable<Item> Open =>
         _items.Where(o => OpenStatuses.Contains(o.Status));
 
+    private bool MatchTab(Item o) => _tab switch
+    {
+        "all"  => true,
+        "open" => OpenStatuses.Contains(o.Status),
+        "loss" => (o.RevenueNet - o.ActualCost) < 0,
+        _      => o.Status == _tab
+    };
+
     private IEnumerable<Item> Filtered =>
         _items.Where(o =>
-            (_tab == "all" || o.Status == _tab) &&
+            MatchTab(o) &&
+            (_bookingNo is null || o.BookingNumber == _bookingNo) &&
             (string.IsNullOrWhiteSpace(_search) ||
              o.OperationNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
              o.CustomerName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
@@ -1110,12 +1409,50 @@
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
+
+        /* رابط مباشر من شاشة الحجوزات: /operations?booking=BK-1024 */
+        var q = Nav.ToAbsoluteUri(Nav.Uri).Query.TrimStart('?');
+        foreach (var part in q.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var kv = part.Split('=', 2);
+            if (kv.Length == 2 && kv[0] == "booking")
+                _bookingNo = Uri.UnescapeDataString(kv[1]);
+        }
+
         if (CanView) await LoadAsync();
     }
 
     private async Task Reload() { await LoadAsync(); }
 
     private void SetTab(string t) { _tab = t; _confirmId = null; }
+
+    private void ToggleFab() => _fabOpen = !_fabOpen;
+    private void CloseFab()  => _fabOpen = false;
+
+    private void GoNewFromFab()
+    {
+        _fabOpen = false;
+        GoNew();
+    }
+
+    private async Task ReloadFromFab()
+    {
+        _fabOpen = false;
+        await LoadAsync();
+    }
+
+    private bool CanTripView   => _user?.Can("TRIP.VIEW")   ?? false;
+    private bool CanTripCreate => _user?.Can("TRIP.CREATE") ?? false;
+
+    private void GoTripsFromFab()   { _fabOpen = false; Nav.NavigateTo("/trips"); }
+    private void GoNewTripFromFab() { _fabOpen = false; Nav.NavigateTo("/trips/new"); }
+
+    private void ClearBookingFilter()
+    {
+        _bookingNo = null;
+        _confirmId = null;
+        Nav.NavigateTo("/operations");
+    }
 
     private async Task LoadAsync()
     {
@@ -1127,6 +1464,13 @@
 
     private void GoNew()         => Nav.NavigateTo("/operations/new");
     private void GoEdit(Item o)  => Nav.NavigateTo($"/operations/new/{o.OperationId}");
+
+    /* رحلة العملية: لو ليها رحلة يفتحها، ولو لأ يفتح فورم رحلة بالعملية مختارة */
+    private void GoTrip(Item o)
+    {
+        if (o.TripId is not null) Nav.NavigateTo($"/trips/new/{o.TripId}");
+        else Nav.NavigateTo($"/trips/new?operation={o.OperationId}");
+    }
 
     private async Task SetStatus(Item o, string to)
     {

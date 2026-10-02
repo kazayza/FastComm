@@ -275,6 +275,31 @@ public class CustodiesController : ControllerBase
             if (dup) return BadRequest(new { message = "في عهدة مفتوحة لنفس الشخص على الرحلة دي — صفّيها الأول" });
         }
 
+        /* 🔴 #28 — عهدة فرعية (توزيع من عهدة موظف على سائق):
+           الرئيسية لازم تكون مفتوحة ورئيسية، ومجموع التوزيعات مايعديش مبلغ عهدة الموظف.
+           الفرعية مابتعملش حركة خزينة — الفلوس خرجت مرة واحدة مع الرئيسية. */
+        if (!req.IsPrimary)
+        {
+            if (req.ParentCustodyId is null)
+                return BadRequest(new { message = "العهدة الفرعية لازم ترتبط بعهدة رئيسية" });
+
+            var parent = await _db.DriverCustodies.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.CustodyId == req.ParentCustodyId && !x.IsDeleted, ct);
+            if (parent is null)
+                return BadRequest(new { message = "العهدة الرئيسية مش موجودة" });
+            if (!parent.IsPrimary)
+                return BadRequest(new { message = "ماينفعش توزيع من عهدة فرعية" });
+            if (parent.Status != "Open")
+                return BadRequest(new { message = $"العهدة الرئيسية حالتها {StatusAr(parent.Status)} — التوزيع من عهدة مفتوحة بس" });
+
+            var distributed = await _db.DriverCustodies.AsNoTracking()
+                .Where(x => !x.IsDeleted && x.ParentCustodyId == parent.CustodyId && x.Status != "Closed")
+                .SumAsync(x => (decimal?)x.AmountIssued, ct) ?? 0m;
+
+            if (distributed + req.AmountIssued > parent.AmountIssued)
+                return BadRequest(new { message = $"التوزيع تجاوز عهدة الموظف — المتاح {(parent.AmountIssued - distributed):N2} ج.م" });
+        }
+
         var branchId = await ResolveBranchIdAsync(ct);
         if (branchId is null) return BadRequest(new { message = "مافيش فرع معرّف في النظام" });
 

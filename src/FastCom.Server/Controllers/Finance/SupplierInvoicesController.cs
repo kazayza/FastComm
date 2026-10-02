@@ -48,7 +48,8 @@ public class SupplierInvoicesController : ControllerBase
 
     public record LineDto(long? SupplierInvoiceItemId, long? TripId, long? OperationId,
         int? ExpenseTypeId, string Description, decimal Quantity, decimal UnitPrice,
-        decimal TaxRate, decimal LineSubtotal, decimal LineTax, decimal LineTotal);
+        decimal TaxRate, decimal LineSubtotal, decimal LineTax, decimal LineTotal,
+        long? BookingContainerLineId = null);
 
     public record ItemDto(long SupplierInvoiceId, string SupplierInvoiceNumber,
         string? SupplierRefNumber, int SupplierId, string SupplierName,
@@ -63,7 +64,8 @@ public class SupplierInvoicesController : ControllerBase
         string Status, string PaymentStatus, string? Notes, List<LineDto> Lines);
 
     public record LineReq(long? TripId, long? OperationId, int? ExpenseTypeId,
-        string? Description, decimal Quantity, decimal UnitPrice, decimal TaxRate);
+        string? Description, decimal Quantity, decimal UnitPrice, decimal TaxRate,
+        long? BookingContainerLineId = null);
 
     public record UpsertReq(int SupplierId, int BranchId, string? InvoiceDate,
         string? DueDate, string? SupplierRefNumber, string? Notes, List<LineReq>? Lines);
@@ -144,7 +146,8 @@ public class SupplierInvoicesController : ControllerBase
             .OrderBy(i => i.SupplierInvoiceItemId)
             .Select(i => new LineDto(i.SupplierInvoiceItemId, i.TripId, i.OperationId,
                 i.ExpenseTypeId, i.Description, i.Quantity, i.UnitPrice, i.TaxRate,
-                i.LineSubtotal ?? 0m, i.LineTax ?? 0m, i.LineTotal ?? 0m))
+                i.LineSubtotal ?? 0m, i.LineTax ?? 0m, i.LineTotal ?? 0m,
+                i.BookingContainerLineId))
             .ToListAsync(ct);
 
         return Ok(new DetailDto(
@@ -153,6 +156,74 @@ public class SupplierInvoicesController : ControllerBase
             Iso(inv.InvoiceDate), Iso(inv.DueDate), inv.CurrencyCode,
             inv.SubTotal, inv.TaxTotal, inv.GrandTotal, inv.PaidAmount,
             inv.Status, inv.PaymentStatus, inv.Notes, lines));
+    }
+
+    /* ═══════════════ ضمان الحاويات — #35 ═══════════════ */
+
+    public record GuarBooking(long BookingId, string BookingNumber, string CustomerName,
+        int LineCount, decimal TotalGuarantee);
+
+    public record GuarLine(long BookingContainerLineId, string ContainerTypeName,
+        int Quantity, decimal GuaranteePerContainer, decimal LineTotal);
+
+    private IQueryable<long> BilledGuarLines =>
+        _db.SupplierInvoiceItems
+            .Where(i => i.BookingContainerLineId != null && !i.SupplierInvoice.IsDeleted
+                        && i.SupplierInvoice.Status != "Cancelled")
+            .Select(i => i.BookingContainerLineId!.Value);
+
+    /// <summary>حجوزات مورد الضمان = هذا المورد وفيها سطور ضمان لسه ما اتفوترتش.</summary>
+    [HttpGet("guarantee-bookings")]
+    [Authorize(Policy = "PERM:SUPPLIER.VIEW")]
+    public async Task<IActionResult> GuaranteeBookings(int supplierId, CancellationToken ct = default)
+    {
+        var billed = BilledGuarLines;
+
+        var rows = await _db.Bookings.AsNoTracking()
+            .Where(b => !b.IsDeleted && b.Status != "Cancelled" &&
+                        b.GuaranteeSupplierId == supplierId &&
+                        b.BookingContainerLines.Any(l =>
+                            l.Status != "Cancelled" && l.GuaranteePerContainer != null &&
+                            l.GuaranteePerContainer > 0 && !billed.Contains(l.BookingContainerLineId)))
+            .OrderByDescending(b => b.BookingId)
+            .Select(b => new
+            {
+                b.BookingId,
+                b.BookingNumber,
+                CustomerName = b.Customer.NameAr,
+                Lines = b.BookingContainerLines
+                    .Where(l => l.Status != "Cancelled" && l.GuaranteePerContainer != null &&
+                                l.GuaranteePerContainer > 0 && !billed.Contains(l.BookingContainerLineId))
+                    .Select(l => new { l.GuaranteePerContainer, l.RequestedQty })
+                    .ToList()
+            })
+            .ToListAsync(ct);
+
+        return Ok(rows.Select(b => new GuarBooking(b.BookingId, b.BookingNumber, b.CustomerName,
+            b.Lines.Count, b.Lines.Sum(l => l.GuaranteePerContainer!.Value * l.RequestedQty))).ToList());
+    }
+
+    /// <summary>سطور الضمان غير المفوترة لحجز — فقط لو مورد ضمان الحجز = مورد الفاتورة.</summary>
+    [HttpGet("guarantee-lines")]
+    [Authorize(Policy = "PERM:SUPPLIER.VIEW")]
+    public async Task<IActionResult> GuaranteeLines(long bookingId, int supplierId, CancellationToken ct = default)
+    {
+        var ok = await _db.Bookings.AsNoTracking()
+            .AnyAsync(b => b.BookingId == bookingId && !b.IsDeleted &&
+                           b.GuaranteeSupplierId == supplierId, ct);
+        if (!ok) return Ok(new List<GuarLine>());
+
+        var billed = BilledGuarLines;
+
+        return Ok(await _db.BookingContainerLines.AsNoTracking()
+            .Where(l => l.BookingId == bookingId && l.Status != "Cancelled" &&
+                        l.GuaranteePerContainer != null && l.GuaranteePerContainer > 0 &&
+                        !billed.Contains(l.BookingContainerLineId))
+            .OrderBy(l => l.LineNo)
+            .Select(l => new GuarLine(l.BookingContainerLineId, l.ContainerType.NameAr,
+                l.RequestedQty, l.GuaranteePerContainer!.Value,
+                l.GuaranteePerContainer.Value * l.RequestedQty))
+            .ToListAsync(ct));
     }
 
     /* ═══════════════ CREATE ═══════════════ */
@@ -211,7 +282,7 @@ public class SupplierInvoicesController : ControllerBase
             return BadRequest(new { message = "فشل الحفظ: " + ex.Message });
         }
 
-        return Ok(new { message = $"✅ اتسجلت الفاتورة {number}", id = inv.SupplierInvoiceId });
+        return Ok(new { message = $"✅ تم تسجيل الفاتورة {number}", id = inv.SupplierInvoiceId });
     }
 
     /* ═══════════════ UPDATE ═══════════════ */
@@ -222,7 +293,7 @@ public class SupplierInvoicesController : ControllerBase
     {
         var inv = await _db.SupplierInvoices
             .FirstOrDefaultAsync(x => x.SupplierInvoiceId == id && !x.IsDeleted, ct);
-        if (inv is null) return NotFound(new { message = "الفاتورة مش موجودة" });
+        if (inv is null) return NotFound(new { message = "الفاتورة غير موجودة" });
 
         /* 🔴 المعتمدة ما تتعدّلش — الأرقام اتبنت عليها دفعات */
         if (inv.Status != "Draft")
@@ -272,7 +343,7 @@ public class SupplierInvoicesController : ControllerBase
             return BadRequest(new { message = "فشل الحفظ: " + ex.Message });
         }
 
-        return Ok(new { message = "✅ اتحدّثت الفاتورة" });
+        return Ok(new { message = "✅ تم تحديث الفاتورة" });
     }
 
     /* ═══════════════ APPROVE ═══════════════ */
@@ -283,7 +354,7 @@ public class SupplierInvoicesController : ControllerBase
     {
         var inv = await _db.SupplierInvoices
             .FirstOrDefaultAsync(x => x.SupplierInvoiceId == id && !x.IsDeleted, ct);
-        if (inv is null) return NotFound(new { message = "الفاتورة مش موجودة" });
+        if (inv is null) return NotFound(new { message = "الفاتورة غير موجودة" });
 
         if (inv.Status != "Draft")
             {
@@ -300,7 +371,7 @@ public class SupplierInvoicesController : ControllerBase
         inv.UpdatedBy   = UserId();
 
         await _db.SaveChangesAsync(ct);
-        return Ok(new { message = "✅ اتعتمدت الفاتورة" });
+        return Ok(new { message = "✅ تم اعتماد الفاتورة" });
     }
 
     /* ═══════════════ CANCEL ═══════════════ */
@@ -311,7 +382,7 @@ public class SupplierInvoicesController : ControllerBase
     {
         var inv = await _db.SupplierInvoices
             .FirstOrDefaultAsync(x => x.SupplierInvoiceId == id && !x.IsDeleted, ct);
-        if (inv is null) return NotFound(new { message = "الفاتورة مش موجودة" });
+        if (inv is null) return NotFound(new { message = "الفاتورة غير موجودة" });
 
         if (inv.Status is "Cancelled")
             {
@@ -331,7 +402,7 @@ public class SupplierInvoicesController : ControllerBase
         inv.UpdatedBy = UserId();
 
         await _db.SaveChangesAsync(ct);
-        return Ok(new { message = "✅ اتلغت الفاتورة" });
+        return Ok(new { message = "✅ تم إلغاء الفاتورة" });
     }
 
     /* ═══════════════ DELETE (ناعم — مسودة بس) ═══════════════ */
@@ -342,7 +413,7 @@ public class SupplierInvoicesController : ControllerBase
     {
         var inv = await _db.SupplierInvoices
             .FirstOrDefaultAsync(x => x.SupplierInvoiceId == id && !x.IsDeleted, ct);
-        if (inv is null) return NotFound(new { message = "الفاتورة مش موجودة" });
+        if (inv is null) return NotFound(new { message = "الفاتورة غير موجودة" });
 
         if (inv.Status != "Draft")
             {
@@ -355,7 +426,7 @@ public class SupplierInvoicesController : ControllerBase
         inv.DeletedBy = UserId();
 
         await _db.SaveChangesAsync(ct);
-        return Ok(new { message = "✅ اتحذفت الفاتورة" });
+        return Ok(new { message = "✅ تم حذف الفاتورة" });
     }
 
     /* ═══════════════ helpers ═══════════════ */
@@ -385,7 +456,8 @@ public class SupplierInvoicesController : ControllerBase
                 TaxRate       = r.TaxRate,
                 LineSubtotal  = lineSub,
                 LineTax       = lineTax,
-                LineTotal     = lineSub + lineTax
+                LineTotal     = lineSub + lineTax,
+                BookingContainerLineId = r.BookingContainerLineId
             });
         }
 
@@ -398,9 +470,9 @@ public class SupplierInvoicesController : ControllerBase
         if (r.BranchId <= 0)   return "لازم تختار الفرع";
 
         if (!await _db.Suppliers.AnyAsync(s => s.SupplierId == r.SupplierId && !s.IsDeleted, ct))
-            return "المورد مش موجود";
+            return "المورد غير موجود";
         if (!await _db.Branches.AnyAsync(b => b.BranchId == r.BranchId && !b.IsDeleted, ct))
-            return "الفرع مش موجود";
+            return "الفرع غير موجود";
 
         if (r.Lines is null || r.Lines.Count == 0) return "لازم بند واحد على الأقل";
 

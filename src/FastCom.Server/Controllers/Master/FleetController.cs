@@ -28,12 +28,13 @@ public class FleetController : ControllerBase
     // ═══════════════════ VEHICLES ═══════════════════
 
     public record VehicleItem(int VehicleId, string VehicleCode, string PlateNumber, string VehicleType,
-        string? Brand, string OwnershipType, decimal? CapacityTon, string Status);
+        string? Brand, string OwnershipType, string? SupplierName,
+        decimal? CapacityTon, string Status);
 
     public record VehicleDetail(int VehicleId, string VehicleCode, string PlateNumber, string VehicleType,
         string? Brand, string? Model, short? ModelYear, string OwnershipType, int? SupplierId,
-        decimal? CapacityTon, byte ContainerSlots20, DateOnly? LicenseExpiryDate,
-        DateOnly? InsuranceExpiryDate, string Status, string? Notes);
+        string? SupplierName, decimal? CapacityTon, byte ContainerSlots20,
+        DateOnly? LicenseExpiryDate, DateOnly? InsuranceExpiryDate, string Status, string? Notes);
 
     public record VehicleUpsert(string PlateNumber, string VehicleType, string? Brand, string? Model,
         short? ModelYear, string OwnershipType, int? SupplierId, decimal? CapacityTon,
@@ -47,7 +48,9 @@ public class FleetController : ControllerBase
             .Where(v => !v.IsDeleted)
             .OrderByDescending(v => v.VehicleId)
             .Select(v => new VehicleItem(v.VehicleId, v.VehicleCode, v.PlateNumber, v.VehicleType,
-                v.Brand, v.OwnershipType, v.CapacityTon, v.Status))
+                v.Brand, v.OwnershipType,
+                _db.Suppliers.Where(s => s.SupplierId == v.SupplierId).Select(s => s.NameAr).FirstOrDefault(),
+                v.CapacityTon, v.Status))
             .ToListAsync(ct));
 
     [HttpGet("vehicles/{id:int}")]
@@ -56,9 +59,14 @@ public class FleetController : ControllerBase
     {
         var v = await _db.Vehicles.AsNoTracking().FirstOrDefaultAsync(x => x.VehicleId == id && !x.IsDeleted, ct);
         if (v is null) return NotFound(new { message = "العربية مش موجودة" });
+        var supName = v.SupplierId is null ? null :
+            await _db.Suppliers.AsNoTracking().Where(s => s.SupplierId == v.SupplierId)
+                .Select(s => s.NameAr).FirstOrDefaultAsync(ct);
+
         return Ok(new VehicleDetail(v.VehicleId, v.VehicleCode, v.PlateNumber, v.VehicleType,
-            v.Brand, v.Model, v.ModelYear, v.OwnershipType, v.SupplierId, v.CapacityTon,
-            v.ContainerSlots20, v.LicenseExpiryDate, v.InsuranceExpiryDate, v.Status, v.Notes));
+            v.Brand, v.Model, v.ModelYear, v.OwnershipType, v.SupplierId, supName,
+            v.CapacityTon, v.ContainerSlots20, v.LicenseExpiryDate, v.InsuranceExpiryDate,
+            v.Status, v.Notes));
     }
 
     [HttpPost("vehicles")]
@@ -228,7 +236,10 @@ public class FleetController : ControllerBase
     {
         if (r is null || string.IsNullOrWhiteSpace(r.PlateNumber)) return "رقم اللوحة مطلوب";
         if (string.IsNullOrWhiteSpace(r.VehicleType)) return "نوع العربية مطلوب";
-        if (r.OwnershipType is not ("Company" or "External")) return "ملكية لازم شركة أو خارجي";
+        if (r.OwnershipType is not ("Company" or "External"))
+            return "الملكية لازم تكون مكتب أو مورد";
+        if (r.OwnershipType == "External" && r.SupplierId is null)
+            return "الملكية مورد — لازم تحدد المورد المالك";
         if (!VehStatuses.Contains(r.Status)) return "الحالة مش صالحة";
         return null;
     }

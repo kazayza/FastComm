@@ -283,13 +283,13 @@
                                     </div>
                                     @if (_showSupplierDropdown && _filteredSuppliers.Count > 0)
                                     {
-                                        <div class="field-dropdown">
+                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
                                             @for (int i = 0; i < _filteredSuppliers.Count; i++)
                                             {
                                                 var s = _filteredSuppliers[i];
                                                 var index = i;
                                                 <div class="field-dropdown-item @(index == _focusedSupplierIndex ? "is-focused" : "")"
-                                                     @mousedown="() => PickSupplier(s)">
+                                                     @onmousedown="() => PickSupplier(s)">
                                                     <span>@s.Label</span>
                                                 </div>
                                             }
@@ -490,6 +490,95 @@
                                 }
                             </div>
 
+                            @if (_f.SupplierId > 0 && !Locked)
+                            {
+                                <div class="inv-guar-box">
+                                    <div class="inv-guar-head">
+                                        <span class="inv-guar-icon" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                            </svg>
+                                        </span>
+                                        <div>
+                                            <div class="inv-guar-title">تحميل ضمان حاويات</div>
+                                            <div class="inv-guar-sub">حجوزات مورد الضمان لهذا المورد — تُضاف كبنود بضمان الحاوية × العدد</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="field-select-wrap" style="margin-top:10px">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                            <path d="M4 3h16v4H4zM4 10h16v4H4zM4 17h16v4H4z"/>
+                                        </svg>
+                                        <select class="field-input field-select"
+                                                value="@_pickGuarBooking"
+                                                @onchange="OnPickGuarBooking">
+                                            <option value="0">— اختر حجزًا لعرض ضماناته غير المفوترة —</option>
+                                            @foreach (var b in _guarBookings)
+                                            {
+                                                <option value="@b.BookingId">@b.BookingNumber — @b.CustomerName · @b.LineCount سطر · @Money(b.TotalGuarantee) ج.م</option>
+                                            }
+                                        </select>
+                                    </div>
+
+                                    @if (_guarLoading)
+                                    {
+                                        <div class="inv-guar-note">جارٍ التحميل...</div>
+                                    }
+                                    else if (_pickGuarBooking is not null && _guarList.Count == 0)
+                                    {
+                                        <div class="inv-guar-note">لا توجد ضمانات غير مفوترة لهذا الحجز لدى هذا المورد</div>
+                                    }
+                                    else if (_guarList.Count > 0)
+                                    {
+                                        <div class="inv-table-wrap" style="margin-top:10px">
+                                            <table class="inv-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th style="width:35px"></th>
+                                                        <th>نوع الحاوية</th>
+                                                        <th style="width:80px">العدد</th>
+                                                        <th style="width:130px">ضمان الواحدة (ج.م)</th>
+                                                        <th style="width:130px; text-align:left">الإجمالي (ج.م)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var x in _guarList)
+                                                    {
+                                                        <tr>
+                                                            <td style="text-align:center">
+                                                                <input type="checkbox"
+                                                                       checked="@_guarSel.Contains(x.BookingContainerLineId)"
+                                                                       @onchange="e => ToggleGuar(x.BookingContainerLineId, e)" />
+                                                            </td>
+                                                            <td>@x.ContainerTypeName</td>
+                                                            <td>@x.Quantity</td>
+                                                            <td>@Money(x.GuaranteePerContainer)</td>
+                                                            <td style="text-align:left"><span class="inv-line-tot">@Money(x.LineTotal)</span></td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div style="display:flex; align-items:center; gap:12px; margin-top:10px">
+                                            <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#5b6b84; cursor:pointer">
+                                                <input type="checkbox"
+                                                       checked="@(_guarSel.Count == _guarList.Count && _guarList.Count > 0)"
+                                                       @onchange="ToggleAllGuar" />
+                                                تحديد الكل
+                                            </label>
+                                            <button type="button" class="bk-add-line-btn"
+                                                    @onclick="AddSelectedGuar"
+                                                    disabled="@(_guarSel.Count == 0)">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                                                    <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                                </svg>
+                                                أضف المحدد (@_guarSel.Count) إلى الفاتورة
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
                             @if (_lines.Count == 0)
                             {
                                 <div class="bk-containers-empty">
@@ -541,6 +630,15 @@
                                                                disabled="@Locked"
                                                                placeholder="وصف البند..."
                                                                @onchange="@(e => l.Description = e.Value?.ToString() ?? string.Empty)" />
+                                                        @if (l.BookingContainerLineId is not null)
+                                                        {
+                                                            <span class="inv-guar-tag">
+                                                                <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                                                </svg>
+                                                                من ضمان حاوية
+                                                            </span>
+                                                        }
                                                     </td>
                                                     <td>
                                                         <input type="number" min="0" step="0.01" class="inv-tbl-input"
@@ -913,6 +1011,13 @@
     .tab-section-icon.blue { background: var(--fc-blue-lt); color: var(--fc-blue); border: 1px solid #bdd4fc; }
     .tab-section-icon.green { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
     .tab-section-title { font-size: 15px; font-weight: 800; color: #1c2b43; line-height: 1.2; }
+    .inv-guar-box { border: 1px solid #e3e9f2; border-radius: 12px; padding: 14px 16px; margin: 14px 0; background: #fbfdff; }
+    .inv-guar-head { display: flex; align-items: flex-start; gap: 10px; }
+    .inv-guar-icon { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; background: #fef3c7; color: #b45309; flex-shrink: 0; }
+    .inv-guar-title { font-size: 13.5px; font-weight: 800; color: #1c2b43; }
+    .inv-guar-sub { font-size: 11.5px; color: #6b7a94; margin-top: 2px; }
+    .inv-guar-note { font-size: 12px; color: #6b7a94; margin-top: 10px; }
+    .inv-guar-tag { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 10px; font-weight: 600; color: #b45309; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 5px; padding: 1px 6px; }
     .tab-section-sub { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
     .tab-section-sub-head {
         display: flex; align-items: center; gap: 7px;
@@ -1272,10 +1377,12 @@
                 Description = l.Description,
                 Quantity    = l.Quantity,
                 UnitPrice   = l.UnitPrice,
-                TaxRateId   = MatchTax(l.TaxRate)
+                TaxRateId   = MatchTax(l.TaxRate),
+                BookingContainerLineId = l.BookingContainerLineId
             }).ToList();
 
             if (_lines.Count == 0) AddLine();
+            await LoadGuarBookings();
         }
         catch (Exception ex) { _ok = false; _msg = "فشل التحميل: " + ex.Message; }
         finally { _loading = false; }
@@ -1377,6 +1484,7 @@
         _supplierSearch = s.Label;
         _showSupplierDropdown = false;
         _focusedSupplierIndex = -1;
+        _ = LoadGuarBookings();
         StateHasChanged();
     }
 
@@ -1431,6 +1539,97 @@
 
     private static string Money(decimal v) => v.ToString("N2");
 
+    /* ── تحميل ضمان الحاويات — #35 ── */
+    private List<GuarBooking> _guarBookings = new();
+    private long?    _pickGuarBooking;
+    private List<GuarLine> _guarList = new();
+    private HashSet<long>  _guarSel  = new();
+    private bool     _guarLoading;
+
+    public class GuarBooking
+    {
+        public long    BookingId       { get; set; }
+        public string  BookingNumber   { get; set; } = "";
+        public string  CustomerName    { get; set; } = "";
+        public int     LineCount       { get; set; }
+        public decimal TotalGuarantee  { get; set; }
+    }
+
+    public class GuarLine
+    {
+        public long    BookingContainerLineId { get; set; }
+        public string  ContainerTypeName      { get; set; } = "";
+        public int     Quantity               { get; set; }
+        public decimal GuaranteePerContainer  { get; set; }
+        public decimal LineTotal              { get; set; }
+    }
+
+    private async Task LoadGuarBookings()
+    {
+        _guarBookings = new();
+        _pickGuarBooking = null;
+        _guarList = new();
+        _guarSel.Clear();
+        if (_f.SupplierId <= 0) return;
+        try { _guarBookings = await Http.GetFromJsonAsync<List<GuarBooking>>($"api/supplier-invoices/guarantee-bookings?supplierId={_f.SupplierId}") ?? new(); }
+        catch { _guarBookings = new(); }
+    }
+
+    private async Task OnPickGuarBooking(ChangeEventArgs e)
+    {
+        _pickGuarBooking = long.TryParse(e.Value?.ToString(), out var v) && v > 0 ? v : null;
+        _guarSel.Clear();
+        _guarList = new();
+        if (_pickGuarBooking is null || _f.SupplierId <= 0) return;
+        _guarLoading = true;
+        try
+        {
+            _guarList = await Http.GetFromJsonAsync<List<GuarLine>>($"api/supplier-invoices/guarantee-lines?bookingId={_pickGuarBooking}&supplierId={_f.SupplierId}") ?? new();
+            /* السطور اللي بقت بنود بالفعل (حتى قبل الحفظ) ما تظهرش تاني */
+            var already = _lines.Where(l => l.BookingContainerLineId is not null)
+                                .Select(l => l.BookingContainerLineId!.Value).ToHashSet();
+            _guarList.RemoveAll(x => already.Contains(x.BookingContainerLineId));
+        }
+        catch { _guarList = new(); }
+        finally { _guarLoading = false; }
+    }
+
+    private void ToggleGuar(long id, ChangeEventArgs e)
+    {
+        if (e.Value is true) _guarSel.Add(id); else _guarSel.Remove(id);
+    }
+
+    private void ToggleAllGuar(ChangeEventArgs e)
+    {
+        _guarSel.Clear();
+        if (e.Value is true)
+            foreach (var x in _guarList) _guarSel.Add(x.BookingContainerLineId);
+    }
+
+    private void AddSelectedGuar()
+    {
+        if (_guarSel.Count == 0) return;
+        var bk = _guarBookings.FirstOrDefault(b => b.BookingId == _pickGuarBooking);
+        var existing = _lines.Where(l => l.BookingContainerLineId is not null)
+                             .Select(l => l.BookingContainerLineId!.Value).ToHashSet();
+        var picked = _guarList.Where(x => _guarSel.Contains(x.BookingContainerLineId)
+                                          && !existing.Contains(x.BookingContainerLineId)).ToList();
+        foreach (var x in picked)
+        {
+            _lines.Add(new Line
+            {
+                Description = "ضمان حاوية — " + x.ContainerTypeName
+                              + (bk is null ? "" : " · حجز " + bk.BookingNumber),
+                Quantity    = x.Quantity,
+                UnitPrice   = x.GuaranteePerContainer,
+                BookingContainerLineId = x.BookingContainerLineId
+            });
+            _guarList.Remove(x);
+        }
+        _guarSel.Clear();
+        Snackbar.Add($"أُضيف {picked.Count} بند ضمان — راجعه ثم احفظ الفاتورة", Severity.Success);
+    }
+
     private async Task SaveAsync()
     {
         _triedSave = true;
@@ -1458,7 +1657,8 @@
                 description   = l.Description.Trim(),
                 quantity      = l.Quantity,
                 unitPrice     = l.UnitPrice,
-                taxRate       = TaxValue(l.TaxRateId)
+                taxRate       = TaxValue(l.TaxRateId),
+                bookingContainerLineId = l.BookingContainerLineId
             }).ToList()
         };
 
@@ -1510,6 +1710,8 @@
         public decimal Quantity    { get; set; }
         public decimal UnitPrice   { get; set; }
         public int?    TaxRateId   { get; set; }
+        /* 🔴 #35 — بند من ضمان حاوية */
+        public long?   BookingContainerLineId { get; set; }
     }
 
     public class Detail
@@ -1546,6 +1748,7 @@
         public decimal LineSubtotal          { get; set; }
         public decimal LineTax               { get; set; }
         public decimal LineTotal             { get; set; }
+        public long?   BookingContainerLineId { get; set; }
     }
 
     public class Opt

@@ -294,14 +294,15 @@
                                                placeholder="ابحث بالاسم..."
                                                @oninput="OnCustomerSearch"
                                                @onfocus="() => { _showCustomerDropdown = true; FilterCustomers(_customerSearch, false); }"
+                                               @onfocusout="() => _showCustomerDropdown = false"
                                                aria-required="true" />
                                     </div>
                                     @if (_showCustomerDropdown && _filteredCustomers.Count > 0)
                                     {
-                                        <div class="field-dropdown">
+                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
                                             @foreach (var c in _filteredCustomers)
                                             {
-                                                <div class="field-dropdown-item" @onclick="() => PickCustomer(c)">
+                                                <div class="field-dropdown-item" @onmousedown="() => PickCustomer(c)">
                                                     @c.Label
                                                 </div>
                                             }
@@ -330,14 +331,15 @@
                                                disabled="@_locked"
                                                placeholder="ابحث بالاسم... (فاضي = نفس العميل)"
                                                @oninput="OnEndCustomerSearch"
-                                               @onfocus="() => { _showEndCustomerDropdown = true; FilterCustomers(_endCustomerSearch, true); }" />
+                                               @onfocus="() => { _showEndCustomerDropdown = true; FilterCustomers(_endCustomerSearch, true); }"
+                                               @onfocusout="() => _showEndCustomerDropdown = false" />
                                     </div>
                                     @if (_showEndCustomerDropdown && _filteredEndCustomers.Count > 0)
                                     {
-                                        <div class="field-dropdown">
+                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
                                             @foreach (var c in _filteredEndCustomers)
                                             {
-                                                <div class="field-dropdown-item" @onclick="() => PickEndCustomer(c)">
+                                                <div class="field-dropdown-item" @onmousedown="() => PickEndCustomer(c)">
                                                     @c.Label
                                                 </div>
                                             }
@@ -532,6 +534,33 @@
                                 </div>
 
                                 @* نوع الرحلة *@
+                                @* ── الخدمة ── *@
+                                <div class="form-field">
+                                    <label class="field-label" for="service">الخدمة</label>
+                                    <div class="field-select-wrap">
+                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                             width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2"
+                                             aria-hidden="true">
+                                            <rect x="2" y="7" width="20" height="14" rx="2"/>
+                                            <path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke-linecap="round"/>
+                                        </svg>
+                                        <select id="service"
+                                                class="field-input field-select"
+                                                @bind="_f.ServiceId"
+                                                disabled="@_locked">
+                                            <option value="">— اختار الخدمة —</option>
+                                            @foreach (var s in _services)
+                                            {
+                                                <option value="@s.Id">@s.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="field-hint">
+                                        الخدمة المختارة تنتقل تلقائيًا إلى العملية وتُستخدم في اقتراح الأسعار
+                                    </div>
+                                </div>
+
                                 <div class="form-field">
                                     <label class="field-label" for="triptype">نوع الرحلة</label>
                                     <div class="field-select-wrap">
@@ -874,9 +903,10 @@
                                                                 value="@ln.TypeId"
                                                                 disabled="@_locked"
                                                                 @onchange="e => OnTypeChange(ln, e)">
+                                                            <option value="0" selected="@(ln.TypeId == 0)">— اختر نوع الحاوية —</option>
                                                             @foreach (var t in _containerTypes)
                                                             {
-                                                                <option value="@t.Id">@t.Label</option>
+                                                                <option value="@t.Id" selected="@(t.Id == ln.TypeId)">@t.Label</option>
                                                             }
                                                         </select>
                                                     </div>
@@ -947,6 +977,13 @@
                                                     <div class="field-hint">
                                                         يتعبأ تلقائيًا من نوع الحاوية — يمكن تعديله لهذا الحجز
                                                     </div>
+                                                    @if (ln.Guarantee.HasValue)
+                                                    {
+                                                        <div class="bk-guar-linetotal">
+                                                            إجمالي السطر: <strong>@($"{ln.Guarantee.Value * ln.Qty:N0}")</strong> ج.م
+                                                            <span>(@($"{ln.Guarantee.Value:N0}") × @ln.Qty حاوية)</span>
+                                                        </div>
+                                                    }
                                                 </div>
 
                                                 <div class="form-field bk-cc-notes">
@@ -968,7 +1005,11 @@
                                                                      fill="none" stroke="currentColor" stroke-width="2.5">
                                                                     <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
                                                                 </svg>
-                                                                <span>إضافة حاوية @(remaining > 0 ? $"(متبقي {remaining})" : "(مكتمل)")</span>
+                                                                <span>تفاصيل حاوية</span>
+                                                                @if (remaining > 0)
+                                                                {
+                                                                    <span class="bk-add-detail-count" title="المتبقي">@remaining</span>
+                                                                }
                                                             </button>
                                                         }
                                                     </div>
@@ -1039,6 +1080,21 @@
                                         </div>
                                     }
 
+                                </div>
+                            }
+
+                            @* ── إجمالي الضمان للحجز ── *@
+                            @if (GuarTotal > 0)
+                            {
+                                <div class="bk-guar-total-bar">
+                                    <svg viewBox="0 0 24 24" width="16" height="16"
+                                         fill="none" stroke="currentColor" stroke-width="2"
+                                         aria-hidden="true">
+                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                    </svg>
+                                    <span>إجمالي الضمان للحجز (ضمان الحاوية × العدد لكل سطر)</span>
+                                    <strong>@($"{GuarTotal:N0}")</strong>
+                                    <span class="bk-guar-cur">ج.م</span>
                                 </div>
                             }
 
@@ -1896,13 +1952,15 @@
     .bk-cc-del:hover { background: var(--fc-red-lt); border-color: #ffc8cf; }
 
     .bk-cc-body {
+        /* السطر كله في شريط واحد متناسق:
+           النوع · العدد · الوزن · الضمان · الملاحظات + زر «إضافة حاوية» */
         display: grid;
-        grid-template-columns: 1.5fr 1fr 1fr 2fr;
+        grid-template-columns: 1.35fr .85fr .85fr 1.05fr 2.1fr;
         gap: 14px; padding: 14px 16px;
         align-items: start;
     }
 
-    .bk-cc-notes { grid-column: 4; }
+    .bk-cc-notes { grid-column: auto; }
 
     /* زر «إضافة حاوية» بجانب حقل الملاحظات + عرض الباقي */
     .bk-notes-action-row {
@@ -1939,6 +1997,47 @@
         color: #fff;
         box-shadow: 0 4px 12px rgba(30,110,245,.28);
     }
+    .bk-add-detail-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: 9px;
+        background: var(--fc-blue);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 800;
+    }
+    .bk-add-detail-inline-btn:hover .bk-add-detail-count {
+        background: #fff;
+        color: var(--fc-blue);
+    }
+
+    /* إجمالي الضمان — سطر + حجز */
+    .bk-guar-linetotal {
+        margin-top: 6px;
+        font-size: 11.5px;
+        font-weight: 700;
+        color: #b45309;
+    }
+    .bk-guar-linetotal span { color: #8a94a3; font-weight: 600; }
+    .bk-guar-total-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 4px 0 14px;
+        padding: 12px 16px;
+        border: 1.5px solid rgba(217, 119, 6, .35);
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(217, 119, 6, .07), rgba(217, 119, 6, .02));
+        color: #b45309;
+        font-size: 12.5px;
+        font-weight: 700;
+    }
+    .bk-guar-total-bar strong { font-size: 15px; margin-inline-start: auto; }
+    .bk-guar-cur { color: #8a94a3; font-size: 11px; }
 
     /* صفوف الحاويات الفعلية */
     .bk-cc-details {
@@ -2320,6 +2419,8 @@
         public int?    GuaranteeSupplierId { get; set; }
         public string? Notes              { get; set; }
         public string  Status             { get; set; } = "Draft";
+        public string? BookingReference   { get; set; }
+        public string? BLNumber           { get; set; }
     }
 
     public class DetailResponse
@@ -2390,10 +2491,17 @@
             EndCustomerId     = d.Booking.EndCustomerId,
             TripTypeId        = d.Booking.TripTypeId,
             CustomerReference = d.Booking.CustomerReference,
+            BookingReference  = d.Booking.BookingReference,
+            BLNumber          = d.Booking.BLNumber,
             ShippingAgentId     = d.Booking.ShippingAgentId,
             GuaranteeSupplierId = d.Booking.GuaranteeSupplierId,
             Notes             = d.Booking.Notes
         };
+
+        /* إصلاح #6: حقلا «العميل / العميل النهائي» صناديق بحث بتعرض نص مش رقم —
+           عند التحميل بنعبّي الصندوقين بالاسم من قايمة العملاء عشان ما يظهروش فاضيين. */
+        _customerSearch    = _customers.FirstOrDefault(x => x.Id == _f.CustomerId)?.Label ?? "";
+        _endCustomerSearch = _customers.FirstOrDefault(x => x.Id == (_f.EndCustomerId ?? 0))?.Label ?? "";
 
         _lines = d.Lines.Select(l => new LineRow
         {
@@ -2419,13 +2527,20 @@
         await LoadContactsAsync(_f.CustomerId);
     }
 
+    /* إجمالي الضمان = Σ (ضمان الحاوية الواحدة × العدد) — نفس معادلة السيرفر في guarantee-estimate */
+    private decimal GuarTotal => _lines
+        .Where(l => l.Guarantee.HasValue)
+        .Sum(l => l.Guarantee!.Value * l.Qty);
+
     private void AddLine()
     {
+        /* 🔴 السطر الجديد يبدأ فاضي — المستخدم هو اللي يختار النوع،
+              والضمان يتعبى أوتوماتيك من النوع وقت الاختيار (OnTypeChange). */
         _lines.Add(new LineRow
         {
-            TypeId    = _containerTypes.FirstOrDefault()?.Id ?? 0,
+            TypeId    = 0,
             Qty       = 1,
-            Guarantee = _containerTypes.FirstOrDefault()?.GuaranteeAmount
+            Guarantee = null
         });
     }
 
@@ -2455,7 +2570,8 @@
     {
         ln.TypeId = ParseInt(e.Value, 0);
         var t = _containerTypes.FirstOrDefault(x => x.Id == ln.TypeId);
-        if (t?.GuaranteeAmount is not null) ln.Guarantee = t.GuaranteeAmount;
+        if (t is null) ln.Guarantee = null;                       // رجع «اختر» — الضمان يتفضى
+        else if (t.GuaranteeAmount is not null) ln.Guarantee = t.GuaranteeAmount;
     }
 
     private async Task OnCustomerChanged(ChangeEventArgs e)
@@ -2585,6 +2701,8 @@
             endCustomerId     = _f.EndCustomerId,
             tripTypeId        = _f.TripTypeId,
             customerReference = _f.CustomerReference,
+            bookingReference  = _f.BookingReference,
+            blNumber          = _f.BLNumber,
             contactId         = _f.ContactId,
             shippingAgentId     = _f.ShippingAgentId,
             guaranteeSupplierId = _f.GuaranteeSupplierId,

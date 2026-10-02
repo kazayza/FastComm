@@ -14,13 +14,23 @@
 @* ═══════════════════════════════════════════
    HERO
 ═══════════════════════════════════════════ *@
-<div class="fc-hero">
-    <div class="fc-hero-inner">
-        <div class="fc-page-head">
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
+            <div class="fc-page-head">
 
             <div>
-                <div class="fc-crumb">التشغيل · الرحلات</div>
-                <h1 class="fc-hero-title">
+                <div class="tf-hero-crumb">
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                         stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <rect x="1" y="3" width="15" height="13" rx="2"/>
+                        <path d="M16 8h4l3 3v5h-7V8z"/>
+                        <circle cx="5.5" cy="18.5" r="2.5"/>
+                        <circle cx="18.5" cy="18.5" r="2.5"/>
+                    </svg>
+                    <span>التشغيل · الرحلات</span>
+                </div>
+                <h1 class="fc-hero-title fc-hero-title-slim">
                     @if (_id is null)
                     {
                         <span>رحلة جديدة</span>
@@ -32,7 +42,7 @@
                         <span class="tf-hero-badge @StatusBadgeClass(_status)">@StatusAr(_status)</span>
                     }
                 </h1>
-                <p class="fc-hero-sub">اختار السائق والسيارة، واربط العمليات اللي هتتنفذ في الخروج ده</p>
+                <p class="fc-hero-sub">اختر السائق والسيارة، واربط العمليات التي تُنفَّذ في هذه الرحلة</p>
             </div>
 
             <div class="fc-head-actions">
@@ -145,6 +155,7 @@
             </div>
         }
 
+        </div>
     </div>
 </div>
 
@@ -195,7 +206,7 @@
                     </svg>
                 </div>
                 <div class="locked-text">
-                    <strong>الرحلة مقفولة للتعديل</strong>
+                    <strong>الرحلة غير قابلة للتعديل</strong>
                     <span>الحالة «@StatusAr(_status)» — الرحلة في هذه الحالة لا تقبل التعديل</span>
                 </div>
             </div>
@@ -256,7 +267,7 @@
                                 </svg>
                             </div>
                             <span>بيانات الرحلة</span>
-                            @if (HasTabError(1))
+                            @if (HasTabError(1) || HasTabError(2))
                             {
                                 <span class="ttab-err-dot" aria-label="يوجد خطأ"></span>
                             }
@@ -264,6 +275,195 @@
                     </TabContent>
 
                     <ChildContent>
+                        <div class="tab-section">
+
+                            <div class="tab-section-head">
+                                <div class="tab-section-icon orange" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18"
+                                         fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                    </svg>
+                                </div>
+                                <div style="flex:1">
+                                    <div class="tab-section-title">العمليات على الرحلة</div>
+                                    <div class="tab-section-sub">
+                                        @_ops.Count عملية · إيراد إجمالي
+                                        <strong>@TotalRevenue.ToString("N2") ج.م</strong>
+                                    </div>
+                                </div>
+                                @if (!_locked)
+                                {
+                                    <button class="tf-add-op-btn" @onclick="AddOp">
+                                        <svg viewBox="0 0 24 24" width="15" height="15"
+                                             fill="none" stroke="currentColor" stroke-width="2.5"
+                                             aria-hidden="true">
+                                            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                        </svg>
+                                        أضف عملية
+                                    </button>
+                                }
+                            </div>
+
+                            @if (_ops.Count == 0)
+                            {
+                                <div class="tf-ops-empty">
+                                    <div class="ops-empty-icon" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="40" height="40"
+                                             fill="none" stroke="currentColor" stroke-width="1.4">
+                                            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                        </svg>
+                                    </div>
+                                    <div class="ops-empty-title">لا توجد عمليات</div>
+                                    <div class="ops-empty-sub">
+                                        يجب إضافة عملية واحدة على الأقل للرحلة قبل التحرك
+                                    </div>
+                                    @if (!_locked)
+                                    {
+                                        <button class="tf-add-op-btn mt-10" @onclick="AddOp">
+                                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                                 fill="none" stroke="currentColor" stroke-width="2.5"
+                                                 aria-hidden="true">
+                                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                            </svg>
+                                            أضف عملية
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="tf-op-cards">
+
+                                    @foreach (var op in _ops)
+                                    {
+                                        var idx    = _ops.IndexOf(op);
+                                        var avail  = _available.FirstOrDefault(a => a.OperationId == op.OperationId);
+                                        var hasOp  = op.OperationId > 0;
+
+                                        <div class="tf-op-card">
+
+                                            @* Card Header *@
+                                            <div class="tf-op-head">
+                                                <div class="tf-op-num">@(idx + 1)</div>
+                                                @if (hasOp && avail is not null)
+                                                {
+                                                    <div class="tf-op-badge">
+                                                        <svg viewBox="0 0 24 24" width="12" height="12"
+                                                             fill="none" stroke="currentColor" stroke-width="2"
+                                                             aria-hidden="true">
+                                                            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                                        </svg>
+                                                        @avail.OperationNumber
+                                                    </div>
+                                                    <div class="tf-op-customer">@avail.CustomerName</div>
+                                                    @if (!string.IsNullOrWhiteSpace(avail.Route))
+                                                    {
+                                                        <div class="tf-op-route">
+                                                            <svg viewBox="0 0 24 24" width="10" height="10"
+                                                                 fill="none" stroke="currentColor" stroke-width="2"
+                                                                 aria-hidden="true">
+                                                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                                                                <circle cx="12" cy="10" r="3"/>
+                                                            </svg>
+                                                            @avail.Route
+                                                        </div>
+                                                    }
+                                                    <div class="tf-op-revenue">
+                                                        إيراد: <strong>@avail.RevenueNet.ToString("N2") ج.م</strong>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="tf-op-badge unselected">اختار عملية</div>
+                                                }
+                                                @if (!_locked)
+                                                {
+                                                    <button class="tf-op-del"
+                                                            @onclick="() => _ops.Remove(op)"
+                                                            title="حذف السطر"
+                                                            aria-label="حذف العملية @(idx + 1)">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                        </svg>
+                                                    </button>
+                                                }
+                                            </div>
+
+                                            @* Card Body *@
+                                            <div class="tf-op-body">
+
+                                                <div class="form-field">
+                                                    <label class="field-label">العملية</label>
+                                                    <div class="field-select-wrap">
+                                                        <svg class="field-select-icon" viewBox="0 0 24 24"
+                                                             width="13" height="13" fill="none"
+                                                             stroke="currentColor" stroke-width="2"
+                                                             aria-hidden="true">
+                                                            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                                        </svg>
+                                                        <select class="field-input field-select"
+                                                                value="@op.OperationId"
+                                                                @onchange="e => OnOpSelected(op, e)"
+                                                                disabled="@_locked">
+                                                            <option value="0">— اختر عملية —</option>
+                                                            @foreach (var a in _available)
+                                                            {
+                                                                <option value="@a.OperationId">
+                                                                    @a.OperationNumber — @a.CustomerName — @a.Route
+                                                                </option>
+                                                            }
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                <div class="form-field">
+                                                    <label class="field-label">استلام من الميناء</label>
+                                                    <div class="field-input-group">
+                                                        <span class="field-prefix" aria-hidden="true">
+                                                            <svg viewBox="0 0 24 24" width="13" height="13"
+                                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                                <circle cx="12" cy="12" r="10"/>
+                                                                <path d="M12 6v6l4 2" stroke-linecap="round"/>
+                                                            </svg>
+                                                        </span>
+                                                        <input type="datetime-local"
+                                                               class="field-input with-prefix"
+                                                               value="@op.PickupAt"
+                                                               disabled="@_locked"
+                                                               @onchange="e => op.PickupAt = e.Value?.ToString()" />
+                                                    </div>
+                                                </div>
+
+                                                <div class="form-field">
+                                                    <label class="field-label">تسليم للعميل</label>
+                                                    <div class="field-input-group">
+                                                        <span class="field-prefix" aria-hidden="true">
+                                                            <svg viewBox="0 0 24 24" width="13" height="13"
+                                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                                <path d="M22 11.08V12a10 10 0 11-5.93-9.14"
+                                                                      stroke-linecap="round"/>
+                                                                <path d="M22 4L12 14.01l-3-3"
+                                                                      stroke-linecap="round" stroke-linejoin="round"/>
+                                                            </svg>
+                                                        </span>
+                                                        <input type="datetime-local"
+                                                               class="field-input with-prefix"
+                                                               value="@op.DeliveryAt"
+                                                               disabled="@_locked"
+                                                               @onchange="e => op.DeliveryAt = e.Value?.ToString()" />
+                                                    </div>
+                                                </div>
+
+                                            </div>
+
+                                        </div>
+                                    }
+
+                                </div>
+                            }
+
+                        </div>
                         <div class="tab-section">
 
                             <div class="tab-section-head">
@@ -284,91 +484,121 @@
 
                             <div class="tf-form-grid">
 
-                                @* السائق *@
-                                <div class="form-field">
+                                @* السائق — بحث *@
+                                <div class="form-field form-field-with-dropdown">
                                     <label class="field-label">
                                         السائق
                                         <span class="field-required">*</span>
                                     </label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                             width="14" height="14" fill="none"
-                                             stroke="currentColor" stroke-width="2"
-                                             aria-hidden="true">
-                                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-                                            <circle cx="12" cy="7" r="4"/>
-                                        </svg>
-                                        <select class="field-input field-select @(_f.DriverId == 0 && _triedSave ? "field-error" : "")"
-                                                @bind="_f.DriverId"
-                                                disabled="@_locked"
-                                                aria-required="true">
-                                            <option value="0">— اختار السائق —</option>
-                                            @foreach (var d in _drivers)
-                                            {
-                                                <option value="@d.Id">@d.Label</option>
-                                            }
-                                        </select>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                                <circle cx="12" cy="7" r="4"/>
+                                            </svg>
+                                        </span>
+                                        <input class="field-input with-prefix @(_f.DriverId == 0 && _triedSave ? "field-error" : "")"
+                                               value="@DriverText"
+                                               disabled="@_locked"
+                                               placeholder="ابحث عن السائق..."
+                                               @oninput="OnDriverSearch"
+                                               @onfocus="() => { _showDriverDropdown = true; _filteredDrivers = FilterOpts(_drivers, _driverSearch); }"
+                                               @onfocusout="() => _showDriverDropdown = false"
+                                               aria-required="true" />
                                     </div>
+                                    @if (_showDriverDropdown && _filteredDrivers.Count > 0)
+                                    {
+                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                            @foreach (var d in _filteredDrivers)
+                                            {
+                                                <div class="field-dropdown-item" @onmousedown="() => PickDriver(d)">
+                                                    @d.Label
+                                                </div>
+                                            }
+                                        </div>
+                                    }
                                     @if (_f.DriverId == 0 && _triedSave)
                                     {
                                         <div class="field-err-msg" role="alert">اختيار السائق مطلوب</div>
                                     }
                                 </div>
 
-                                @* السيارة *@
-                                <div class="form-field">
+                                @* السيارة — بحث *@
+                                <div class="form-field form-field-with-dropdown">
                                     <label class="field-label">
                                         السيارة
                                         <span class="field-required">*</span>
                                     </label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                             width="14" height="14" fill="none"
-                                             stroke="currentColor" stroke-width="2"
-                                             aria-hidden="true">
-                                            <rect x="1" y="3" width="15" height="13" rx="2"/>
-                                            <path d="M16 8h4l3 3v5h-7V8z"/>
-                                            <circle cx="5.5" cy="18.5" r="2.5"/>
-                                            <circle cx="18.5" cy="18.5" r="2.5"/>
-                                        </svg>
-                                        <select class="field-input field-select @(_f.VehicleId == 0 && _triedSave ? "field-error" : "")"
-                                                @bind="_f.VehicleId"
-                                                disabled="@_locked"
-                                                aria-required="true">
-                                            <option value="0">— اختار السيارة —</option>
-                                            @foreach (var v in _vehicles)
-                                            {
-                                                <option value="@v.Id">@v.Label</option>
-                                            }
-                                        </select>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                                <path d="M16 8h4l3 3v5h-7V8z"/>
+                                                <circle cx="5.5" cy="18.5" r="2.5"/>
+                                                <circle cx="18.5" cy="18.5" r="2.5"/>
+                                            </svg>
+                                        </span>
+                                        <input class="field-input with-prefix @(_f.VehicleId == 0 && _triedSave ? "field-error" : "")"
+                                               value="@VehicleText"
+                                               disabled="@_locked"
+                                               placeholder="ابحث عن السيارة..."
+                                               @oninput="OnVehicleSearch"
+                                               @onfocus="() => { _showVehicleDropdown = true; _filteredVehicles = FilterOpts(_vehicles, _vehicleSearch); }"
+                                               @onfocusout="() => _showVehicleDropdown = false"
+                                               aria-required="true" />
                                     </div>
+                                    @if (_showVehicleDropdown && _filteredVehicles.Count > 0)
+                                    {
+                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                            @foreach (var v in _filteredVehicles)
+                                            {
+                                                <div class="field-dropdown-item" @onmousedown="() => PickVehicle(v)">
+                                                    @v.Label
+                                                </div>
+                                            }
+                                        </div>
+                                    }
                                     @if (_f.VehicleId == 0 && _triedSave)
                                     {
                                         <div class="field-err-msg" role="alert">اختيار السيارة مطلوب</div>
                                     }
                                 </div>
 
-                                @* المقطورة *@
-                                <div class="form-field">
+                                @* المقطورة — بحث *@
+                                <div class="form-field form-field-with-dropdown">
                                     <label class="field-label">المقطورة</label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                             width="14" height="14" fill="none"
-                                             stroke="currentColor" stroke-width="2"
-                                             aria-hidden="true">
-                                            <rect x="2" y="7" width="20" height="10" rx="2"/>
-                                            <path d="M6 7V5M18 7V5" stroke-linecap="round"/>
-                                        </svg>
-                                        <select class="field-input field-select"
-                                                @bind="_f.TrailerId"
-                                                disabled="@_locked">
-                                            <option value="">— من غير مقطورة —</option>
-                                            @foreach (var t in _trailers)
-                                            {
-                                                <option value="@t.Id">@t.Label</option>
-                                            }
-                                        </select>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="2" y="7" width="20" height="10" rx="2"/>
+                                                <path d="M6 7V5M18 7V5" stroke-linecap="round"/>
+                                            </svg>
+                                        </span>
+                                        <input class="field-input with-prefix"
+                                               value="@TrailerText"
+                                               disabled="@_locked"
+                                               placeholder="ابحث عن مقطورة... (اختياري)"
+                                               @oninput="OnTrailerSearch"
+                                               @onfocus="() => { _showTrailerDropdown = true; _filteredTrailers = FilterOpts(_trailers, _trailerSearch); }"
+                                               @onfocusout="() => _showTrailerDropdown = false" />
                                     </div>
+                                    @if (_showTrailerDropdown)
+                                    {
+                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                            <div class="field-dropdown-item" @onmousedown="PickNoTrailer">
+                                                — بدون مقطورة —
+                                            </div>
+                                            @foreach (var t in _filteredTrailers)
+                                            {
+                                                <div class="field-dropdown-item" @onmousedown="() => PickTrailer(t)">
+                                                    @t.Label
+                                                </div>
+                                            }
+                                        </div>
+                                    }
                                     <div class="field-hint">
                                         <svg viewBox="0 0 16 16" width="10" height="10"
                                              fill="none" stroke="currentColor" stroke-width="1.8"
@@ -500,215 +730,6 @@
 
 
                 @* ══════════════════════════════════════
-                   TAB 2 — العمليات
-                ══════════════════════════════════════ *@
-                <MudTabPanel>
-                    <TabContent>
-                        <div class="ttab-label">
-                            <div class="ttab-icon ttab-orange" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" width="15" height="15"
-                                     fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
-                                </svg>
-                            </div>
-                            <span>العمليات</span>
-                            @if (_ops.Count > 0)
-                            {
-                                <span class="ttab-count">@_ops.Count</span>
-                            }
-                            @if (HasTabError(2))
-                            {
-                                <span class="ttab-err-dot" aria-label="يوجد خطأ"></span>
-                            }
-                        </div>
-                    </TabContent>
-
-                    <ChildContent>
-                        <div class="tab-section">
-
-                            <div class="tab-section-head">
-                                <div class="tab-section-icon orange" aria-hidden="true">
-                                    <svg viewBox="0 0 24 24" width="18" height="18"
-                                         fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
-                                    </svg>
-                                </div>
-                                <div style="flex:1">
-                                    <div class="tab-section-title">العمليات على الرحلة</div>
-                                    <div class="tab-section-sub">
-                                        @_ops.Count عملية · إيراد إجمالي
-                                        <strong>@TotalRevenue.ToString("N2") ج.م</strong>
-                                    </div>
-                                </div>
-                                @if (!_locked)
-                                {
-                                    <button class="tf-add-op-btn" @onclick="AddOp">
-                                        <svg viewBox="0 0 24 24" width="15" height="15"
-                                             fill="none" stroke="currentColor" stroke-width="2.5"
-                                             aria-hidden="true">
-                                            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
-                                        </svg>
-                                        أضف عملية
-                                    </button>
-                                }
-                            </div>
-
-                            @if (_ops.Count == 0)
-                            {
-                                <div class="tf-ops-empty">
-                                    <div class="ops-empty-icon" aria-hidden="true">
-                                        <svg viewBox="0 0 24 24" width="40" height="40"
-                                             fill="none" stroke="currentColor" stroke-width="1.4">
-                                            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
-                                        </svg>
-                                    </div>
-                                    <div class="ops-empty-title">لا توجد عمليات</div>
-                                    <div class="ops-empty-sub">
-                                        الرحلة لازم يكون عليها عملية واحدة على الأقل قبل التحرك
-                                    </div>
-                                    @if (!_locked)
-                                    {
-                                        <button class="tf-add-op-btn mt-10" @onclick="AddOp">
-                                            <svg viewBox="0 0 24 24" width="15" height="15"
-                                                 fill="none" stroke="currentColor" stroke-width="2.5"
-                                                 aria-hidden="true">
-                                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
-                                            </svg>
-                                            أضف عملية
-                                        </button>
-                                    }
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="tf-op-cards">
-
-                                    @foreach (var op in _ops)
-                                    {
-                                        var idx    = _ops.IndexOf(op);
-                                        var avail  = _available.FirstOrDefault(a => a.OperationId == op.OperationId);
-                                        var hasOp  = op.OperationId > 0;
-
-                                        <div class="tf-op-card">
-
-                                            @* Card Header *@
-                                            <div class="tf-op-head">
-                                                <div class="tf-op-num">@(idx + 1)</div>
-                                                @if (hasOp && avail is not null)
-                                                {
-                                                    <div class="tf-op-badge">
-                                                        <svg viewBox="0 0 24 24" width="12" height="12"
-                                                             fill="none" stroke="currentColor" stroke-width="2"
-                                                             aria-hidden="true">
-                                                            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
-                                                        </svg>
-                                                        @avail.OperationNumber
-                                                    </div>
-                                                    <div class="tf-op-customer">@avail.CustomerName</div>
-                                                    @if (!string.IsNullOrWhiteSpace(avail.Route))
-                                                    {
-                                                        <div class="tf-op-route">📍 @avail.Route</div>
-                                                    }
-                                                    <div class="tf-op-revenue">
-                                                        إيراد: <strong>@avail.RevenueNet.ToString("N2") ج.م</strong>
-                                                    </div>
-                                                }
-                                                else
-                                                {
-                                                    <div class="tf-op-badge unselected">اختار عملية</div>
-                                                }
-                                                @if (!_locked)
-                                                {
-                                                    <button class="tf-op-del"
-                                                            @onclick="() => _ops.Remove(op)"
-                                                            title="حذف السطر"
-                                                            aria-label="حذف العملية @(idx + 1)">
-                                                        <svg viewBox="0 0 24 24" width="14" height="14"
-                                                             fill="none" stroke="currentColor" stroke-width="2">
-                                                            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
-                                                        </svg>
-                                                    </button>
-                                                }
-                                            </div>
-
-                                            @* Card Body *@
-                                            <div class="tf-op-body">
-
-                                                <div class="form-field">
-                                                    <label class="field-label">العملية</label>
-                                                    <div class="field-select-wrap">
-                                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                                             width="13" height="13" fill="none"
-                                                             stroke="currentColor" stroke-width="2"
-                                                             aria-hidden="true">
-                                                            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
-                                                        </svg>
-                                                        <select class="field-input field-select"
-                                                                @bind="op.OperationId"
-                                                                disabled="@_locked">
-                                                            <option value="0">— اختار عملية —</option>
-                                                            @foreach (var a in _available)
-                                                            {
-                                                                <option value="@a.OperationId">
-                                                                    @a.OperationNumber — @a.CustomerName (@a.Route)
-                                                                </option>
-                                                            }
-                                                        </select>
-                                                    </div>
-                                                </div>
-
-                                                <div class="form-field">
-                                                    <label class="field-label">استلام من الميناء</label>
-                                                    <div class="field-input-group">
-                                                        <span class="field-prefix" aria-hidden="true">
-                                                            <svg viewBox="0 0 24 24" width="13" height="13"
-                                                                 fill="none" stroke="currentColor" stroke-width="2">
-                                                                <circle cx="12" cy="12" r="10"/>
-                                                                <path d="M12 6v6l4 2" stroke-linecap="round"/>
-                                                            </svg>
-                                                        </span>
-                                                        <input type="datetime-local"
-                                                               class="field-input with-prefix"
-                                                               value="@op.PickupAt"
-                                                               disabled="@_locked"
-                                                               @onchange="e => op.PickupAt = e.Value?.ToString()" />
-                                                    </div>
-                                                </div>
-
-                                                <div class="form-field">
-                                                    <label class="field-label">تسليم للعميل</label>
-                                                    <div class="field-input-group">
-                                                        <span class="field-prefix" aria-hidden="true">
-                                                            <svg viewBox="0 0 24 24" width="13" height="13"
-                                                                 fill="none" stroke="currentColor" stroke-width="2">
-                                                                <path d="M22 11.08V12a10 10 0 11-5.93-9.14"
-                                                                      stroke-linecap="round"/>
-                                                                <path d="M22 4L12 14.01l-3-3"
-                                                                      stroke-linecap="round" stroke-linejoin="round"/>
-                                                            </svg>
-                                                        </span>
-                                                        <input type="datetime-local"
-                                                               class="field-input with-prefix"
-                                                               value="@op.DeliveryAt"
-                                                               disabled="@_locked"
-                                                               @onchange="e => op.DeliveryAt = e.Value?.ToString()" />
-                                                    </div>
-                                                </div>
-
-                                            </div>
-
-                                        </div>
-                                    }
-
-                                </div>
-                            }
-
-                        </div>
-                    </ChildContent>
-                </MudTabPanel>
-
-
-                @* ══════════════════════════════════════
                    TAB 3 — توزيع التكلفة والملاحظات
                 ══════════════════════════════════════ *@
                 <MudTabPanel>
@@ -754,7 +775,7 @@
                                     </svg>
                                     <div>
                                         <strong>توزيع التكلفة متاح بعد الحفظ</strong>
-                                        <p>احفظ الرحلة الأول، وبعدين سجّل المصروفات ووزّع التكلفة على العمليات</p>
+                                        <p>احفظ الرحلة أولًا، ثم سجّل المصروفات ووزّع التكلفة على العمليات</p>
                                     </div>
                                 </div>
                             }
@@ -768,8 +789,8 @@
                                         <path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
                                     </svg>
                                     <div>
-                                        مافيش مصروفات مسجلة على الرحلة لسه —
-                                        سجّل المصروفات الأول وبعدين وزّع
+                                        لا توجد مصروفات مسجلة على الرحلة بعد —
+                                        سجّل المصروفات ثم وزّع التكلفة
                                     </div>
                                 </div>
                             }
@@ -1037,6 +1058,70 @@
 ═══════════════════════════════════════════ *@
 <style>
 
+    /* ================================================================
+       HERO — كارت دائري مستقل (نفس نمط الحجوزات والعمليات)
+    ================================================================ */
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px;
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 1;
+    }
+
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important;
+        overflow: hidden;
+        box-shadow:
+            0 12px 32px rgba(13, 38, 84, 0.15),
+            0 4px 12px rgba(13, 38, 84, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .hero-wrapper .fc-hero.fc-hero-slim {
+        padding-top: 18px !important;
+        padding-bottom: 22px !important;
+    }
+
+    .hero-wrapper .fc-hero-sub { font-size: 13px; color: rgba(255, 255, 255, .55); }
+
+    .tf-hero-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+
+    .tf-hero-left { flex: 1; min-width: 200px; }
+
+    .tf-hero-crumb {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10.5px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.55);
+        margin-bottom: 6px;
+    }
+
+    .tf-hero-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    .tf-hero-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, .1);
+        border: 1px solid rgba(255, 255, 255, .2);
+        font-size: 11.5px;
+        color: #fff;
+    }
+
     :root {
         --fc-blue:      #1e6ef5;
         --fc-blue-lt:   #eaf1ff;
@@ -1130,9 +1215,12 @@
     .tf-body {
         background: var(--fc-bg);
         min-height: calc(100vh - 180px);
-        padding: 16px 20px 32px;
-        max-width: 1050px; width: 100%;
+        padding: 18px clamp(16px, 3vw, 40px) 96px;
+        max-width: 1440px; width: 100%;
         margin: 0 auto;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 2;
         display: flex; flex-direction: column; gap: 14px;
     }
 
@@ -1414,9 +1502,40 @@
     .tf-op-badge.unselected { background: #f0f3f8; border-color: #dde5f0; color: #9aaabb; }
 
     .tf-op-customer { font-size: 11px; font-weight: 700; color: #344563; }
-    .tf-op-route    { font-size: 10px; color: #9aaabb; }
+    .tf-op-route    { font-size: 10px; color: #9aaabb; display: inline-flex; align-items: center; gap: 4px; }
     .tf-op-revenue  { font-size: 10.5px; color: #5a6e88; margin-right: auto; }
     .tf-op-revenue strong { color: var(--fc-green); font-weight: 900; }
+
+    /* بحث + قايمة منسدلة — نفس نمط حقل العميل */
+    .form-field-with-dropdown { position: relative; }
+
+    .field-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        left: 0;
+        margin-top: 4px;
+        background: #fafcff;
+        border: 1px solid #d8e2f0;
+        border-radius: 9px;
+        box-shadow: 0 8px 24px rgba(0,0,0,.12);
+        max-height: 240px;
+        overflow-y: auto;
+        z-index: 100;
+    }
+
+    .field-dropdown-item {
+        padding: 10px 12px;
+        font-family: inherit;
+        font-size: 13px;
+        color: var(--fc-text);
+        cursor: pointer;
+        transition: background .1s;
+    }
+
+    .field-dropdown-item:hover {
+        background: #eaf1ff;
+    }
 
     .tf-op-del {
         width: 28px; height: 28px; border-radius: 7px; flex: 0 0 28px;
@@ -1677,6 +1796,7 @@
     private List<Avail> _available = new();
 
     private List<OpRow>    _ops       = new();
+    private long? _operationQ;   /* من رابط العمليات: /trips/new?operation=123 */
     private List<AllocRow> _allocRows = new();
     private decimal        _directCost;
     private decimal        _distributableCost;
@@ -1700,6 +1820,10 @@
         public string  OperationNumber { get; set; } = "";
         public string  CustomerName    { get; set; } = "";
         public string  Route           { get; set; } = "";
+        public int?    PortId          { get; set; }
+        public int?    DestinationId   { get; set; }
+        public int?    TahteeqPortId   { get; set; }
+        public int?    TripTypeId      { get; set; }
         public decimal RevenueNet      { get; set; }
     }
 
@@ -1805,6 +1929,19 @@
         _ops.Sum(o => _available.FirstOrDefault(a => a.OperationId == o.OperationId)?.RevenueNet ?? 0m);
 
     /* ── Init ── */
+    /* التنقل بين /trips/new و /trips/new/{id} بيعيد استعمال نفس المكوّن —
+       OnInitializedAsync ما بتتنفذش تاني، فبنزامن _id هنا ونعيد التحميل.
+       بدونها: أي حفظ بعد إنشاء رحلة كان بيتبعت POST تاني = رحلة مكررة. */
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Id != _id)
+        {
+            _id = Id;
+            if (_id is not null && CanSave && !_loading)
+                await LoadTripAsync(_id.Value);
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
@@ -1829,6 +1966,27 @@
             else
             {
                 _available = await SafeAvail("api/trips/available-operations");
+
+                /* رابط مباشر من شاشة العمليات: /trips/new?operation=123 — يضيف العملية للرحلة */
+                var q = Nav.ToAbsoluteUri(Nav.Uri).Query.TrimStart('?');
+                foreach (var part in q.Split('&', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var kv = part.Split('=', 2);
+                    if (kv.Length == 2 && kv[0] == "operation" && long.TryParse(kv[1], out var opId))
+                        _operationQ = opId;
+                }
+
+                var preOp = _operationQ is not null
+                    ? _available.FirstOrDefault(a => a.OperationId == _operationQ.Value)
+                    : null;
+                if (preOp is not null)
+                {
+                    _ops.Add(new OpRow { OperationId = preOp.OperationId });
+                    _f.PortId        = preOp.PortId;
+                    _f.DestinationId = preOp.DestinationId;
+                    _f.TahteeqPortId = preOp.TahteeqPortId;
+                    _f.TripTypeId    = preOp.TripTypeId;
+                }
             }
         }
         catch (Exception ex) { _msg = "فشل التحميل: " + ex.Message; _ok = false; }
@@ -1919,6 +2077,117 @@
 
     private void AddOp() => _ops.Add(new OpRow());
 
+    /* اختيار عملية — يحدّث حقول الرحلة المرتبطة (المسار) من بياناتها */
+    private void OnOpSelected(OpRow op, ChangeEventArgs e)
+    {
+        op.OperationId = long.TryParse(e.Value?.ToString(), out var n) ? n : 0;
+
+        var a = _available.FirstOrDefault(x => x.OperationId == op.OperationId);
+        if (a is not null)
+        {
+            _f.PortId        = a.PortId;
+            _f.DestinationId = a.DestinationId;
+            _f.TahteeqPortId = a.TahteeqPortId;
+            _f.TripTypeId    = a.TripTypeId;
+        }
+    }
+
+    /* ── بحث السائق / السيارة / المقطورة — نفس نمط حقل العميل ── */
+    private bool _showDriverDropdown, _showVehicleDropdown, _showTrailerDropdown;
+    private bool _driverTouched, _vehicleTouched, _trailerTouched;
+    private string _driverSearch = "", _vehicleSearch = "", _trailerSearch = "";
+    private List<Opt> _filteredDrivers = new(), _filteredVehicles = new(), _filteredTrailers = new();
+
+    private string DriverText =>
+        !_driverTouched && _f.DriverId > 0
+            ? (_drivers.FirstOrDefault(x => x.Id == _f.DriverId)?.Label ?? "")
+            : _driverSearch;
+
+    private string VehicleText =>
+        !_vehicleTouched && _f.VehicleId > 0
+            ? (_vehicles.FirstOrDefault(x => x.Id == _f.VehicleId)?.Label ?? "")
+            : _vehicleSearch;
+
+    private string TrailerText =>
+        !_trailerTouched && _f.TrailerId is > 0
+            ? (_trailers.FirstOrDefault(x => x.Id == _f.TrailerId)?.Label ?? "")
+            : _trailerSearch;
+
+    private void OnDriverSearch(ChangeEventArgs e)
+    {
+        _driverSearch = e.Value?.ToString() ?? "";
+        _driverTouched = true;
+        _showDriverDropdown = true;
+        _filteredDrivers = FilterOpts(_drivers, _driverSearch);
+    }
+
+    private void OnVehicleSearch(ChangeEventArgs e)
+    {
+        _vehicleSearch = e.Value?.ToString() ?? "";
+        _vehicleTouched = true;
+        _showVehicleDropdown = true;
+        _filteredVehicles = FilterOpts(_vehicles, _vehicleSearch);
+    }
+
+    private void OnTrailerSearch(ChangeEventArgs e)
+    {
+        _trailerSearch = e.Value?.ToString() ?? "";
+        _trailerTouched = true;
+        _showTrailerDropdown = true;
+        _filteredTrailers = FilterOpts(_trailers, _trailerSearch);
+    }
+
+    private void PickDriver(Opt d)
+    {
+        _f.DriverId = d.Id;
+        _driverSearch = d.Label;
+        _driverTouched = false;
+        _showDriverDropdown = false;
+    }
+
+    private void PickVehicle(Opt v)
+    {
+        _f.VehicleId = v.Id;
+        _vehicleSearch = v.Label;
+        _vehicleTouched = false;
+        _showVehicleDropdown = false;
+    }
+
+    private void PickTrailer(Opt t)
+    {
+        _f.TrailerId = t.Id;
+        _trailerSearch = t.Label;
+        _trailerTouched = false;
+        _showTrailerDropdown = false;
+    }
+
+    private void PickNoTrailer()
+    {
+        _f.TrailerId = null;
+        _trailerSearch = "";
+        _trailerTouched = false;
+        _showTrailerDropdown = false;
+    }
+
+    private static List<Opt> FilterOpts(List<Opt> src, string search) =>
+        string.IsNullOrWhiteSpace(search)
+            ? src.Take(20).ToList()
+            : src.Where(x => NormalizeArabic(x.Label).Contains(NormalizeArabic(search.Trim())))
+                 .Take(20).ToList();
+
+    private static string NormalizeArabic(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        return s
+            .Replace('أ', 'ا').Replace('إ', 'ا').Replace('آ', 'ا').Replace('ٱ', 'ا')
+            .Replace('ة', 'ه')
+            .Replace('ى', 'ي')
+            .Replace('ؤ', 'و')
+            .Replace('ئ', 'ي')
+            .Replace('ـ', ' ')
+            .ToLowerInvariant();
+    }
+
     private void GoBack() => Nav.NavigateTo("/trips");
 
     private async Task SaveAsync()
@@ -1927,14 +2196,14 @@
         _msg       = null;
 
         if (_f.DriverId <= 0)
-        { _ok = false; _msg = "لازم تختار السائق"; _activeTab = 0; return; }
+        { _ok = false; _msg = "يجب اختيار السائق"; _activeTab = 0; return; }
 
         if (_f.VehicleId <= 0)
-        { _ok = false; _msg = "لازم تختار العربية"; _activeTab = 0; return; }
+        { _ok = false; _msg = "يجب اختيار السيارة"; _activeTab = 0; return; }
 
         var ops = _ops.Where(o => o.OperationId > 0).ToList();
         if (_id is not null && ops.Count == 0)
-        { _ok = false; _msg = "الرحلة لازم يكون عليها عملية واحدة على الأقل"; _activeTab = 1; return; }
+        { _ok = false; _msg = "يجب إضافة عملية واحدة على الأقل للرحلة"; _activeTab = 0; return; }
 
         var payload = new
         {

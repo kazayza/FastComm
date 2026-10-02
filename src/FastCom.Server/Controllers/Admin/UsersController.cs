@@ -216,7 +216,7 @@ public class UsersController : ControllerBase
         _permissions.Invalidate(id);
 
         _logger.LogInformation("تعديل مستخدم {Id} بواسطة {By}", id, CurrentUserId());
-        return Ok(new { message = "✅ اتحفظ التعديل" });
+        return Ok(new { message = "تم حفظ التعديل" });
     }
 
     // ════════════════════════ DISABLE (soft delete) ════════════════════════

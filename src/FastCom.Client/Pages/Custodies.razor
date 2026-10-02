@@ -411,6 +411,22 @@
                                                 </svg>
                                             </button>
 
+                                            @* #28 — توزيع على سائق (عهدة موظف مفتوحة) *@
+                                            @if (c.Status == "Open" && c.OwnerType == "Employee" && c.IsPrimary && CanCreate)
+                                            {
+                                                <button class="cu-act-btn act-tx"
+                                                        @onclick="() => OpenDistribute(c)"
+                                                        title="توزيع على سائق"
+                                                        aria-label="توزيع من @c.CustodyNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                                                        <circle cx="9" cy="7" r="4"/>
+                                                        <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke-linecap="round"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
                                             @if (c.Status is "Open" or "PartiallySettled" && CanSettle)
                                             {
                                                 @* رد / إضافة *@
@@ -1509,6 +1525,131 @@
 @* ═══════════════════════════════════════════
    CSS
 ═══════════════════════════════════════════ *@
+@* ═══════════════ MODAL — توزيع من عهدة موظف على سائق (#28) ═══════════════ *@
+@if (_distParent is not null)
+{
+    <div class="cu-modal-backdrop" @onclick="CloseDistribute"
+         role="dialog" aria-modal="true" aria-label="توزيع على سائق">
+        <div class="cu-modal" @onclick:stopPropagation="true">
+
+            <div class="cu-modal-head">
+                <div class="cu-modal-icon tx-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22"
+                         fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="cu-modal-title">توزيع على سائق من @_distParent.CustodyNumber</div>
+                    <div class="cu-modal-sub">عهدة فرعية — بدون حركة خزينة جديدة (الفلوس خرجت مع العهدة الرئيسية)</div>
+                </div>
+                <button class="cu-modal-close" @onclick="CloseDistribute" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            @if (_distMsg is not null)
+            {
+                <div class="cu-modal-banner @(_distOk ? "banner-success" : "banner-error")" role="alert">
+                    <span>@_distMsg</span>
+                    <button @onclick="() => _distMsg = null">✕</button>
+                </div>
+            }
+
+            <div class="cu-modal-body">
+
+                @* السائق *@
+                <div class="cu-mfield">
+                    <label class="cu-mlabel">
+                        السائق
+                        <span class="cu-mrequired">*</span>
+                    </label>
+                    <div class="cu-mselect-wrap">
+                        <svg class="cu-mselect-icon" viewBox="0 0 24 24"
+                             width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                            <circle cx="12" cy="7" r="4"/>
+                        </svg>
+                        <select class="cu-minput cu-mselect"
+                                value="@_distDriverId"
+                                @onchange="e => _distDriverId = ParseInt(e.Value)">
+                            <option value="0">— اختر السائق —</option>
+                            @foreach (var d in _drivers)
+                            {
+                                <option value="@d.Id">@d.Label</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                @* المبلغ *@
+                <div class="cu-mfield">
+                    <label class="cu-mlabel">
+                        مبلغ التوزيع
+                        <span class="cu-mrequired">*</span>
+                    </label>
+                    <div class="cu-mfield-group">
+                        <span class="cu-mprefix" aria-hidden="true">ج.م</span>
+                        <input type="number" min="0" step="0.01"
+                               class="cu-minput with-prefix"
+                               value="@_distAmount"
+                               placeholder="0.00"
+                               @onchange="e => _distAmount = ParseAmount(e.Value)" />
+                    </div>
+                </div>
+
+                @* نوع التوزيع *@
+                <div class="cu-mfield">
+                    <label class="cu-mlabel">نوع التوزيع</label>
+                    <div class="cu-mselect-wrap">
+                        <svg class="cu-mselect-icon" viewBox="0 0 24 24"
+                             width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
+                            <circle cx="7" cy="7" r="1.5"/>
+                        </svg>
+                        <select class="cu-minput cu-mselect" @bind="_distType">
+                            <option value="Road">مصاريف طريق</option>
+                            <option value="Freight">سلفة من نولون النقله</option>
+                        </select>
+                    </div>
+                </div>
+
+                @* ملاحظات *@
+                <div class="cu-mfield">
+                    <label class="cu-mlabel">ملاحظات</label>
+                    <input class="cu-minput"
+                           value="@_distNotes"
+                           maxlength="500"
+                           placeholder="أي ملاحظات..."
+                           @onchange="e => _distNotes = e.Value?.ToString() ?? string.Empty" />
+                </div>
+
+            </div>
+
+            <div class="cu-modal-foot">
+                <button class="cu-modal-cancel" @onclick="CloseDistribute">إلغاء</button>
+                <button class="cu-modal-save"
+                        @onclick="SaveDistributeAsync"
+                        disabled="@_distSaving">
+                    @if (_distSaving)
+                    {
+                        <span class="btn-spinner sm" aria-hidden="true"></span>
+                    }
+                    توزيع على السائق
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
 <style>
 
     :root {
@@ -3139,6 +3280,7 @@
     private static string TripStatusAr(string s) => s switch
     {
         "Planned"   => "مخططة",
+        "Started"   => "في الطريق",
         "Assigned"  => "متسندة",
         "InTransit" => "في الطريق",
         "Completed" => "مكتملة",
@@ -3303,7 +3445,8 @@
 
     private async Task SaveIssue()
     {
-        if (_nf.IsPrimary && _nf.TripId is null) { _ok = false; _msg = "اختار الرحلة"; return; }
+        /* #28 — السائق: الرحلة إجبارية · الموظف (أمين العهدة): الرحلة اختيارية */
+        if (_nf.OwnerType == "Driver" && _nf.TripId is null) { _ok = false; _msg = "اختار الرحلة"; return; }
         if (_nf.OwnerId <= 0)   { _ok = false; _msg = "اختار صاحب العهدة"; return; }
 
         _saving = true; _msg = null;
@@ -3327,6 +3470,53 @@
         }
         catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
         finally { _saving = false; }
+    }
+
+    /* ── #28 — توزيع من عهدة موظف على سائق ── */
+    private Item?   _distParent;
+    private int     _distDriverId;
+    private decimal _distAmount;
+    private string  _distType = "Road";
+    private string  _distNotes = "";
+    private bool    _distSaving, _distTried, _distOk = true;
+    private string? _distMsg;
+
+    private void OpenDistribute(Item c)
+    {
+        _distParent = c; _distDriverId = 0; _distAmount = 0;
+        _distType = "Road"; _distNotes = ""; _distMsg = null; _distTried = false; _distOk = true;
+    }
+
+    private void CloseDistribute() => _distParent = null;
+
+    private async Task SaveDistributeAsync()
+    {
+        _distTried = true; _distMsg = null;
+        if (_distDriverId <= 0) { _distOk = false; _distMsg = "اختار السائق"; return; }
+        if (_distAmount <= 0)   { _distOk = false; _distMsg = "ادخل مبلغ التوزيع"; return; }
+
+        _distSaving = true;
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/custodies", new
+            {
+                tripId          = (long?)null,
+                ownerType       = "Driver",
+                ownerId         = _distDriverId,
+                amountIssued    = _distAmount,
+                custodyDate     = DateTime.Now.ToString("yyyy-MM-ddTHH:mm"),
+                notes           = string.IsNullOrWhiteSpace(_distNotes) ? null : _distNotes.Trim(),
+                isPrimary       = false,
+                parentCustodyId = _distParent!.CustodyId,
+                allocationType  = _distType
+            });
+            _distMsg = await MsgOf(res);
+            _distOk  = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode)
+            { Snackbar.Add(_distMsg, Severity.Success); CloseDistribute(); await LoadAsync(); }
+        }
+        catch (Exception ex) { _distOk = false; _distMsg = "فشل: " + ex.Message; }
+        finally { _distSaving = false; }
     }
 
     /* ── حركة ── */

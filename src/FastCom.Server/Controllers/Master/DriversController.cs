@@ -96,7 +96,7 @@ public class DriversController : ControllerBase
         if (d.DriverType == "Internal") d.SupplierId = null; else d.EmployeeId = null;
         d.UpdatedAt = DateTime.UtcNow; d.UpdatedBy = CurrentUserId();
         await _db.SaveChangesAsync(ct);
-        return Ok(new { message = "✅ اتحفظ التعديل" });
+        return Ok(new { message = "تم حفظ التعديل" });
     }
 
     [HttpDelete("{id:int}")]

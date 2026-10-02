@@ -897,6 +897,8 @@ public partial class FastComDbContext
 
             entity.HasOne(d => d.Operation).WithMany(p => p.SupplierInvoiceItems).HasConstraintName("FK_SII_Operations");
 
+            entity.HasOne(d => d.BookingContainerLine).WithMany().HasConstraintName("FK_SII_BCLines");
+
             entity.HasOne(d => d.SupplierInvoice).WithMany(p => p.SupplierInvoiceItems)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_SII_Invoices");

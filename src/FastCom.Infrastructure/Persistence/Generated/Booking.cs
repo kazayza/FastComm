@@ -39,6 +39,12 @@ public partial class Booking
     [StringLength(100)]
     public string? CustomerReference { get; set; }
 
+    [StringLength(100)]
+    public string? BookingReference { get; set; }
+
+    [StringLength(100)]
+    public string? BLNumber { get; set; }
+
     public int? ContactId { get; set; }
 
     public int? ShippingAgentId { get; set; }

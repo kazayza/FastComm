@@ -53,8 +53,10 @@ public class OperationsController : ControllerBase
 
     public record ListItem(long OperationId, string OperationNumber, string? BookingNumber,
         string CustomerName, string? ServiceName, string? PortName, string? DestinationName,
+        string? TahteeqPortName,
         DateTime? PlannedDate, string Status, decimal RevenueNet, decimal RevenueTax,
-        decimal EstimatedCost, decimal ActualCost, DateTime CreatedAt);
+        decimal EstimatedCost, decimal ActualCost, DateTime CreatedAt,
+        long? TripId, string? TripNumber);
 
     public record RevenueLineItem(long OperationRevenueItemId, int ServiceId, string ServiceName,
         string? Description, decimal Quantity, decimal UnitPrice, decimal Discount,
@@ -104,8 +106,15 @@ public class OperationsController : ControllerBase
                 o.Service != null ? o.Service.NameAr : null,
                 o.Port != null ? o.Port.NameAr : null,
                 o.Destination != null ? o.Destination.NameAr : null,
+                o.TahteeqPort != null ? o.TahteeqPort.NameAr : null,
                 o.PlannedDate, o.Status,
-                o.RevenueNet, o.RevenueTax, o.EstimatedCost, o.ActualCost, o.CreatedAt))
+                o.RevenueNet, o.RevenueTax, o.EstimatedCost, o.ActualCost, o.CreatedAt,
+                _db.TripOperations
+                    .Where(to => to.OperationId == o.OperationId && to.Status != "Cancelled")
+                    .Select(to => (long?)to.TripId).FirstOrDefault(),
+                _db.TripOperations
+                    .Where(to => to.OperationId == o.OperationId && to.Status != "Cancelled")
+                    .Select(to => to.Trip.TripNumber).FirstOrDefault()))
             .ToListAsync(ct);
 
         return Ok(rows);
@@ -437,7 +446,7 @@ public class OperationsController : ControllerBase
             throw;
         }
 
-        return Ok(new { message = "✅ اتحفظ التعديل" });
+        return Ok(new { message = "✅ تم حفظ التعديل" });
     }
 
     private void AddRevenueLines(long operationId, List<RevenueLineDto> lines, int userId)
@@ -564,7 +573,7 @@ public class OperationsController : ControllerBase
 
         await _db.SaveChangesAsync(ct);
 
-        return Ok(new { message = "✅ اتقفلت العملية" });
+        return Ok(new { message = "✅ تم اغلاق العملية" });
     }
 
     [HttpPost("{id:long}/reopen")]
@@ -572,8 +581,8 @@ public class OperationsController : ControllerBase
     public async Task<IActionResult> Reopen(long id, CancellationToken ct)
     {
         var o = await _db.Operations.FirstOrDefaultAsync(x => x.OperationId == id && !x.IsDeleted, ct);
-        if (o is null) return NotFound(new { message = "العملية مش موجودة" });
-        if (o.Status is not "Closed") return BadRequest(new { message = "العملية مش مقفولة" });
+        if (o is null) return NotFound(new { message = "العملية غير موجودة" });
+        if (o.Status is not "Closed") return BadRequest(new { message = "العملية غير مقفولة" });
 
         o.Status   = "Delivered";
         o.ClosedAt = null;
@@ -588,7 +597,7 @@ public class OperationsController : ControllerBase
 
         await _audit.LogAsync(FastCom.Server.Services.AuditActions.Reopen, "Operation", null, description: "إعادة فتح عملية", ct: ct);
 
-        return Ok(new { message = "✅ اتفتحت العملية تاني" });
+        return Ok(new { message = "✅ تم اعاده فتح العمليه مرة اخرى" });
     }
 
     private static bool Allowed(string from, string to) => (from, to) switch
@@ -663,7 +672,7 @@ public class OperationsController : ControllerBase
     public async Task<IActionResult> Delete(long id, CancellationToken ct)
     {
         var o = await _db.Operations.FirstOrDefaultAsync(x => x.OperationId == id && !x.IsDeleted, ct);
-        if (o is null) return NotFound(new { message = "العملية مش موجودة" });
+        if (o is null) return NotFound(new { message = "العملية غير موجودة" });
 
         if (o.Status is not ("Pending" or "Cancelled"))
             {
@@ -698,37 +707,37 @@ public class OperationsController : ControllerBase
             throw;
         }
 
-        return Ok(new { message = "✅ اتحذفت العملية" });
+        return Ok(new { message = "✅ تم حذف العملية" });
     }
 
     // ═══════════════ validation ═══════════════
 
     private async Task<string?> ValidateAsync(OperationUpsert? r, CancellationToken ct)
     {
-        if (r is null) return "البيانات مش كاملة";
-        if (r.CustomerId <= 0) return "لازم تختار العميل";
+        if (r is null) return "البيانات غير كاملة";
+        if (r.CustomerId <= 0) return "لابد من اختيار العميل";
 
         if (!await _db.Customers.AnyAsync(c => c.CustomerId == r.CustomerId && !c.IsDeleted, ct))
-            return "العميل مش موجود";
+            return "العميل غير موجود";
 
         if (r.BookingId is not null)
         {
             var bk = await _db.Bookings.AsNoTracking()
                 .FirstOrDefaultAsync(b => b.BookingId == r.BookingId && !b.IsDeleted, ct);
-            if (bk is null) return "الحجز مش موجود";
-            if (bk.CustomerId != r.CustomerId) return "الحجز مش تابع للعميل ده";
+            if (bk is null) return "الحجز غير موجود";
+            if (bk.CustomerId != r.CustomerId) return "الحجز غير تابع لهذا العميل";
         }
 
         if (r.ServiceId is not null && !await _db.Services.AnyAsync(x => x.ServiceId == r.ServiceId, ct))
-            return "الخدمة مش موجودة";
+            return "الخدمة غير موجودة";
         if (r.PortId is not null && !await _db.Ports.AnyAsync(x => x.PortId == r.PortId, ct))
-            return "الميناء مش موجود";
+            return "الميناء غير موجود";
         if (r.DestinationId is not null && !await _db.Destinations.AnyAsync(x => x.DestinationId == r.DestinationId, ct))
-            return "الجهة مش موجودة";
+            return "الجهة غير موجودة";
         if (r.TahteeqPortId is not null && !await _db.Ports.AnyAsync(x => x.PortId == r.TahteeqPortId, ct))
-            return "ميناء التعتيق مش موجود";
+            return "ميناء التعتيق غير موجود";
         if (r.TripTypeId is not null && !await _db.TripTypes.AnyAsync(x => x.TripTypeId == r.TripTypeId, ct))
-            return "نوع الرحلة مش موجود";
+            return "نوع الرحلة غير موجود";
 
         if (r.EstimatedCost < 0) return "التكلفة التقديرية ماينفعش تكون سالبة";
 
@@ -737,7 +746,7 @@ public class OperationsController : ControllerBase
             var svcIds = r.RevenueLines.Select(l => l.ServiceId).Distinct().ToList();
             var found = await _db.Services.Where(s => svcIds.Contains(s.ServiceId))
                 .Select(s => s.ServiceId).ToListAsync(ct);
-            if (found.Count != svcIds.Count) return "فيه خدمة في سطور الإيراد مش موجودة";
+            if (found.Count != svcIds.Count) return "فيه خدمة في سطور الإيراد غير موجودة";
 
             foreach (var l in r.RevenueLines)
             {

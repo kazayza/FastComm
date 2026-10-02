@@ -93,7 +93,7 @@ public class SuppliersController : ControllerBase
         s.PaymentTermId = req.PaymentTermId;
         s.UpdatedAt = DateTime.UtcNow; s.UpdatedBy = CurrentUserId();
         await _db.SaveChangesAsync(ct);
-        return Ok(new { message = "✅ اتحفظ التعديل" });
+        return Ok(new { message = "تم حفظ التعديل" });
     }
 
     [HttpPost("{id:int}/toggle-active")]

@@ -153,7 +153,7 @@ public class CustomersController : ControllerBase
         c.UpdatedBy      = CurrentUserId();
 
         await _db.SaveChangesAsync(ct);
-        return Ok(new { message = "✅ اتحفظ التعديل" });
+        return Ok(new { message = "تم حفظ التعديل" });
     }
 
     // ═══════════════ TOGGLE ACTIVE ═══════════════

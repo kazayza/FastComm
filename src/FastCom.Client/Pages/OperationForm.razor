@@ -315,32 +315,40 @@
                             <div class="opf-form-grid">
 
                                 @* العميل *@
-                                <div class="form-field">
+                                <div class="form-field form-field-with-dropdown">
                                     <label class="field-label" for="customer">
                                         العميل
                                         <span class="field-required" aria-label="مطلوب">*</span>
                                     </label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                             width="14" height="14" fill="none"
-                                             stroke="currentColor" stroke-width="2"
-                                             aria-hidden="true">
-                                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-                                            <circle cx="12" cy="7" r="4"/>
-                                        </svg>
-                                        <select id="customer"
-                                                class="field-input field-select @(_f.CustomerId == 0 && _triedSave ? "field-error" : "")"
-                                                value="@_f.CustomerId"
-                                                disabled="@_locked"
-                                                @onchange="OnCustomerChanged"
-                                                aria-required="true">
-                                            <option value="0">— اختر العميل —</option>
-                                            @foreach (var c in _customers)
-                                            {
-                                                <option value="@c.Id">@c.Label</option>
-                                            }
-                                        </select>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="11" cy="11" r="8"/>
+                                                <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                                            </svg>
+                                        </span>
+                                        <input id="customer"
+                                               class="field-input with-prefix @(_f.CustomerId == 0 && _triedSave ? "field-error" : "")"
+                                               value="@CustomerSearchText"
+                                               disabled="@_locked"
+                                               placeholder="ابحث باسم العميل..."
+                                               @oninput="OnCustomerSearch"
+                                               @onfocus="() => { _showCustomerDropdown = true; FilterCustomers(_customerSearch); }"
+                                               @onfocusout="() => _showCustomerDropdown = false"
+                                               aria-required="true" />
                                     </div>
+                                    @if (_showCustomerDropdown && _filteredCustomers.Count > 0)
+                                    {
+                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                            @foreach (var c in _filteredCustomers)
+                                            {
+                                                <div class="field-dropdown-item" @onmousedown="() => PickCustomer(c)">
+                                                    @c.Label
+                                                </div>
+                                            }
+                                        </div>
+                                    }
                                     @if (_f.CustomerId == 0 && _triedSave)
                                     {
                                         <div class="field-err-msg" role="alert">اختيار العميل مطلوب</div>
@@ -1539,6 +1547,35 @@
     }
 
     .form-field { display: flex; flex-direction: column; gap: 6px; }
+    .form-field-with-dropdown { position: relative; }
+
+    .field-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        left: 0;
+        margin-top: 4px;
+        background: #fafcff;
+        border: 1px solid #d8e2f0;
+        border-radius: 9px;
+        box-shadow: 0 8px 24px rgba(0,0,0,.12);
+        max-height: 240px;
+        overflow-y: auto;
+        z-index: 100;
+    }
+
+    .field-dropdown-item {
+        padding: 10px 12px;
+        font-family: inherit;
+        font-size: 13px;
+        color: var(--fc-text);
+        cursor: pointer;
+        transition: background .1s;
+    }
+
+    .field-dropdown-item:hover {
+        background: #eaf1ff;
+    }
 
     .field-label {
         font-size: 12px; font-weight: 800; color: #344258;
@@ -1995,6 +2032,17 @@
     private string? _msg;     private bool _ok;
     private string? _priceSource;
     private string  _selectedBooking = "";
+    private bool    _showCustomerDropdown;
+    private bool    _custTouched;
+    private string  _customerSearch = "";
+    private List<Opt> _filteredCustomers = new();
+
+    /* المعروض في خانة العميل: اسم العميل المختار، وأثناء الكتابة يظهر المكتوب */
+    private string CustomerSearchText =>
+        !_custTouched && _f.CustomerId > 0
+            ? (_customers.FirstOrDefault(x => x.Id == _f.CustomerId)?.Label ?? "")
+            : _customerSearch;
+    private string? _bookingQ;   /* من الرابط المباشر /operations/new?booking=BK-... */
 
     private List<Opt>    _customers    = new();
     private List<Opt>    _services     = new();
@@ -2166,8 +2214,28 @@
             }
             else
             {
+                /* رابط مباشر من شاشة الحجوزات: /operations/new?booking=BK-1024 */
+                var q = Nav.ToAbsoluteUri(Nav.Uri).Query.TrimStart('?');
+                foreach (var part in q.Split('&', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var kv = part.Split('=', 2);
+                    if (kv.Length == 2 && kv[0] == "booking")
+                        _bookingQ = Uri.UnescapeDataString(kv[1]);
+                }
+
                 _bookings = await SafeGetBk("api/operations/available-bookings");
-                AddLine();
+
+                if (!string.IsNullOrWhiteSpace(_bookingQ))
+                {
+                    var match = _bookings.FirstOrDefault(x => x.BookingNumber == _bookingQ);
+                    if (match is not null)
+                    {
+                        _selectedBooking = match.BookingId.ToString();
+                        await ApplyBookingAsync(match.BookingId);
+                    }
+                }
+
+                if (_lines.Count == 0) AddLine();
             }
         }
         catch (Exception ex) { _msg = "فشل التحميل: " + ex.Message; _ok = false; }
@@ -2264,10 +2332,49 @@
 
     private void RemoveLine(RevRow ln) => _lines.Remove(ln);
 
-    private void OnCustomerChanged(ChangeEventArgs e)
+    private void OnCustomerSearch(ChangeEventArgs e)
     {
-        _f.CustomerId = int.TryParse(e.Value?.ToString(), out var n) ? n : 0;
-        _priceSource  = null;
+        _customerSearch = e.Value?.ToString() ?? "";
+        _custTouched = true;
+        _showCustomerDropdown = true;
+        FilterCustomers(_customerSearch);
+    }
+
+    private void FilterCustomers(string search)
+    {
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            _filteredCustomers = _customers.Take(20).ToList();
+            return;
+        }
+
+        var normalized = NormalizeArabic(search.Trim());
+        _filteredCustomers = _customers
+            .Where(x => NormalizeArabic(x.Label).Contains(normalized))
+            .Take(20)
+            .ToList();
+    }
+
+    private void PickCustomer(Opt c)
+    {
+        _f.CustomerId    = c.Id;
+        _customerSearch  = c.Label;
+        _custTouched     = false;
+        _showCustomerDropdown = false;
+        _priceSource     = null;   /* نفس سلوك اختيار العميل القديم */
+    }
+
+    private static string NormalizeArabic(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        return s
+            .Replace('أ', 'ا').Replace('إ', 'ا').Replace('آ', 'ا').Replace('ٱ', 'ا')
+            .Replace('ة', 'ه')
+            .Replace('ى', 'ي')
+            .Replace('ؤ', 'و')
+            .Replace('ئ', 'ي')
+            .Replace('ـ', ' ')
+            .ToLowerInvariant();
     }
 
     private async Task OnBookingPicked(ChangeEventArgs e)
@@ -2275,7 +2382,12 @@
         _selectedBooking = e.Value?.ToString() ?? "";
         if (!long.TryParse(_selectedBooking, out var bkId) || bkId <= 0)
         { _f.BookingId = null; return; }
+        await ApplyBookingAsync(bkId);
+    }
 
+    /* ملء بيانات العملية من حجز — من الاختيار اليدوي أو من الرابط المباشر */
+    private async Task ApplyBookingAsync(long bkId)
+    {
         try
         {
             var d = await Http.GetFromJsonAsync<BookingDetail>($"api/bookings/{bkId}");

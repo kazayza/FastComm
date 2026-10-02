@@ -52,6 +52,7 @@ public sealed record CashEntry(
     long    OperationId      = 0,
     long    InvoiceId        = 0,
     long    CustodyId        = 0,
+    int     VehicleId        = 0,
     string? Description      = null,
     DateOnly? Date           = null);
 
@@ -132,6 +133,7 @@ public sealed class CashBook : ICashBook
             OperationId     = e.OperationId == 0 ? null : e.OperationId,
             InvoiceId       = e.InvoiceId   == 0 ? null : e.InvoiceId,
             CustodyId       = e.CustodyId   == 0 ? null : e.CustodyId,
+            VehicleId       = e.VehicleId   == 0 ? null : e.VehicleId,
             ReferenceNumber = e.ReferenceNumber,
             Description     = e.Description,
             Status          = "Posted",

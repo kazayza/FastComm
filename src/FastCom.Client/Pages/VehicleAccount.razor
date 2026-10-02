@@ -7,6 +7,7 @@
 @inject AuthService Auth
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject IJSRuntime JS
 
 <PageTitle>كشف حساب المركبة — فاست كوم</PageTitle>
 
@@ -137,6 +138,16 @@
 
             <div class="va-filter-wrap">
                 <svg class="va-filter-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                </svg>
+                <input type="text" class="va-filter-select" style="min-width:150px"
+                       @bind="_vehSearch" @bind:event="oninput"
+                       placeholder="ابحث برقم السيارة أو اسم السائق..." />
+            </div>
+
+            <div class="va-filter-wrap">
+                <svg class="va-filter-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <rect x="1" y="3" width="15" height="13" rx="2"/>
                     <path d="M16 8h4l3 3v5h-7V8z"/>
                     <circle cx="5.5" cy="18.5" r="2.5"/>
@@ -144,9 +155,27 @@
                 </svg>
                 <select class="va-filter-select" @bind="_selectedVehicleId" @bind:after="LoadAsync">
                     <option value="0">— اختر المركبة —</option>
-                    @foreach (var v in _vehicles)
+                    @foreach (var v in FilteredVehicles)
                     {
-                        <option value="@v.VehicleId">@v.PlateNumber — @v.VehicleType</option>
+                        <option value="@v.VehicleId">
+                            @v.PlateNumber — @v.VehicleType@(string.IsNullOrWhiteSpace(v.LastDriver) ? "" : $" — سائق: {v.LastDriver}")
+                        </option>
+                    }
+                </select>
+            </div>
+
+            <div class="va-filter-wrap">
+                <svg class="va-filter-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+                </svg>
+                <select class="va-filter-select" @bind="_selectedSupplierId" @bind:after="LoadAsync"
+                        title="كشف مجمع لكل مركبات المورد المالك">
+                    <option value="0">— كشف مجمع بالمورد —</option>
+                    @foreach (var sp in _suppliers)
+                    {
+                        <option value="@sp.Id">@sp.Label</option>
                     }
                 </select>
             </div>
@@ -164,6 +193,13 @@
                 </select>
             </div>
 
+            <button type="button" class="va-print-btn va-xlsx-btn" @onclick="ExportExcel" disabled="@_exporting" title="تصدير كشف الحساب إلى إكسيل">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                    <path d="M14 2v6h6M8 13l3 4M11 13l-3 4"/>
+                </svg>
+                @(_exporting ? "جارٍ التصدير..." : "تصدير إكسيل")
+            </button>
             <button type="button" class="va-print-btn" @onclick="Print" title="طباعة كشف الحساب">
                 <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="6 9 6 2 18 2 18 9"/>
@@ -180,7 +216,7 @@
                 </svg>
                 @if (_stmt is not null)
                 {
-                    <span>عرض <strong>@_stmt.Lines.Count</strong> حركة مالية</span>
+                    <span>عرض <strong>@(_stmt?.Lines.Count ?? 0)</strong> حركة مالية</span>
                 }
                 else
                 {
@@ -229,12 +265,25 @@
         }
         else
         {
+            <div class="va-print-head">
+                <div class="va-print-title">كشف حساب العربية — @(_stmt?.PlateNumber)</div>
+                <div class="va-print-sub">
+                    من @_from.ToString("dd/MM/yyyy") حتى @_to.AddDays(-1).ToString("dd/MM/yyyy")
+                    · طُبع في @DateTime.Now.ToString("dd/MM/yyyy hh:mm tt")
+                </div>
+            </div>
             <div class="pay-table-wrap">
                 <table class="pay-table" aria-label="كشف حساب المركبة">
                     <thead>
                         <tr>
                             <th class="th-start" style="width:110px">التاريخ</th>
+                            @if (_consolidated)
+                            {
+                                <th style="width:100px">المركبة</th>
+                            }
                             <th style="width:130px">نوع الحركة</th>
+                            <th style="width:110px">الوجهة</th>
+                            <th style="width:120px">السائق</th>
                             <th style="width:130px">المرجع</th>
                             <th class="th-start">البيان الوصفي</th>
                             <th style="width:120px">مدين</th>
@@ -246,7 +295,7 @@
                         @* الرصيد الافتتاحي كصف ثابت *@
                         <tr class="va-opening-row">
                             <td class="td-start va-date-cell">@_from.ToString("dd/MM/yyyy")</td>
-                            <td colspan="3" class="td-start">
+                            <td colspan="@(_consolidated ? 6 : 5)" class="td-start">
                                 <div class="va-opening-label">
                                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                         <path d="M23 4v6h-6"/>
@@ -258,24 +307,36 @@
                             <td class="td-muted">—</td>
                             <td class="td-muted">—</td>
                             <td>
-                                <span class="va-balance-chip opening">@Money(_stmt.Opening)</span>
+                                <span class="va-balance-chip opening">@Money(_stmt?.Opening ?? 0m)</span>
                             </td>
                         </tr>
 
-                        @foreach (var l in _stmt.Lines)
+                        @foreach (var l in _stmt?.Lines ?? Enumerable.Empty<Line>())
                         {
                             <tr>
                                 <td class="td-start va-date-cell">@l.Date.ToString("dd/MM/yyyy")</td>
+                                @if (_consolidated)
+                                {
+                                    <td><span class="va-ref-chip ref-booking">@(l.Plate ?? "—")</span></td>
+                                }
                                 <td>
                                     <span class="va-kind-chip kind-@l.Kind.ToLower()">
                                         <span class="va-kind-dot" aria-hidden="true"></span>
                                         @KindAr(l.Kind)
                                     </span>
                                 </td>
+                                <td>@(string.IsNullOrWhiteSpace(l.Dest) ? "—" : l.Dest)</td>
+                                <td>@(string.IsNullOrWhiteSpace(l.Driver) ? "—" : l.Driver)</td>
                                 <td>
                                     @if (!string.IsNullOrWhiteSpace(l.Ref))
                                     {
-                                        <span class="va-ref-chip">@l.Ref</span>
+                                        <div class="va-ref-stack">
+                                            <span class="va-ref-chip">@l.Ref</span>
+                                            @if (!string.IsNullOrWhiteSpace(l.SubRef))
+                                            {
+                                                <span class="va-ref-chip ref-booking" title="الحجز التابع له">@l.SubRef</span>
+                                            }
+                                        </div>
                                     }
                                     else
                                     {
@@ -313,16 +374,18 @@
                     </tbody>
                     <tfoot>
                         <tr>
-                            <td colspan="4" class="td-start va-total-label">
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                    <line x1="12" y1="1" x2="12" y2="23"/>
-                                    <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
-                                </svg>
-                                إجمالي الحركة المالية للفترة
+                            <td colspan="@(_consolidated ? 7 : 6)" class="td-start">
+                                <div class="va-total-label">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <line x1="12" y1="1" x2="12" y2="23"/>
+                                        <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                                    </svg>
+                                    إجمالي الحركة المالية للفترة
+                                </div>
                             </td>
-                            <td><span class="va-num va-num-debit">@Money(_stmt.TotalDebit)</span></td>
-                            <td><span class="va-num va-num-credit">@Money(_stmt.TotalCredit)</span></td>
-                            <td><span class="va-balance-chip closing">@Money(_stmt.Closing)</span></td>
+                            <td><span class="va-num va-num-debit">@Money(_stmt?.TotalDebit ?? 0m)</span></td>
+                            <td><span class="va-num va-num-credit">@Money(_stmt?.TotalCredit ?? 0m)</span></td>
+                            <td><span class="va-balance-chip closing">@Money(_stmt?.Closing ?? 0m)</span></td>
                         </tr>
                     </tfoot>
                 </table>
@@ -361,6 +424,38 @@
 
             <div class="svc-modal-body" style="padding: 22px 24px">
                 <div class="svc-grid">
+
+                    <div class="svc-field">
+                        <label class="svc-label">تاريخ الدفعة <span class="svc-req">*</span></label>
+                        <div class="svc-input-wrap">
+                            <span class="svc-prefix">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2"/>
+                                    <path d="M16 2v4M8 2v4M3 10h18"/>
+                                </svg>
+                            </span>
+                            <input type="date" class="svc-input ltr with-prefix" @bind="_payDate" />
+                        </div>
+                    </div>
+
+                    <div class="svc-field">
+                        <label class="svc-label">طريقة الدفع</label>
+                        <div class="svc-input-wrap">
+                            <span class="svc-prefix">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="1" y="4" width="22" height="16" rx="2"/>
+                                    <path d="M1 10h22"/>
+                                </svg>
+                            </span>
+                            <select class="svc-input svc-select with-prefix" @bind="_payMethodId">
+                                <option value="">— أول طريقة دفع نشطة —</option>
+                                @foreach (var m in _payMethods)
+                                {
+                                    <option value="@m.Id">@m.Label</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
 
                     <div class="svc-field svc-full">
                         <label class="svc-label">القيمة المالية المستلمة <span class="svc-req">*</span></label>
@@ -593,6 +688,20 @@
         cursor: pointer; transition: all .15s ease;
     }
     .va-print-btn:hover { background: var(--fc-blue); color: #fff; }
+    .va-xlsx-btn { color: #15803d; }
+    .va-xlsx-btn:hover { background: #15803d; color: #fff; }
+    .va-xlsx-btn:disabled { opacity: .6; cursor: default; }
+    .va-print-head { display: none; }
+    @@media print {
+        .hero-wrapper, .va-filter-wrap, .pay-hero-refresh, .pay-hero-add,
+        .va-print-btn, .va-xlsx-btn, .fc-fab-container, .x-fab-scrim,
+        .svc-modal-backdrop, .mud-snackbar { display: none !important; }
+        .va-print-head { display: block !important; margin-bottom: 12px; }
+        .va-print-title { font-size: 16px; font-weight: 900; color: #0a1b3b; }
+        .va-print-sub { font-size: 11px; color: #526070; margin-top: 2px; }
+        .pay-table-wrap { overflow: visible !important; box-shadow: none !important; border: none !important; }
+        body { background: #fff !important; }
+    }
 
     .pay-results-badge {
         display: flex; align-items: center; gap: 5px;
@@ -679,7 +788,12 @@
     .pay-table tfoot td {
         padding: 14px 14px; color: var(--fc-text); font-weight: 800;
         border-top: 2px solid #e4eaf3;
+        text-align: center; /* 🔴 نفس توسيط أعمدة الجسم — المدين تحت المدين */
     }
+    .va-ref-stack { display: flex; flex-direction: column; gap: 3px; align-items: center; }
+    .va-ref-chip.ref-booking { background: #eef6ff; color: var(--fc-blue); border-color: #cfe3fb; }
+    .va-kind-chip.kind-custodyfreight { background: #eaf7ef; color: #15803d; border-color: #bfe8cd; }
+    .va-kind-chip.kind-custodyroad { background: #fff8e6; color: #9a6d08; border-color: #f0d898; }
     .va-total-label {
         display: flex; align-items: center; gap: 6px;
         font-size: 12.5px; font-weight: 800; color: var(--fc-text);
@@ -816,11 +930,14 @@
     protected override async Task OnInitializedAsync()
     {
         var today = DateTime.Today;
-        _months = Enumerable.Range(0, 12).Select(i => today.AddMonths(-i)).ToList();
+        /* 🔴 #44 — الشهور: 12 شهر ورا + 12 شهر قدام (دفعات مستقبلية) */
+        _months = Enumerable.Range(0, 25).Select(i => today.AddMonths(12 - i)).ToList();
         _month = today.ToString("yyyy-MM");
 
         try { _vehicles = await Http.GetFromJsonAsync<List<VehicleOpt>>("api/vehicle-accounts/vehicles") ?? new(); }
         catch { _vehicles = new(); }
+        try { _suppliers = await Http.GetFromJsonAsync<List<SupOpt>>("api/options/suppliers") ?? new(); }
+        catch { _suppliers = new(); }
 
         _selectedVehicleId = VehicleId > 0 ? VehicleId : (_vehicles.FirstOrDefault()?.VehicleId ?? 0);
         if (_selectedVehicleId > 0) await LoadAsync();
@@ -829,11 +946,37 @@
 
     private async Task LoadAsync()
     {
-        if (_selectedVehicleId <= 0) { _stmt = null; _loading = false; return; }
-        _loading = true;
         _from = DateTime.ParseExact(_month + "-01", "yyyy-MM-dd", null);
         _to = _from.AddMonths(1);
         _monthLabel = _from.ToString("MMMM yyyy");
+
+        /* 🔴 #45 — كشف مجمع لكل مركبات مورد */
+        if (_selectedSupplierId > 0)
+        {
+            _consolidated = true;
+            _loading = true;
+            try
+            {
+                var s = await Http.GetFromJsonAsync<SupplierStmtOut>(
+                    $"api/vehicle-accounts/by-supplier/{_selectedSupplierId}/statement?from={_from:yyyy-MM-dd}&to={_to:yyyy-MM-dd}");
+                _stmt = s is null ? null : new StatementOut
+                {
+                    PlateNumber = $"مجمع — {s.SupplierName} ({s.VehicleCount} مركبة)",
+                    Opening     = s.Opening,
+                    Lines       = s.Lines,
+                    TotalDebit  = s.TotalDebit,
+                    TotalCredit = s.TotalCredit,
+                    Closing     = s.Closing
+                };
+            }
+            catch { _stmt = null; }
+            finally { _loading = false; }
+            return;
+        }
+
+        _consolidated = false;
+        if (_selectedVehicleId <= 0) { _stmt = null; _loading = false; return; }
+        _loading = true;
 
         try
         {
@@ -847,7 +990,15 @@
     private void OpenPayment()
     {
         _fabOpen = false;
+        if (_selectedVehicleId <= 0)
+        {
+            Snackbar.Add("اختر مركبة واحدة أولاً لتسجيل دفعة عليها", Severity.Info);
+            return;
+        }
         _payAmount = 0;
+        _payDate = DateTime.Today;
+        _payMethodId = null;
+        if (_payMethods.Count == 0) _ = LoadPayMethods();
         _payDesc = null;
         _payOpen = true;
     }
@@ -865,9 +1016,9 @@
             var res = await Http.PostAsJsonAsync("api/vehicle-accounts/payment", new
             {
                 vehicleId = _selectedVehicleId,
-                txDate = (string?)null,
+                txDate = _payDate?.ToString("yyyy-MM-dd"),
                 amount = _payAmount,
-                paymentMethodId = (int?)null,
+                paymentMethodId = _payMethodId,
                 description = _payDesc
             });
             if (res.IsSuccessStatusCode)
@@ -886,15 +1037,95 @@
         finally { _saving = false; }
     }
 
+    /* 🔴 #38 — الطباعة كانت بتفتح نفس الصفحة بباراميتر مافيش حاجة بتقراه —
+       دلوقتي نداء مباشر لنافذة الطباعة (CSS الطباعة بيخفي الأزرار). */
+    /* 🔴 #44 — الطباعة بقت صفحة احترافية مستقلة (زي طباعة الفواتير) */
     private void Print()
     {
         _fabOpen = false;
-        Nav.NavigateTo($"/vehicles/{_selectedVehicleId}/account?print=1", true);
+        if (_consolidated)
+        {
+            Snackbar.Add("الطباعة الاحترافية لمركبة واحدة — اختر مركبة من القائمة", Severity.Info);
+            return;
+        }
+        if (_selectedVehicleId <= 0) return;
+        Nav.NavigateTo($"/vehicles/print/{_selectedVehicleId}?from={_from:yyyy-MM-dd}&to={_to:yyyy-MM-dd}");
+    }
+
+    private bool _exporting;
+
+    /* ── #45 كشف مجمع بالمورد ── */
+    private int  _selectedSupplierId;
+    private bool _consolidated;
+    private List<SupOpt> _suppliers = new();
+    public class SupOpt { public int Id { get; set; } public string Label { get; set; } = ""; }
+
+    public class SupplierStmtOut
+    {
+        public string  SupplierName { get; set; } = "";
+        public int     VehicleCount { get; set; }
+        public decimal Opening      { get; set; }
+        public List<Line> Lines     { get; set; } = new();
+        public decimal TotalDebit   { get; set; }
+        public decimal TotalCredit  { get; set; }
+        public decimal Closing      { get; set; }
+    }
+
+    /* ── بحث السيارات ── */
+    private string _vehSearch = "";
+    private List<VehicleOpt> FilteredVehicles
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_vehSearch)) return _vehicles;
+            var s = _vehSearch.Trim();
+            return _vehicles.Where(v =>
+                   v.PlateNumber.Contains(s, StringComparison.OrdinalIgnoreCase)
+                || v.VehicleType.Contains(s, StringComparison.OrdinalIgnoreCase)
+                || (v.LastDriver?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false)
+                || (v.Drivers?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false))
+                .ToList();
+        }
+    }
+
+    /* ── دفعة: تاريخ + طريقة دفع ── */
+    private DateTime? _payDate;
+    private int?   _payMethodId;
+    private List<PayOpt> _payMethods = new();
+    public class PayOpt { public int Id { get; set; } public string Label { get; set; } = ""; }
+
+    private async Task LoadPayMethods()
+    {
+        try { _payMethods = await Http.GetFromJsonAsync<List<PayOpt>>("api/options/payment-methods") ?? new(); }
+        catch { _payMethods = new(); }
+    }
+    private async Task ExportExcel()
+    {
+        if (_selectedVehicleId <= 0 && _selectedSupplierId <= 0) return;
+        _exporting = true;
+        try
+        {
+            var url = _consolidated
+                ? $"api/vehicle-accounts/by-supplier/{_selectedSupplierId}/export?from={_from:yyyy-MM-dd}&to={_to:yyyy-MM-dd}"
+                : $"api/vehicle-accounts/{_selectedVehicleId}/export?from={_from:yyyy-MM-dd}&to={_to:yyyy-MM-dd}";
+            var res = await Http.GetAsync(url);
+            if (!res.IsSuccessStatusCode)
+            { Snackbar.Add("فشل التصدير: " + (int)res.StatusCode, Severity.Error); return; }
+            var bytes = await res.Content.ReadAsByteArrayAsync();
+            await JS.InvokeAsync<bool>("fastcom.downloadBase64", Convert.ToBase64String(bytes),
+                $"vehicle-account-{_selectedVehicleId}-{_month}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            Snackbar.Add("تم تصدير كشف الحساب إلى إكسيل", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add("تعذر التصدير: " + ex.Message, Severity.Error); }
+        finally { _exporting = false; }
     }
 
     private static string KindAr(string k) => k switch
     {
         "Freight" => "نولون رحلة",
+        "CustodyFreight" => "سلفة نولون",
+        "CustodyRoad" => "مصاريف طريق",
         "Custody" => "عهدة نقدية",
         "Expense" => "مصروف تشغيلي",
         "Payment" => "دفعة سداد",
@@ -922,6 +1153,10 @@
         public decimal Debit { get; set; }
         public decimal Credit { get; set; }
         public decimal Balance { get; set; }
+        public string? SubRef { get; set; }
+        public string? Plate  { get; set; }
+        public string? Dest   { get; set; }
+        public string? Driver { get; set; }
     }
 
     public class VehicleOpt
@@ -930,5 +1165,7 @@
         public string PlateNumber { get; set; } = "";
         public string VehicleType { get; set; } = "";
         public string Status { get; set; } = "";
+        public string? LastDriver { get; set; }
+        public string? Drivers    { get; set; }
     }
 }

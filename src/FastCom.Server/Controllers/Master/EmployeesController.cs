@@ -160,7 +160,7 @@ public class EmployeesController : ControllerBase
         e.UpdatedAt         = DateTime.UtcNow;
         e.UpdatedBy         = CurrentUserId();
         await _db.SaveChangesAsync(ct);
-        return Ok(new { message = "✅ اتحفظ التعديل" });
+        return Ok(new { message = "تم حفظ التعديل" });
     }
 
     // ═══════════════ DELETE (ناعم) ═══════════════

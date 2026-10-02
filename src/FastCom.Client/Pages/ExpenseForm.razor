@@ -18,9 +18,9 @@
     <div class="fc-hero fc-hero-slim">
         <div class="fc-hero-inner">
 
-            <div class="bk-hero-row">
-                <div class="bk-hero-left">
-                    <div class="bk-hero-crumb">
+            <div class="ef-hero-row">
+                <div class="ef-hero-left">
+                    <div class="ef-hero-crumb">
                         <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
                             <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
@@ -37,22 +37,22 @@
                             <span>@ExpenseNumber</span>
                         }
                     </h1>
-                    <span class="bk-hero-sub">
+                    <span class="ef-hero-sub">
                         @(_id is null
                             ? "تسجيل المصروف وبيانات الدفع، ويُقيَّد في الخزينة تلقائيًا عند استيفاء الشروط"
                             : $"تعديل بيانات المصروف رقم {ExpenseNumber}")
                     </span>
                 </div>
 
-                <div class="bk-hero-right">
-                    <span class="bk-hero-chip @(_id is null ? "badge-new" : PayStatusBadge(_paymentStatus))">
+                <div class="ef-hero-right">
+                    <span class="ef-hero-chip @(_id is null ? "badge-new" : PayStatusBadge(_paymentStatus))">
                         <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <circle cx="12" cy="12" r="10"/>
                             <path d="M12 6v6l4 2" stroke-linecap="round"/>
                         </svg>
                         @(_id is null ? "جديد" : PayAr(_paymentStatus))
                     </span>
-                    <span class="bk-hero-chip">
+                    <span class="ef-hero-chip">
                         <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <rect x="3" y="4" width="18" height="18" rx="2"/>
                             <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
@@ -296,23 +296,32 @@
                                         نوع المصروف
                                         <span class="field-required">*</span>
                                     </label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                             width="14" height="14" fill="none"
-                                             stroke="currentColor" stroke-width="2"
-                                             aria-hidden="true">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                                            <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round"/>
-                                        </svg>
-                                        <select class="field-input field-select @(_f.ExpenseTypeId <= 0 && _triedSave ? "field-error" : "")"
-                                                value="@_f.ExpenseTypeId"
-                                                @onchange="OnTypeChanged"
-                                                aria-required="true">
-                                            @foreach (var t in _types)
-                                            {
-                                                <option value="@t.Id">@t.Label</option>
-                                            }
-                                        </select>
+                                    <div class="form-field-with-dropdown">
+                                        <div class="field-select-wrap">
+                                            <svg class="field-select-icon" viewBox="0 0 24 24"
+                                                 width="14" height="14" fill="none"
+                                                 stroke="currentColor" stroke-width="2"
+                                                 aria-hidden="true">
+                                                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                                <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round"/>
+                                            </svg>
+                                            <input class="field-input field-select @(_f.ExpenseTypeId <= 0 && _triedSave ? "field-error" : "")"
+                                                   value="@TypeText"
+                                                   placeholder="ابحث عن النوع..."
+                                                   @oninput="OnTypeSearch"
+                                                   @onfocus="() => { _showTypeDd = true; _filteredTypes = FilterList(_types, x => x.Label, _typeSearch); }"
+                                                   @onfocusout="() => _showTypeDd = false"
+                                                   aria-required="true" />
+                                        </div>
+                                        @if (_showTypeDd && _filteredTypes.Count > 0)
+                                        {
+                                            <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                                @foreach (var t in _filteredTypes)
+                                                {
+                                                    <div class="field-dropdown-item" @onmousedown="() => PickType(t)">@t.Label</div>
+                                                }
+                                            </div>
+                                        }
                                     </div>
                                     @if (CurrentType is not null)
                                     {
@@ -351,6 +360,28 @@
                                     {
                                         <div class="field-err-msg" role="alert">يجب أن يكون المبلغ أكبر من صفر</div>
                                     }
+                                </div>
+
+                                @* 🔴 القيمة المحمّلة على العميل *@
+                                <div class="form-field">
+                                    <label class="field-label">القيمة المحمّلة على العميل</label>
+                                    <div class="field-input-group">
+                                        <span class="field-prefix" aria-hidden="true">ج.م</span>
+                                        <input type="number" min="0" step="0.01"
+                                               class="field-input with-prefix"
+                                               value="@_f.BillableAmount"
+                                               placeholder="0.00"
+                                               @onchange="e => _f.BillableAmount = ParseAmount(e.Value)" />
+                                    </div>
+                                    <div class="field-hint">
+                                        <svg viewBox="0 0 16 16" width="10" height="10"
+                                             fill="none" stroke="currentColor" stroke-width="1.8"
+                                             aria-hidden="true">
+                                            <circle cx="8" cy="8" r="6"/>
+                                            <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                        </svg>
+                                        القيمة المُحصَّلة من العميل — عند تركها صفرًا لا يُحمَّل المصروف على الفاتورة
+                                    </div>
                                 </div>
 
                                 @* التاريخ *@
@@ -539,28 +570,6 @@
                                     </div>
                                 }
 
-                                @* 🔴 القيمة المحمّلة على العميل *@
-                                <div class="form-field">
-                                    <label class="field-label">القيمة المحمّلة على العميل</label>
-                                    <div class="field-input-group">
-                                        <span class="field-prefix" aria-hidden="true">ج.م</span>
-                                        <input type="number" min="0" step="0.01"
-                                               class="field-input with-prefix"
-                                               value="@_f.BillableAmount"
-                                               placeholder="0.00"
-                                               @onchange="e => _f.BillableAmount = ParseAmount(e.Value)" />
-                                    </div>
-                                    <div class="field-hint">
-                                        <svg viewBox="0 0 16 16" width="10" height="10"
-                                             fill="none" stroke="currentColor" stroke-width="1.8"
-                                             aria-hidden="true">
-                                            <circle cx="8" cy="8" r="6"/>
-                                            <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
-                                        </svg>
-                                        القيمة المُحصَّلة من العميل — عند تركها صفرًا لا يُحمَّل المصروف على الفاتورة
-                                    </div>
-                                </div>
-
                                 <div class="form-field">
                                     <label class="field-label">ضريبة القيمة المحمّلة %</label>
                                     <div class="field-input-group">
@@ -698,22 +707,31 @@
                                     @* العملية *@
                                     <div class="form-field">
                                         <label class="field-label">العملية</label>
-                                        <div class="field-select-wrap">
-                                            <svg class="field-select-icon" viewBox="0 0 24 24"
-                                                 width="14" height="14" fill="none"
-                                                 stroke="currentColor" stroke-width="2"
-                                                 aria-hidden="true">
-                                                <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
-                                            </svg>
-                                            <select class="field-input field-select" @bind="_f.OperationId">
-                                                <option value="">—</option>
-                                                @foreach (var o in _operations)
-                                                {
-                                                    <option value="@o.OperationId">
-                                                        @o.OperationNumber — @o.CustomerName
-                                                    </option>
-                                                }
-                                            </select>
+                                        <div class="form-field-with-dropdown">
+                                            <div class="field-select-wrap">
+                                                <svg class="field-select-icon" viewBox="0 0 24 24"
+                                                     width="14" height="14" fill="none"
+                                                     stroke="currentColor" stroke-width="2"
+                                                     aria-hidden="true">
+                                                    <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                                </svg>
+                                                <input class="field-input field-select"
+                                                       value="@OpText"
+                                                       placeholder="ابحث عن العملية..."
+                                                       @oninput="OnOpSearch"
+                                                       @onfocus="() => { _showOpDd = true; _filteredOps = FilterList(_operations, OpLabel, _opSearch); }"
+                                                       @onfocusout="() => _showOpDd = false" />
+                                            </div>
+                                            @if (_showOpDd)
+                                            {
+                                                <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                                    <div class="field-dropdown-item" @onmousedown="ClearOp">— بدون عملية —</div>
+                                                    @foreach (var o in _filteredOps)
+                                                    {
+                                                        <div class="field-dropdown-item" @onmousedown="() => PickOp(o)">@OpLabel(o)</div>
+                                                    }
+                                                </div>
+                                            }
                                         </div>
                                         <div class="field-hint">
                                             <svg viewBox="0 0 16 16" width="10" height="10"
@@ -729,27 +747,34 @@
                                     @* الرحلة *@
                                     <div class="form-field">
                                         <label class="field-label">الرحلة</label>
-                                        <div class="field-select-wrap">
-                                            <svg class="field-select-icon" viewBox="0 0 24 24"
-                                                 width="14" height="14" fill="none"
-                                                 stroke="currentColor" stroke-width="2"
-                                                 aria-hidden="true">
-                                                <rect x="1" y="3" width="15" height="13" rx="2"/>
-                                                <path d="M16 8h4l3 3v5h-7V8z"/>
-                                                <circle cx="5.5" cy="18.5" r="2.5"/>
-                                                <circle cx="18.5" cy="18.5" r="2.5"/>
-                                            </svg>
-                                            <select class="field-input field-select"
-                                                    value="@_f.TripId"
-                                                    @onchange="OnTripChanged">
-                                                <option value="">—</option>
-                                                @foreach (var t in _trips)
-                                                {
-                                                    <option value="@t.TripId">
-                                                        @t.TripNumber — @t.DriverName
-                                                    </option>
-                                                }
-                                            </select>
+                                        <div class="form-field-with-dropdown">
+                                            <div class="field-select-wrap">
+                                                <svg class="field-select-icon" viewBox="0 0 24 24"
+                                                     width="14" height="14" fill="none"
+                                                     stroke="currentColor" stroke-width="2"
+                                                     aria-hidden="true">
+                                                    <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                                                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                                                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                                                </svg>
+                                                <input class="field-input field-select"
+                                                       value="@TripText"
+                                                       placeholder="ابحث عن الرحلة..."
+                                                       @oninput="OnTripSearch"
+                                                       @onfocus="() => { _showTripDd = true; _filteredTrips = FilterList(_trips, TripLabel, _tripSearch); }"
+                                                       @onfocusout="() => _showTripDd = false" />
+                                            </div>
+                                            @if (_showTripDd)
+                                            {
+                                                <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                                    <div class="field-dropdown-item" @onmousedown="ClearTrip">— بدون رحلة —</div>
+                                                    @foreach (var t in _filteredTrips)
+                                                    {
+                                                        <div class="field-dropdown-item" @onmousedown="() => PickTrip(t)">@TripLabel(t)</div>
+                                                    }
+                                                </div>
+                                            }
                                         </div>
                                     </div>
 
@@ -875,21 +900,32 @@
                                 @* المورد *@
                                 <div class="form-field">
                                     <label class="field-label">المورد</label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                             width="14" height="14" fill="none"
-                                             stroke="currentColor" stroke-width="2"
-                                             aria-hidden="true">
-                                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-                                            <path d="M9 22V12h6v10"/>
-                                        </svg>
-                                        <select class="field-input field-select" @bind="_f.SupplierId">
-                                            <option value="">—</option>
-                                            @foreach (var s in _suppliers)
-                                            {
-                                                <option value="@s.Id">@s.Label</option>
-                                            }
-                                        </select>
+                                    <div class="form-field-with-dropdown">
+                                        <div class="field-select-wrap">
+                                            <svg class="field-select-icon" viewBox="0 0 24 24"
+                                                 width="14" height="14" fill="none"
+                                                 stroke="currentColor" stroke-width="2"
+                                                 aria-hidden="true">
+                                                <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                                <path d="M9 22V12h6v10"/>
+                                            </svg>
+                                            <input class="field-input field-select"
+                                                   value="@SupText"
+                                                   placeholder="ابحث عن المورد..."
+                                                   @oninput="OnSupSearch"
+                                                   @onfocus="() => { _showSupDd = true; _filteredSups = FilterList(_suppliers, x => x.Label, _supSearch); }"
+                                                   @onfocusout="() => _showSupDd = false" />
+                                        </div>
+                                        @if (_showSupDd)
+                                        {
+                                            <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                                <div class="field-dropdown-item" @onmousedown="ClearSup">— بدون مورد —</div>
+                                                @foreach (var s in _filteredSups)
+                                                {
+                                                    <div class="field-dropdown-item" @onmousedown="() => PickSup(s)">@s.Label</div>
+                                                }
+                                            </div>
+                                        }
                                     </div>
                                 </div>
 
@@ -1031,63 +1067,6 @@
 @* ═══════════════════════════════════════════
    CSS
 ═══════════════════════════════════════════ *@
-
-@* ═══════════════════════════════════════════
-   FLOATING ACTION BUTTON
-═══════════════════════════════════════════ *@
-@if (CanSave && !_cancelled)
-{
-    <div class="glow-fab-wrap @(_fabOpen ? "is-open" : "")">
-
-        <div class="glow-fab-menu" role="menu" aria-label="الإجراءات السريعة">
-            <button type="button" class="glow-fab-item" role="menuitem" @onclick="() => SaveAsync(false)" disabled="@_saving">
-                <span class="glow-fab-item-ic">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                        <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
-                        <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                </span>
-                <span class="glow-fab-item-lb">@(_saving ? "جاري الحفظ..." : "حفظ وتأكيد")</span>
-            </button>
-            <button type="button" class="glow-fab-item" role="menuitem" @onclick="() => SaveAsync(true)" disabled="@_saving">
-                <span class="glow-fab-item-ic">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                        <path d="M12 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                        <path d="M12 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
-                    </svg>
-                </span>
-                <span class="glow-fab-item-lb">حفظ كمسودة</span>
-            </button>
-            <button type="button" class="glow-fab-item" role="menuitem" @onclick="GoBack">
-                <span class="glow-fab-item-ic">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                </span>
-                <span class="glow-fab-item-lb">إلغاء</span>
-            </button>
-        </div>
-
-        <div class="glow-fab-container">
-            <span class="glow-ring glow-ring-1" aria-hidden="true"></span>
-            <span class="glow-ring glow-ring-2" aria-hidden="true"></span>
-            <span class="glow-ring glow-ring-3" aria-hidden="true"></span>
-            <span class="glow-halo" aria-hidden="true"></span>
-
-            <button type="button" class="glow-fab-btn" @onclick="ToggleFab" aria-label="الإجراءات" aria-expanded="@(_fabOpen ? "true" : "false")">
-                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.8" class="glow-fab-icon" aria-hidden="true">
-                    <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
-                </svg>
-            </button>
-        </div>
-
-    </div>
-}
-
-@if (_fabOpen)
-{
-    <div class="glow-fab-scrim" @onclick="ToggleFab" aria-hidden="true"></div>
-}
 
 
 <style>
@@ -1233,79 +1212,23 @@
         padding-top: 18px !important;
         padding-bottom: 22px !important;
     }
-    .bk-hero-row {
+    .ef-hero-row {
         display: flex; align-items: center; justify-content: space-between;
         gap: 16px; flex-wrap: wrap;
     }
-    .bk-hero-left { flex: 1; min-width: 200px; }
-    .bk-hero-crumb {
+    .ef-hero-left { flex: 1; min-width: 200px; }
+    .ef-hero-crumb {
         display: flex; align-items: center; gap: 6px;
         font-size: 11.5px; color: rgba(255, 255, 255, 0.55); margin-bottom: 6px;
     }
-    .bk-hero-sub { font-size: 13px; color: rgba(255, 255, 255, 0.55); }
-    .bk-hero-right { display: flex; gap: 8px; flex-wrap: wrap; }
-    .bk-hero-chip {
+    .ef-hero-sub { font-size: 13px; color: rgba(255, 255, 255, 0.55); }
+    .ef-hero-right { display: flex; gap: 8px; flex-wrap: wrap; }
+    .ef-hero-chip {
         display: flex; align-items: center; gap: 6px;
         padding: 6px 12px; border-radius: 20px;
         background: rgba(255, 255, 255, .1);
         border: 1px solid rgba(255, 255, 255, .2);
         font-size: 11.5px; color: #fff;
-    }
-
-    /* ── FAB (نفس مرجع InvoiceForm) ── */
-    .glow-fab-wrap { position: fixed; left: 28px; bottom: 28px; z-index: 1299; }
-    .glow-fab-container { position: relative; z-index: 2; width: 64px; height: 64px; }
-    .glow-fab-btn {
-        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        width: 60px; height: 60px; border-radius: 50%;
-        background: linear-gradient(135deg, #1e6ef5, #0d47a1);
-        border: 2.5px solid #fbbf24; color: #fff; cursor: pointer;
-        display: flex; align-items: center; justify-content: center;
-        box-shadow: 0 4px 16px rgba(30, 110, 245, .4); transition: transform .2s, box-shadow .2s;
-        z-index: 2;
-    }
-    .glow-fab-btn:hover { transform: translate(-50%, -50%) scale(1.05); }
-    .glow-fab-icon { transition: transform .3s; }
-    .glow-fab-wrap.is-open .glow-fab-icon { transform: rotate(130deg); }
-    .glow-halo, .glow-ring {
-        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        border-radius: 50%; pointer-events: none;
-    }
-    .glow-halo {
-        width: 60px; height: 60px;
-        background: radial-gradient(circle, rgba(30, 110, 245, .3) 0%, transparent 70%);
-        animation: glow-breath 2s ease-in-out infinite;
-    }
-    .glow-ring {
-        width: 60px; height: 60px;
-        border: 2px solid rgba(30, 110, 245, .4);
-        animation: glow-expand 2s ease-out infinite;
-    }
-    .glow-ring-2 { animation-delay: .3s; }
-    .glow-ring-3 { animation-delay: .6s; }
-    @@keyframes glow-breath { 0%, 100% { opacity: .5; transform: translate(-50%, -50%) scale(1); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } }
-    @@keyframes glow-expand { 0% { opacity: .8; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.5); } }
-    .glow-fab-menu {
-        position: absolute; bottom: 80px; left: 0; z-index: 3;
-        display: flex; flex-direction: column; gap: 8px;
-        opacity: 0; pointer-events: none; transform: translateY(10px);
-        transition: opacity .2s, transform .2s;
-    }
-    .glow-fab-wrap.is-open .glow-fab-menu { opacity: 1; pointer-events: auto; transform: translateY(0); }
-    .glow-fab-item {
-        display: flex; align-items: center; gap: 10px;
-        padding: 10px 16px; border-radius: 12px; background: #fff;
-        border: 1px solid #dde5f0; box-shadow: 0 4px 12px rgba(0, 0, 0, .1);
-        cursor: pointer; font-size: 13px; color: #1c2c44; white-space: nowrap;
-    }
-    .glow-fab-item:hover { background: #f4f7fb; border-color: #1e6ef5; }
-    .glow-fab-item-ic {
-        display: flex; align-items: center; justify-content: center;
-        width: 28px; height: 28px; border-radius: 8px; background: #eaf1ff; color: #1e6ef5;
-    }
-    .glow-fab-scrim {
-        position: fixed; inset: 0; background: rgba(9, 18, 35, .45);
-        backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 1298;
     }
 
     /* ================================================================
@@ -1671,6 +1594,36 @@
         .ex-treasury-strip { display: none; }
     }
 
+    /* ── قوايم البحث المنسدلة (#30) — نفس نمط فورم الرحلات ── */
+    .form-field-with-dropdown { position: relative; }
+
+    .field-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        left: 0;
+        margin-top: 4px;
+        background: #fafcff;
+        border: 1px solid #d8e2f0;
+        border-radius: 9px;
+        box-shadow: 0 8px 24px rgba(0,0,0,.12);
+        max-height: 240px;
+        overflow-y: auto;
+        z-index: 100;
+    }
+
+    .field-dropdown-item {
+        padding: 10px 12px;
+        font-family: inherit;
+        font-size: 13px;
+        color: var(--fc-text);
+        cursor: pointer;
+        transition: background .1s;
+    }
+
+    .field-dropdown-item:hover {
+        background: #eaf1ff;
+    }
 </style>
 
 
@@ -1689,8 +1642,6 @@
     private bool CanSave   => _id is null ? CanCreate : CanEdit;
 
     private bool    _loading; private bool _saving;
-    private bool    _fabOpen;
-    private void ToggleFab() => _fabOpen = !_fabOpen;
 
     /* 🔴 تعبئة مسبقة من شاشة تانية (زر «تسجيل مصروف الضمان» في فورم العملية) */
     [SupplyParameterFromQuery(Name = "operationId")]   public long?    QOperationId   { get; set; }
@@ -1912,26 +1863,7 @@
     }
 
     /* ── Handlers ── */
-    private void OnTypeChanged(ChangeEventArgs e)
-    {
-        _f.ExpenseTypeId = int.TryParse(e.Value?.ToString(), out var n) ? n : 0;
-        var t = CurrentType;
-        if (t is not null && !t.IsOperationCost)
-        {
-            _f.OperationId = null;
-            _f.TripId      = null;
-            _f.CustodyId   = null;
-        }
-        _f.IsTaxDeductible = t?.IsTaxDeductible;
-    }
-
-    private void OnTripChanged(ChangeEventArgs e)
-    {
-        _f.TripId    = long.TryParse(e.Value?.ToString(), out var t) && t > 0 ? t : null;
-        _f.CustodyId = null;
-        _ = LoadCustodiesAsync();
-    }
-
+    /* اختيار عهدة ← يعبّي الرحلة والسائق منها لو فاضيين */
     private void OnCustodyChanged(ChangeEventArgs e)
     {
         var id = long.TryParse(e.Value?.ToString(), out var c) && c > 0 ? c : (long?)null;
@@ -2012,6 +1944,128 @@
 
     /* ── Helpers ── */
     private void GoBack() => Nav.NavigateTo("/expenses");
+
+    /* ── #30 حقول بالبحث — نفس نمط فورم الرحلات والحجوزات ── */
+    private bool _showTypeDd, _showOpDd, _showTripDd, _showSupDd;
+    private bool _typeTouched, _opTouched, _tripTouched, _supTouched;
+    private string _typeSearch = "", _opSearch = "", _tripSearch = "", _supSearch = "";
+    private List<ExpType> _filteredTypes = new();
+    private List<OpOpt>   _filteredOps   = new();
+    private List<TripOpt> _filteredTrips = new();
+    private List<Opt>     _filteredSups  = new();
+
+    private static string OpLabel(OpOpt o)     => o.OperationNumber + " — " + o.CustomerName;
+    private static string TripLabel(TripOpt t) => t.TripNumber + " — " + t.DriverName;
+
+    private string TypeText =>
+        !_typeTouched && _f.ExpenseTypeId > 0
+            ? (_types.FirstOrDefault(x => x.Id == _f.ExpenseTypeId)?.Label ?? "")
+            : _typeSearch;
+
+    private string OpText =>
+        !_opTouched && _f.OperationId is not null
+            ? (_operations.FirstOrDefault(x => x.OperationId == _f.OperationId) is { } o ? OpLabel(o) : "")
+            : _opSearch;
+
+    private string TripText =>
+        !_tripTouched && _f.TripId is not null
+            ? (_trips.FirstOrDefault(x => x.TripId == _f.TripId) is { } tr ? TripLabel(tr) : "")
+            : _tripSearch;
+
+    private string SupText =>
+        !_supTouched && _f.SupplierId is not null
+            ? (_suppliers.FirstOrDefault(x => x.Id == _f.SupplierId)?.Label ?? "")
+            : _supSearch;
+
+    private void OnTypeSearch(ChangeEventArgs e)
+    {
+        _typeSearch = e.Value?.ToString() ?? ""; _typeTouched = true; _showTypeDd = true;
+        _filteredTypes = FilterList(_types, x => x.Label, _typeSearch);
+    }
+
+    private void OnOpSearch(ChangeEventArgs e)
+    {
+        _opSearch = e.Value?.ToString() ?? ""; _opTouched = true; _showOpDd = true;
+        _filteredOps = FilterList(_operations, OpLabel, _opSearch);
+    }
+
+    private void OnTripSearch(ChangeEventArgs e)
+    {
+        _tripSearch = e.Value?.ToString() ?? ""; _tripTouched = true; _showTripDd = true;
+        _filteredTrips = FilterList(_trips, TripLabel, _tripSearch);
+    }
+
+    private void OnSupSearch(ChangeEventArgs e)
+    {
+        _supSearch = e.Value?.ToString() ?? ""; _supTouched = true; _showSupDd = true;
+        _filteredSups = FilterList(_suppliers, x => x.Label, _supSearch);
+    }
+
+    private void PickType(ExpType t)
+    {
+        _showTypeDd = false; _typeTouched = true; _typeSearch = t.Label;
+        _f.ExpenseTypeId = t.Id;
+        if (!t.IsOperationCost)
+        {
+            _f.OperationId = null; _f.TripId = null; _f.CustodyId = null;
+            _opTouched = false; _opSearch = "";
+            _tripTouched = false; _tripSearch = "";
+        }
+        _f.IsTaxDeductible = t.IsTaxDeductible;
+    }
+
+    private void PickOp(OpOpt o)
+    { _showOpDd = false; _opTouched = true; _opSearch = OpLabel(o); _f.OperationId = o.OperationId; }
+
+    private void ClearOp()
+    { _showOpDd = false; _opTouched = true; _opSearch = ""; _f.OperationId = null; }
+
+    /* اختيار الرحلة = نفس منطق #24/#29: العهد بتتحمل + العملية تتحدد تلقائي */
+    private async Task PickTrip(TripOpt t)
+    {
+        _showTripDd = false; _tripTouched = true; _tripSearch = TripLabel(t);
+        _f.TripId    = t.TripId;
+        _f.CustodyId = null;
+        await LoadCustodiesAsync();
+
+        var rops = await SafeGetT<OpOpt>($"api/options/trip-operations?tripId={t.TripId}");
+        if (rops.Count > 0 && !rops.Any(o => o.OperationId == _f.OperationId))
+        {
+            _f.OperationId = rops[0].OperationId;
+            _opTouched = false; _opSearch = "";
+        }
+    }
+
+    private async Task ClearTrip()
+    {
+        _showTripDd = false; _tripTouched = true; _tripSearch = "";
+        _f.TripId    = null;
+        _f.CustodyId = null;
+        await LoadCustodiesAsync();
+    }
+
+    private void PickSup(Opt s)
+    { _showSupDd = false; _supTouched = true; _supSearch = s.Label; _f.SupplierId = s.Id; }
+
+    private void ClearSup()
+    { _showSupDd = false; _supTouched = true; _supSearch = ""; _f.SupplierId = null; }
+
+    private static List<T> FilterList<T>(List<T> src, Func<T, string> label, string search) =>
+        string.IsNullOrWhiteSpace(search)
+            ? src.Take(20).ToList()
+            : src.Where(x => NormalizeArabic(label(x)).Contains(NormalizeArabic(search.Trim())))
+                 .Take(20).ToList();
+
+    private static string NormalizeArabic(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        return s
+            .Replace('أ', 'ا').Replace('إ', 'ا').Replace('آ', 'ا').Replace('ٱ', 'ا')
+            .Replace('ة', 'ه')
+            .Replace('ى', 'ي')
+            .Replace('ؤ', 'و')
+            .Replace('ئ', 'ي');
+    }
 
     private static decimal ParseAmount(object? v) =>
         decimal.TryParse(v?.ToString(), out var n) && n > 0 ? n : 0m;

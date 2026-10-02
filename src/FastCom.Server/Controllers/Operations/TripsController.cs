@@ -47,7 +47,8 @@ public class TripsController : ControllerBase
     public record TripOpDto(long OperationId, int SequenceNo, string? PickupAt, string? DeliveryAt, string? Notes);
 
     public record TripUpsert(int DriverId, int VehicleId, int? TrailerId, int? TripTypeId,
-        string? PlannedStartAt, string? Notes, decimal? FreightAmount, List<TripOpDto>? Operations);
+        string? PlannedStartAt, string? Notes, decimal? FreightAmount,
+        int? PortId, int? DestinationId, int? TahteeqPortId, List<TripOpDto>? Operations);
 
     public record ListItem(long TripId, string TripNumber, string DriverName, string VehiclePlate,
         string? TrailerPlate, int OperationsCount, decimal DirectCost, decimal AllocatedCost,
@@ -62,7 +63,8 @@ public class TripsController : ControllerBase
 
     public record Detail(long TripId, string TripNumber, int DriverId, string DriverName,
         int VehicleId, string VehiclePlate, int? TrailerId, string? TrailerPlate,
-        int? TripTypeId, string? PlannedStartAt, string? ActualStartAt, string? ActualEndAt,
+        int? TripTypeId, int? PortId, int? DestinationId, int? TahteeqPortId,
+        string? PlannedStartAt, string? ActualStartAt, string? ActualEndAt,
         decimal? StartOdometer, decimal? EndOdometer, decimal? TotalDistanceKm,
         decimal? FreightAmount,
         string? Notes, string Status, decimal DirectCost,
@@ -175,6 +177,7 @@ public class TripsController : ControllerBase
 
         var detail = new Detail(t.TripId, t.TripNumber, t.DriverId, driverName,
             t.VehicleId, plate, t.TrailerId, trailerPlate, t.TripTypeId,
+            t.PortId, t.DestinationId, t.TahteeqPortId,
             t.PlannedStartAt?.ToString("yyyy-MM-ddTHH:mm"),
             t.ActualStartAt?.ToString("yyyy-MM-ddTHH:mm"),
             t.ActualEndAt?.ToString("yyyy-MM-ddTHH:mm"),
@@ -204,7 +207,9 @@ public class TripsController : ControllerBase
                 o.OperationId, o.OperationNumber,
                 CustomerName = o.Customer.NameAr,
                 Route = (o.Port != null ? o.Port.NameAr : "—") + " ← " +
-                        (o.Destination != null ? o.Destination.NameAr : "—"),
+                        (o.Destination != null ? o.Destination.NameAr : "—") +
+                        (o.TahteeqPort != null ? " ← تعتيق: " + o.TahteeqPort.NameAr : ""),
+                o.PortId, o.DestinationId, o.TahteeqPortId, o.TripTypeId,
                 o.RevenueNet
             })
             .ToListAsync(ct);
@@ -232,6 +237,9 @@ public class TripsController : ControllerBase
             VehicleId     = req.VehicleId,
             TrailerId     = req.TrailerId,
             TripTypeId    = req.TripTypeId,
+            PortId        = req.PortId,
+            DestinationId = req.DestinationId,
+            TahteeqPortId = req.TahteeqPortId,
             PlannedStartAt = Dt(req.PlannedStartAt),
             FreightAmount  = req.FreightAmount is > 0 ? req.FreightAmount : null,
             Notes         = B(req.Notes),
@@ -286,6 +294,9 @@ public class TripsController : ControllerBase
         t.VehicleId     = req.VehicleId;
         t.TrailerId     = req.TrailerId;
         t.TripTypeId    = req.TripTypeId;
+        t.PortId        = req.PortId;
+        t.DestinationId = req.DestinationId;
+        t.TahteeqPortId = req.TahteeqPortId;
         t.PlannedStartAt = Dt(req.PlannedStartAt);
         t.FreightAmount  = req.FreightAmount is > 0 ? req.FreightAmount : null;
         t.Notes         = B(req.Notes);
@@ -324,7 +335,7 @@ public class TripsController : ControllerBase
             throw;
         }
 
-        return Ok(new { message = "✅ اتحفظ التعديل" });
+        return Ok(new { message = "✅ تم حفظ التعديل" });
     }
 
     private async Task AttachOperationsAsync(long tripId, List<TripOpDto> ops, CancellationToken ct)

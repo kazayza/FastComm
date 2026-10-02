@@ -136,7 +136,7 @@ public class RolesController : ControllerBase
             await InvalidateRoleUsers(id);
 
         _logger.LogInformation("تعديل دور {Id} بواسطة {By}", id, CurrentUserId());
-        return Ok(new { message = "✅ اتحفظ التعديل" });
+        return Ok(new { message = "تم حفظ التعديل" });
     }
 
     // ════════════════════════ DELETE ════════════════════════

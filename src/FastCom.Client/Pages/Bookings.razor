@@ -45,15 +45,18 @@
         @if (CanView)
         {
             <div class="fc-kpis fc-kpis-glass">
-                <div class="fc-kpi">
+                <div class="fc-kpi fc-kpi-click @(_tab == "all" ? "fc-kpi-active" : "")"
+                     @onclick='() => SetTab("all")' role="button" aria-pressed="@(_tab == "all")">
                     <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.BookOnline" /></div>
                     <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي الحجوزات</div></div>
                 </div>
-                <div class="fc-kpi">
+                <div class="fc-kpi fc-kpi-click @(_tab == "Draft" ? "fc-kpi-active" : "")"
+                     @onclick='() => SetTab("Draft")' role="button" aria-pressed="@(_tab == "Draft")">
                     <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.HourglassTop" /></div>
                     <div><div class="fc-kpi-num">@_items.Count(b => b.Status == "Draft")</div><div class="fc-kpi-lb">مسودة</div></div>
                 </div>
-                <div class="fc-kpi">
+                <div class="fc-kpi fc-kpi-click @(_tab == "Confirmed" ? "fc-kpi-active" : "")"
+                     @onclick='() => SetTab("Confirmed")' role="button" aria-pressed="@(_tab == "Confirmed")">
                     <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
                     <div><div class="fc-kpi-num">@_items.Count(b => b.Status == "Confirmed")</div><div class="fc-kpi-lb">مؤكد</div></div>
                 </div>
@@ -170,7 +173,7 @@
                     <span class="bl-wf-step wf-amber">مكتمل</span>
                 </div>
                 <div class="bl-wf-note">
-                    أنت بتتحكم في أول خطوتين فقط — الباقي بيتحرك تلقائياً حسب العمليات
+                    تتحكم في الخطوتين الأوليين فقط — والباقي يتحرك تلقائيًا حسب العمليات
                 </div>
             </div>
 
@@ -283,6 +286,19 @@
                                                     </svg>
                                                 </span>
                                                 <span class="bl-route-to">@(b.DestinationName ?? "—")</span>
+                                                @if (b.TahteeqPortName is not null)
+                                                {
+                                                <span class="bl-route-arrow" aria-hidden="true">
+                                                    <svg viewBox="0 0 24 24" width="12" height="12"
+                                                         fill="none" stroke="currentColor" stroke-width="2.5">
+                                                        <path d="M5 12h14M12 5l7 7-7 7" stroke-linecap="round"
+                                                              stroke-linejoin="round"/>
+                                                    </svg>
+                                                </span>
+                                                    <span class="bl-route-tah" title="ميناء التعتيق">
+                                                        <span class="bl-route-tah-tag">تعتيق</span>@b.TahteeqPortName
+                                                    </span>
+                                                }
                                             </div>
                                         }
                                         else
@@ -335,6 +351,65 @@
                                     @* ── إجراءات ── *@
                                     <td>
                                         <div class="bl-actions">
+
+                                            @if (CanView)
+                                            {
+                                                <button class="bl-act-btn act-view"
+                                                        @onclick="() => GoEdit(b)"
+                                                        title="عرض التفاصيل"
+                                                        aria-label="عرض تفاصيل @b.BookingNumber">
+                                                    <svg viewBox="0 0 24 24" width="15" height="15"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                                        <circle cx="12" cy="12" r="3"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @if (CanOps)
+                                            {
+                                                <div class="bl-ops-wrap">
+                                                    <button class="bl-act-btn act-ops"
+                                                            @onclick="() => ToggleOpsMenu(b.BookingId)"
+                                                            title="عمليات الحجز"
+                                                            aria-label="عمليات @b.BookingNumber"
+                                                            aria-haspopup="menu"
+                                                            aria-expanded="@(_opsMenuId == b.BookingId ? "true" : "false")">
+                                                        <svg viewBox="0 0 24 24" width="15" height="15"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                                                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                                                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                                                        </svg>
+                                                    </button>
+                                                    @if (_opsMenuId == b.BookingId)
+                                                    {
+                                                        <div class="bl-ops-menu" role="menu">
+                                                            <button type="button" class="bl-ops-item" role="menuitem"
+                                                                    @onclick="() => GoOps(b)">
+                                                                <svg viewBox="0 0 24 24" width="13" height="13"
+                                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                                                    <circle cx="12" cy="12" r="3"/>
+                                                                </svg>
+                                                                عرض العمليات
+                                                            </button>
+                                                            @if (CanCreateOp)
+                                                            {
+                                                                <button type="button" class="bl-ops-item" role="menuitem"
+                                                                        @onclick="() => GoNewOpFor(b)">
+                                                                    <svg viewBox="0 0 24 24" width="13" height="13"
+                                                                         fill="none" stroke="currentColor" stroke-width="2.5">
+                                                                        <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                                                    </svg>
+                                                                    إضافة عملية
+                                                                </button>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
 
                                             @if (b.Status == "Draft")
                                             {
@@ -451,10 +526,6 @@
                                                 </button>
                                             }
 
-                                            else
-                                            {
-                                                <span class="td-muted" style="font-size:11px">تلقائي</span>
-                                            }
 
                                         </div>
                                     </td>
@@ -499,6 +570,15 @@
                 </span>
                 <span class="fc-fab-label">تحديث البيانات</span>
             </button>
+            @if (CanOps)
+            {
+                <button type="button" class="fc-fab-item" role="menuitem" @onclick="GoOpsScreenFromFab">
+                    <span class="fc-fab-icon" style="background: rgba(124,77,189,.1); color: #7c4dbd;">
+                        <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Size="Size.Small" />
+                    </span>
+                    <span class="fc-fab-label">شاشة العمليات</span>
+                </button>
+            }
         </div>
 
         <button type="button" class="fc-fab-main fc-glow-gold @(_fabOpen ? "is-open" : "")"
@@ -909,6 +989,17 @@
 
     .bl-route-from { font-size: 11px; font-weight: 700; color: var(--fc-blue); }
     .bl-route-to   { font-size: 11px; font-weight: 700; color: var(--fc-green); }
+    .bl-route-tah  { font-size: 11px; font-weight: 700; color: #b45309; display: inline-flex; align-items: center; gap: 3px; }
+    .bl-route-tah-tag {
+        background: rgba(217, 119, 6, .12);
+        border: 1px solid rgba(217, 119, 6, .28);
+        color: #b45309;
+        font-size: 9px;
+        font-weight: 800;
+        padding: 1px 4px;
+        border-radius: 4px;
+        letter-spacing: .2px;
+    }
     .bl-route-arrow { color: #c0ccd8; display: flex; }
 
     /* ── Date Cell ── */
@@ -971,12 +1062,45 @@
     .act-delete   { color: var(--fc-red); }
     .act-cancel   { color: var(--fc-red); }
     .act-revert   { color: var(--fc-blue); }
+    .act-view     { color: var(--fc-text); }
+    .act-ops      { color: var(--fc-blue); }
 
     .act-edit:hover     { background: var(--fc-blue-lt);  border-color: #c0d4fb; }
     .act-confirm:hover  { background: var(--fc-green-lt); border-color: #b0e0c5; }
     .act-delete:hover   { background: var(--fc-red-lt);   border-color: #ffc8cf; }
     .act-cancel:hover   { background: var(--fc-red-lt);   border-color: #ffc8cf; }
     .act-revert:hover   { background: var(--fc-blue-lt);  border-color: #c0d4fb; }
+    .act-view:hover     { background: #eef2f7;            border-color: #d5dde6; }
+    .act-ops:hover      { background: var(--fc-blue-lt);  border-color: #c0d4fb; }
+
+    /* قائمة خيارات العمليات الصغيرة */
+    .bl-ops-wrap { position: relative; display: inline-flex; }
+    .bl-ops-menu {
+        position: absolute;
+        top: calc(100% + 6px);
+        inset-inline-end: 0;
+        z-index: 60;
+        min-width: 150px;
+        background: #fff;
+        border: 1px solid var(--fc-border);
+        border-radius: 10px;
+        box-shadow: 0 8px 28px rgba(15, 41, 82, .16);
+        padding: 5px;
+        display: flex; flex-direction: column; gap: 2px;
+    }
+    .bl-ops-item {
+        display: flex; align-items: center; gap: 7px;
+        padding: 7px 9px;
+        border: none; border-radius: 7px;
+        background: transparent;
+        color: var(--fc-text);
+        font-family: inherit; font-size: 11.5px; font-weight: 700;
+        cursor: pointer; text-align: start;
+        transition: background .12s ease;
+    }
+    .bl-ops-item:hover { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .bl-ops-item svg { color: #8899ae; flex-shrink: 0; }
+    .bl-ops-item:hover svg { color: var(--fc-blue); }
 
     .bl-confirm-del {
         height: 28px; padding: 0 10px;
@@ -1087,6 +1211,8 @@
 @code {
     private AuthUser? _user;
     private bool CanView    => _user?.Can("BOOKING.VIEW")    ?? false;
+    private bool CanOps       => _user?.Can("OPERATION.VIEW")   ?? false;
+    private bool CanCreateOp  => _user?.Can("OPERATION.CREATE") ?? false;
     private bool CanCreate  => _user?.Can("BOOKING.CREATE")  ?? false;
     private bool CanEdit    => _user?.Can("BOOKING.EDIT")    ?? false;
     private bool CanDelete  => _user?.Can("BOOKING.DELETE")  ?? false;
@@ -1120,6 +1246,12 @@
         GoNew();
     }
 
+    private void GoOpsScreenFromFab()
+    {
+        _fabOpen = false;
+        Nav.NavigateTo("/operations");
+    }
+
     private async Task ReloadFromFab()
     {
         _fabOpen = false;
@@ -1134,6 +1266,7 @@
         public string?  ServiceName       { get; set; }
         public string?  PortName          { get; set; }
         public string?  DestinationName   { get; set; }
+        public string?  TahteeqPortName   { get; set; }
         public string?  CustomerReference { get; set; }
         public DateOnly? RequestedDate    { get; set; }
         public int      ContainersQty     { get; set; }
@@ -1229,6 +1362,21 @@
 
     private void GoNew()        => Nav.NavigateTo("/bookings/new");
     private void GoEdit(Item b) => Nav.NavigateTo($"/bookings/new/{b.BookingId}");
+    private long _opsMenuId;
+
+    private void ToggleOpsMenu(long id) => _opsMenuId = _opsMenuId == id ? 0 : id;
+
+    private void GoOps(Item b)
+    {
+        _opsMenuId = 0;
+        Nav.NavigateTo($"/operations?booking={Uri.EscapeDataString(b.BookingNumber)}");
+    }
+
+    private void GoNewOpFor(Item b)
+    {
+        _opsMenuId = 0;
+        Nav.NavigateTo($"/operations/new?booking={Uri.EscapeDataString(b.BookingNumber)}");
+    }
 
     private async Task Confirm(Item b) => await SetStatus(b, "Confirmed");
 

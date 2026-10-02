@@ -209,6 +209,21 @@ public class OptionsController : ControllerBase
                                         c.TripId, c.AmountIssued))
             .ToListAsync(ct));
 
+    /// <summary>عمليات رحلة — للربط التلقائي في فورم المصروف (#29).</summary>
+    [HttpGet("trip-operations")]
+    [Authorize(Policy = "PERM:EXPENSE.VIEW")]
+    public async Task<IActionResult> TripOperations(long? tripId, CancellationToken ct) =>
+        Ok(tripId is null
+            ? new List<TripOpOpt>()
+            : await _db.TripOperations.AsNoTracking()
+                .Where(to => to.TripId == tripId && !to.Operation.IsDeleted)
+                .OrderBy(to => to.SequenceNo)
+                .Select(to => new TripOpOpt(to.OperationId, to.Operation.OperationNumber,
+                                            to.Operation.Customer.NameAr))
+                .ToListAsync(ct));
+
+    public record TripOpOpt(long OperationId, string OperationNumber, string CustomerName);
+
     public record CustodyOpt(long Id, string Label, string OwnerType, int OwnerId,
                              long? TripId, decimal AmountIssued);
 

@@ -338,7 +338,7 @@ public class InvoicesController : ControllerBase
             await _db.Database.CommitTransactionAsync(ct);
 
             return Ok(new { id = inv.InvoiceId, number = inv.InvoiceNumber,
-                message = $"✅ اتحفظت الفاتورة برقم {inv.InvoiceNumber}" });
+                message = $"✅ تم حفظ الفاتورة برقم {inv.InvoiceNumber}" });
         }
         catch (Exception)
         {
@@ -389,7 +389,7 @@ public class InvoicesController : ControllerBase
 
             await _db.Database.CommitTransactionAsync(ct);
 
-            return Ok(new { message = "✅ اتعدّلت الفاتورة" });
+            return Ok(new { message = "✅ تم تعديل الفاتورة" });
         }
         catch (Exception)
         {

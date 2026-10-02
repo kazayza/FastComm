@@ -289,7 +289,7 @@ public class ExpensesController : ControllerBase
         await SyncTreasuryAsync(e, oldAmount, ct);
         await _db.SaveChangesAsync(ct);
 
-        return Ok(new { message = "✅ اتحفظ التعديل" });
+        return Ok(new { message = "تم حفظ التعديل" });
     }
 
     /// <summary>TaxRate في الجدول Denormalized Snapshot — لازم التطبيق ينسخها من TaxRates.</summary>

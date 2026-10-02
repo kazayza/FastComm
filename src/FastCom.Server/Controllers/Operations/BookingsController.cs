@@ -51,12 +51,14 @@ public class BookingsController : ControllerBase
         int CustomerId, string? RequestedDate, int? ServiceId, int? PortId, int? DestinationId,
         int? TahteeqPortId, int? EndCustomerId, int? TripTypeId, string? CustomerReference, int? ContactId, string? Notes,
         List<BookingLineDto>? Lines, List<ContainerDetailDto>? ContainerDetails,
-        int? GuaranteeSupplierId = null, int? ShippingAgentId = null);
+        int? GuaranteeSupplierId = null, int? ShippingAgentId = null,
+        string? BookingReference = null, string? BLNumber = null);
 
     public record ListItem(
         long BookingId, string BookingNumber, string CustomerName, string? ServiceName,
         string? PortName, string? DestinationName, string? CustomerReference,
-        DateOnly? RequestedDate, int ContainersQty, string Status, DateTime CreatedAt);
+        DateOnly? RequestedDate, int ContainersQty, string Status, DateTime CreatedAt,
+        string? TahteeqPortName);
 
     public record ContainerDetailItem(
         long BookingContainerDetailId, long? ContainerId, string? ContainerNumber,
@@ -74,7 +76,8 @@ public class BookingsController : ControllerBase
         int? DestinationId, string? DestinationName, int? TahteeqPortId, string? TahteeqPortName,
         int? EndCustomerId, string? EndCustomerName, int? TripTypeId, string? TripTypeName,
         string? CustomerReference, int? ContactId, string? Notes, string Status, DateTime CreatedAt,
-        int? ShippingAgentId, string? ShippingAgentName, int? GuaranteeSupplierId, string? GuaranteeSupplierName);
+        int? ShippingAgentId, string? ShippingAgentName, int? GuaranteeSupplierId, string? GuaranteeSupplierName,
+        string? BookingReference, string? BLNumber);
 
     public record DetailResponse(Detail Booking, List<LineItem> Lines);
 
@@ -112,7 +115,8 @@ public class BookingsController : ControllerBase
                 b.CustomerReference,
                 b.RequestedDate,
                 b.BookingContainerLines.Sum(l => l.RequestedQty),
-                b.Status, b.CreatedAt))
+                b.Status, b.CreatedAt,
+                b.TahteeqPort != null ? b.TahteeqPort.NameAr : null))
             .ToListAsync(ct);
 
         return Ok(rows);
@@ -178,7 +182,8 @@ public class BookingsController : ControllerBase
             b.PortId, names.Port, b.DestinationId, names.Destination,
             b.TahteeqPortId, names.TahteeqPort, b.EndCustomerId, names.EndCustomer, b.TripTypeId, names.TripType, b.CustomerReference, b.ContactId,
             b.Notes, b.Status, b.CreatedAt,
-            b.ShippingAgentId, agentName, b.GuaranteeSupplierId, guarSupName);
+            b.ShippingAgentId, agentName, b.GuaranteeSupplierId, guarSupName,
+            b.BookingReference, b.BLNumber);
 
         return Ok(new DetailResponse(detail, linesWithDetails));
     }
@@ -233,6 +238,8 @@ public class BookingsController : ControllerBase
             EndCustomerId   = req.EndCustomerId,
             TripTypeId      = req.TripTypeId,
             CustomerReference = B(req.CustomerReference),
+            BookingReference  = B(req.BookingReference),
+            BLNumber          = B(req.BLNumber),
             ContactId       = req.ContactId,
             ShippingAgentId   = req.ShippingAgentId,
             GuaranteeSupplierId = req.GuaranteeSupplierId,
@@ -262,7 +269,7 @@ public class BookingsController : ControllerBase
         await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "Booking", null, description: "إنشاء حجز", ct: ct);
 
         return Ok(new { id = b.BookingId, number = b.BookingNumber,
-            message = $"✅ اتسجل الحجز برقم {b.BookingNumber}" });
+            message = $"✅ تم تسجيل الحجز برقم {b.BookingNumber}" });
     }
 
     // ═══════════════ UPDATE ═══════════════
@@ -275,7 +282,7 @@ public class BookingsController : ControllerBase
         if (err is not null) return BadRequest(new { message = err });
 
         var b = await _db.Bookings.FirstOrDefaultAsync(x => x.BookingId == id && !x.IsDeleted, ct);
-        if (b is null) return NotFound(new { message = "الحجز مش موجود" });
+        if (b is null) return NotFound(new { message = "الحجز غير موجود" });
 
         if (b.Status is not ("Draft" or "Confirmed"))
             {
@@ -292,6 +299,8 @@ public class BookingsController : ControllerBase
         b.EndCustomerId   = req.EndCustomerId;
         b.TripTypeId      = req.TripTypeId;
         b.CustomerReference = B(req.CustomerReference);
+        b.BookingReference  = B(req.BookingReference);
+        b.BLNumber          = B(req.BLNumber);
         b.ContactId       = req.ContactId;
         b.ShippingAgentId     = req.ShippingAgentId;
         b.GuaranteeSupplierId = req.GuaranteeSupplierId;
@@ -341,7 +350,7 @@ public class BookingsController : ControllerBase
             throw;
         }
 
-        return Ok(new { message = "✅ اتحفظ التعديل" });
+        return Ok(new { message = "تم حفظ التعديل" });
     }
 
     private void AddLines(long bookingId, List<BookingLineDto> lines, int userId, List<ContainerDetailDto>? details = null)
@@ -425,7 +434,7 @@ public class BookingsController : ControllerBase
         b.UpdatedBy = CurrentUserId();
         await _db.SaveChangesAsync(ct);
 
-        return Ok(new { message = to == "Confirmed" ? "✅ اتأكد الحجز"
+        return Ok(new { message = to == "Confirmed" ? "تم تأكيد الحجز"
                                 : to == "Cancelled" ? "✅ اتلغى الحجز"
                                 : "✅ اتحدثت الحالة" });
     }
