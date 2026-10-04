@@ -122,7 +122,7 @@ public class CustomersController : ControllerBase
         await _db.SaveChangesAsync(ct);
 
         _logger.LogInformation("عميل جديد {Code} {Name}", code, c.NameAr);
-        return Ok(new { id = c.CustomerId, code, message = $"✅ اتعمل العميل بكود {code}" });
+        return Ok(new { id = c.CustomerId, code, message = $"✅ تم انشاء العميل بكود {code}" });
     }
 
     // ═══════════════ UPDATE ═══════════════
@@ -135,7 +135,7 @@ public class CustomersController : ControllerBase
         if (err is not null) return BadRequest(new { message = err });
 
         var c = await _db.Customers.FirstOrDefaultAsync(x => x.CustomerId == id, ct);
-        if (c is null) return NotFound(new { message = "العميل مش موجود" });
+        if (c is null) return NotFound(new { message = "العميل غير موجود" });
 
         c.CustomerType   = req.CustomerType;
         c.NameAr         = req.NameAr.Trim();
@@ -163,7 +163,7 @@ public class CustomersController : ControllerBase
     public async Task<IActionResult> ToggleActive(int id, CancellationToken ct)
     {
         var c = await _db.Customers.FirstOrDefaultAsync(x => x.CustomerId == id, ct);
-        if (c is null) return NotFound(new { message = "العميل مش موجود" });
+        if (c is null) return NotFound(new { message = "العميل غير موجود" });
 
         c.IsActive  = !c.IsActive;
         c.UpdatedAt = DateTime.UtcNow;
@@ -180,7 +180,7 @@ public class CustomersController : ControllerBase
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         var c = await _db.Customers.FirstOrDefaultAsync(x => x.CustomerId == id, ct);
-        if (c is null) return NotFound(new { message = "العميل مش موجود" });
+        if (c is null) return NotFound(new { message = "العميل غير موجود" });
 
         c.IsDeleted = true;
         c.IsActive  = false;

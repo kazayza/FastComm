@@ -5,6 +5,8 @@
 @inject HttpClient Http
 @inject AuthService Auth
 @inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>الخزينة وصناديق النقد — فاست كوم</PageTitle>
 
@@ -180,6 +182,12 @@
                         @if (CanManage)
                         {
                             <div class="tr-box-actions">
+                                <button type="button" class="tr-box-act" title="كشف حساب الصندوق" @onclick="() => OpenStmt(b)">
+                                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                        <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
+                                    </svg>
+                                </button>
                                 @if (b.Status == "Open" && b.Code != _defaultBoxCode)
                                 {
                                     <a class="tr-box-act" href="/treasury/boxes/new/@b.CashBoxId" title="تعديل بيانات الخزينة">
@@ -193,6 +201,21 @@
                                             <rect x="3" y="11" width="18" height="11" rx="2"/>
                                             <path d="M7 11V7a5 5 0 0110 0v4"/>
                                         </svg>
+                                    </button>
+                                    <button type="button" class="tr-box-act" title="@(b.IsActive ? "إيقاف الصندوق" : "تفعيل الصندوق")" @onclick="() => ToggleActive(b)">
+                                        @if (b.IsActive)
+                                        {
+                                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="6" y="4" width="4" height="16" rx="1"/>
+                                                <rect x="14" y="4" width="4" height="16" rx="1"/>
+                                            </svg>
+                                        }
+                                        else
+                                        {
+                                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                                                <polygon points="5 3 19 12 5 21 5 3"/>
+                                            </svg>
+                                        }
                                     </button>
                                 }
                                 @if (b.Status == "Closed")
@@ -225,6 +248,107 @@
             </div>
         }
 
+
+        @* ── #48 كشف حساب الصندوق ── *@
+        @if (_stmtBoxId > 0)
+        {
+            <div class="si-card ts-card">
+                <div class="ts-head">
+                    <div class="ts-title">
+                        كشف حساب الصندوق
+                        @if (_stmt is not null)
+                        {
+                            <b>— @_stmt.BoxName (@_stmt.BoxCode)</b>
+                        }
+                    </div>
+                    <div class="ts-controls">
+                        <select class="ts-month" @bind="_stmtMonth" @bind:after="LoadStmt" title="شهر الكشف">
+                            @foreach (var m in _stmtMonths)
+                            {
+                                <option value="@m.ToString("yyyy-MM")">@m.ToString("MMMM yyyy")</option>
+                            }
+                        </select>
+                        <button type="button" class="ts-btn" @onclick="PrintStmt" title="طباعة احترافية">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <polyline points="6 9 6 2 18 2 18 9"/>
+                                <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+                                <rect x="6" y="14" width="12" height="8"/>
+                            </svg>
+                            طباعة
+                        </button>
+                        <button type="button" class="ts-btn" @onclick="ExportStmt" disabled="@_stmtExporting" title="تصدير إكسيل">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            تصدير إكسيل
+                        </button>
+                        <button type="button" class="ts-btn ts-close" @onclick="CloseStmt">إغلاق</button>
+                    </div>
+                </div>
+
+                @if (_stmtLoading)
+                {
+                    <div class="ts-loading">جاري تحميل الكشف...</div>
+                }
+                else if (_stmt is null)
+                {
+                    <div class="ts-loading">تعذر تحميل الكشف</div>
+                }
+                else
+                {
+                    <div class="ts-table-wrap">
+                        <table class="ts-table">
+                            <thead>
+                                <tr>
+                                    <th>التاريخ</th>
+                                    <th>نوع الحركة</th>
+                                    <th>المرجع</th>
+                                    <th class="th-start">البيان</th>
+                                    <th>الطرف المقابل</th>
+                                    <th>مدين</th>
+                                    <th>دائن</th>
+                                    <th>الرصيد الجاري</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="ts-opening-row">
+                                    <td>@_stmtFrom.ToString("dd/MM/yyyy")</td>
+                                    <td colspan="4" class="td-start">رصيد مُرحّل من فترات سابقة</td>
+                                    <td>—</td>
+                                    <td>—</td>
+                                    <td class="num">@Money(_stmt.Opening)</td>
+                                </tr>
+                                @foreach (var l in _stmt.Lines)
+                                {
+                                    <tr>
+                                        <td>@l.Date.ToString("dd/MM/yyyy")</td>
+                                        <td><span class="ts-kind ts-kind-@l.Kind.ToLower()">@BoxKindAr(l.Kind)</span></td>
+                                        <td>@l.Ref</td>
+                                        <td class="td-start">@(l.Description ?? "—")</td>
+                                        <td>@(string.IsNullOrWhiteSpace(l.Counterpart) ? "—" : l.Counterpart)</td>
+                                        <td class="num debit">@Money(l.Debit)</td>
+                                        <td class="num credit">@Money(l.Credit)</td>
+                                        <td class="num">@Money(l.Balance)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="5" class="td-start">
+                                        <div class="ts-total-label">إجمالي الحركة المالية للفترة</div>
+                                    </td>
+                                    <td class="num debit">@Money(_stmt.TotalDebit)</td>
+                                    <td class="num credit">@Money(_stmt.TotalCredit)</td>
+                                    <td class="num closing">@Money(_stmt.Closing)</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                }
+            </div>
+        }
 
         @* ── Transactions Card ── *@
         <div class="si-card">
@@ -440,7 +564,7 @@
                                         @if (!string.IsNullOrWhiteSpace(t.ReferenceNumber) || !string.IsNullOrWhiteSpace(t.Description))
                                         {
                                             <div class="tr-ref-desc">
-                                                @(t.ReferenceNumber ?? t.Description)
+                                                @(t.RefAr ?? t.ReferenceNumber ?? t.Description)
                                             </div>
                                         }
                                         else
@@ -479,6 +603,16 @@
                                     @if (CanVoid)
                                     {
                                         <td>
+                                            @if (OriginRoute(t) is string origin)
+                                            {
+                                                <a class="tr-origin-btn" href="@origin" title="الذهاب إلى أصل الحركة">
+                                                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                        <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+                                                        <polyline points="15 3 21 3 21 9"/>
+                                                        <line x1="10" y1="14" x2="21" y2="3"/>
+                                                    </svg>
+                                                </a>
+                                            }
                                             @if (t.Status == "Posted")
                                             {
                                                 @if (_confirmId == t.CashTransactionId)
@@ -510,241 +644,6 @@
         </div>
     }
 </div>
-
-
-@* ═══════════════════════════════════════════
-   MODAL — حركة جديدة (صرف / قبض)
-═══════════════════════════════════════════ *@
-@if (_postOpen && CanPost)
-{
-    <div class="tr-modal-backdrop" @onclick="ClosePost" role="dialog" aria-modal="true" aria-label="حركة خزينة جديدة">
-        <div class="tr-modal tr-modal-xl" @onclick:stopPropagation="true">
-
-            <div class="tr-modal-head">
-                <div class="tr-modal-icon @(_pf.Type == "Receipt" ? "icon-green" : "icon-red")" aria-hidden="true">
-                    @if (_pf.Type == "Receipt")
-                    {
-                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 2v20M2 12l10-10 10 10" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                    }
-                    else
-                    {
-                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 22V2M22 12l-10 10L2 12" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                    }
-                </div>
-                <div style="flex:1; min-width:0">
-                    <div class="tr-modal-title">تسجيل حركة مالية جديدة</div>
-                    <div class="tr-modal-sub">يتم تحديث وإيداع الأرصدة تلقائياً في وعاء الصندوق المختار فور الحفظ</div>
-                </div>
-                <button class="tr-modal-close" @onclick="ClosePost" aria-label="إغلاق">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
-                    </svg>
-                </button>
-            </div>
-
-            @if (_msg is not null)
-            {
-                <div class="tr-modal-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
-                    <span>@_msg</span>
-                    <button class="tr-banner-close" @onclick="() => _msg = null" aria-label="إغلاق التنبيه">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true">
-                            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
-                        </svg>
-                    </button>
-                </div>
-            }
-
-            <div class="tr-modal-body">
-
-                <div class="tr-type-toggle" role="group" aria-label="نوع الحركة المالية">
-                    <button type="button" class="tr-type-btn @(_pf.Type == "Receipt" ? "type-receipt" : "")" @onclick='() => { _pf.Type = "Receipt"; _pf.CustomerId = 0; _openInvoices = new(); }' aria-pressed="@(_pf.Type == "Receipt")">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <path d="M12 2v20M2 12l10-10 10 10" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        سند قبض (إيداع/وارد)
-                    </button>
-                    <button type="button" class="tr-type-btn @(_pf.Type == "Payment" ? "type-payment" : "")" @onclick='() => { _pf.Type = "Payment"; _pf.CustomerId = 0; _openInvoices = new(); }' aria-pressed="@(_pf.Type == "Payment")">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <path d="M12 22V2M22 12l-10 10L2 12" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        سند صرف (خصم/صادر)
-                    </button>
-                </div>
-
-                <div class="tr-modal-grid">
-
-                    <div class="tr-mfield">
-                        <label class="tr-mlabel">
-                            صندوق الصرف المستهدف <span class="tr-mrequired">*</span>
-                        </label>
-                        <div class="tr-mselect-wrap">
-                            <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                <rect x="2" y="7" width="20" height="14" rx="2"/>
-                                <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
-                            </svg>
-                            <select class="tr-minput tr-msel" value="@_pf.CashBoxId" @onchange="e => _pf.CashBoxId = ParseInt(e.Value)" aria-required="true">
-                                <option value="0">— اختر صندوق الصرف —</option>
-                                @foreach (var b in _boxes)
-                                {
-                                    <option value="@b.CashBoxId">@b.NameAr (@Money(b.CurrentBalance))</option>
-                                }
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="tr-mfield">
-                        <label class="tr-mlabel">
-                            مبلغ الحركة المالي <span class="tr-mrequired">*</span>
-                        </label>
-                        <div class="tr-mfield-group">
-                            <span class="tr-mprefix" aria-hidden="true">ج.م</span>
-                            <input type="number" min="0.01" step="0.01" class="tr-minput with-prefix" value="@_pf.Amount" placeholder="0.00" @onchange="e => _pf.Amount = ParseDec(e.Value)" />
-                        </div>
-                    </div>
-
-                    <div class="tr-mfield">
-                        <label class="tr-mlabel">تاريخ الحركة</label>
-                        <div class="tr-mfield-group">
-                            <span class="tr-mprefix" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="12" cy="12" r="10"/>
-                                    <path d="M12 6v6l4 2" stroke-linecap="round"/>
-                                </svg>
-                            </span>
-                            <input type="datetime-local" class="tr-minput with-prefix" value="@_pf.TxDate" @onchange="e => _pf.TxDate = e.Value?.ToString()" />
-                        </div>
-                    </div>
-
-                    <div class="tr-mfield">
-                        <label class="tr-mlabel">طريقة السداد</label>
-                        <div class="tr-mselect-wrap">
-                            <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                <rect x="1" y="4" width="22" height="16" rx="2"/>
-                                <path d="M1 10h22"/>
-                            </svg>
-                            <select class="tr-minput tr-msel" value="@_pf.PaymentMethodId" @onchange="e => _pf.PaymentMethodId = ParseInt(e.Value)">
-                                <option value="0">— نقد كاش —</option>
-                                @foreach (var m in _methods)
-                                {
-                                    <option value="@m.Id">@m.Label</option>
-                                }
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="tr-mfield">
-                        <label class="tr-mlabel">
-                            @(_pf.Type == "Receipt" ? "العميل المسدد" : "العميل المستفيد (اختياري)")
-                            @if (_pf.Type == "Receipt")
-                            {
-                                <span class="tr-mrequired">*</span>
-                            }
-                        </label>
-                        <div class="tr-mselect-wrap">
-                            <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-                                <circle cx="12" cy="7" r="4"/>
-                            </svg>
-                            <select class="tr-minput tr-msel" value="@_pf.CustomerId" @onchange="OnCustomerChanged">
-                                <option value="0">— حدد اسم العميل —</option>
-                                @foreach (var c in _customers)
-                                {
-                                    <option value="@c.Id">@c.Label</option>
-                                }
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="tr-mfield">
-                        <label class="tr-mlabel">المورد</label>
-                        <div class="tr-mselect-wrap">
-                            <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-                                <path d="M9 22V12h6v10"/>
-                            </svg>
-                            <select class="tr-minput tr-msel" value="@_pf.SupplierId" @onchange="e => _pf.SupplierId = ParseInt(e.Value)">
-                                <option value="0">— حدد اسم المورد —</option>
-                                @foreach (var s in _suppliers)
-                                {
-                                    <option value="@s.Id">@s.Label</option>
-                                }
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="tr-mfield">
-                        <label class="tr-mlabel">فاتورة المبيعات المرتبطة</label>
-                        @if (_pf.CustomerId > 0 && _openInvoices.Any())
-                        {
-                            <div class="tr-mselect-wrap">
-                                <svg class="tr-msel-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round"/>
-                                </svg>
-                                <select class="tr-minput tr-msel" value="@_pf.InvoiceId" @onchange="e => _pf.InvoiceId = ParseLong(e.Value)">
-                                    <option value="0">— اختر الفاتورة المراد سدادها —</option>
-                                    @foreach (var i in _openInvoices)
-                                    {
-                                        <option value="@i.InvoiceId">
-                                            @i.InvoiceNumber — متبقي عليها: @Money(i.Due) ج.م
-                                        </option>
-                                    }
-                                </select>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="tr-field-hint">
-                                <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                                    <circle cx="8" cy="8" r="6"/>
-                                    <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
-                                </svg>
-                                يرجى اختيار العميل أولاً لفلترة فواتيره غير المسددة
-                            </div>
-                        }
-                    </div>
-
-                    <div class="tr-mfield">
-                        <label class="tr-mlabel">رقم المرجع المالي</label>
-                        <input class="tr-minput" value="@_pf.ReferenceNumber" maxlength="100" placeholder="رقم الشيك أو الحوالة البنكية..." @onchange="e => _pf.ReferenceNumber = e.Value?.ToString()" />
-                    </div>
-
-                    <div class="tr-mfield tr-mfield-full">
-                        <label class="tr-mlabel">البيان الوصفي للحركة</label>
-                        <input class="tr-minput" value="@_pf.Description" maxlength="500" placeholder="وصف الحركة بالتفصيل..." @onchange="e => _pf.Description = e.Value?.ToString()" />
-                    </div>
-
-                </div>
-
-            </div>
-
-            <div class="tr-modal-foot">
-                <button class="tr-modal-cancel" @onclick="ClosePost">تراجع</button>
-                <button class="tr-modal-save @(_pf.Type == "Receipt" ? "save-green" : "save-red")" @onclick="SavePost" disabled="@_saving">
-                    @if (_saving)
-                    {
-                        <span class="btn-spinner sm" aria-hidden="true"></span>
-                        <span>جاري الحفظ...</span>
-                    }
-                    else
-                    {
-                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <rect x="2" y="7" width="20" height="14" rx="2"/>
-                            <path d="M16 7V5a2 2 0 00-4 0v2M8 7V5a2 2 0 00-4 0v2"/>
-                            <circle cx="12" cy="14" r="2"/>
-                        </svg>
-                        <span>تسجيل الحركة المادية</span>
-                    }
-                </button>
-            </div>
-
-        </div>
-    </div>
-}
 
 
 @* ═══════════════════════════════════════════
@@ -905,6 +804,130 @@
 }
 
 
+@* ══════════════ MODAL — سند خزينة سريع ══════════════ *@
+@if (_voucherOpen)
+{
+    <div class="tr-modal-backdrop" @onclick="CloseVoucher" role="dialog" aria-modal="true" aria-label="سند خزينة سريع">
+        <div class="tr-modal" @onclick:stopPropagation="true">
+
+            <div class="tr-modal-head">
+                <div>
+                    <div class="tr-modal-title">سند خزينة سريع</div>
+                    <div class="tr-modal-sub">كل نوع بيتسجل في دفتره الرسمي — مربوط بأصله دايمًا</div>
+                </div>
+                <button type="button" class="tr-modal-x" @onclick="CloseVoucher" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="tr-modal-body">
+                @if (_vcType is null)
+                {
+                    <div class="vc-types">
+                        <button type="button" class="vc-type" @onclick='() => _vcType = "receipt"'>
+                            <div class="vc-type-name">سند قبض — فاتورة عميل</div>
+                            <div class="vc-type-desc">يقبض من العميل ويسدد فواتيره — يظهر في مدفوعاته وفي الصندوق معًا</div>
+                        </button>
+                        <button type="button" class="vc-type" @onclick="GoSupplier">
+                            <div class="vc-type-name">سند صرف — سداد مورد</div>
+                            <div class="vc-type-desc">يفتح شاشة سداد المورد الكاملة</div>
+                        </button>
+                        <button type="button" class="vc-type" @onclick="GoExpense">
+                            <div class="vc-type-name">سند صرف — مصروف مباشر</div>
+                            <div class="vc-type-desc">يفتح نموذج مصروف جديد</div>
+                        </button>
+                        <button type="button" class="vc-type" @onclick="GoCustody">
+                            <div class="vc-type-name">سند صرف — سلفة عهدة</div>
+                            <div class="vc-type-desc">يفتح شاشة العهد لصرف السلفة</div>
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div class="tr-mgrid">
+
+                        <div class="tr-mfield">
+                            <label class="tr-mlabel">العميل</label>
+                            <select class="tr-minput tr-msel" value="@_vcCustomer" @onchange="VcCustomerChanged">
+                                <option value="0">— اختر العميل —</option>
+                                @foreach (var cu in _vcCustomers)
+                                {
+                                    <option value="@cu.Id">@cu.Label</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="tr-mfield">
+                            <label class="tr-mlabel">الفاتورة المراد سدادها</label>
+                            <select class="tr-minput tr-msel" value="@_vcInvoice" @onchange="VcInvoiceChanged" disabled="@(_vcCustomer <= 0)">
+                                <option value="0">— اختر الفاتورة —</option>
+                                @foreach (var iv in _vcInvoices)
+                                {
+                                    <option value="@iv.InvoiceId">@iv.InvoiceNumber — متبقي: @Money(iv.Due) ج.م</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="tr-mfield">
+                            <label class="tr-mlabel">المبلغ المقبوض (ج.م)</label>
+                            <input class="tr-minput" type="number" step="0.01" min="0" value="@_vcAmount"
+                                   @onchange="e => _vcAmount = decimal.TryParse(e.Value?.ToString(), out var a) ? a : 0" />
+                        </div>
+
+                        <div class="tr-mfield">
+                            <label class="tr-mlabel">طريقة الدفع</label>
+                            <select class="tr-minput tr-msel" value="@_vcMethod" @onchange="e => _vcMethod = int.TryParse(e.Value?.ToString(), out var m) ? m : 0">
+                                <option value="0">— اختر الطريقة —</option>
+                                @foreach (var m in _vcMethods)
+                                {
+                                    <option value="@m.Id">@m.Label</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="tr-mfield">
+                            <label class="tr-mlabel">تاريخ القبض</label>
+                            <input class="tr-minput" type="date" value="@_vcDate" @onchange="e => _vcDate = e.Value?.ToString() ?? _vcDate" />
+                        </div>
+
+                        <div class="tr-mfield tr-mfield-full">
+                            <label class="tr-mlabel">ملاحظات</label>
+                            <input class="tr-minput" maxlength="500" value="@_vcNotes" @onchange="e => _vcNotes = e.Value?.ToString()" />
+                        </div>
+
+                    </div>
+
+                    @if (_vcMsg is not null)
+                    {
+                        <div class="tr-modal-msg @(_vcOk ? "ok" : "err")">@_vcMsg</div>
+                    }
+                }
+            </div>
+
+            @if (_vcType is not null)
+            {
+                <div class="tr-modal-foot">
+                    <button class="tr-modal-cancel" @onclick='() => { _vcType = null; _vcMsg = null; }'>رجوع للأنواع</button>
+                    <button class="tr-modal-save save-green" @onclick="SaveReceipt" disabled="@_vcSaving">
+                        @if (_vcSaving)
+                        {
+                            <span class="btn-spinner sm" aria-hidden="true"></span>
+                            <span>جاري الحفظ...</span>
+                        }
+                        else
+                        {
+                            <span>تسجيل سند القبض</span>
+                        }
+                    </button>
+                </div>
+            }
+
+        </div>
+    </div>
+}
+
 @* ══════════════ MODAL — تسوية الخزينة وإقفالها ══════════════ *@
 @if (_settleTarget is not null)
 {
@@ -996,7 +1019,7 @@
 
 
 @* ══════════════ GLOW FAB — الإجراءات السريعة ══════════════ *@
-@if (CanView && (CanPost || CanTransfer || CanManage))
+@if (CanView && (CanTransfer || CanManage))
 {
     <div class="glow-fab-wrap @(_fabOpen ? "is-open" : "")">
 
@@ -1014,6 +1037,15 @@
                     <span>خزينة جديدة</span>
                 </a>
             }
+            <button type="button" class="glow-fab-item" role="menuitem" @onclick="() => { _fabOpen = false; _ = OpenVoucher(); }">
+                <span class="glow-fab-item-ic">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <rect x="2" y="5" width="20" height="14" rx="2"/>
+                        <path d="M2 10h20"/>
+                    </svg>
+                </span>
+                <span>سند خزينة سريع</span>
+            </button>
             @if (CanTransfer)
             {
                 <button type="button" class="glow-fab-item" role="menuitem" @onclick="() => { _fabOpen = false; OpenTransfer(); }">
@@ -1026,18 +1058,6 @@
                         </svg>
                     </span>
                     <span>تحويل مالي بين صناديق النقد</span>
-                </button>
-            }
-            @if (CanPost)
-            {
-                <button type="button" class="glow-fab-item" role="menuitem" @onclick="() => { _fabOpen = false; OpenPost(); }">
-                    <span class="glow-fab-item-ic">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <rect x="2" y="5" width="20" height="14" rx="2"/>
-                            <path d="M2 10h20"/>
-                        </svg>
-                    </span>
-                    <span>تسجيل حركة صرف / قبض</span>
                 </button>
             }
         </div>
@@ -1542,13 +1562,53 @@
         .si-tab-dot { display: none; }
         .tr-kpis-grid { grid-template-columns: 1fr; }
     }
+    /* ═══ #48 كشف حساب الصندوق ═══ */
+    .ts-card { margin-top: 16px; }
+    .ts-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .ts-title { font-size: 14px; font-weight: 900; color: #0a1b3b; }
+    .ts-title b { color: var(--fc-blue); }
+    .ts-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .ts-month { border: 1px solid #d6e0ee; border-radius: 9px; padding: 7px 10px; font-size: 12px; font-weight: 700; color: #2c3e5d; background: #fff; font-family: inherit; }
+    .ts-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #d6e0ee; background: #fff; color: #2c3e5d; border-radius: 9px; padding: 7px 12px; font-size: 12px; font-weight: 800; cursor: pointer; font-family: inherit; }
+    .ts-btn:hover { border-color: var(--fc-blue); color: var(--fc-blue); }
+    .ts-btn:disabled { opacity: .5; cursor: default; }
+    .ts-close { color: #b03a48; }
+    .ts-loading { padding: 30px 0; text-align: center; color: #526070; font-size: 13px; font-weight: 700; }
+    .ts-table-wrap { overflow-x: auto; }
+    .ts-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .ts-table thead th { background: #0a1b3b; color: #fff; font-size: 11px; font-weight: 800; padding: 9px 8px; text-align: center; border: 1px solid #0a1b3b; white-space: nowrap; }
+    .ts-table tbody td { padding: 8px; border: 1px solid #e4eaf3; text-align: center; color: #3d4d68; }
+    .ts-table tbody tr:nth-child(even) { background: #fafcff; }
+    .ts-table .th-start, .ts-table .td-start { text-align: right; }
+    .ts-table .num { font-weight: 800; white-space: nowrap; }
+    .ts-table .debit { color: #15803d; }
+    .ts-table .credit { color: #b03a48; }
+    .ts-opening-row td { background: #eef3fa; font-weight: 800; color: #0a1b3b; }
+    .ts-table tfoot td { background: #f0f3f8; font-weight: 900; color: #0a1b3b; padding: 10px 8px; border: 1px solid #d9e3f0; text-align: center; }
+    .ts-table tfoot .closing { color: #0d8a48; }
+    .ts-total-label { display: flex; align-items: center; justify-content: flex-end; font-weight: 900; }
+    .ts-kind { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 800; border: 1px solid transparent; }
+    .ts-kind-receipt { background: #eaf7ef; color: #15803d; border-color: #bfe8cd; }
+    .ts-kind-payment { background: #fdeef0; color: #b03a48; border-color: #f3c6cd; }
+    .ts-kind-transferin { background: #eef3fa; color: #2456a6; border-color: #c9d9f2; }
+    .ts-kind-transferout { background: #fff8e6; color: #9a6d08; border-color: #f0d898; }
+    /* ═══ السند السريع + الأصل ═══ */
+    .vc-types { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .vc-type { text-align: right; border: 1px solid #d6e0ee; background: #fff; border-radius: 12px; padding: 14px; cursor: pointer; font-family: inherit; transition: .15s; }
+    .vc-type:hover { border-color: var(--fc-blue); box-shadow: 0 4px 14px rgba(11,86,223,.10); }
+    .vc-type-name { font-size: 13px; font-weight: 900; color: #0a1b3b; margin-bottom: 4px; }
+    .vc-type-desc { font-size: 11px; color: #7b8aa3; font-weight: 600; line-height: 1.6; }
+    .tr-origin-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid #d6e0ee; border-radius: 8px; color: #2456a6; background: #fff; margin-inline-end: 6px; vertical-align: middle; }
+    .tr-origin-btn:hover { border-color: var(--fc-blue); color: var(--fc-blue); }
+    .tr-modal-msg { margin-top: 12px; padding: 9px 12px; border-radius: 9px; font-size: 12px; font-weight: 800; }
+    .tr-modal-msg.ok  { background: #eaf7ef; color: #15803d; border: 1px solid #bfe8cd; }
+    .tr-modal-msg.err { background: #fdeef0; color: #b03a48; border: 1px solid #f3c6cd; }
 </style>
 
 
 @code {
     private AuthUser? _user;
     private bool CanView     => _user?.Can("TREASURY.VIEW")     ?? false;
-    private bool CanPost     => _user?.Can("TREASURY.POST")     ?? false;
     private bool CanVoid     => _user?.Can("TREASURY.VOID")     ?? false;
     private bool CanTransfer => _user?.Can("TREASURY.TRANSFER") ?? false;
     private bool CanManage   => _user?.Can("TREASURY.MANAGE")   ?? false;
@@ -1565,10 +1625,6 @@
 
     private List<Box>     _boxes        = new();
     private List<Tx>      _txs          = new();
-    private List<Cust>    _customers    = new();
-    private List<Opt>     _suppliers    = new();
-    private List<Method>  _methods      = new();
-    private List<OpenInv> _openInvoices = new();
 
     private bool    _loading;
     private string  _search    = "";
@@ -1581,8 +1637,6 @@
     private string? _msg;
     private bool    _ok;
 
-    private bool         _postOpen;
-    private PostForm     _pf = new();
     private bool         _transferOpen;
     private TransferForm _tf = new();
 
@@ -1593,10 +1647,6 @@
     private Box?    _reopenTarget;
     private decimal _reopenOpening;
 
-    public class Opt     { public int Id { get; set; } public string Label { get; set; } = ""; }
-    public class Cust    { public int Id { get; set; } public string Label { get; set; } = ""; }
-    public class Method  { public int Id { get; set; } public string Label { get; set; } = ""; public bool RequiresChequeNo { get; set; } }
-    public class OpenInv { public long InvoiceId { get; set; } public string InvoiceNumber { get; set; } = ""; public decimal GrandTotal { get; set; } public decimal PaidAmount { get; set; } public decimal Due { get; set; } }
 
     public class Box
     {
@@ -1634,21 +1684,10 @@
         public string?  ReferenceNumber   { get; set; }
         public string?  Description       { get; set; }
         public string   Status            { get; set; } = "";
-    }
-
-    public class PostForm
-    {
-        public string  Type            { get; set; } = "Receipt";
-        public int     CashBoxId       { get; set; }
-        public string? TxDate          { get; set; }
-        public decimal Amount          { get; set; }
-        public int     PaymentMethodId { get; set; }
-        public int     CustomerId      { get; set; }
-        public int     SupplierId      { get; set; }
-        public long    InvoiceId       { get; set; }
-        public string? ChequeNumber    { get; set; }
-        public string? ReferenceNumber { get; set; }
-        public string? Description     { get; set; }
+        public long?    InvoiceId         { get; set; }
+        public long?    CustodyId         { get; set; }
+        public int?     VehicleId         { get; set; }
+        public string?  RefAr             { get; set; }
     }
 
     public class TransferForm
@@ -1734,19 +1773,243 @@
         _             => "sdot-all"
     };
 
+    /* ═══ #48 — كشف حساب الصندوق ═══ */
+
+    private int      _stmtBoxId;
+    private string   _stmtMonth = "";
+    private DateTime _stmtFrom, _stmtTo;
+    private bool     _stmtLoading, _stmtExporting;
+    private List<DateTime> _stmtMonths = new();
+    private BoxStmt? _stmt;
+
+    public class BLine
+    {
+        public DateTime Date        { get; set; }
+        public string   Kind        { get; set; } = "";
+        public string   Ref         { get; set; } = "";
+        public string?  Description { get; set; }
+        public string?  Counterpart { get; set; }
+        public decimal  Debit       { get; set; }
+        public decimal  Credit      { get; set; }
+        public decimal  Balance     { get; set; }
+    }
+
+    public class BoxStmt
+    {
+        public string      BoxName     { get; set; } = "";
+        public string      BoxCode     { get; set; } = "";
+        public decimal     Opening     { get; set; }
+        public List<BLine> Lines       { get; set; } = new();
+        public decimal     TotalDebit  { get; set; }
+        public decimal     TotalCredit { get; set; }
+        public decimal     Closing     { get; set; }
+    }
+
+    private async Task OpenStmt(Box b)
+    {
+        _stmtBoxId = b.CashBoxId;
+        if (_stmtMonths.Count == 0)
+        {
+            var today = DateTime.Today;
+            _stmtMonths = Enumerable.Range(0, 25).Select(i => today.AddMonths(12 - i)).ToList();
+            _stmtMonth = today.ToString("yyyy-MM");
+        }
+        await LoadStmt();
+    }
+
+    private async Task LoadStmt()
+    {
+        if (_stmtBoxId <= 0) return;
+        _stmtLoading = true;
+        try
+        {
+            _stmtFrom = DateTime.ParseExact(_stmtMonth + "-01", "yyyy-MM-dd", null);
+            _stmtTo   = _stmtFrom.AddMonths(1);
+            _stmt = await Http.GetFromJsonAsync<BoxStmt>(
+                $"api/treasury/boxes/{_stmtBoxId}/statement?from={_stmtFrom:yyyy-MM-dd}&to={_stmtTo:yyyy-MM-dd}");
+        }
+        catch { _stmt = null; }
+        finally { _stmtLoading = false; }
+    }
+
+    private void CloseStmt() { _stmtBoxId = 0; _stmt = null; }
+
+    private void PrintStmt()
+    {
+        if (_stmtBoxId <= 0) return;
+        Nav.NavigateTo($"/treasury/print/{_stmtBoxId}?from={_stmtFrom:yyyy-MM-dd}&to={_stmtTo:yyyy-MM-dd}");
+    }
+
+    private async Task ExportStmt()
+    {
+        if (_stmtBoxId <= 0) return;
+        _stmtExporting = true;
+        try
+        {
+            var res = await Http.GetAsync($"api/treasury/boxes/{_stmtBoxId}/export?from={_stmtFrom:yyyy-MM-dd}&to={_stmtTo:yyyy-MM-dd}");
+            if (!res.IsSuccessStatusCode)
+            { Snackbar.Add("فشل التصدير: " + (int)res.StatusCode, Severity.Error); return; }
+            var bytes = await res.Content.ReadAsByteArrayAsync();
+            await JS.InvokeAsync<bool>("fastcom.downloadBase64", Convert.ToBase64String(bytes),
+                $"box-{_stmtBoxId}-{_stmtMonth}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            Snackbar.Add("تم تصدير كشف الصندوق إلى إكسيل", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add("تعذر التصدير: " + ex.Message, Severity.Error); }
+        finally { _stmtExporting = false; }
+    }
+
+    private async Task ToggleActive(Box b)
+    {
+        try
+        {
+            var res = await Http.PutAsJsonAsync($"api/treasury/boxes/{b.CashBoxId}", new
+            {
+                code                  = b.Code,
+                nameAr                = b.NameAr,
+                responsibleEmployeeId = b.ResponsibleEmployeeId,
+                openingBalance        = 0m,
+                isActive              = !b.IsActive,
+                boxKind               = b.BoxKind
+            });
+            var msg = await MsgOf(res);
+            if (res.IsSuccessStatusCode) { Snackbar.Add(msg, Severity.Success); await LoadAsync(); }
+            else Snackbar.Add(msg, Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add("تعذر التنفيذ: " + ex.Message, Severity.Error); }
+    }
+
+    /* ═══ السند السريع + أصل الحركة ═══ */
+
+    private bool     _voucherOpen;
+    private string?  _vcType;
+    private int      _vcCustomer, _vcInvoice, _vcMethod;
+    private decimal  _vcAmount;
+    private string   _vcDate = "";
+    private string?  _vcNotes;
+    private string?  _vcMsg;
+    private bool     _vcOk = true;
+    private bool     _vcSaving;
+    private List<Opt>   _vcCustomers = new();
+    private List<Opt>   _vcMethods   = new();
+    private List<VcInv> _vcInvoices  = new();
+
+    public class Opt   { public int Id { get; set; } public string Label { get; set; } = ""; }
+    public class VcInv { public long InvoiceId { get; set; } public string InvoiceNumber { get; set; } = ""; public decimal Due { get; set; } }
+
+    private async Task OpenVoucher()
+    {
+        _vcType = null; _vcCustomer = 0; _vcInvoice = 0; _vcMethod = 0; _vcAmount = 0;
+        _vcDate = DateTime.Today.ToString("yyyy-MM-dd");
+        _vcNotes = null; _vcMsg = null; _vcOk = true; _vcInvoices = new();
+        _voucherOpen = true;
+        try
+        {
+            _vcCustomers = await Http.GetFromJsonAsync<List<Opt>>("api/options/customers") ?? new();
+            _vcMethods   = await Http.GetFromJsonAsync<List<Opt>>("api/options/payment-methods") ?? new();
+        }
+        catch { /* هتظهر الرسالة وقت الحفظ */ }
+    }
+
+    private void CloseVoucher() { _voucherOpen = false; }
+    private void GoSupplier() { _voucherOpen = false; Nav.NavigateTo("/supplier-payments/new"); }
+    private void GoExpense()  { _voucherOpen = false; Nav.NavigateTo("/expenses/new"); }
+    private void GoCustody()  { _voucherOpen = false; Nav.NavigateTo("/custodies"); }
+
+    private async Task VcCustomerChanged(ChangeEventArgs e)
+    {
+        _vcCustomer = int.TryParse(e.Value?.ToString(), out var id) ? id : 0;
+        _vcInvoice = 0; _vcAmount = 0; _vcInvoices = new(); _vcMsg = null; _vcOk = true;
+        if (_vcCustomer <= 0) return;
+        try
+        {
+            _vcInvoices = await Http.GetFromJsonAsync<List<VcInv>>(
+                $"api/payments/open-invoices?customerId={_vcCustomer}") ?? new();
+            if (_vcInvoices.Count == 0)
+            { _vcOk = false; _vcMsg = "مافيش فواتير غير مسددة على العميل ده"; }
+        }
+        catch (Exception ex) { _vcOk = false; _vcMsg = "تعذر جلب الفواتير: " + ex.Message; }
+    }
+
+    private void VcInvoiceChanged(ChangeEventArgs e)
+    {
+        _vcInvoice = int.TryParse(e.Value?.ToString(), out var iv) ? iv : 0;
+        var inv = _vcInvoices.FirstOrDefault(x => x.InvoiceId == _vcInvoice);
+        if (inv is not null) _vcAmount = inv.Due;
+    }
+
+    private async Task SaveReceipt()
+    {
+        _vcMsg = null; _vcOk = true;
+        if (_vcCustomer <= 0) { _vcOk = false; _vcMsg = "اختر العميل"; return; }
+        if (_vcInvoice <= 0)  { _vcOk = false; _vcMsg = "اختر الفاتورة"; return; }
+        if (_vcMethod <= 0)   { _vcOk = false; _vcMsg = "اختر طريقة الدفع"; return; }
+        var inv2 = _vcInvoices.FirstOrDefault(x => x.InvoiceId == _vcInvoice);
+        if (_vcAmount <= 0 || (inv2 is not null && _vcAmount > inv2.Due))
+        { _vcOk = false; _vcMsg = $"المبلغ لازم يكون أكتر من صفر ومش أكتر من المتبقي ({(inv2?.Due ?? 0):N2})"; return; }
+
+        _vcSaving = true;
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/payments", new
+            {
+                customerId      = _vcCustomer,
+                paymentDate     = _vcDate,
+                paymentMethodId = _vcMethod,
+                amount          = _vcAmount,
+                notes           = _vcNotes,
+                allocations     = new[] { new { invoiceId = (long)_vcInvoice, amount = _vcAmount } }
+            });
+            var msg = await MsgOf(res);
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(msg, Severity.Success);
+                _voucherOpen = false;
+                await LoadAsync();
+            }
+            else { _vcOk = false; _vcMsg = msg; }
+        }
+        catch (Exception ex) { _vcOk = false; _vcMsg = "تعذر التسجيل: " + ex.Message; }
+        finally { _vcSaving = false; }
+    }
+
+    /// <summary>🔴 الوصول السريع لأصل الحركة — كل نوع يوديك على شاشته.</summary>
+    private static string? OriginRoute(Tx t)
+    {
+        var r = t.ReferenceNumber ?? "";
+        if (t.InvoiceId is > 0) return $"/invoices/new/{t.InvoiceId}";
+        if (t.CustodyId is > 0) return "/custodies";
+        if (r.StartsWith("VEHPAY:"))
+        {
+            var parts = r.Split(':');
+            if (parts.Length >= 2 && int.TryParse(parts[1], out var vid))
+                return $"/vehicles/{vid}/account";
+        }
+        if (r.StartsWith("EXP:"))  return "/expenses";
+        if (r.StartsWith("SPAY:")) return "/supplier-payments";
+        if (r.StartsWith("CUST-ISSUE:") || r.StartsWith("CUST-REFUND:")) return "/custodies";
+        if (r.StartsWith("PAY:"))  return "/payments";
+        return null;
+    }
+
+    private static string BoxKindAr(string k) => k switch
+    {
+        "Receipt"     => "قبض",
+        "Payment"     => "صرف",
+        "TransferIn"  => "تحويل وارد",
+        "TransferOut" => "تحويل صادر",
+        _ => k
+    };
+
     private static string Money(decimal v)     => v.ToString("N2");
     private static decimal ParseDec(object? v) => decimal.TryParse(v?.ToString(), out var n) ? n : 0m;
     private static int    ParseInt(object? v)  => int.TryParse(v?.ToString(), out var n) ? n : 0;
-    private static long   ParseLong(object? v) => long.TryParse(v?.ToString(), out var n) ? n : 0;
 
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
         if (!CanView) return;
         await LoadAsync();
-        _customers = await SafeGetT<Cust>("api/treasury/customers");
-        _suppliers = await SafeGetT<Opt>("api/options/suppliers");
-        _methods   = await SafeGetT<Method>("api/options/payment-methods");
         try
         {
             var db = await Http.GetFromJsonAsync<DefaultBoxRes>("api/treasury/default-box");
@@ -1755,11 +2018,6 @@
         catch { }
     }
 
-    private async Task<List<T>> SafeGetT<T>(string url)
-    {
-        try { return await Http.GetFromJsonAsync<List<T>>(url) ?? new(); }
-        catch { return new(); }
-    }
 
     private async Task Reload() { await LoadAsync(); }
     private void SetTab(string t) { _tab = t; _confirmId = null; }
@@ -1781,61 +2039,6 @@
     }
 
     private void ToggleFab() => _fabOpen = !_fabOpen;
-
-    private void OpenPost()
-    {
-        _pf = new PostForm
-        {
-            TxDate    = DateTime.Now.ToString("yyyy-MM-ddTHH:mm"),
-            CashBoxId = _boxes.FirstOrDefault()?.CashBoxId ?? 0
-        };
-        _openInvoices = new(); _msg = null; _postOpen = true;
-    }
-
-    private void ClosePost() { _postOpen = false; _msg = null; }
-
-    private async Task OnCustomerChanged(ChangeEventArgs e)
-    {
-        _pf.CustomerId = ParseInt(e.Value);
-        _pf.InvoiceId  = 0;
-        _openInvoices = _pf.CustomerId > 0
-            ? await SafeGetT<OpenInv>($"api/payments/open-invoices?customerId={_pf.CustomerId}")
-            : new();
-    }
-
-    private async Task SavePost()
-    {
-        if (_pf.CashBoxId <= 0) { _ok = false; _msg = "يرجى تحديد وعاء الصندوق المالي أولاً"; return; }
-        if (_pf.Amount <= 0)    { _ok = false; _msg = "يرجى إدخال مبلغ مالي صحيح"; return; }
-        if (_pf.Type == "Receipt" && _pf.CustomerId <= 0)
-        { _ok = false; _msg = "معاملات القبض تتطلب تحديد العميل المسدد"; return; }
-
-        _saving = true; _msg = null;
-        try
-        {
-            var res = await Http.PostAsJsonAsync("api/treasury/transactions", new
-            {
-                type            = _pf.Type,
-                cashBoxId       = _pf.CashBoxId,
-                txDate          = _pf.TxDate,
-                amount          = _pf.Amount,
-                paymentMethodId = _pf.PaymentMethodId == 0 ? (int?)null : _pf.PaymentMethodId,
-                customerId      = _pf.CustomerId == 0 ? (int?)null : _pf.CustomerId,
-                supplierId      = _pf.SupplierId == 0 ? (int?)null : _pf.SupplierId,
-                invoiceId       = _pf.InvoiceId == 0 ? (long?)null : _pf.InvoiceId,
-                custodyId       = (long?)null,
-                chequeNumber    = _pf.ChequeNumber,
-                chequeDate      = (string?)null,
-                bankAccount     = (string?)null,
-                referenceNumber = _pf.ReferenceNumber,
-                description     = _pf.Description
-            });
-            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
-            if (res.IsSuccessStatusCode) { Snackbar.Add(_msg, Severity.Success); ClosePost(); await LoadAsync(); }
-        }
-        catch (Exception ex) { _ok = false; _msg = "تعذر التسجيل: " + ex.Message; }
-        finally { _saving = false; }
-    }
 
     private void OpenTransfer()
     {

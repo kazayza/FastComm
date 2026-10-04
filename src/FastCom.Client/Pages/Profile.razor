@@ -1,21 +1,18 @@
-@page "/drivers"
+@page "/profile"
 @attribute [Authorize]
 @using System.Net.Http.Json
 @using FastCom.Client.Auth
 @inject HttpClient Http
 @inject AuthService Auth
-@inject NavigationManager Nav
-@inject ISnackbar Snackbar
 
-<PageTitle>السائقون — فاست كوم</PageTitle>
+<PageTitle>الملف الشخصي — فاست كوم</PageTitle>
 
 @* ═══════════════════════════════════════════
-   HERO SECTION (flt-* — نفس عيلة شاشة الأسطول)
+   HERO (flt-* — عيلة الأسطول)
 ═══════════════════════════════════════════ *@
 <div class="hero-wrapper">
     <div class="fc-hero fc-hero-slim">
         <div class="fc-hero-inner">
-
             <div class="flt-hero-row">
                 <div class="flt-hero-left">
                     <div class="flt-hero-crumb">
@@ -23,28 +20,20 @@
                             <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
                             <circle cx="12" cy="7" r="4"/>
                         </svg>
-                        <span>الأسطول التشغيلي · السائقون</span>
+                        <span>النظام · الملف الشخصي</span>
                     </div>
-                    <h1 class="fc-hero-title fc-hero-title-slim">السائقون</h1>
-                    <span class="flt-hero-sub">السائقون الداخليون (موظفون) والخارجيون (موردون) — مع متابعة الرخص والحالات</span>
+                    <h1 class="fc-hero-title fc-hero-title-slim">@(_me?.FullName is { Length: > 0 } ? _me.FullName : _me?.UserName ?? "الملف الشخصي")</h1>
+                    <span class="flt-hero-sub">بيانات حسابك في النظام — للاطلاع، التعديل يتم بواسطة مسؤول النظام</span>
                 </div>
-
                 <div class="flt-hero-right">
-                    <button type="button" class="flt-hero-refresh" @onclick="Reload" title="تحديث البيانات">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M23 4v6h-6"/>
-                            <path d="M1 20v-6h6"/>
-                            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-                        </svg>
-                    </button>
-                    @if (CanCreate)
+                    @if (_me is not null && _me.Roles.Count > 0)
                     {
-                        <button type="button" class="flt-hero-add" @onclick="GoNew">
-                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                        <span class="flt-hero-chip">
+                            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                             </svg>
-                            سائق جديد
-                        </button>
+                            @string.Join(" · ", _me.Roles)
+                        </span>
                     }
                     <span class="flt-hero-chip">
                         <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
@@ -55,471 +44,162 @@
                     </span>
                 </div>
             </div>
-
-            @* ── KPI Cards (flt-kpis-strip — فلاتر قابلة للنقر) ── *@
-            @if (CanView && !_loading)
-            {
-                <div class="flt-kpis-strip">
-
-                    <div class="flt-kpi-item @(_kpi == "all" ? "kpi-active" : "")" @onclick='() => SetKpi("all")' role="button" tabindex="0" title="عرض كل السائقين">
-                        <div class="flt-kpi-icon kpi-blue">
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
-                                <circle cx="9" cy="7" r="4"/>
-                                <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
-                            </svg>
-                        </div>
-                        <div class="flt-kpi-text">
-                            <div class="flt-kpi-label">إجمالي السائقين</div>
-                            <div class="flt-kpi-val">@_items.Count</div>
-                        </div>
-                    </div>
-
-                    <div class="flt-kpi-div" aria-hidden="true"></div>
-
-                    <div class="flt-kpi-item @(_kpi == "active" ? "kpi-active" : "")" @onclick='() => SetKpi("active")' role="button" tabindex="0" title="تصفية السائقين النشطين">
-                        <div class="flt-kpi-icon kpi-green">
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
-                                <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        </div>
-                        <div class="flt-kpi-text">
-                            <div class="flt-kpi-label">نشط</div>
-                            <div class="flt-kpi-val val-green">@_items.Count(d => d.Status == "Active")</div>
-                        </div>
-                    </div>
-
-                    <div class="flt-kpi-div" aria-hidden="true"></div>
-
-                    <div class="flt-kpi-item @(_kpi == "suspended" ? "kpi-active" : "")" @onclick='() => SetKpi("suspended")' role="button" tabindex="0" title="تصفية السائقين الموقوفين">
-                        <div class="flt-kpi-icon kpi-red">
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"/>
-                                <path d="M4.93 4.93l14.14 14.14" stroke-linecap="round"/>
-                            </svg>
-                        </div>
-                        <div class="flt-kpi-text">
-                            <div class="flt-kpi-label">موقوف</div>
-                            <div class="flt-kpi-val val-red">@_items.Count(d => d.Status == "Suspended")</div>
-                        </div>
-                    </div>
-
-                    <div class="flt-kpi-div" aria-hidden="true"></div>
-
-                    <div class="flt-kpi-item @(_kpi == "soon" ? "kpi-active" : "")" @onclick='() => SetKpi("soon")' role="button" tabindex="0" title="تصفية الرخص التي تنتهي خلال 30 يومًا">
-                        <div class="flt-kpi-icon kpi-amber">
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-                                <path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
-                            </svg>
-                        </div>
-                        <div class="flt-kpi-text">
-                            <div class="flt-kpi-label">رخص تنتهي خلال 30 يومًا</div>
-                            <div class="flt-kpi-val val-amber">@ExpiringSoon</div>
-                        </div>
-                    </div>
-
-                </div>
-            }
         </div>
     </div>
 </div>
 
 
 @* ═══════════════════════════════════════════
-   BODY (flt-body / flt-card)
+   BODY
 ═══════════════════════════════════════════ *@
 <div class="flt-body">
     <div class="flt-card">
 
-        @if (!CanView)
+        @if (_loading)
+        {
+            <div class="flt-loading">
+                <div class="flt-spinner" aria-label="جاري التحميل"></div>
+                <span>جاري تحميل بيانات الحساب...</span>
+            </div>
+        }
+        else if (_me is null)
         {
             <div class="flt-empty">
                 <div class="flt-empty-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.4">
-                        <rect x="3" y="11" width="18" height="11" rx="2"/>
-                        <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
                     </svg>
                 </div>
-                <div class="flt-empty-title">ليست لديك صلاحية</div>
-                <div class="flt-empty-sub">ليست لديك الصلاحية الكافية لعرض السائقين</div>
+                <div class="flt-empty-title">تعذّر تحميل بيانات الحساب</div>
+                <div class="flt-empty-sub">يرجى إعادة تسجيل الدخول والمحاولة مرة أخرى</div>
             </div>
         }
         else
         {
-            @* ── Toolbar: بحث + شارة النتائج ── *@
-            <div class="flt-toolbar">
-                <div class="flt-search-wrap">
-                    <svg class="flt-search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                        <circle cx="11" cy="11" r="8"/>
-                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
-                    </svg>
-                    <input class="flt-search-input"
-                           placeholder="بحث بالاسم أو الكود..."
-                           @bind="_search" @bind:event="oninput"
-                           aria-label="البحث في السائقين" />
-                    @if (!string.IsNullOrWhiteSpace(_search))
-                    {
-                        <button type="button" class="flt-search-clear" @onclick="() => _search = string.Empty" title="مسح البحث">
-                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
-                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
-                            </svg>
-                        </button>
-                    }
+            <div class="pf-head">
+                <div class="pf-avatar" aria-hidden="true">
+                    @(string.IsNullOrWhiteSpace(_me.FullName) ? (_me.UserName.Length > 0 ? _me.UserName[..1].ToUpperInvariant() : "؟") : _me.FullName[..1].ToString())
                 </div>
-
-                <div class="flt-results-badge">
-                    <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                        <circle cx="8" cy="8" r="6"/>
-                        <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
-                    </svg>
-                    <span>عرض <strong>@Filtered.Count()</strong> من <strong>@_items.Count</strong> سائق</span>
+                <div>
+                    <div class="pf-head-name">@(_me.FullName.Length > 0 ? _me.FullName : _me.UserName)</div>
+                    <div class="pf-head-sub">@@@_me.UserName</div>
                 </div>
-            </div>
-
-            @* ── تبويبات النوع ── *@
-            <div class="flt-tab-bar">
-                <div class="flt-tabs" role="group">
-                    <button type="button" class='flt-tab @(_typeFilter == "all" ? "active" : "")' @onclick='() => _typeFilter = "all"'>
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
-                            <circle cx="9" cy="7" r="4"/>
-                            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+                <div class="pf-head-side">
+                    <span class="flt-status-chip @(_me.UserStatus == "Active" ? "chip-available" : "chip-outofservice")">
+                        <span class="flt-status-dot @(_me.UserStatus == "Active" ? "dot-available" : "dot-outofservice")" aria-hidden="true"></span>
+                        @(_me.UserStatus == "Active" ? "حساب نشط" : _me.UserStatus == "Locked" ? "حساب مقفل" : "حساب موقوف")
+                    </span>
+                    <button type="button" class="flt-hero-add" @onclick="() => _pwdOpen = true">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3"/>
                         </svg>
-                        الكل
-                        <span class="flt-tab-count">@_items.Count</span>
-                    </button>
-                    <button type="button" class='flt-tab @(_typeFilter == "Internal" ? "active" : "")' @onclick='() => _typeFilter = "Internal"'>
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="2" y="7" width="20" height="14" rx="2"/>
-                            <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>
-                        </svg>
-                        داخلي (موظفون)
-                        <span class="flt-tab-count">@_items.Count(d => d.DriverType == "Internal")</span>
-                    </button>
-                    <button type="button" class='flt-tab @(_typeFilter == "External" ? "active" : "")' @onclick='() => _typeFilter = "External"'>
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-                            <circle cx="12" cy="7" r="4"/>
-                        </svg>
-                        خارجي (موردون)
-                        <span class="flt-tab-count">@_items.Count(d => d.DriverType == "External")</span>
+                        تغيير كلمة المرور
                     </button>
                 </div>
             </div>
 
-            @* ── الجدول ── *@
-            @if (_loading)
-            {
-                <div class="flt-loading">
-                    <div class="flt-spinner" aria-label="جاري التحميل"></div>
-                    <span>جاري تحميل السائقين...</span>
+            <div class="pf-rows">
+                <div class="pf-row">
+                    <div class="pf-label">الاسم الكامل</div>
+                    <div class="pf-value">@(_me.FullName.Length > 0 ? _me.FullName : "—")</div>
                 </div>
-            }
-            else if (!Filtered.Any())
-            {
-                <div class="flt-empty">
-                    <div class="flt-empty-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.4">
-                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-                            <circle cx="12" cy="7" r="4"/>
-                        </svg>
+                <div class="pf-row">
+                    <div class="pf-label">اسم المستخدم</div>
+                    <div class="pf-value" dir="ltr">@_me.UserName</div>
+                </div>
+                <div class="pf-row">
+                    <div class="pf-label">البريد الإلكتروني</div>
+                    <div class="pf-value" dir="ltr">@(string.IsNullOrWhiteSpace(_me.Email) ? "—" : _me.Email)</div>
+                </div>
+                <div class="pf-row">
+                    <div class="pf-label">رقم الهاتف</div>
+                    <div class="pf-value" dir="ltr">@(string.IsNullOrWhiteSpace(_me.PhoneNumber) ? "—" : _me.PhoneNumber)</div>
+                </div>
+                <div class="pf-row">
+                    <div class="pf-label">الفرع</div>
+                    <div class="pf-value">@(BranchName ?? "—")</div>
+                </div>
+                <div class="pf-row">
+                    <div class="pf-label">الأدوار</div>
+                    <div class="pf-value">@(_me.Roles.Count > 0 ? string.Join(" · ", _me.Roles) : "—")</div>
+                </div>
+                <div class="pf-row">
+                    <div class="pf-label">آخر تسجيل دخول</div>
+                    <div class="pf-value">
+                        @if (_me.LastLoginAt is null)
+                        {
+                            <text>—</text>
+                        }
+                        else
+                        {
+                            var lt = _me.LastLoginAt.Value.ToLocalTime();
+                            <text>@lt.ToString("yyyy-MM-dd") — @lt.ToString("HH:mm")</text>
+                        }
                     </div>
-                    <div class="flt-empty-title">@(_items.Count == 0 ? "لا يوجد سائقون مسجلون" : "لا توجد نتائج مطابقة")</div>
-                    <div class="flt-empty-sub">@(_items.Count == 0 ? "ابدأ بتسجيل أول سائق في الأسطول" : "جرّب تعديل البحث أو التبويب أو إلغاء التصفية من الكروت أعلاه")</div>
                 </div>
-            }
-            else
-            {
-                <div class="flt-table-wrap">
-                    <table class="flt-table" aria-label="قائمة السائقين">
-                        <thead>
-                            <tr>
-                                <th class="th-start">السائق</th>
-                                <th>النوع</th>
-                                <th>الموبايل</th>
-                                <th>الرخصة</th>
-                                <th>الحالة</th>
-                                @if (CanEdit) { <th style="width:110px">إجراءات</th> }
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var d in Filtered)
-                            {
-                                <tr>
-                                    <td class="td-start">
-                                        <div class="flt-item-cell">
-                                            <div class="flt-avatar @(d.DriverType == "Internal" ? "av-intrip" : "av-maintenance")" aria-hidden="true">
-                                                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
-                                                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-                                                    <circle cx="12" cy="7" r="4"/>
-                                                </svg>
-                                            </div>
-                                            <div class="flt-item-info">
-                                                <div class="flt-code-plate">
-                                                    <span class="flt-code-chip">@d.DriverCode</span>
-                                                </div>
-                                                <div class="flt-plate-num">@d.FullName</div>
-                                            </div>
-                                        </div>
-                                    </td>
+            </div>
 
-                                    <td>
-                                        <span class="flt-ownership-badge @(d.DriverType == "Internal" ? "ownership-company" : "ownership-external")">
-                                            @if (d.DriverType == "Internal")
-                                            {
-                                                <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                                    <rect x="2" y="7" width="20" height="14" rx="2"/>
-                                                    <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>
-                                                </svg>
-                                                <span>داخلي</span>
-                                            }
-                                            else
-                                            {
-                                                <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-                                                    <circle cx="12" cy="7" r="4"/>
-                                                </svg>
-                                                <span>خارجي</span>
-                                            }
-                                        </span>
-                                    </td>
-
-                                    <td class="td-muted" dir="ltr">@(d.Mobile ?? "—")</td>
-
-                                    <td>
-                                        @if (d.LicenseExpiryDate is null)
-                                        {
-                                            <span class="td-muted">—</span>
-                                        }
-                                        else
-                                        {
-                                            var licStatus = GetLicStatus(d.LicenseExpiryDate);
-                                            <span class="flt-doc-badge @(licStatus == "expired" ? "doc-expired" : licStatus == "soon" ? "doc-warning" : "doc-valid")">
-                                                رخصة: @d.LicenseExpiryDate.Value.ToString("yyyy-MM-dd")
-                                            </span>
-                                        }
-                                    </td>
-
-                                    <td>
-                                        <span class="flt-status-chip @StatusChipClass(d.Status)">
-                                            <span class="flt-status-dot @StatusDotClass(d.Status)" aria-hidden="true"></span>
-                                            @StatusAr(d.Status)
-                                        </span>
-                                    </td>
-
-                                    @if (CanEdit)
-                                    {
-                                        <td>
-                                            <div class="flt-actions">
-                                                <button type="button" class="flt-act-btn act-edit" @onclick="() => GoEdit(d)" title="تعديل بيانات السائق" aria-label="تعديل @d.FullName">
-                                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-                                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                                                    </svg>
-                                                </button>
-                                                @if (CanDelete)
-                                                {
-                                                    @if (_confirmId == d.DriverId)
-                                                    {
-                                                        <button type="button" class="flt-confirm-del" @onclick="() => Delete(d)">تأكيد الحذف؟</button>
-                                                    }
-                                                    else
-                                                    {
-                                                        <button type="button" class="flt-act-btn act-del" @onclick="() => _confirmId = d.DriverId" title="حذف السائق" aria-label="حذف @d.FullName">
-                                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                                                                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
-                                                            </svg>
-                                                        </button>
-                                                    }
-                                                }
-                                            </div>
-                                        </td>
-                                    }
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
+            <div class="pf-note">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                </svg>
+                <span>لتعديل البيانات الأساسية للحساب (الاسم، البريد، الهاتف، الفرع، الأدوار) يرجى مراجعة مسؤول النظام من شاشة المستخدمين.</span>
+            </div>
         }
+
     </div>
 </div>
 
-
-@* ═══════════════════════════════════════════
-   GLOW FAB (موضع ثابت في أسفل اليسار)
-═══════════════════════════════════════════ *@
-@if (CanCreate)
-{
-    <div class="glow-fab-wrap @(_fabOpen ? "is-open" : "")">
-
-        <div class="glow-fab-menu" role="menu" aria-label="الإجراءات السريعة">
-            <button type="button" class="glow-fab-item" role="menuitem" @onclick="() => { _fabOpen = false; GoNew(); }">
-                <span class="glow-fab-item-ic">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                        <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
-                        <circle cx="8.5" cy="7" r="4"/>
-                        <path d="M20 8v6M23 11h-6" stroke-linecap="round"/>
-                    </svg>
-                </span>
-                <span>تسجيل سائق جديد</span>
-            </button>
-            <button type="button" class="glow-fab-item" role="menuitem" @onclick="() => { _fabOpen = false; _ = Reload(); }">
-                <span class="glow-fab-item-ic">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                        <path d="M23 4v6h-6"/>
-                        <path d="M1 20v-6h6"/>
-                        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-                    </svg>
-                </span>
-                <span>تحديث البيانات</span>
-            </button>
-        </div>
-
-        <div class="glow-fab-container">
-            <span class="glow-ring glow-ring-1" aria-hidden="true"></span>
-            <span class="glow-ring glow-ring-2" aria-hidden="true"></span>
-            <span class="glow-ring glow-ring-3" aria-hidden="true"></span>
-            <span class="glow-halo" aria-hidden="true"></span>
-
-            <button type="button" class="glow-fab-btn" @onclick="ToggleFab" aria-label="لوحة التحكم" aria-expanded="@(_fabOpen ? "true" : "false")">
-                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.8" class="glow-fab-icon" aria-hidden="true">
-                    <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
-                </svg>
-            </button>
-        </div>
-
-    </div>
-}
-
-@if (_fabOpen)
-{
-    <div class="glow-fab-scrim" @onclick="ToggleFab" aria-hidden="true"></div>
-}
+<ChangePasswordDialog Open="_pwdOpen" Close="ClosePwd" />
 
 @code {
-    private AuthUser? _user;
-    private bool CanView   => _user?.Can("DRIVER.VIEW")   ?? false;
-    private bool CanCreate => _user?.Can("DRIVER.CREATE") ?? false;
-    private bool CanEdit   => _user?.Can("DRIVER.EDIT")   ?? false;
-    private bool CanDelete => _user?.Can("DRIVER.DELETE") ?? false;
+    private MeModel? _me;
+    private List<Opt> _branches = new();
+    private bool _loading = true;
+    private bool _pwdOpen;
 
-    private List<Item> _items = new();
-    private bool   _loading;
-    private string _search     = "";
-    private string _typeFilter = "all";
-    private int?   _confirmId;
-    private bool   _fabOpen;
+    private void ClosePwd() => _pwdOpen = false;
 
-    /* KPI = فلتر — الضغط مرة يفعّله ومرة يلغيه */
-    private string _kpi = "all";
-    private void SetKpi(string k) => _kpi = (_kpi == k && k != "all") ? "all" : k;
-
-    private void ToggleFab() => _fabOpen = !_fabOpen;
-
-    public class Item
+    private string? BranchName
     {
-        public int     DriverId          { get; set; }
-        public string  DriverCode        { get; set; } = "";
-        public string  DriverType        { get; set; } = "";
-        public string  FullName          { get; set; } = "";
-        public string? Mobile            { get; set; }
-        public DateOnly? LicenseExpiryDate { get; set; }
-        public string  Status            { get; set; } = "";
-    }
-
-    private int ExpiringSoon => _items.Count(d =>
-        d.LicenseExpiryDate is not null &&
-        d.LicenseExpiryDate.Value > DateOnly.FromDateTime(DateTime.Today) &&
-        d.LicenseExpiryDate.Value <= DateOnly.FromDateTime(DateTime.Today.AddDays(30)));
-
-    private static string GetLicStatus(DateOnly? exp)
-    {
-        if (exp is null) return "none";
-        if (exp.Value < DateOnly.FromDateTime(DateTime.Today)) return "expired";
-        if (exp.Value <= DateOnly.FromDateTime(DateTime.Today.AddDays(30))) return "soon";
-        return "ok";
-    }
-
-    private IEnumerable<Item> Filtered => _items.Where(d =>
-        (_typeFilter == "all" || d.DriverType == _typeFilter) &&
-        (_kpi switch
+        get
         {
-            "active"    => d.Status == "Active",
-            "suspended" => d.Status == "Suspended",
-            "soon"      => d.LicenseExpiryDate is not null &&
-                           d.LicenseExpiryDate.Value > DateOnly.FromDateTime(DateTime.Today) &&
-                           d.LicenseExpiryDate.Value <= DateOnly.FromDateTime(DateTime.Today.AddDays(30)),
-            _           => true
-        }) &&
-        (string.IsNullOrWhiteSpace(_search) ||
-         d.FullName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-         d.DriverCode.Contains(_search, StringComparison.OrdinalIgnoreCase)));
+            if (_me?.BranchId is null) return null;
+            var b = _branches.FirstOrDefault(x => x.Id == _me.BranchId.Value);
+            return b?.Label;
+        }
+    }
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+
+    /// <summary>مطابق لـ MeResponse بعد التوسيع.</summary>
+    public class MeModel
+    {
+        public int UserId { get; set; }
+        public string UserName { get; set; } = "";
+        public string FullName { get; set; } = "";
+        public string? Email { get; set; }
+        public int? BranchId { get; set; }
+        public string? PhoneNumber { get; set; }
+        public string UserStatus { get; set; } = "Active";
+        public DateTime? LastLoginAt { get; set; }
+        public string? ProfileImagePath { get; set; }
+        public List<string> Roles { get; set; } = new();
+        public List<string> Permissions { get; set; } = new();
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        _user = await Auth.GetUserAsync();
-        if (CanView) await LoadAsync();
-    }
-
-    private void GoNew()        => Nav.NavigateTo("/drivers/new");
-    private void GoEdit(Item d) => Nav.NavigateTo($"/drivers/new/{d.DriverId}");
-
-    private async Task Reload() { await LoadAsync(); }
-
-    private async Task LoadAsync()
-    {
-        _loading = true;
-        _confirmId = null;
-        try   { _items = await Http.GetFromJsonAsync<List<Item>>("api/drivers") ?? new(); }
-        catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
+        try
+        {
+            _me = await Http.GetFromJsonAsync<MeModel>("api/auth/me");
+            try { _branches = await Http.GetFromJsonAsync<List<Opt>>("api/options/branches") ?? new(); }
+            catch { _branches = new(); }
+        }
+        catch { _me = null; }
         finally { _loading = false; }
-    }
-
-    private async Task Delete(Item d)
-    {
-        try
-        {
-            var res = await Http.DeleteAsync($"api/drivers/{d.DriverId}");
-            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
-            _confirmId = null;
-            if (res.IsSuccessStatusCode) await LoadAsync();
-        }
-        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
-    }
-
-    /* أي " جوه attribute = RZ1010 — فالـ helpers بتخرج الـ class */
-
-    private static string StatusChipClass(string s) => s switch
-    {
-        "Active"    => "chip-available",
-        "Suspended" => "chip-suspended",
-        _           => "chip-outofservice"
-    };
-
-    private static string StatusDotClass(string s) => s switch
-    {
-        "Active"    => "dot-available",
-        "Suspended" => "dot-suspended",
-        _           => "dot-outofservice"
-    };
-
-    private static string StatusAr(string s) => s switch
-    {
-        "Active" => "نشط", "Suspended" => "موقوف", _ => "غير نشط"
-    };
-
-    private static async Task<string> MsgOf(HttpResponseMessage res)
-    {
-        try
-        {
-            var b = await res.Content.ReadAsStringAsync();
-            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
-            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
-        }
-        catch { return res.IsSuccessStatusCode ? "تم بنجاح" : $"خطأ {(int)res.StatusCode}"; }
     }
 }
 
@@ -869,7 +549,43 @@
         .glow-fab-wrap { left: 16px; bottom: 16px; }
     }
 
-    /* ── إضافة محلية: حالة «موقوف» (أحمر) ── */
-    .chip-suspended { background: #fff0f2; color: #c0182e; border: 1px solid #ffc8cf; }
-    .dot-suspended  { background: #e03048; }
+    /* ── إضافات البروفايل ── */
+    .pf-head {
+        display: flex; align-items: center; gap: 16px;
+        padding: 22px 24px 16px;
+    }
+    .pf-avatar {
+        width: 58px; height: 58px; flex: 0 0 58px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 24px; font-weight: 800; color: #fff;
+        background: linear-gradient(135deg, #1558d6, #1e6ef5);
+        box-shadow: 0 4px 14px rgba(30,110,245,.28);
+    }
+    .pf-head-name { font-size: 17px; font-weight: 800; color: #1c2b43; }
+    .pf-head-sub  { font-size: 12px; color: #6b7d95; margin-top: 2px; }
+    .pf-head-side { margin-inline-start: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+    .pf-rows { padding: 4px 24px 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+    .pf-row {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 12px 0; border-bottom: 1px solid #f0f3f8;
+    }
+    .pf-row:last-child, .pf-row:nth-last-child(2) { border-bottom: none; }
+    .pf-label { font-size: 12px; font-weight: 800; color: #6b7d95; white-space: nowrap; }
+    .pf-value { font-size: 13px; font-weight: 700; color: #1c2b43; text-align: end; word-break: break-word; }
+
+    .pf-note {
+        display: flex; align-items: center; gap: 8px;
+        margin: 10px 24px 22px; padding: 11px 14px;
+        background: #f7f9fd; border: 1px solid #e4edf8; border-radius: 10px;
+        font-size: 11.5px; color: #5a6e88; font-weight: 600;
+    }
+    .pf-note svg { flex: 0 0 auto; color: #9aaabb; }
+
+    @@media (max-width: 680px) {
+        .pf-head { flex-wrap: wrap; }
+        .pf-head-side { margin-inline-start: 0; }
+        .pf-rows { grid-template-columns: 1fr; }
+        .pf-row:nth-last-child(2) { border-bottom: 1px solid #f0f3f8; }
+    }
 </style>

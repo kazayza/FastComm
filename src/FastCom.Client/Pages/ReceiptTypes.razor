@@ -135,6 +135,13 @@
                             </button>
                         }
                     </div>
+                    <div class="doc-status-filter">
+                        <select class="doc-filter-select" @bind="_statusFilter" title="تصفية بالحالة" aria-label="تصفية بالحالة">
+                            <option value="all">كل الحالات</option>
+                            <option value="active">نشط فقط</option>
+                            <option value="inactive">معطل فقط</option>
+                        </select>
+                    </div>
                     <div class="doc-results-badge">
                         <svg viewBox="0 0 16 16" width="11" height="11" fill="none"
                              stroke="currentColor" stroke-width="1.8" aria-hidden="true">
@@ -1268,6 +1275,8 @@
     @@media (max-width: 480px) {
         .doc-kpis-row { grid-template-columns: 1fr 1fr; }
     }
+    .doc-status-filter { display: flex; align-items: center; }
+    .doc-filter-select { border: 1px solid #d6e0ee; border-radius: 9px; padding: 8px 12px; font-size: 12px; font-weight: 700; color: #2c3e5d; background: #fff; font-family: inherit; cursor: pointer; }
 </style>
 
 @code {
@@ -1278,6 +1287,7 @@
     private List<Item> _items = new();
     private bool    _loading;
     private string  _search    = "";
+    private string  _statusFilter = "all";
     private bool    _saving;
     private string? _msg;
     private bool    _ok        = true;
@@ -1308,10 +1318,11 @@
     }
 
     private IEnumerable<Item> Filtered => _items.Where(i =>
-        string.IsNullOrWhiteSpace(_search) ||
+        (_statusFilter == "all" || (_statusFilter == "active") == i.IsActive) &&
+        (string.IsNullOrWhiteSpace(_search) ||
         i.Code.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
         i.NameAr.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-        (i.NameEn ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase));
+        (i.NameEn ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase)));
 
     protected override async Task OnInitializedAsync()
     {

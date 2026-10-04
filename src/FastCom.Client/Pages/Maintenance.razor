@@ -6,233 +6,553 @@
 @inject AuthService Auth
 @inject ISnackbar Snackbar
 
-<PageTitle>صيانة العربات — فاست كوم</PageTitle>
+<PageTitle>صيانة المركبات — فاست كوم</PageTitle>
 
-<div class="fc-hero">
-    <div class="fc-hero-inner">
-        <div class="fc-page-head">
-            <div>
-                <div class="fc-crumb">الأسطول</div>
-                <h1 class="fc-hero-title">صيانة العربات</h1>
-                <p class="fc-hero-sub">سجل الصيانة وتكلفة الشهر والعربيات اللي صيانتها جاية</p>
-            </div>
-            <div class="fc-head-actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="تحديث" OnClick="LoadAsync" Style="color:#9FB4CC" />
-                @if (CanCreate)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.Add" OnClick="New">سجل صيانة</MudButton>
-                }
-            </div>
-        </div>
+@* ═══════════════════════════════════════════
+   HERO SECTION (flt-* — نفس عيلة شاشة الأسطول)
+═══════════════════════════════════════════ *@
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
 
-        <div class="fc-kpis-glass">
-            <div class="fc-kpi"><div class="fc-kpi-lb">مفتوح</div><div class="fc-kpi-num">@_s.Open</div></div>
-            <div class="fc-kpi"><div class="fc-kpi-lb">متأخر</div><div class="fc-kpi-num">@_s.Overdue</div></div>
-            <div class="fc-kpi"><div class="fc-kpi-lb">صيانة جاية (30 يوم)</div><div class="fc-kpi-num">@_s.DueSoon</div></div>
-            <div class="fc-kpi"><div class="fc-kpi-lb">تكلفة الشهر</div>
-                <div class="fc-kpi-num">@_s.MonthCost.ToString("N0")</div></div>
+            <div class="flt-hero-row">
+                <div class="flt-hero-left">
+                    <div class="flt-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
+                        </svg>
+                        <span>الأسطول التشغيلي · سجل الصيانة</span>
+                    </div>
+                    <h1 class="fc-hero-title fc-hero-title-slim">صيانة المركبات</h1>
+                    <span class="flt-hero-sub">سجل عمليات الصيانة — متابعة التكلفة الشهرية والمواعيد المستحقة لكل مركبة</span>
+                </div>
+
+                <div class="flt-hero-right">
+                    <button type="button" class="flt-hero-refresh" @onclick="LoadAsync" title="تحديث البيانات">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 4v6h-6"/>
+                            <path d="M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                        </svg>
+                    </button>
+                    @if (CanCreate)
+                    {
+                        <button type="button" class="flt-hero-add" @onclick="New">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                            سجل صيانة
+                        </button>
+                    }
+                    <span class="flt-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                </div>
+            </div>
+
+            @* ── KPI Cards (flt-kpis-strip — فلاتر قابلة للنقر) ── *@
+            @if (CanView && !_loading)
+            {
+                <div class="flt-kpis-strip">
+
+                    <div class="flt-kpi-item @(_kpi == "open" ? "kpi-active" : "")" @onclick='() => SetKpi("open")' role="button" tabindex="0" title="تصفية السجلات المفتوحة">
+                        <div class="flt-kpi-icon kpi-blue">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
+                            </svg>
+                        </div>
+                        <div class="flt-kpi-text">
+                            <div class="flt-kpi-label">سجلات مفتوحة</div>
+                            <div class="flt-kpi-val">@_s.Open</div>
+                        </div>
+                    </div>
+
+                    <div class="flt-kpi-div" aria-hidden="true"></div>
+
+                    <div class="flt-kpi-item @(_kpi == "overdue" ? "kpi-active" : "")" @onclick='() => SetKpi("overdue")' role="button" tabindex="0" title="تصفية المتأخرة عن موعدها">
+                        <div class="flt-kpi-icon kpi-red">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                                <path d="M12 9v4M12 17h.01" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="flt-kpi-text">
+                            <div class="flt-kpi-label">متأخرة عن الموعد</div>
+                            <div class="flt-kpi-val val-red">@_s.Overdue</div>
+                        </div>
+                    </div>
+
+                    <div class="flt-kpi-div" aria-hidden="true"></div>
+
+                    <div class="flt-kpi-item @(_kpi == "soon" ? "kpi-active" : "")" @onclick='() => SetKpi("soon")' role="button" tabindex="0" title="تصفية المستحقة خلال 30 يومًا">
+                        <div class="flt-kpi-icon kpi-amber">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 6v6l4 2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="flt-kpi-text">
+                            <div class="flt-kpi-label">مستحقة خلال 30 يومًا</div>
+                            <div class="flt-kpi-val val-amber">@_s.DueSoon</div>
+                        </div>
+                    </div>
+
+                    <div class="flt-kpi-div" aria-hidden="true"></div>
+
+                    <div class="flt-kpi-item @(_kpi == "all" ? "kpi-active" : "")" @onclick='() => SetKpi("all")' role="button" tabindex="0" title="عرض كل السجلات (إلغاء التصفية)">
+                        <div class="flt-kpi-icon kpi-green">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 1v22"/>
+                                <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                            </svg>
+                        </div>
+                        <div class="flt-kpi-text">
+                            <div class="flt-kpi-label">تكلفة الشهر</div>
+                            <div class="flt-kpi-val val-green">@_s.MonthCost.ToString("N0")</div>
+                        </div>
+                    </div>
+
+                </div>
+            }
         </div>
     </div>
 </div>
 
-<div class="fc-page">
-    @if (!CanView)
-    {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">ليس لديك صلاحية عرض الصيانة.</MudAlert>
-    }
-    else
-    {
-        <div class="fc-overlap"><div class="fc-card">
 
-            @if (_s.Overdue > 0)
+@* ═══════════════════════════════════════════
+   BODY (flt-body / flt-card)
+═══════════════════════════════════════════ *@
+<div class="flt-body">
+    <div class="flt-card">
+
+        @if (!CanView)
+        {
+            <div class="flt-empty">
+                <div class="flt-empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.4">
+                        <rect x="3" y="11" width="18" height="11" rx="2"/>
+                        <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="flt-empty-title">ليست لديك صلاحية</div>
+                <div class="flt-empty-sub">ليست لديك الصلاحية الكافية لعرض سجل الصيانة</div>
+            </div>
+        }
+        else
+        {
+            @* ── Toolbar: بحث + شارة النتائج ── *@
+            <div class="flt-toolbar">
+                <div class="flt-search-wrap">
+                    <svg class="flt-search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                    </svg>
+                    <input class="flt-search-input"
+                           placeholder="بحث برقم السجل أو اللوحة أو المورد..."
+                           @bind="_search" @bind:event="oninput"
+                           aria-label="البحث في سجل الصيانة" />
+                    @if (!string.IsNullOrWhiteSpace(_search))
+                    {
+                        <button type="button" class="flt-search-clear" @onclick="() => _search = string.Empty" title="مسح البحث">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    }
+                </div>
+
+                <div class="flt-results-badge">
+                    <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <circle cx="8" cy="8" r="6"/>
+                        <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                    </svg>
+                    <span>عرض <strong>@DisplayItems.Count</strong> من <strong>@_items.Count</strong> سجل</span>
+                </div>
+            </div>
+
+            @* ── الفلاتر الإضافية ── *@
+            <div class="flt-toolbar">
+                <select class="svc-input svc-select" style="width:auto; min-width:160px" value="@_fStatus" @onchange="e => _fStatus = e.Value?.ToString()" aria-label="تصفية بالحالة">
+                    <option value="">كل الحالات</option>
+                    <option value="Scheduled">مجدولة</option>
+                    <option value="InProgress">قيد التنفيذ</option>
+                    <option value="Completed">مكتملة</option>
+                    <option value="Cancelled">ملغاة</option>
+                </select>
+                <select class="svc-input svc-select" style="width:auto; min-width:160px" value="@_fVehicle" @onchange="e => _fVehicle = Nul(e.Value)" aria-label="تصفية بالمركبة">
+                    <option value="">كل المركبات</option>
+                    @foreach (var v in _vehicles) { <option value="@v.Id">@v.Label</option> }
+                </select>
+                <button type="button" class="flt-hero-add" @onclick="LoadAsync">تطبيق التصفية</button>
+            </div>
+
+            @* ── الجدول ── *@
+            @if (_loading)
             {
-                <div class="fc-alert fc-alert-warn">
-                    <div class="fc-alert-ic"><MudIcon Icon="@Icons.Material.Filled.Warning" /></div>
-                    <div class="fc-alert-body">
-                        <div class="fc-alert-title">فيه @_s.Overdue عربة صيانتها اتأخرت</div>
-                        <div>فلتر بـ «متأخرة» تحت عشان تشوفهم.</div>
-                    </div>
+                <div class="flt-loading">
+                    <div class="flt-spinner" aria-label="جاري التحميل"></div>
+                    <span>جاري تحميل سجل الصيانة...</span>
                 </div>
             }
+            else if (!DisplayItems.Any())
+            {
+                <div class="flt-empty">
+                    <div class="flt-empty-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.4">
+                            <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
+                        </svg>
+                    </div>
+                    <div class="flt-empty-title">@(_items.Count == 0 ? "لا توجد سجلات صيانة" : "لا توجد نتائج مطابقة")</div>
+                    <div class="flt-empty-sub">@(_items.Count == 0 ? "ابدأ بتسجيل أول عملية صيانة لأسطولك" : "جرّب تعديل البحث أو إلغاء التصفية من الكروت أعلاه")</div>
+                </div>
+            }
+            else
+            {
+                <div class="flt-table-wrap">
+                    <table class="flt-table" aria-label="سجل الصيانة">
+                        <thead>
+                            <tr>
+                                <th class="th-start">المركبة والسجل</th>
+                                <th>التاريخ</th>
+                                <th>نوع الصيانة</th>
+                                <th>المورد / الورشة</th>
+                                <th>التكلفة</th>
+                                <th>الصيانة القادمة</th>
+                                <th>الحالة</th>
+                                @if (CanEdit) { <th style="width:110px">إجراءات</th> }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var m in DisplayItems)
+                            {
+                                <tr>
+                                    <td class="td-start">
+                                        <div class="flt-item-cell">
+                                            <div class="flt-avatar av-maintenance" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
+                                                </svg>
+                                            </div>
+                                            <div class="flt-item-info">
+                                                <div class="flt-code-plate">
+                                                    <span class="flt-code-chip">@m.MaintenanceNumber</span>
+                                                </div>
+                                                <div class="flt-plate-num">@m.VehiclePlate</div>
+                                                @if (!string.IsNullOrWhiteSpace(m.VehicleModel))
+                                                {
+                                                    <div class="flt-brand-sub">@m.VehicleModel</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td>@m.MaintenanceDate.ToString("yyyy-MM-dd")</td>
+
+                                    <td>
+                                        <div class="flt-type-cell">
+                                            <span class="flt-type-tag">@TypeAr(m.MaintenanceType)</span>
+                                            @if (m.Odometer.HasValue)
+                                            {
+                                                <div class="flt-brand-sub">@m.Odometer.Value.ToString("N0") كم</div>
+                                            }
+                                        </div>
+                                    </td>
+
+                                    <td class="td-muted">@(m.SupplierName ?? "—")</td>
+
+                                    <td><strong>@m.Cost.ToString("N2")</strong></td>
+
+                                    <td>@DueCell(m)</td>
+
+                                    <td>
+                                        <span class="flt-status-chip @StatusChipClass(m.Status)">
+                                            <span class="flt-status-dot @StatusDotClass(m.Status)" aria-hidden="true"></span>
+                                            @StatusAr(m.Status)
+                                        </span>
+                                    </td>
+
+                                    @if (CanEdit)
+                                    {
+                                        <td>
+                                            <div class="flt-actions">
+                                                <button type="button" class="flt-act-btn act-edit" @onclick="() => Edit(m)" title="تعديل السجل">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                    </svg>
+                                                </button>
+                                                @if (CanDelete)
+                                                {
+                                                    @if (_confirmId == m.MaintenanceId)
+                                                    {
+                                                        <button type="button" class="flt-confirm-del" @onclick="() => DeleteAsync(m)">تأكيد الحذف؟</button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button type="button" class="flt-act-btn act-del" @onclick="() => _confirmId = m.MaintenanceId" title="حذف السجل">
+                                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                            </svg>
+                                                        </button>
+                                                    }
+                                                }
+                                            </div>
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+
+@* ═══════════════════════════════════════════
+   GLOW FAB (موضع ثابت في أسفل اليسار)
+═══════════════════════════════════════════ *@
+@if (CanCreate)
+{
+    <div class="glow-fab-wrap @(_fabOpen ? "is-open" : "")">
+
+        <div class="glow-fab-menu" role="menu" aria-label="الإجراءات السريعة">
+            <button type="button" class="glow-fab-item" role="menuitem" @onclick="() => { _fabOpen = false; New(); }">
+                <span class="glow-fab-item-ic">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
+                    </svg>
+                </span>
+                <span>تسجيل عملية صيانة</span>
+            </button>
+            <button type="button" class="glow-fab-item" role="menuitem" @onclick="() => { _fabOpen = false; _ = LoadAsync(); }">
+                <span class="glow-fab-item-ic">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M23 4v6h-6"/>
+                        <path d="M1 20v-6h6"/>
+                        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                    </svg>
+                </span>
+                <span>تحديث البيانات</span>
+            </button>
+        </div>
+
+        <div class="glow-fab-container">
+            <span class="glow-ring glow-ring-1" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-2" aria-hidden="true"></span>
+            <span class="glow-ring glow-ring-3" aria-hidden="true"></span>
+            <span class="glow-halo" aria-hidden="true"></span>
+
+            <button type="button" class="glow-fab-btn" @onclick="ToggleFab" aria-label="لوحة التحكم" aria-expanded="@(_fabOpen ? "true" : "false")">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.8" class="glow-fab-icon" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+
+    </div>
+}
+
+@if (_fabOpen)
+{
+    <div class="glow-fab-scrim" @onclick="ToggleFab" aria-hidden="true"></div>
+}
+
+
+@* ═══════════════════════════════════════════
+   MODAL — سجل صيانة (svc-modal Standard)
+═══════════════════════════════════════════ *@
+@if (_open && (CanCreate || CanEdit))
+{
+    <div class="svc-modal-backdrop" @onclick="Close" role="dialog" aria-modal="true">
+        <div class="svc-modal" @onclick:stopPropagation="true">
+
+            <div class="svc-modal-head">
+                <div class="svc-head-icon @(_editId is null ? "svc-icon-create" : "svc-icon-edit")" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
+                    </svg>
+                </div>
+                <div class="svc-head-text">
+                    <div class="svc-head-title">@(_editId is null ? "تسجيل عملية صيانة جديدة" : "تعديل سجل الصيانة")</div>
+                    <div class="svc-head-sub">
+                        @if (_editId is null)
+                        {
+                            <span>يتم توليد الرقم تلقائيًا بالبادئة (MAINT-)</span>
+                        }
+                        else
+                        {
+                            <span>تحديث بيانات عملية الصيانة: @_f.MaintenanceNumber</span>
+                        }
+                    </div>
+                </div>
+                <button class="svc-head-close" @onclick="Close" aria-label="إغلاق" type="button">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
 
             @if (_msg is not null)
             {
-                <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
-                          Class="mb-4">@_msg</MudAlert>
+                <div class="svc-banner @(_ok ? "svc-banner-ok" : "svc-banner-err")" role="alert">
+                    <span class="svc-banner-msg">@_msg</span>
+                    <button class="svc-banner-x" @onclick="() => _msg = null" type="button">&#10005;</button>
+                </div>
             }
 
-            <div class="fc-fsec">
-                <div class="fc-fsec-head">
-                    <span class="fc-fsec-n">1</span>
-                    <div>
-                        <div class="fc-fsec-t">سجل الصيانة</div>
-                        <div class="fc-fsec-d">التكلفة هنا سجل بس — عايزها تدخل الخزينة؟ اعمل مصروف من شاشة المصروفات</div>
+            <div class="svc-modal-body">
+                <div class="svc-section">
+                    <div class="svc-section-head">
+                        <div class="svc-section-ic blue">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="svc-section-title">بيانات عملية الصيانة</div>
+                            <div class="svc-section-sub">المركبة، الفرع، التاريخ، النوع، التكلفة، والحالة</div>
+                        </div>
                     </div>
-                    <span class="fc-fsec-ic"><MudIcon Icon="@Icons.Material.Filled.Build" Size="Size.Small" /></span>
-                </div>
 
-                <div class="fc-filters">
-                    <select class="fc-sel" value="@_fStatus" @onchange="e => _fStatus = e.Value?.ToString()">
-                        <option value="">كل الحالات</option>
-                        <option value="Scheduled">مجدولة</option>
-                        <option value="InProgress">شغالة</option>
-                        <option value="Completed">خلصت</option>
-                        <option value="Cancelled">ملغاة</option>
-                    </select>
-                    <select class="fc-sel" value="@_fVehicle" @onchange="e => _fVehicle = Nul(e.Value)">
-                        <option value="">كل العربات</option>
-                        @foreach (var v in _vehicles) { <option value="@v.Id">@v.Label</option> }
-                    </select>
-                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
-                               OnClick="LoadAsync">تطبيق</MudButton>
-                </div>
-
-                <div class="fc-table-wrap"><table class="fc-table">
-                    <thead><tr>
-                        <th>الرقم</th><th>العربة</th><th>التاريخ</th><th>النوع</th>
-                        <th>المورد</th><th>التكلفة</th><th>الصيانة القادمة</th>
-                        <th>الحالة</th><th style="width:90px"></th>
-                    </tr></thead>
-                    <tbody>
-                        @foreach (var m in _items)
-                        {
-                            <tr>
-                                <td><span class="fc-role-chip">@m.MaintenanceNumber</span></td>
-                                <td class="fc-cell-main">
-                                    @m.VehiclePlate
-                                    @if (!string.IsNullOrWhiteSpace(m.VehicleModel))
+                    <div class="svc-grid">
+                        <div class="svc-field">
+                            <label class="svc-label">المركبة <span class="svc-req">*</span></label>
+                            <div class="svc-input-wrap">
+                                <select class="svc-input svc-select" @bind="_f.VehicleId">
+                                    <option value="0">— اختر المركبة —</option>
+                                    @foreach (var v in _vehicles) { <option value="@v.Id">@v.Label</option> }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="svc-field">
+                            <label class="svc-label">الفرع <span class="svc-req">*</span></label>
+                            <div class="svc-input-wrap">
+                                <select class="svc-input svc-select" @bind="_f.BranchId">
+                                    <option value="0">— اختر الفرع —</option>
+                                    @foreach (var b in _branches) { <option value="@b.Id">@b.Label</option> }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="svc-field">
+                            <label class="svc-label">تاريخ الصيانة <span class="svc-req">*</span></label>
+                            <div class="svc-input-wrap">
+                                <input type="date" class="svc-input" value="@_f.MaintenanceDate"
+                                       @onchange="e => _f.MaintenanceDate = e.Value?.ToString()" />
+                            </div>
+                        </div>
+                        <div class="svc-field">
+                            <label class="svc-label">نوع الصيانة <span class="svc-req">*</span></label>
+                            <div class="svc-input-wrap">
+                                <select class="svc-input svc-select" @bind="_f.MaintenanceType">
+                                    @foreach (var t in Types)
                                     {
-                                        <div class="fc-cell-sub">@m.VehicleModel</div>
+                                        <option value="@t" selected="@(_f.MaintenanceType == t)">@TypeAr(t)</option>
                                     }
-                                </td>
-                                <td>@m.MaintenanceDate.ToString("yyyy-MM-dd")</td>
-                                <td>@TypeAr(m.MaintenanceType)</td>
-                                <td class="fc-cell-sub">@(m.SupplierName ?? "—")</td>
-                                <td><b>@m.Cost.ToString("N2")</b></td>
-                                <td>@DueCell(m)</td>
-                                <td><span class="fc-chip @StatusCls(m.Status)">@StatusAr(m.Status)</span></td>
-                                <td>
-                                    @if (CanEdit)
-                                    {
-                                        <div class="fc-row-actions">
-                                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit"
-                                                           Color="Color.Primary" title="تعديل" OnClick="() => Edit(m)" />
-                                            @if (CanDelete)
-                                            {
-                                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete"
-                                                               Color="Color.Error" title="حذف" OnClick="() => DeleteAsync(m)" />
-                                            }
-                                        </div>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                        @if (_items.Count == 0)
+                                </select>
+                            </div>
+                        </div>
+                        <div class="svc-field">
+                            <label class="svc-label">المورد / الورشة</label>
+                            <div class="svc-input-wrap">
+                                <select class="svc-input svc-select" value="@_f.SupplierId" @onchange="e => _f.SupplierId = Nul(e.Value)">
+                                    <option value="">— بدون —</option>
+                                    @foreach (var s in _suppliers) { <option value="@s.Id">@s.Label</option> }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="svc-field">
+                            <label class="svc-label">الحالة <span class="svc-req">*</span></label>
+                            <div class="svc-input-wrap">
+                                <select class="svc-input svc-select" @bind="_f.Status">
+                                    <option value="Scheduled" selected="@(_f.Status == "Scheduled")">مجدولة</option>
+                                    <option value="InProgress" selected="@(_f.Status == "InProgress")">قيد التنفيذ</option>
+                                    <option value="Completed" selected="@(_f.Status == "Completed")">مكتملة</option>
+                                    <option value="Cancelled" selected="@(_f.Status == "Cancelled")">ملغاة</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="svc-field">
+                            <label class="svc-label">قراءة العداد (كم)</label>
+                            <div class="svc-input-wrap">
+                                <input type="number" min="0" step="0.1" class="svc-input" value="@_f.Odometer"
+                                       @onchange="e => _f.Odometer = DecN(e.Value)" />
+                            </div>
+                        </div>
+                        <div class="svc-field">
+                            <label class="svc-label">التكلفة (ج.م)</label>
+                            <div class="svc-input-wrap">
+                                <input type="number" min="0" step="0.01" class="svc-input" value="@_f.Cost"
+                                       @onchange="e => _f.Cost = Dec(e.Value)" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="svc-section">
+                    <div class="svc-section-head">
+                        <div class="svc-section-ic blue">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 6v6l4 2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="svc-section-title">الصيانة القادمة والوصف</div>
+                            <div class="svc-section-sub">موعد الصيانة التالية بالتاريخ أو بالعداد — يظهر التنبيه تلقائيًا عند الاقتراب</div>
+                        </div>
+                    </div>
+
+                    <div class="svc-grid">
+                        <div class="svc-field">
+                            <label class="svc-label">الصيانة القادمة — التاريخ</label>
+                            <div class="svc-input-wrap">
+                                <input type="date" class="svc-input" value="@_f.NextDueDate"
+                                       @onchange="e => _f.NextDueDate = e.Value?.ToString()" />
+                            </div>
+                        </div>
+                        <div class="svc-field">
+                            <label class="svc-label">الصيانة القادمة — العداد</label>
+                            <div class="svc-input-wrap">
+                                <input type="number" min="0" step="0.1" class="svc-input" value="@_f.NextDueOdometer"
+                                       @onchange="e => _f.NextDueOdometer = DecN(e.Value)" />
+                            </div>
+                        </div>
+                        <div class="svc-field svc-field-full">
+                            <label class="svc-label">الوصف</label>
+                            <div class="svc-input-wrap">
+                                <input class="svc-input" @bind="_f.Description" maxlength="1000" placeholder="ما تم أو ما سيتم تنفيذه في هذه الصيانة" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="svc-modal-foot">
+                <div class="svc-foot-right">
+                    <button class="svc-btn-cancel" @onclick="Close" type="button">تراجع</button>
+                    <button class="svc-btn-save" @onclick="SaveAsync" disabled="@_saving" type="button">
+                        @if (_saving)
                         {
-                            <tr><td colspan="9"><div class="fc-empty">مافيش سجلات صيانة</div></td></tr>
+                            <span class="svc-spinner"></span>
+                            <span>جاري الحفظ...</span>
                         }
-                    </tbody>
-                </table></div>
-            </div>
-
-        </div></div>
-    }
-</div>
-
-@* ═══════════ مودال ═══════════ *@
-@if (_open && CanCreate)
-{
-    <div class="fc-modal-backdrop" @onclick="Close">
-        <div class="fc-modal" @onclick:stopPropagation="true">
-            <div class="fc-modal-head">
-                <div>
-                    <div class="fc-modal-title">@ModalTitle</div>
-                    <div class="fc-modal-sub">الرقم بيتولّد تلقائيًا من سلسلة MAINTENANCE</div>
-                </div>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="Close" />
-            </div>
-            <div class="fc-modal-body">
-
-                @if (_msg is not null)
-                {
-                    <MudAlert Severity="@(_ok ? Severity.Success : Severity.Error)" Variant="Variant.Outlined"
-                              Class="mb-4">@_msg</MudAlert>
-                }
-
-                <div class="fc-form-grid">
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">العربة<i>*</i></div>
-                        <select class="fc-sel fc-sel-lg" @bind="_f.VehicleId">
-                            <option value="0">— اختار —</option>
-                            @foreach (var v in _vehicles) { <option value="@v.Id">@v.Label</option> }
-                        </select>
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">الفرع<i>*</i></div>
-                        <select class="fc-sel fc-sel-lg" @bind="_f.BranchId">
-                            <option value="0">— اختار —</option>
-                            @foreach (var b in _branches) { <option value="@b.Id">@b.Label</option> }
-                        </select>
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">تاريخ الصيانة<i>*</i></div>
-                        <input type="date" class="fc-sel fc-sel-lg" value="@_f.MaintenanceDate"
-                               @onchange="e => _f.MaintenanceDate = e.Value?.ToString()" />
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">نوع الصيانة<i>*</i></div>
-                        <select class="fc-sel fc-sel-lg" @bind="_f.MaintenanceType">
-                            @foreach (var t in Types) { <option value="@t">@TypeAr(t)</option> }
-                        </select>
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">المورد / الورشة</div>
-                        <select class="fc-sel fc-sel-lg" value="@_f.SupplierId" @onchange="e => _f.SupplierId = Nul(e.Value)">
-                            <option value="">— بدون —</option>
-                            @foreach (var s in _suppliers) { <option value="@s.Id">@s.Label</option> }
-                        </select>
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">الحالة<i>*</i></div>
-                        <select class="fc-sel fc-sel-lg" @bind="_f.Status">
-                            <option value="Scheduled">مجدولة</option>
-                            <option value="InProgress">شغالة</option>
-                            <option value="Completed">خلصت</option>
-                            <option value="Cancelled">ملغاة</option>
-                        </select>
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">قراءة العداد</div>
-                        <input type="number" min="0" step="0.1" class="fc-sel fc-sel-lg" value="@_f.Odometer"
-                               @onchange="e => _f.Odometer = DecN(e.Value)" />
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">التكلفة</div>
-                        <input type="number" min="0" step="0.01" class="fc-sel fc-sel-lg" value="@_f.Cost"
-                               @onchange="e => _f.Cost = Dec(e.Value)" />
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">الصيانة القادمة — تاريخ</div>
-                        <input type="date" class="fc-sel fc-sel-lg" value="@_f.NextDueDate"
-                               @onchange="e => _f.NextDueDate = e.Value?.ToString()" />
-                    </div>
-                    <div class="fc-fld">
-                        <div class="fc-fld-lb">الصيانة القادمة — عداد</div>
-                        <input type="number" min="0" step="0.1" class="fc-sel fc-sel-lg" value="@_f.NextDueOdometer"
-                               @onchange="e => _f.NextDueOdometer = DecN(e.Value)" />
-                    </div>
-                    <div class="fc-fld fc-field-full">
-                        <div class="fc-fld-lb">الوصف</div>
-                        <input class="fc-sel fc-sel-lg" @bind="_f.Description" maxlength="1000" />
-                    </div>
+                        else
+                        {
+                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span>@(_editId is null ? "تسجيل الصيانة" : "حفظ التعديلات")</span>
+                        }
+                    </button>
                 </div>
             </div>
-            <div class="fc-modal-foot">
-                <MudButton Variant="Variant.Text" OnClick="Close">إلغاء</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving"
-                           StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">حفظ</MudButton>
-            </div>
+
         </div>
     </div>
 }
@@ -254,11 +574,44 @@
     private Sum _s = new();
     private List<Opt> _vehicles = new(), _branches = new(), _suppliers = new();
     private string? _fStatus; private int? _fVehicle;
+    private string _search = "";
+    private bool _loading;
 
-    private bool _open, _saving;
+    private bool _open, _saving, _fabOpen;
     private string? _msg; private bool _ok = true;
     private long? _editId;
+    private long? _confirmId;
     private Form _f = new();
+
+    /* KPI = فلتر — الضغط مرة يفعّله ومرة يلغيه */
+    private string _kpi = "all";
+    private void SetKpi(string k) => _kpi = (_kpi == k && k != "all") ? "all" : k;
+
+    private List<Item> DisplayItems
+    {
+        get
+        {
+            IEnumerable<Item> q = _items;
+            q = _kpi switch
+            {
+                "open"    => q.Where(m => m.Status is "Scheduled" or "InProgress"),
+                "overdue" => q.Where(m => m.NextDueDate is not null && m.DaysToDue < 0),
+                "soon"    => q.Where(m => m.NextDueDate is not null && m.DaysToDue >= 0 && m.DaysToDue <= 30),
+                _         => q
+            };
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                var s = _search.Trim();
+                q = q.Where(m => m.MaintenanceNumber.Contains(s, StringComparison.OrdinalIgnoreCase)
+                              || m.VehiclePlate.Contains(s, StringComparison.OrdinalIgnoreCase)
+                              || (m.SupplierName?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false)
+                              || TypeAr(m.MaintenanceType).Contains(s));
+            }
+            return q.ToList();
+        }
+    }
+
+    private void ToggleFab() => _fabOpen = !_fabOpen;
 
     public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
 
@@ -323,6 +676,9 @@
 
     private async Task LoadAsync()
     {
+        if (_loading) return;
+        _loading = true;
+        _confirmId = null;
         try
         {
             var qs = "";
@@ -331,7 +687,12 @@
             _items = await Http.GetFromJsonAsync<List<Item>>("api/fleet/maintenance?" + qs) ?? new();
             _s = await Http.GetFromJsonAsync<Sum>("api/fleet/maintenance/summary") ?? new();
         }
-        catch (Exception ex) { _ok = false; _msg = "فشل التحميل: " + ex.Message; }
+        catch (Exception ex)
+        {
+            _ok = false; _msg = "فشل التحميل: " + ex.Message;
+            Snackbar.Add(_msg, Severity.Error);
+        }
+        finally { _loading = false; }
     }
 
     private async Task<List<Opt>> SafeOpts(string url)
@@ -339,8 +700,7 @@
         try { return await Http.GetFromJsonAsync<List<Opt>>(url) ?? new(); }
         catch (Exception ex)
         {
-            /* 🔴 كان بيبلع الخطأ بصمت — فالدروبداون يفضى من غير أي سبب ظاهر.
-                  دلوقتي بيقول إيه اللي فشل بالظبط. */
+            /* كان بيبلع الخطأ بصمت — فالدروبداون يفضى من غير أي سبب ظاهر */
             _ok = false;
             _msg = $"تعذّر تحميل القوائم ({url}): {ex.Message}";
             return new();
@@ -375,9 +735,9 @@
     private async Task SaveAsync()
     {
         if (_saving) return;
-        if (_f.VehicleId <= 0) { _ok = false; _msg = "اختار العربة"; return; }
-        if (_f.BranchId <= 0)  { _ok = false; _msg = "اختار الفرع"; return; }
-        if (string.IsNullOrWhiteSpace(_f.MaintenanceDate)) { _ok = false; _msg = "التاريخ مطلوب"; return; }
+        if (_f.VehicleId <= 0) { _ok = false; _msg = "يرجى اختيار المركبة"; return; }
+        if (_f.BranchId <= 0)  { _ok = false; _msg = "يرجى اختيار الفرع"; return; }
+        if (string.IsNullOrWhiteSpace(_f.MaintenanceDate)) { _ok = false; _msg = "تاريخ الصيانة مطلوب"; return; }
 
         _saving = true; _msg = null;
         try
@@ -404,6 +764,7 @@
 
     private async Task DeleteAsync(Item m)
     {
+        _confirmId = null;
         try
         {
             var res = await Http.DeleteAsync($"api/fleet/maintenance/{m.MaintenanceId}");
@@ -414,45 +775,56 @@
         catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
     }
 
-    /* 🔴 أي `"` جوه attribute = RZ1010 — فالـ helpers بتخرج الـ class */
+    /* أي " جوه attribute = RZ1010 — فالـ helpers بتخرج الـ class */
 
-    private string ModalTitle => _editId is null ? "سجل صيانة جديد" : "تعديل: " + _f.MaintenanceNumber;
-    /* 🔴 أي `"` جوه attribute = RZ1010 — فالـ helpers بتخرج الـ class */
-
-    /// <summary>خلية «الصيانة القادمة» — بتحمر لو متأخرة.</summary>
+    /// <summary>خلية «الصيانة القادمة» — شارة ملونة زي رخص المركبات بالظبط.</summary>
     private RenderFragment DueCell(Item m) => __builder =>
     {
         @if (m.NextDueDate is null)
         {
-            <span class="fc-cell-sub">—</span>
-        }
-        else if (m.DaysToDue < 0)
-        {
-            <b class="fc-txt-bad">@m.NextDueDate.Value.ToString("yyyy-MM-dd")</b>
-            <span class="fc-cell-sub"> (متأخرة @(-m.DaysToDue) يوم)</span>
+            <span class="td-muted">—</span>
         }
         else
         {
-            <text>@m.NextDueDate.Value.ToString("yyyy-MM-dd")</text>
-            <span class="fc-cell-sub"> (بعد @m.DaysToDue يوم)</span>
+            <div class="flt-doc-cell">
+                <span class="flt-doc-badge @(m.DaysToDue < 0 ? "doc-expired" : m.DaysToDue < 30 ? "doc-warning" : "doc-valid")">
+                    صيانة: @m.NextDueDate.Value.ToString("yyyy-MM-dd")
+                </span>
+                <span class="flt-brand-sub">
+                    @(m.DaysToDue < 0 ? $"متأخرة {-m.DaysToDue} يومًا" : $"بعد {m.DaysToDue} يومًا")
+                </span>
+            </div>
         }
     };
 
-    private static string StatusCls(string s) => s switch
+    private static string StatusChipClass(string s) => s switch
     {
-        "Scheduled" => "fc-chip-blue", "InProgress" => "fc-chip-warn",
-        "Completed" => "fc-chip-ok", "Cancelled" => "fc-chip-gray", _ => "fc-chip-gray"
+        "Scheduled"  => "chip-maintenance",
+        "InProgress" => "chip-intrip",
+        "Completed"  => "chip-available",
+        "Cancelled"  => "chip-outofservice",
+        _            => "chip-outofservice"
     };
+
+    private static string StatusDotClass(string s) => s switch
+    {
+        "Scheduled"  => "dot-maintenance",
+        "InProgress" => "dot-intrip",
+        "Completed"  => "dot-available",
+        "Cancelled"  => "dot-outofservice",
+        _            => "dot-outofservice"
+    };
+
     private static string StatusAr(string s) => s switch
     {
-        "Scheduled" => "مجدولة", "InProgress" => "شغالة",
-        "Completed" => "خلصت", "Cancelled" => "ملغاة", _ => s
+        "Scheduled" => "مجدولة", "InProgress" => "قيد التنفيذ",
+        "Completed" => "مكتملة", "Cancelled" => "ملغاة", _ => s
     };
     private static string TypeAr(string t) => t switch
     {
-        "Oil" => "زيت", "Filter" => "فلاتر", "Brake" => "فرامل", "Tire" => "كاوتش",
-        "Battery" => "بطارية", "Coolant" => "تبريد", "Transmission" => "فتيس",
-        "Electrical" => "كهرباء", "Body" => "سمكرة", "Inspection" => "فحص",
+        "Oil" => "زيت محرك", "Filter" => "فلاتر", "Brake" => "فرامل", "Tire" => "إطارات",
+        "Battery" => "بطارية", "Coolant" => "دورة تبريد", "Transmission" => "ناقل حركة",
+        "Electrical" => "كهرباء", "Body" => "أعمال هيكل", "Inspection" => "فحص فني",
         "Other" => "أخرى", _ => t
     };
 
@@ -468,6 +840,354 @@
             var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
             return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
         }
-        catch { return res.IsSuccessStatusCode ? "✅ تم" : "حصل خطأ — حاول تاني"; }
+        catch { return res.IsSuccessStatusCode ? "تم بنجاح" : "حدث خطأ — يرجى المحاولة مرة أخرى"; }
     }
 }
+
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ── Hero ── */
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px; margin: 0 auto; width: 100%;
+        box-sizing: border-box; position: relative; z-index: 1;
+    }
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important; overflow: hidden;
+        box-shadow: 0 12px 32px rgba(13,38,84,.15), 0 4px 12px rgba(13,38,84,.08);
+        border: 1px solid rgba(255,255,255,.08);
+    }
+    .hero-wrapper .fc-hero.fc-hero-slim { padding-top: 18px !important; padding-bottom: 22px !important; }
+
+    .flt-hero-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+    .flt-hero-left { flex: 1; min-width: 200px; }
+    .flt-hero-crumb { display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; color: rgba(255,255,255,.55); margin-bottom: 2px; }
+    .flt-hero-sub { font-size: 13px; color: rgba(255,255,255,.55); font-weight: 600; }
+    .flt-hero-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .flt-hero-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 8px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); color: rgba(255,255,255,.7); font-size: 10.5px; font-weight: 700; white-space: nowrap; }
+
+    .flt-hero-refresh {
+        width: 36px; height: 36px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.08);
+        color: rgba(255,255,255,.75); cursor: pointer; transition: background .15s;
+    }
+    .flt-hero-refresh:hover { background: rgba(255,255,255,.14); }
+
+    .flt-hero-add {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 16px; border-radius: 9px;
+        border: none; background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: #fff; font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; box-shadow: 0 4px 14px rgba(22,163,74,.35);
+        transition: all .15s ease;
+    }
+    .flt-hero-add:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(22,163,74,.4); }
+
+    /* ── KPIs Glass Strip ── */
+    .flt-kpis-strip {
+        display: flex; align-items: stretch;
+        background: rgba(0,0,0,.15); border: 1px solid rgba(255,255,255,.10);
+        border-radius: 12px; overflow: hidden; backdrop-filter: blur(8px); margin-top: 14px;
+    }
+    .flt-kpi-item {
+        flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+        cursor: pointer; transition: background .15s ease;
+    }
+    .flt-kpi-item:hover { background: rgba(255,255,255,.06); }
+    .flt-kpi-item.kpi-active { background: rgba(30,110,245,.28); }
+    .flt-kpi-div { width: 1px; background: rgba(255,255,255,.10); align-self: stretch; }
+    .flt-kpi-icon {
+        width: 36px; height: 36px; flex: 0 0 36px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .kpi-blue  { background: rgba(30,110,245,.2); color: #93c5fd; }
+    .kpi-amber { background: rgba(234,179,8,.2);  color: #fde68a; }
+    .kpi-red   { background: rgba(239,68,68,.2);  color: #fca5a5; }
+    .kpi-green { background: rgba(34,197,94,.2);  color: #86efac; }
+
+    .flt-kpi-label { font-size: 9.5px; color: rgba(255,255,255,.5); font-weight: 600; }
+    .flt-kpi-val { font-size: 15px; font-weight: 900; color: #fff; margin-top: 2px; }
+    .val-green { color: #86efac !important; }
+    .val-red   { color: #fca5a5 !important; }
+    .val-amber { color: #fde68a !important; }
+
+    /* ── Body ── */
+    .flt-body {
+        background: var(--fc-bg); min-height: calc(100vh - 180px);
+        padding: 18px clamp(16px, 3vw, 40px) 96px;
+        max-width: 1440px; width: 100%; margin: 0 auto;
+        box-sizing: border-box; position: relative; z-index: 2;
+        display: flex; flex-direction: column; gap: 14px;
+    }
+
+    .flt-state-box {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px; background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center; box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+    .flt-state-icon { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .flt-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+    .flt-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .flt-state-box p { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    .flt-card { background: var(--fc-card); border: 1px solid var(--fc-border); border-radius: var(--fc-radius); box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06); overflow: hidden; }
+
+    /* ── Toolbar ── */
+    .flt-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; background: linear-gradient(180deg, #fff 0%, #fafbfd 100%); border-bottom: 1px solid #edf1f7; flex-wrap: wrap; }
+    .flt-search-wrap { position: relative; display: flex; align-items: center; flex: 1; min-width: 200px; max-width: 380px; }
+    .flt-search-icon { position: absolute; right: 12px; color: #9aaabb; pointer-events: none; }
+    .flt-search-input {
+        width: 100%; height: 42px; padding: 0 36px 0 12px; border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text); font-family: inherit; font-size: 13px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .flt-search-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .flt-search-input::placeholder { color: #b0bcc8; }
+    .flt-search-clear { position: absolute; left: 10px; display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; border: none; background: #edf1f7; color: #8899ae; cursor: pointer; }
+    .flt-search-clear:hover { background: #dde3ed; }
+    .flt-results-badge { display: flex; align-items: center; gap: 5px; margin-right: auto; font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap; }
+    .flt-results-badge strong { color: #5a6e88; }
+
+    /* ── Tabs ── */
+    .flt-tab-bar { padding: 10px 18px; background: #f9fafd; border-bottom: 1px solid #edf1f7; }
+    .flt-tabs { display: flex; gap: 4px; padding: 3px; border-radius: 10px; background: #f0f3f8; width: fit-content; }
+    .flt-tab {
+        display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border: none; border-radius: 7px;
+        background: transparent; color: #6b7d95; font-family: inherit; font-size: 12px; font-weight: 700;
+        cursor: pointer; white-space: nowrap; transition: all .15s ease;
+    }
+    .flt-tab:hover:not(.active) { color: var(--fc-text); background: rgba(255,255,255,.6); }
+    .flt-tab.active { background: var(--fc-card); color: var(--fc-blue); box-shadow: 0 1px 4px rgba(15,41,82,.10); font-weight: 800; }
+    .flt-tab-count { min-width: 22px; height: 20px; border-radius: 5px; padding: 0 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .flt-tab:not(.active) .flt-tab-count { background: #e4eaf3; color: #8899ae; }
+
+    /* ── Loading / Empty ── */
+    .flt-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 200px; color: var(--fc-muted); font-size: 12px; font-weight: 600; }
+    .flt-spinner { width: 32px; height: 32px; border: 3px solid #dde5f0; border-top-color: var(--fc-blue); border-radius: 50%; animation: flt-spin .75s linear infinite; }
+    @@keyframes flt-spin { to { transform: rotate(360deg); } }
+    .flt-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 240px; padding: 40px; text-align: center; }
+    .flt-empty-icon { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #f0f4fa; color: #b0c4d8; }
+    .flt-empty-title { font-size: 15px; font-weight: 800; color: var(--fc-text); }
+    .flt-empty-sub { font-size: 12px; color: var(--fc-muted); }
+
+    /* ── Table ── */
+    .flt-table-wrap { overflow-x: auto; }
+    .flt-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .flt-table thead th {
+        padding: 12px 14px; background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 10.5px; font-weight: 800; text-align: center;
+        border-bottom: 2px solid #e4eaf3; white-space: nowrap;
+    }
+    .flt-table .th-start { text-align: right; }
+    .flt-table tbody tr { border-bottom: 1px solid #f0f3f8; transition: background .12s ease; }
+    .flt-table tbody tr:last-child { border-bottom: none; }
+    .flt-table tbody tr:hover { background: #fafcff; }
+    .flt-table tbody td { padding: 11px 12px; color: #526070; text-align: center; vertical-align: middle; }
+    .td-start { text-align: right !important; }
+    .td-muted { color: #8899ae; font-size: 11px; }
+
+    .flt-item-cell { display: flex; align-items: center; gap: 10px; }
+    .flt-avatar { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.10); }
+    .av-available   { background: linear-gradient(135deg, #0d8a48, #16a35b); }
+    .av-intrip      { background: linear-gradient(135deg, #1558d6, #1e6ef5); }
+    .av-maintenance { background: linear-gradient(135deg, #b87d08, #e09a10); }
+    .av-outofservice{ background: linear-gradient(135deg, #6b7d95, #4a5a74); }
+
+    .flt-item-info { min-width: 0; }
+    .flt-code-plate { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .flt-code-chip { display: inline-flex; padding: 2px 8px; border-radius: 6px; background: #f0f4fa; border: 1px solid #e0e8f4; font-size: 10.5px; font-weight: 800; color: var(--fc-blue); font-family: "Inter", Arial, sans-serif; }
+    .flt-plate-num { font-size: 13px; font-weight: 800; color: #1c2b43; margin-top: 4px; font-family: "Inter", Arial, sans-serif; }
+
+    .flt-type-cell { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+    .flt-type-tag { display: inline-flex; padding: 3px 10px; border-radius: 6px; background: var(--fc-blue-lt); color: var(--fc-blue); font-size: 11px; font-weight: 800; border: 1px solid #bdd4fc; }
+    .flt-brand-sub { font-size: 10.5px; color: #8899ae; font-weight: 600; }
+
+    .flt-ownership-badge {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 800;
+    }
+    .ownership-company { background: #eaf1ff; color: var(--fc-blue); border: 1px solid #bdd4fc; }
+    .ownership-external { background: #fff8e6; color: #9a6d08; border: 1px solid #f0d898; }
+
+    .flt-doc-cell { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+    .flt-doc-badge { display: inline-flex; padding: 2px 8px; border-radius: 5px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+    .doc-valid   { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .doc-warning { background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898; }
+    .doc-expired { background: var(--fc-red-lt); color: var(--fc-red); border: 1px solid #ffc8cf; }
+
+    .flt-status-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 7px; font-size: 10.5px; font-weight: 800; }
+    .flt-status-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
+    .chip-available   { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .chip-intrip      { background: var(--fc-blue-lt); color: var(--fc-blue); border: 1px solid #c0d4fb; }
+    .chip-maintenance { background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898; }
+    .chip-outofservice{ background: #f0f3f8; color: #6b7d95; border: 1px solid #dde5f0; }
+    .dot-available    { background: var(--fc-green); }
+    .dot-intrip       { background: var(--fc-blue); }
+    .dot-maintenance  { background: var(--fc-amber); }
+    .dot-outofservice { background: #6b7d95; }
+
+    .flt-actions { display: flex; align-items: center; gap: 3px; justify-content: center; }
+    .flt-act-btn { width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; border: 1px solid transparent; cursor: pointer; transition: all .15s ease; background: transparent; }
+    .act-edit { color: var(--fc-blue); }
+    .act-del  { color: var(--fc-red); }
+    .act-edit:hover { background: var(--fc-blue-lt); border-color: #c0d4fb; }
+    .act-del:hover  { background: var(--fc-red-lt); border-color: #ffc8cf; }
+
+    .flt-confirm-del { height: 28px; padding: 0 10px; border: none; border-radius: 6px; background: linear-gradient(135deg, #e03048, #c0182e); color: #fff; font-family: inherit; font-size: 10px; font-weight: 800; cursor: pointer; animation: flt-pulse-del 1s ease infinite; white-space: nowrap; }
+    @@keyframes flt-pulse-del { 0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.35); } 50% { box-shadow: 0 0 0 5px rgba(224,48,72,0); } }
+
+    /* ── Modals (svc-modal) ── */
+    .svc-modal-backdrop { position: fixed; inset: 0; z-index: 1400; background: rgba(10,27,59,.62); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 20px; animation: svc-fade .2s ease both; }
+    @@keyframes svc-fade { from { opacity: 0; } to { opacity: 1; } }
+
+    .svc-modal { width: 100%; max-width: 720px; background: #fff; border-radius: 20px; box-shadow: 0 25px 60px rgba(10,27,59,.28), 0 8px 20px rgba(10,27,59,.12); overflow: hidden; animation: svc-pop .28s cubic-bezier(.22,.9,.36,1.1) both; max-height: 92vh; display: flex; flex-direction: column; }
+    @@keyframes svc-pop { from { opacity: 0; transform: translateY(20px) scale(.96); } to { opacity: 1; transform: none; } }
+
+    .svc-modal-head { display: flex; align-items: center; gap: 14px; padding: 20px 24px; background: linear-gradient(135deg, #0A1B3B 0%, #16306B 100%); color: #fff; flex: 0 0 auto; position: relative; overflow: hidden; }
+    .svc-modal-head::before { content: ""; position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, rgba(255,128,21,.15) 0%, transparent 70%); pointer-events: none; }
+    .svc-head-icon { width: 46px; height: 46px; flex: 0 0 46px; display: flex; align-items: center; justify-content: center; border-radius: 13px; position: relative; z-index: 1; }
+    .svc-icon-create { background: rgba(27,158,94,.2); color: #6ee7b7; border: 1px solid rgba(110,231,183,.3); }
+    .svc-icon-edit   { background: rgba(255,128,21,.2); color: #FFD9B8; border: 1px solid rgba(255,128,21,.3); }
+    .svc-head-text  { flex: 1; min-width: 0; position: relative; z-index: 1; }
+    .svc-head-title { font-size: 16px; font-weight: 800; color: #fff; line-height: 1.3; }
+    .svc-head-sub   { font-size: 11.5px; color: rgba(255,255,255,.62); margin-top: 3px; }
+    .svc-head-close { width: 34px; height: 34px; flex: 0 0 34px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,.15); border-radius: 9px; background: rgba(255,255,255,.06); color: rgba(255,255,255,.7); cursor: pointer; transition: all .15s; position: relative; z-index: 1; }
+    .svc-head-close:hover { background: rgba(255,255,255,.14); color: #fff; transform: rotate(90deg); }
+
+    .svc-banner { display: flex; align-items: center; gap: 10px; padding: 12px 20px; flex: 0 0 auto; font-size: 12.5px; font-weight: 600; }
+    .svc-banner-ok  { background: #e9f8f0; color: #0e7a43; border-bottom: 1px solid #b5e8d0; }
+    .svc-banner-err { background: #fff0f2; color: #D64545; border-bottom: 1px solid #ffc8cf; }
+    .svc-banner-msg { flex: 1; }
+    .svc-banner-x { background: none; border: none; color: inherit; opacity: .5; cursor: pointer; }
+    .svc-modal-body { flex: 1 1 auto; overflow-y: auto; padding: 0; }
+
+    /* MudTabs */
+    .svc-mud-tabs .mud-tabs-toolbar { background: linear-gradient(180deg, #f8fafd, #f2f5fa) !important; border-bottom: 2px solid #e4eaf3 !important; padding: 0 16px !important; min-height: 52px !important; }
+    .svc-mud-tabs .mud-tab { font-family: inherit !important; font-size: 12px !important; font-weight: 700 !important; color: #6B7A8F !important; padding: 0 10px !important; min-width: unset !important; text-transform: none !important; letter-spacing: 0 !important; min-height: 52px !important; }
+    .svc-mud-tabs .mud-tab.mud-tab-active { color: #0B56DF !important; font-weight: 800 !important; }
+    .svc-mud-tabs .mud-tab-slider { background: #0B56DF !important; height: 3px !important; border-radius: 3px 3px 0 0 !important; }
+    .svc-mud-tabs .mud-tab:hover:not(.mud-tab-active) { color: #1A2332 !important; background: rgba(11,86,223,.04) !important; border-radius: 8px !important; }
+    .svc-tab-panel { padding: 0 !important; }
+
+    .svc-tab-label { display: flex; align-items: center; gap: 7px; padding: 0 4px; white-space: nowrap; }
+    .svc-tab-ic { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 7px; }
+    .svc-tab-ic-blue  { background: #eaf1ff; color: #0B56DF; }
+    .svc-tab-ic-green { background: #e9f8f0; color: #1B9E5E; }
+    .svc-tab-ic-amber { background: #fff8e6; color: #E8A317; }
+
+    .svc-section { padding: 22px 24px 26px; }
+    .svc-section-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #edf1f7; }
+    .svc-section-ic { width: 40px; height: 40px; flex: 0 0 40px; display: flex; align-items: center; justify-content: center; border-radius: 11px; }
+    .svc-section-ic.blue  { background: #eaf1ff; color: #0B56DF; border: 1px solid #bdd4fc; }
+    .svc-section-ic.green { background: #e9f8f0; color: #1B9E5E; border: 1px solid #b0e0c5; }
+    .svc-section-ic.amber { background: #fff8e6; color: #E8A317; border: 1px solid #f0d898; }
+    .svc-section-title { font-size: 14.5px; font-weight: 800; color: #1A2332; line-height: 1.2; }
+    .svc-section-sub   { font-size: 11px; font-weight: 500; color: #6B7A8F; margin-top: 3px; }
+
+    .svc-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .svc-full { grid-column: 1 / -1; }
+    .svc-field { display: flex; flex-direction: column; gap: 5px; position: relative; }
+    .svc-label { font-size: 11.5px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 4px; }
+    .svc-req { color: #D64545; font-size: 13px; }
+
+    .svc-input-wrap { position: relative; display: flex; align-items: center; }
+    .svc-prefix { position: absolute; right: 12px; z-index: 1; display: flex; align-items: center; color: #9aaabb; pointer-events: none; }
+    .svc-prefix.txt { font-size: 11px; font-weight: 800; color: #6B7A8F; }
+    .svc-input { width: 100%; height: 42px; border: 1.5px solid #d8e2f0; border-radius: 10px; background: #fafcff; color: #1A2332; font-family: inherit; font-size: 13px; padding: 0 12px; outline: none; box-sizing: border-box; transition: border-color .15s, box-shadow .15s, background .15s; }
+    .svc-input:focus { border-color: #0B56DF; box-shadow: 0 0 0 3px rgba(11,86,223,.1); background: #fff; }
+    .svc-input::placeholder { color: #b0bcc8; }
+    .svc-input.ltr { direction: ltr; text-align: left; }
+    .svc-input.with-prefix { padding-right: 40px; }
+
+    .svc-select {
+        cursor: pointer; -webkit-appearance: none; appearance: none;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B7A8F' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
+        background-repeat: no-repeat; background-position: left 12px center; background-size: 13px; padding-left: 34px;
+    }
+
+    .field-clear-btn { position: absolute; left: 12px; background: none; border: none; color: #9aaabb; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 50%; font-size: 11px; font-weight: bold; }
+    .field-clear-btn:hover { background: rgba(0,0,0,0.05); color: var(--fc-red); }
+
+    .field-dropdown { position: absolute; top: 100%; right: 0; left: 0; margin-top: 4px; background: #fafcff; border: 1px solid #d8e2f0; border-radius: 9px; box-shadow: 0 8px 24px rgba(0,0,0,.12); max-height: 240px; overflow-y: auto; z-index: 100; }
+    .field-dropdown-item { padding: 10px 12px; font-size: 13px; color: var(--fc-text); cursor: pointer; transition: background .1s; }
+    .field-dropdown-item:hover, .field-dropdown-item.is-focused { background: #eaf1ff; color: var(--fc-blue); font-weight: 600; }
+
+    .svc-modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 20px; background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%); border-top: 1px solid #edf1f7; flex: 0 0 auto; }
+    .svc-foot-right { display: flex; align-items: center; gap: 8px; }
+    .svc-btn-cancel { height: 38px; padding: 0 16px; border: 1.5px solid #d8e2f0; border-radius: 9px; background: #fff; color: #6B7A8F; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s; }
+    .svc-btn-cancel:hover { background: #f0f4fa; color: #1A2332; border-color: #c0ccd8; }
+    .svc-btn-save { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 22px; border: none; border-radius: 10px; background: linear-gradient(135deg, #0B56DF, #083CA8); color: #fff; font-family: inherit; font-size: 12.5px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(11,86,223,.28); transition: all .18s; }
+    .svc-btn-save:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(11,86,223,.4); }
+    .svc-btn-save:disabled { opacity: .6; cursor: not-allowed; }
+    .svc-spinner { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: flt-spin .7s linear infinite; }
+
+    /* ── FAB ── */
+    .glow-fab-wrap { position: fixed; left: 28px; bottom: 28px; z-index: 1299; width: 60px; height: 60px; }
+    .glow-fab-container { position: relative; z-index: 2; width: 60px; height: 60px; }
+    .glow-fab-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 58px; height: 58px; border-radius: 50%; background: linear-gradient(135deg, #1e6ef5, #0d47a1); border: 2.5px solid #fbbf24; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(30, 110, 245, .4); transition: transform .2s; z-index: 2; }
+    .glow-fab-btn:hover { transform: translate(-50%, -50%) scale(1.05); }
+    .glow-fab-icon { transition: transform .3s; }
+    .glow-fab-wrap.is-open .glow-fab-icon { transform: rotate(130deg); }
+
+    .glow-halo, .glow-ring { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
+    .glow-halo { width: 58px; height: 58px; background: radial-gradient(circle, rgba(30, 110, 245, .3) 0%, transparent 70%); animation: glow-breath 2s ease-in-out infinite; }
+    .glow-ring { width: 58px; height: 58px; border: 2px solid rgba(30, 110, 245, .4); animation: glow-expand 2s ease-out infinite; }
+    .glow-ring-2 { animation-delay: .3s; }
+    .glow-ring-3 { animation-delay: .6s; }
+
+    @@keyframes glow-breath { 0%, 100% { opacity: .5; transform: translate(-50%, -50%) scale(1); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } }
+    @@keyframes glow-expand { 0% { opacity: .8; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.5); } }
+
+    .glow-fab-menu { position: absolute; bottom: 74px; left: 0; z-index: 3; display: flex; flex-direction: column; gap: 8px; opacity: 0; pointer-events: none; transform: translateY(10px); transition: opacity .2s, transform .2s; }
+    .glow-fab-wrap.is-open .glow-fab-menu { opacity: 1; pointer-events: auto; transform: translateY(0); }
+    .glow-fab-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 12px; background: #fff; border: 1px solid #dde5f0; box-shadow: 0 4px 12px rgba(0, 0, 0, .1); cursor: pointer; font-size: 13px; color: #1c2c44; white-space: nowrap; }
+    .glow-fab-item:hover { background: #f4f7fb; border-color: #1e6ef5; }
+    .glow-fab-item-ic { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: #eaf1ff; color: #1e6ef5; }
+    .glow-fab-scrim { position: fixed; inset: 0; background: rgba(9, 18, 35, .45); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 1298; }
+
+    /* ── Responsive ── */
+    @@media (max-width: 992px) {
+        .flt-kpis-strip { flex-wrap: wrap; }
+        .flt-kpi-item { flex: 0 0 50%; }
+        .flt-kpi-div:nth-child(4) { display: none; }
+    }
+    @@media (max-width: 900px) {
+        .flt-toolbar { flex-direction: column; align-items: stretch; }
+        .flt-search-wrap { max-width: 100%; }
+        .svc-grid { grid-template-columns: 1fr; }
+    }
+    @@media (max-width: 768px) {
+        .flt-hero-row { flex-direction: column; align-items: flex-start; }
+        .flt-hero-right { width: 100%; justify-content: flex-start; }
+        .flt-kpi-item { flex: 0 0 100%; }
+        .flt-kpi-div { display: none; }
+    }
+    @@media (max-width: 680px) {
+        .flt-body { padding: 12px 12px 90px; }
+        .svc-modal { max-width: 100%; border-radius: 16px; }
+        .svc-modal-head { padding: 16px 18px; gap: 10px; }
+        .svc-section { padding: 18px 16px 22px; }
+        .glow-fab-wrap { left: 16px; bottom: 16px; }
+    }
+    .svc-field-full { grid-column: 1 / -1; }
+</style>

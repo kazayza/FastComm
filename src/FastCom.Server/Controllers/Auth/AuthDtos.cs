@@ -54,6 +54,10 @@ public class MeResponse
     public string FullName { get; set; } = "";
     public string? Email { get; set; }
     public int? BranchId { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string UserStatus { get; set; } = "Active";
+    public DateTime? LastLoginAt { get; set; }
+    public string? ProfileImagePath { get; set; }
     public List<string> Roles { get; set; } = new();
     public List<string> Permissions { get; set; } = new();
 }

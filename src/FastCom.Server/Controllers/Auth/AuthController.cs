@@ -208,6 +208,10 @@ public class AuthController : ControllerBase
             FullName    = user.FullName ?? "",
             Email       = user.Email,
             BranchId    = user.BranchId,
+            PhoneNumber = user.PhoneNumber,
+            UserStatus  = user.UserStatus,
+            LastLoginAt = user.LastLoginAt,
+            ProfileImagePath = user.ProfileImagePath,
             Roles       = await _tokens.GetRoleCodesAsync(user),
             Permissions = await _tokens.GetPermissionsAsync(userId, ct)
         });
@@ -340,6 +344,48 @@ public class AuthController : ControllerBase
     //  محاولات تخمين (الحساب بيتقفل بعد 5 محاولات غلط).
     //  ⚠️ في الـ Production الـ endpoint ده بيرجّع 404.
     // ═══════════════════════════════════════════════════════════════════
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  POST /api/auth/change-password — المستخدم يغيّر كلمة مروره بنفسه
+    // ═══════════════════════════════════════════════════════════════════
+
+    public record ChangePasswordRequest(string CurrentPassword, string NewPassword, string ConfirmPassword);
+
+    [HttpPost("change-password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest req, CancellationToken ct)
+    {
+        if (req is null || string.IsNullOrWhiteSpace(req.CurrentPassword) || string.IsNullOrWhiteSpace(req.NewPassword))
+            return BadRequest(new { message = "بيانات ناقصة" });
+
+        if (req.NewPassword != req.ConfirmPassword)
+            return BadRequest(new { message = "كلمتا المرور الجديدتان غير متطابقتين" });
+
+        if (req.NewPassword.Length < 8)
+            return BadRequest(new { message = "كلمة المرور الجديدة يجب ألا تقل عن 8 أحرف" });
+
+        if (req.CurrentPassword == req.NewPassword)
+            return BadRequest(new { message = "كلمة المرور الجديدة يجب أن تختلف عن الحالية" });
+
+        var idText = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                     ?? User.FindFirstValue("sub");
+        if (!int.TryParse(idText, out var userId))
+            return Unauthorized(new { message = "الجلسة غير صالحة — يرجى إعادة تسجيل الدخول" });
+
+        var user = await _users.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null || !user.IsActive)
+            return Unauthorized(new { message = "المستخدم غير موجود أو موقوف" });
+
+        if (!await _users.CheckPasswordAsync(user, req.CurrentPassword))
+            return BadRequest(new { message = "كلمة المرور الحالية غير صحيحة" });
+
+        var res = await _users.ChangePasswordAsync(user, req.CurrentPassword, req.NewPassword);
+        if (!res.Succeeded)
+            return BadRequest(new { message = "كلمة المرور مرفوضة: " + string.Join(" · ", res.Errors.Select(e => e.Description)) });
+
+        _logger.LogInformation("غيّر المستخدم {UserName} كلمة مروره", user.UserName);
+        return Ok(new { message = "تم تغيير كلمة المرور بنجاح" });
+    }
 
     [HttpPost("reset-password")]
     [AllowAnonymous]

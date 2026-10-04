@@ -252,11 +252,18 @@ public class DashboardController : ControllerBase
         var start = new DateOnly(today.Year, today.Month, 1).AddMonths(-5);
         var startDt = start.ToDateTime(TimeOnly.MinValue);
 
+        // 🔤 أسماء الشهور بالعربية (كانت ToString("MMMM") = إنجليزي)
+        string[] arMonths =
+        {
+            "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+            "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"
+        };
+
         var rows = new List<MonthFlow>();
         for (var i = 0; i < 6; i++)
         {
             var mStart = start.AddMonths(i);
-            rows.Add(new MonthFlow(mStart.ToString("yyyy-MM"), mStart.ToString("MMMM"), 0m, 0m, 0m));
+            rows.Add(new MonthFlow(mStart.ToString("yyyy-MM"), arMonths[mStart.Month - 1], 0m, 0m, 0m));
         }
 
         // التحصيل

@@ -13,7 +13,7 @@ namespace FastCom.Server.Controllers;
 /// <summary>
 /// 🔍 البحث العام في الشريط العلوي.
 /// <para>
-/// بيبحث في <b>7 وحدات</b> مرة واحدة: عملاء · حجوزات · عمليات · فواتير · رحلات · حاويات · سيارات.
+/// بيبحث في <b>16 وحدة</b> مرة واحدة: عملاء · حجوزات · عمليات · فواتير · رحلات · حاويات · سيارات · سائقون · موردون · موظفون · عهد · مصروفات · تحصيلات · فواتير موردين · صيانة · مقطورات.
 /// </para>
 /// </summary>
 /// <remarks>
@@ -50,7 +50,16 @@ public class SearchController : ControllerBase
         ("فاتورة", "INVOICE.VIEW"),
         ("رحلة",   "TRIP.VIEW"),
         ("حاوية",  "OPERATION.VIEW"),
-        ("سيارة",  "FLEET.VIEW")
+        ("سيارة",  "FLEET.VIEW"),
+        ("سائق",        "DRIVER.VIEW"),
+        ("مورد",        "SUPPLIER.VIEW"),
+        ("موظف",        "EMPLOYEE.VIEW"),
+        ("عهدة",        "CUSTODY.VIEW"),
+        ("مصروف",       "EXPENSE.VIEW"),
+        ("تحصيل",       "PAYMENT.VIEW"),
+        ("فاتورة مورد", "SUPPLIER.VIEW"),
+        ("صيانة",       "MAINTENANCE.VIEW"),
+        ("مقطورة",      "FLEET.VIEW")
     };
 
     private readonly FastComDbContext _db;
@@ -109,7 +118,7 @@ public class SearchController : ControllerBase
                 Results        = new List<SearchHit>(),
                 SearchableIn   = new List<string>(),
                 DeniedEntities = denied,
-                Message        = "ماعندكش صلاحية عرض أي وحدة من وحدات البحث"
+                Message        = "ليست لديك صلاحية عرض أي وحدة من وحدات البحث"
             });
         }
 
@@ -332,6 +341,137 @@ ORDER BY x.SortOrder, x.Code";
       AND (vh.PlateNumber LIKE @q
            OR ISNULL(vh.VehicleCode, N'') LIKE @q
            OR ISNULL(vh.Brand, N'') LIKE @q)",
+
+        // ── 8) السائقون ───────────────────────────────────────────────────
+        "سائق" => $@"    SELECT TOP ({take})
+           N'سائق', CAST(dr.DriverId AS bigint),
+           ISNULL(dr.DriverCode, N''),
+           ISNULL(dr.FullName, N''),
+           ISNULL(dr.Status, N''),
+           ISNULL(dr.Mobile, N''),
+           8
+    FROM Drivers dr
+    WHERE dr.IsDeleted = 0
+      AND (dr.DriverCode LIKE @q OR dr.FullName LIKE @q
+           OR ISNULL(dr.Mobile, N'') LIKE @q
+           OR ISNULL(dr.NationalId, N'') LIKE @q)",
+
+        // ── 9) الموردون ───────────────────────────────────────────────────
+        "مورد" => $@"    SELECT TOP ({take})
+           N'مورد', CAST(s.SupplierId AS bigint),
+           ISNULL(s.SupplierCode, N''),
+           ISNULL(s.NameAr, N''),
+           ISNULL(s.Phone, N''),
+           ISNULL(s.SupplierType, N''),
+           9
+    FROM Suppliers s
+    WHERE s.IsDeleted = 0
+      AND (s.SupplierCode LIKE @q OR s.NameAr LIKE @q
+           OR ISNULL(s.NameEn, N'') LIKE @q
+           OR ISNULL(s.Phone, N'') LIKE @q
+           OR ISNULL(s.TaxNumber, N'') LIKE @q)",
+
+        // ── 10) الموظفون ──────────────────────────────────────────────────
+        "موظف" => $@"    SELECT TOP ({take})
+           N'موظف', CAST(e.EmployeeId AS bigint),
+           ISNULL(e.EmployeeCode, N''),
+           ISNULL(e.FullNameAr, N''),
+           ISNULL(e.EmploymentStatus, N''),
+           ISNULL(e.Mobile, N''),
+           10
+    FROM Employees e
+    WHERE e.IsDeleted = 0
+      AND (e.EmployeeCode LIKE @q OR e.FullNameAr LIKE @q
+           OR ISNULL(e.FullNameEn, N'') LIKE @q
+           OR ISNULL(e.Mobile, N'') LIKE @q
+           OR ISNULL(e.NationalId, N'') LIKE @q)",
+
+        // ── 11) العهد ─────────────────────────────────────────────────────
+        "عهدة" => $@"    SELECT TOP ({take})
+           N'عهدة', CAST(dc.CustodyId AS bigint),
+           ISNULL(dc.CustodyNumber, N''),
+           CASE WHEN dc.OwnerType = N'Driver'
+                THEN ISNULL((SELECT TOP 1 d2.FullName FROM Drivers d2 WHERE d2.DriverId = dc.OwnerId), N'')
+                ELSE ISNULL((SELECT TOP 1 e2.FullNameAr FROM Employees e2 WHERE e2.EmployeeId = dc.OwnerId), N'') END,
+           ISNULL(dc.Status, N''),
+           FORMAT(dc.AmountIssued, N'#,0.00'),
+           11
+    FROM DriverCustodies dc
+    WHERE dc.IsDeleted = 0
+      AND (dc.CustodyNumber LIKE @q
+           OR (dc.OwnerType = N'Driver'
+               AND EXISTS (SELECT 1 FROM Drivers d3 WHERE d3.DriverId = dc.OwnerId AND d3.FullName LIKE @q))
+           OR (dc.OwnerType <> N'Driver'
+               AND EXISTS (SELECT 1 FROM Employees e3 WHERE e3.EmployeeId = dc.OwnerId AND e3.FullNameAr LIKE @q)))",
+
+        // ── 12) المصروفات ─────────────────────────────────────────────────
+        "مصروف" => $@"    SELECT TOP ({take})
+           N'مصروف', CAST(ex.ExpenseId AS bigint),
+           ISNULL(ex.ExpenseNumber, N''),
+           ISNULL(ex.Description, N'بدون وصف'),
+           ISNULL(ex.Status, N''),
+           FORMAT(ex.Amount, N'#,0.00'),
+           12
+    FROM Expenses ex
+    WHERE ex.IsDeleted = 0
+      AND (ex.ExpenseNumber LIKE @q OR ISNULL(ex.Description, N'') LIKE @q)",
+
+        // ── 13) التحصيلات ─────────────────────────────────────────────────
+        "تحصيل" => $@"    SELECT TOP ({take})
+           N'تحصيل', CAST(p.PaymentId AS bigint),
+           ISNULL(p.PaymentNumber, N''),
+           ISNULL(c.NameAr, N'بدون عميل'),
+           ISNULL(p.Status, N''),
+           FORMAT(p.Amount, N'#,0.00'),
+           13
+    FROM Payments p
+         LEFT JOIN Customers c ON c.CustomerId = p.CustomerId
+    WHERE p.IsDeleted = 0
+      AND (p.PaymentNumber LIKE @q
+           OR ISNULL(p.ChequeNumber, N'') LIKE @q
+           OR ISNULL(c.NameAr, N'') LIKE @q)",
+
+        // ── 14) فواتير الموردين ───────────────────────────────────────────
+        "فاتورة مورد" => $@"    SELECT TOP ({take})
+           N'فاتورة مورد', CAST(si.SupplierInvoiceId AS bigint),
+           ISNULL(si.SupplierInvoiceNumber, N''),
+           ISNULL(s.NameAr, N'بدون مورد'),
+           ISNULL(si.PaymentStatus, N''),
+           FORMAT(si.GrandTotal, N'#,0.00'),
+           14
+    FROM SupplierInvoices si
+         LEFT JOIN Suppliers s ON s.SupplierId = si.SupplierId
+    WHERE si.IsDeleted = 0
+      AND (si.SupplierInvoiceNumber LIKE @q
+           OR ISNULL(si.SupplierRefNumber, N'') LIKE @q
+           OR ISNULL(s.NameAr, N'') LIKE @q)",
+
+        // ── 15) سجلات الصيانة ─────────────────────────────────────────────
+        "صيانة" => $@"    SELECT TOP ({take})
+           N'صيانة', CAST(vm.MaintenanceId AS bigint),
+           ISNULL(vm.MaintenanceNumber, N''),
+           ISNULL(v.PlateNumber, N'بدون سيارة'),
+           ISNULL(vm.Status, N''),
+           FORMAT(vm.Cost, N'#,0.00'),
+           15
+    FROM VehicleMaintenance vm
+         LEFT JOIN Vehicles v ON v.VehicleId = vm.VehicleId
+    WHERE vm.IsDeleted = 0
+      AND (vm.MaintenanceNumber LIKE @q
+           OR ISNULL(v.PlateNumber, N'') LIKE @q
+           OR ISNULL(vm.Description, N'') LIKE @q)",
+
+        // ── 16) المقطورات ─────────────────────────────────────────────────
+        "مقطورة" => $@"    SELECT TOP ({take})
+           N'مقطورة', CAST(tr.TrailerId AS bigint),
+           ISNULL(tr.TrailerCode, N''),
+           ISNULL(tr.PlateNumber, N'بدون لوحة'),
+           ISNULL(tr.Status, N''),
+           ISNULL(tr.TrailerType, N''),
+           16
+    FROM Trailers tr
+    WHERE tr.IsDeleted = 0
+      AND (tr.TrailerCode LIKE @q OR ISNULL(tr.PlateNumber, N'') LIKE @q)",
 
         _ => null
     };

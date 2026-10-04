@@ -5,6 +5,7 @@ using FastCom.Server.Auth;
 using FastCom.Server.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 
 namespace FastCom.Server.Controllers.Finance;
@@ -33,8 +34,7 @@ public class TreasuryController : ControllerBase
         int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : -1;
 
     private static string? B(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
-    private static DateTime Dt(string? s) => DateTime.TryParse(s, out var d) ? d : DateTime.UtcNow;
-    private static DateOnly? Dn(string? s) => DateOnly.TryParse(s, out var d) ? d : null;
+    private static DateTime Dt(string? s) => DateTime.TryParse(s, out var d) ? d : DateTime.Now;
 
     private async Task<int?> ResolveBranchIdAsync(CancellationToken ct)
     {
@@ -44,11 +44,6 @@ public class TreasuryController : ControllerBase
     }
 
     // ═══════════════ DTOs ═══════════════
-
-    public record TxUpsert(string? Type, int CashBoxId, string? TxDate, decimal Amount,
-        int? PaymentMethodId, int? CustomerId, int? SupplierId, long? InvoiceId,
-        long? CustodyId, string? ChequeNumber, string? ChequeDate, string? BankAccount,
-        string? ReferenceNumber, string? Description);
 
     public record TransferRequest(int FromCashBoxId, int ToCashBoxId, string? TxDate,
         decimal Amount, string? Description);
@@ -68,7 +63,8 @@ public class TreasuryController : ControllerBase
         int CashBoxId, string CashBoxName, decimal Amount, string? MethodName,
         string? CustomerName, string? SupplierName, string? InvoiceNumber, string? CustodyNumber,
         string? CounterpartName, string? ChequeNumber, string? ReferenceNumber,
-        string? Description, string Status);
+        string? Description, string Status,
+        long? InvoiceId, long? CustodyId, int? VehicleId, string? RefAr);
 
     public record BoxOpt(int Id, string Label, string Code, decimal CurrentBalance);
 
@@ -103,18 +99,6 @@ public class TreasuryController : ControllerBase
 
         return Ok(boxes);
     }
-
-    /// <summary>عملاء — لدروبداون القبض.</summary>
-    [HttpGet("customers")]
-    [Authorize(Policy = "PERM:TREASURY.VIEW")]
-    public async Task<IActionResult> Customers(CancellationToken ct) =>
-        Ok(await _db.Customers.AsNoTracking()
-            .Where(c => !c.IsDeleted && c.IsActive)
-            .OrderBy(c => c.NameAr)
-            .Select(c => new CustOpt(c.CustomerId, c.NameAr, c.CustomerCode))
-            .ToListAsync(ct));
-
-    public record CustOpt(int Id, string Label, string Code);
 
     /// <summary>الصناديق المفتوحة — للدروبداون. المقفولة ماتظهرش.</summary>
     [HttpGet("box-options")]
@@ -183,100 +167,11 @@ public class TreasuryController : ControllerBase
                 t.Invoice != null ? t.Invoice.InvoiceNumber : null,
                 t.Custody != null ? t.Custody.CustodyNumber : null,
                 t.CounterpartCashBox != null ? t.CounterpartCashBox.NameAr : null,
-                t.ChequeNumber, t.ReferenceNumber, t.Description, t.Status))
+                t.ChequeNumber, t.ReferenceNumber, t.Description, t.Status,
+                t.InvoiceId, t.CustodyId, t.VehicleId, null))
             .ToListAsync(ct);
 
-        return Ok(rows);
-    }
-
-    // ═══════════════ تسجيل حركة ═══════════════
-
-    [HttpPost("transactions")]
-    [Authorize(Policy = "PERM:TREASURY.POST")]
-    public async Task<IActionResult> Post([FromBody] TxUpsert req, CancellationToken ct)
-    {
-        if (req is null) return BadRequest(new { message = "البيانات مش كاملة" });
-        if (req.Type is not ("Receipt" or "Payment"))
-            return BadRequest(new { message = "نوع الحركة لازم يكون وارد أو صادر" });
-        if (req.Amount <= 0) return BadRequest(new { message = "المبلغ لازم يكون أكتر من صفر" });
-        /* 🔴 كان hard-coded — بقى من `TREASURY.MAX_AMOUNT`.
-           ⚠️ المفتاح لسه مش في الـ seed — هيشتغل بالافتراضي (100,000,000). */
-        var trMax = await _settings.GetDecimalAsync(SettingKeys.TreasuryMaxAmount,
-                                                   SettingDefaults.TreasuryMaxAmount, ct);
-        if (trMax > 0 && req.Amount > trMax)
-            return BadRequest(new { message = $"المبلغ أكبر من سقف حركة الخزينة المسموح ({trMax:N0})" });
-
-        var box = await _db.CashBoxes.AsNoTracking()
-            .FirstOrDefaultAsync(b => b.CashBoxId == req.CashBoxId && !b.IsDeleted, ct);
-        if (box is null) return BadRequest(new { message = "الخزينة مش موجودة" });
-        if (!box.IsActive) return BadRequest(new { message = "الخزينة دي متوقفة" });
-
-        if (req.Type == "Receipt" && req.CustomerId is null)
-            return BadRequest(new { message = "القبض لازم يكون من عميل" });
-
-        if (req.PaymentMethodId is not null &&
-            !await _db.PaymentMethods.AnyAsync(m => m.PaymentMethodId == req.PaymentMethodId && m.IsActive, ct))
-            return BadRequest(new { message = "طريقة الدفع مش موجودة" });
-
-        if (req.CustomerId is not null &&
-            !await _db.Customers.AnyAsync(c => c.CustomerId == req.CustomerId && !c.IsDeleted, ct))
-            return BadRequest(new { message = "العميل مش موجود" });
-
-        if (req.SupplierId is not null &&
-            !await _db.Suppliers.AnyAsync(s => s.SupplierId == req.SupplierId && !s.IsDeleted, ct))
-            return BadRequest(new { message = "المورد مش موجود" });
-
-        if (req.InvoiceId is not null)
-        {
-            var inv = await _db.Invoices.AsNoTracking()
-                .FirstOrDefaultAsync(i => i.InvoiceId == req.InvoiceId && !i.IsDeleted, ct);
-            if (inv is null) return BadRequest(new { message = "الفاتورة مش موجودة" });
-            if (req.CustomerId is not null && inv.CustomerId != req.CustomerId)
-                return BadRequest(new { message = "الفاتورة دي لعميل تاني" });
-        }
-
-        if (req.CustodyId is not null &&
-            !await _db.DriverCustodies.AnyAsync(c => c.CustodyId == req.CustodyId && !c.IsDeleted, ct))
-            return BadRequest(new { message = "العهدة مش موجودة" });
-
-        var branchId = await ResolveBranchIdAsync(ct);
-        if (branchId is null) return BadRequest(new { message = "مافيش فرع معرّف في النظام" });
-
-        var t = new CashTransaction
-        {
-            BranchId        = branchId.Value,
-            CashBoxId       = req.CashBoxId,
-            TransactionDate = Dt(req.TxDate),
-            TransactionType = req.Type ?? "Receipt",  /* 🔴 CS8601: Type nullable */
-            Amount          = req.Amount,
-            PaymentMethodId = req.PaymentMethodId,
-            CustomerId      = req.CustomerId,
-            SupplierId      = req.SupplierId,
-            InvoiceId       = req.InvoiceId,
-            CustodyId       = req.CustodyId,
-            ChequeNumber    = B(req.ChequeNumber),
-            ChequeDate      = Dn(req.ChequeDate),
-            BankAccount     = B(req.BankAccount),
-            ReferenceNumber = B(req.ReferenceNumber),
-            Description     = B(req.Description),
-            Status          = "Posted",
-            CreatedBy       = CurrentUserId()
-        };
-        _db.CashTransactions.Add(t);
-        await _db.SaveChangesAsync(ct);
-
-        var now = await _db.CashBoxes.AsNoTracking()
-            .Where(b => b.CashBoxId == req.CashBoxId)
-            .Select(b => b.CurrentBalance).FirstAsync(ct);
-
-        return Ok(new
-        {
-            id = t.CashTransactionId,
-            balance = now,
-            message = req.Type == "Receipt"
-                ? $"اتسجّل القبض — رصيد {box.NameAr} بقى {now:N2}"
-                : $"اتسجّل الصرف — رصيد {box.NameAr} بقى {now:N2}"
-        });
+        return Ok(rows.Select(x => x with { RefAr = RefAr(x.ReferenceNumber) }).ToList());
     }
 
     // ═══════════════ تحويل بين خزينتين ═══════════════
@@ -287,6 +182,10 @@ public class TreasuryController : ControllerBase
     {
         if (req is null) return BadRequest(new { message = "البيانات مش كاملة" });
         if (req.Amount <= 0) return BadRequest(new { message = "المبلغ لازم يكون أكتر من صفر" });
+        var trMaxT = await _settings.GetDecimalAsync(SettingKeys.TreasuryMaxAmount,
+                                                     SettingDefaults.TreasuryMaxAmount, ct);
+        if (trMaxT > 0 && req.Amount > trMaxT)
+            return BadRequest(new { message = $"المبلغ أكبر من سقف حركة الخزينة المسموح ({trMaxT:N0})" });
         if (req.FromCashBoxId == req.ToCashBoxId)
             return BadRequest(new { message = "الخزينة المصروفة والمستلمة ماينفعش يكونوا نفس الخزينة" });
 
@@ -353,6 +252,17 @@ public class TreasuryController : ControllerBase
         if (t is null) return NotFound(new { message = "الحركة مش موجودة" });
         if (t.Status == "Void") return BadRequest(new { message = "الحركة ملغية أصلًا" });
 
+        /* 🔴 #48-1: حركة مرتبطة بمستند (فاتورة/مصروف/عهدة/دفعة/تسوية صندوق) —
+           إلغاؤها من هنا كان بينزّل الرصيد ويسيب المستند قائم = الدفاتر بتفصل.
+           الإلغاء الصحيح من شاشة المستند نفسه (هناك بيُلغي الحركة كمان). */
+        var refNo = t.ReferenceNumber ?? "";
+        var linked = t.InvoiceId is not null || t.CustodyId is not null ||
+                     refNo.StartsWith("PAY:") || refNo.StartsWith("SPAY:") ||
+                     refNo.StartsWith("EXP:") || refNo.StartsWith("CUST-ISSUE:") ||
+                     refNo.StartsWith("VEHPAY:") || refNo.StartsWith("BOXSETTLE-");
+        if (linked)
+            return BadRequest(new { message = "الحركة مرتبطة بمستند (قبض/مصروف/عهدة/دفعة/تسوية) — الإلغاء يتم من شاشة المستند نفسه حتى تظل الأرصدة متطابقة" });
+
         // التحويل = حركتين — بيتلغوا مع بعض
         var targets = new List<CashTransaction> { t };
         if (t.TransferGroupId is not null)
@@ -386,6 +296,156 @@ public class TreasuryController : ControllerBase
                 ? $"اتلغى التحويل ({targets.Count} حركات) والأرصدة اتظبطت"
                 : "اتلغت الحركة والرصيد اتظبط"
         });
+    }
+
+    // ═══════════════ #48 — كشف حساب الصندوق (رصيد أول/آخر المدة) ═══════════════
+
+    public record BoxStmtLine(DateTime Date, string Kind, string Ref, string? Description,
+        string? Counterpart, decimal Debit, decimal Credit, decimal Balance);
+
+    public record BoxStmtOut(string BoxName, string BoxCode, decimal Opening,
+        List<BoxStmtLine> Lines, decimal TotalDebit, decimal TotalCredit, decimal Closing);
+
+    /// <summary>🔴 المرجع بالعربي — بدل كود PAY:/EXP:/... المستخدم يشوف نوع الحركة.</summary>
+    private static string? RefAr(string? r)
+    {
+        if (string.IsNullOrWhiteSpace(r)) return null;
+        if (r.StartsWith("PAY:"))         return "قبض فاتورة — " + r[4..];
+        if (r.StartsWith("SPAY:"))        return "دفعة مورد — " + r[5..];
+        if (r.StartsWith("EXP:"))         return "مصروف — " + r[4..];
+        if (r.StartsWith("CUST-ISSUE:"))  return "سلفة عهدة — " + r[11..];
+        if (r.StartsWith("CUST-REFUND:")) return "رد باقي عهدة — " + r[12..];
+        if (r.StartsWith("VEHPAY:"))      return "دفعة مركبة";
+        if (r.StartsWith("BOXSETTLE-"))   return "تسوية صندوق";
+        return r;
+    }
+
+    private static string KindArBox(string k) => k switch
+    {
+        "Receipt"     => "قبض",
+        "Payment"     => "صرف",
+        "TransferIn"  => "تحويل وارد",
+        "TransferOut" => "تحويل صادر",
+        _ => k
+    };
+
+    private async Task<BoxStmtOut?> BuildBoxStatementAsync(int cashBoxId, DateTime? from,
+        DateTime? to, CancellationToken ct)
+    {
+        var box = await _db.CashBoxes.AsNoTracking()
+            .FirstOrDefaultAsync(b => b.CashBoxId == cashBoxId && !b.IsDeleted, ct);
+        if (box is null) return null;
+
+        var start = (from ?? new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1)).Date;
+        var end   = (to ?? start.AddMonths(1)).Date;
+        if (end <= start) end = start.AddMonths(1);
+
+        /* الرصيد المرحّل = الافتتاحي + صافي كل الحركات قبل الفترة (نفس معادلة التريجّر) */
+        var netBefore = await _db.CashTransactions.AsNoTracking()
+            .Where(t => t.CashBoxId == cashBoxId && t.Status == "Posted" && !t.IsDeleted &&
+                        t.TransactionDate < start)
+            .Select(t => t.TransactionType == "Receipt" || t.TransactionType == "TransferIn"
+                ? t.Amount : -t.Amount)
+            .SumAsync(ct);
+        var opening = box.OpeningBalance + netBefore;
+
+        var txs = await _db.CashTransactions.AsNoTracking()
+            .Where(t => t.CashBoxId == cashBoxId && t.Status == "Posted" && !t.IsDeleted &&
+                        t.TransactionDate >= start && t.TransactionDate < end)
+            .OrderBy(t => t.TransactionDate).ThenBy(t => t.CashTransactionId)
+            .Select(t => new
+            {
+                t.TransactionDate, t.TransactionType, t.ReferenceNumber, t.Description, t.Amount,
+                Counterpart = t.CounterpartCashBox != null ? t.CounterpartCashBox.NameAr
+                    : t.Customer != null ? t.Customer.NameAr
+                    : t.Supplier != null ? t.Supplier.NameAr : null
+            })
+            .ToListAsync(ct);
+
+        var lines = new List<BoxStmtLine>();
+        var bal = opening;
+        foreach (var t in txs)
+        {
+            var isIn = t.TransactionType is "Receipt" or "TransferIn";
+            bal += isIn ? t.Amount : -t.Amount;
+            lines.Add(new BoxStmtLine(t.TransactionDate, t.TransactionType,
+                RefAr(t.ReferenceNumber) ?? "—", t.Description, t.Counterpart,
+                isIn ? t.Amount : 0, isIn ? 0 : t.Amount, bal));
+        }
+
+        return new BoxStmtOut(box.NameAr, box.Code, opening, lines,
+            lines.Sum(l => l.Debit), lines.Sum(l => l.Credit), bal);
+    }
+
+    [HttpGet("boxes/{id:int}/statement")]
+    [Authorize(Policy = "PERM:TREASURY.VIEW")]
+    public async Task<IActionResult> BoxStatement(int id, [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to, CancellationToken ct)
+    {
+        var s = await BuildBoxStatementAsync(id, from, to, ct);
+        if (s is null) return NotFound(new { message = "الصندوق غير موجود" });
+        return Ok(s);
+    }
+
+    [HttpGet("boxes/{id:int}/export")]
+    [Authorize(Policy = "PERM:TREASURY.VIEW")]
+    public async Task<IActionResult> BoxExport(int id, [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to, CancellationToken ct)
+    {
+        var s = await BuildBoxStatementAsync(id, from, to, ct);
+        if (s is null) return NotFound(new { message = "الصندوق غير موجود" });
+
+        using var wb = new XLWorkbook();
+        var ws = wb.AddWorksheet("كشف صندوق");
+        ws.RightToLeft = true;
+
+        ws.Cell(1, 1).Value = $"كشف حساب صندوق — {s.BoxName} ({s.BoxCode})";
+        ws.Cell(1, 1).Style.Font.Bold = true;
+        ws.Cell(1, 1).Style.Font.FontSize = 14;
+
+        var heads = new[] { "التاريخ", "النوع", "المرجع", "البيان", "الطرف المقابل", "مدين", "دائن", "الرصيد" };
+        for (var i = 0; i < heads.Length; i++)
+        {
+            var hc = ws.Cell(3, i + 1);
+            hc.Value = heads[i];
+            hc.Style.Font.Bold = true;
+            hc.Style.Fill.BackgroundColor = XLColor.FromHtml("#EEF3FA");
+            hc.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        }
+
+        var r = 4;
+        ws.Cell(r, 4).Value = "رصيد مُرحّل من فترات سابقة";
+        ws.Cell(r, 4).Style.Font.Bold = true;
+        ws.Cell(r, 8).Value = s.Opening;
+        ws.Cell(r, 8).Style.Font.Bold = true;
+        r++;
+        foreach (var l in s.Lines)
+        {
+            ws.Cell(r, 1).Value = l.Date.ToString("yyyy-MM-dd");
+            ws.Cell(r, 2).Value = KindArBox(l.Kind);
+            ws.Cell(r, 3).Value = l.Ref;
+            ws.Cell(r, 4).Value = l.Description;
+            ws.Cell(r, 5).Value = l.Counterpart;
+            ws.Cell(r, 6).Value = l.Debit;
+            ws.Cell(r, 7).Value = l.Credit;
+            ws.Cell(r, 8).Value = l.Balance;
+            r++;
+        }
+        ws.Cell(r, 4).Value = "الإجمالي";
+        ws.Cell(r, 6).Value = s.TotalDebit;
+        ws.Cell(r, 7).Value = s.TotalCredit;
+        ws.Cell(r, 8).Value = s.Closing;
+        for (var i = 4; i <= 8; i++) ws.Cell(r, i).Style.Font.Bold = true;
+
+        ws.Columns(1, 8).AdjustToContents(1, Math.Max(r, 5));
+        ws.Column(6).Width = 14; ws.Column(7).Width = 14; ws.Column(8).Width = 14;
+        ws.Range(4, 6, r, 8).Style.NumberFormat.Format = "#,##0.00";
+
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        return File(ms.ToArray(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"box-{s.BoxCode}-{DateTime.Today:yyyyMM}.xlsx");
     }
 
     // ═══════════════ كشف حساب العميل ═══════════════
@@ -523,6 +583,16 @@ public class TreasuryController : ControllerBase
         box.NameEn                = B(req.NameEn);
         box.ResponsibleEmployeeId = req.ResponsibleEmployeeId;
         if (req.BoxKind is "Cash" or "Entity") box.BoxKind = req.BoxKind;
+
+        /* 🔴 #48-7: إيقاف/تفعيل — الرئيسية ماتتوقفش (كل الحركات الأوتوماتيك بتقع عليها) */
+        if (req.IsActive is not null && req.IsActive.Value != box.IsActive)
+        {
+            var mainCodeU = await _settings.GetStringAsync(SettingKeys.TreasuryDefaultBox,
+                                                           SettingDefaults.TreasuryDefaultBox, ct);
+            if (box.Code == mainCodeU && req.IsActive.Value == false)
+                return BadRequest(new { message = "الخزينة الرئيسية لا يمكن إيقافها — كل الحركات الأوتوماتيكية بتسقط عليها" });
+            box.IsActive = req.IsActive.Value;
+        }
         await _db.SaveChangesAsync(ct);
 
         await _audit.LogAsync(FastCom.Server.Services.AuditActions.Update, "CashBox",
@@ -557,32 +627,40 @@ public class TreasuryController : ControllerBase
         if (branchId is null) return BadRequest(new { message = "مافيش فرع معرّف في النظام" });
 
         var uid  = CurrentUserId();
-        var when = DateTime.UtcNow;
+        var when = DateTime.Now;
         var amt  = box.CurrentBalance;
+
+        /* 🔴 #48-4: صندوق بعجز — الرئيسية تغطيه قبل الإقفال */
+        if (amt < 0 && main.CurrentBalance < -amt)
+            return BadRequest(new { message = $"عجز «{box.NameAr}» {(-amt):N2} أكبر من رصيد الرئيسية ({main.CurrentBalance:N2}) — مش هتقدر تغطيه" });
 
         await _db.Database.BeginTransactionAsync(ct);
         try
         {
             /* لو فيها رصيد — يتحوّل كامل للرئيسية (حركتين مربوطين).
+               لو عجز (سالب) — الرئيسية تغطيه بحركة عكسية.
                لو صفر — تتقفل على طول من غير حركات. */
-            if (amt > 0)
+            if (amt != 0)
             {
-                var group = Guid.NewGuid();
-                var desc  = $"تسوية خزينة {box.NameAr}";
+                var abs    = Math.Abs(amt);
+                var outBox = amt > 0 ? box : main;
+                var inBox  = amt > 0 ? main : box;
+                var group  = Guid.NewGuid();
+                var desc   = $"تسوية خزينة {box.NameAr}";
                 _db.CashTransactions.AddRange(
                     new CashTransaction
                     {
-                        BranchId = branchId.Value, CashBoxId = box.CashBoxId, TransactionDate = when,
-                        TransactionType = "TransferOut", Amount = amt,
-                        TransferGroupId = group, CounterpartCashBoxId = main.CashBoxId,
+                        BranchId = branchId.Value, CashBoxId = outBox.CashBoxId, TransactionDate = when,
+                        TransactionType = "TransferOut", Amount = abs,
+                        TransferGroupId = group, CounterpartCashBoxId = inBox.CashBoxId,
                         ReferenceNumber = $"BOXSETTLE-OUT:{box.Code}:{when:yyyyMMddHHmmss}",
                         Description = desc, Status = "Posted", CreatedBy = uid
                     },
                     new CashTransaction
                     {
-                        BranchId = branchId.Value, CashBoxId = main.CashBoxId, TransactionDate = when,
-                        TransactionType = "TransferIn", Amount = amt,
-                        TransferGroupId = group, CounterpartCashBoxId = box.CashBoxId,
+                        BranchId = branchId.Value, CashBoxId = inBox.CashBoxId, TransactionDate = when,
+                        TransactionType = "TransferIn", Amount = abs,
+                        TransferGroupId = group, CounterpartCashBoxId = outBox.CashBoxId,
                         ReferenceNumber = $"BOXSETTLE-IN:{box.Code}:{when:yyyyMMddHHmmss}",
                         Description = desc, Status = "Posted", CreatedBy = uid
                     });
@@ -607,6 +685,8 @@ public class TreasuryController : ControllerBase
         {
             message = amt > 0
                 ? $"اتحوّل {amt:N2} من {box.NameAr} للرئيسية — واتقفلت"
+                : amt < 0
+                ? $"الرئيسية غطّت عجز {(-amt):N2} في {box.NameAr} — واتقفلت"
                 : $"اتقفلت خزينة {box.NameAr} (كانت فاضية)"
         });
     }
@@ -630,6 +710,10 @@ public class TreasuryController : ControllerBase
             .Select(t => t.TransactionType == "Receipt" || t.TransactionType == "TransferIn"
                 ? t.Amount : -t.Amount)
             .SumAsync(ct);
+
+        /* 🔴 #48-11: مافيش فتح برصيد سالب */
+        if (opening + net < 0)
+            return BadRequest(new { message = $"صافي حركات الصندوق ({net:N2}) مع الرصيد الافتتاحي ({opening:N2}) هيطلع رصيد سالب — راجع الرقم" });
 
         box.OpeningBalance = opening;
         box.CurrentBalance = opening + net;
