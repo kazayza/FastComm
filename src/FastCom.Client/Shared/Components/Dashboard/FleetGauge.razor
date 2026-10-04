@@ -9,15 +9,31 @@
 else
 {
     <div class="v3-donut-wrap">
-        <ApexChart TItem="StatusCount" Options="BuildOptions()">
-            <ApexPointSeries TItem="StatusCount" Items="Counts" SeriesType="SeriesType.RadialBar" Name="المركبات"
-                             XValue="@(s => Label(s.Status))" YValue="@(s => (decimal)s.Count)" />
+        <ApexChart TItem="StatusCount" Options="GetOptions()" Height="250">
+            @* ⚠️ كان RadialBar — مسار الراديال في ApexCharts 4.0.0 (اللي جاي مع Blazor-ApexCharts 4.0.1)
+               بيسقط (null/yRatio أو toString of undefined) فاتحوّل لـ Donut عشان يشتغل مضمون *@
+            <ApexPointSeries TItem="StatusCount" Items="Counts" SeriesType="SeriesType.Donut" Name="المركبات"
+                             XValue="@(s => Label(s.Status ?? ""))" YValue="@(s => (decimal)s.Count)" />
         </ApexChart>
     </div>
 }
 
 @code {
     [Parameter] public List<StatusCount> Counts { get; set; } = new();
+
+    private ApexChartOptions<StatusCount>? _opts;
+    private List<StatusCount>? _optsFor;
+
+    /// <summary>Options متخزّنة (Cached) — مبنية مرة واحدة لكل مجموعة بيانات.</summary>
+    private ApexChartOptions<StatusCount> GetOptions()
+    {
+        if (_opts is null || !ReferenceEquals(_optsFor, Counts))
+        {
+            _opts = BuildOptions();
+            _optsFor = Counts;
+        }
+        return _opts;
+    }
 
     private static string Label(string s) => s switch
     {

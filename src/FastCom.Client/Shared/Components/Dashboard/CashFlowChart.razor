@@ -12,7 +12,7 @@
 }
 else
 {
-    <ApexChart TItem="MonthFlow" Options="BuildOptions()">
+    <ApexChart TItem="MonthFlow" Options="GetOptions()" Height="300">
         <ApexPointSeries TItem="MonthFlow" Items="Points" SeriesType="SeriesType.Area" Name="مفوتر"
                          XValue="@(p => p.MonthName)" YValue="@(p => p.Invoiced)" />
         <ApexPointSeries TItem="MonthFlow" Items="Points" SeriesType="SeriesType.Area" Name="محصّل"
@@ -24,6 +24,21 @@ else
 
 @code {
     [Parameter] public List<MonthFlow> Points { get; set; } = new();
+
+    private ApexChartOptions<MonthFlow>? _opts;
+    private List<MonthFlow>? _optsFor;
+
+    /// <summary>Options متخزّنة (Cached) — مبنية مرة واحدة لكل مجموعة بيانات،
+    /// مش في كل render (إعادة البناء بتعمل re-init للشارت وارتجاف).</summary>
+    private ApexChartOptions<MonthFlow> GetOptions()
+    {
+        if (_opts is null || !ReferenceEquals(_optsFor, Points))
+        {
+            _opts = BuildOptions();
+            _optsFor = Points;
+        }
+        return _opts;
+    }
 
     // ⚠️ كل chart لازم ياخد Options instance خاصة بيه — مينفعش تتشارك
     private ApexChartOptions<MonthFlow> BuildOptions() => new()

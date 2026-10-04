@@ -1061,18 +1061,40 @@ else
         if (!silent) { _loading = true; StateHasChanged(); }
         try
         {
-            _s = await Http.GetFromJsonAsync<Summary>("api/dashboard/summary", _cts.Token);
-            _alerts = await Http.GetFromJsonAsync<List<AlertItem>>("api/dashboard/alerts?take=5", _cts.Token) ?? new();
-            _flow = await Http.GetFromJsonAsync<List<MonthFlow>>("api/dashboard/monthly", _cts.Token) ?? new();
-            _trends = await Http.GetFromJsonAsync<TrendsOut>("api/dashboard/trends", _cts.Token);
-            _opsStatus = await Http.GetFromJsonAsync<List<StatusCount>>("api/dashboard/operation-status-breakdown", _cts.Token) ?? new();
-            _fleet = await Http.GetFromJsonAsync<List<StatusCount>>("api/dashboard/fleet-status", _cts.Token) ?? new();
-            _activity = await Http.GetFromJsonAsync<List<ActivityItem>>("api/dashboard/recent-activity?take=8", _cts.Token) ?? new();
+            // ⚡ تحميل متوازي (Parallel) — كل النداءات بتشتغل مع بعض بدل التسلسل
+            //    ده بيقلّل زمن تحميل الهوم من مجموع الـ 9 نداءات لأبطأ واحد فيهم
+            var token = _cts.Token;
+            var wantsFinance = CanSeeFinance;
 
-            if (CanSeeFinance)
+            var summaryTask  = Http.GetFromJsonAsync<Summary>("api/dashboard/summary", token);
+            var alertsTask   = Http.GetFromJsonAsync<List<AlertItem>>("api/dashboard/alerts?take=5", token);
+            var flowTask     = Http.GetFromJsonAsync<List<MonthFlow>>("api/dashboard/monthly", token);
+            var trendsTask   = Http.GetFromJsonAsync<TrendsOut>("api/dashboard/trends", token);
+            var opsTask      = Http.GetFromJsonAsync<List<StatusCount>>("api/dashboard/operation-status-breakdown", token);
+            var fleetTask    = Http.GetFromJsonAsync<List<StatusCount>>("api/dashboard/fleet-status", token);
+            var activityTask = Http.GetFromJsonAsync<List<ActivityItem>>("api/dashboard/recent-activity?take=8", token);
+            var topTask      = wantsFinance
+                ? Http.GetFromJsonAsync<List<TopCustomer>>("api/dashboard/top-customers?take=5", token)
+                : Task.FromResult<List<TopCustomer>?>(null);
+            var agingTask    = wantsFinance
+                ? Http.GetFromJsonAsync<AgingOut>("api/dashboard/receivables-aging", token)
+                : Task.FromResult<AgingOut?>(null);
+
+            await Task.WhenAll(summaryTask, alertsTask, flowTask, trendsTask,
+                               opsTask, fleetTask, activityTask, topTask, agingTask);
+
+            _s         = await summaryTask;
+            _alerts    = await alertsTask   ?? new();
+            _flow      = await flowTask     ?? new();
+            _trends    = await trendsTask;
+            _opsStatus = await opsTask      ?? new();
+            _fleet     = await fleetTask    ?? new();
+            _activity  = await activityTask ?? new();
+
+            if (wantsFinance)
             {
-                _top = await Http.GetFromJsonAsync<List<TopCustomer>>("api/dashboard/top-customers?take=5", _cts.Token) ?? new();
-                _aging = await Http.GetFromJsonAsync<AgingOut>("api/dashboard/receivables-aging", _cts.Token);
+                _top   = await topTask ?? new();
+                _aging = await agingTask;
             }
 
             _lastUpdated = DateTime.Now.ToString("HH:mm");

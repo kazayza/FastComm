@@ -9,15 +9,29 @@
 else
 {
     <div class="v3-donut-wrap">
-        <ApexChart TItem="StatusCount" Options="BuildOptions()">
+        <ApexChart TItem="StatusCount" Options="GetOptions()">
             <ApexPointSeries TItem="StatusCount" Items="Counts" SeriesType="SeriesType.Donut" Name="العمليات"
-                             XValue="@(s => Label(s.Status))" YValue="@(s => (decimal)s.Count)" />
+                             XValue="@(s => Label(s.Status ?? ""))" YValue="@(s => (decimal)s.Count)" />
         </ApexChart>
     </div>
 }
 
 @code {
     [Parameter] public List<StatusCount> Counts { get; set; } = new();
+
+    private ApexChartOptions<StatusCount>? _opts;
+    private List<StatusCount>? _optsFor;
+
+    /// <summary>Options متخزّنة (Cached) — مبنية مرة واحدة لكل مجموعة بيانات.</summary>
+    private ApexChartOptions<StatusCount> GetOptions()
+    {
+        if (_opts is null || !ReferenceEquals(_optsFor, Counts))
+        {
+            _opts = BuildOptions();
+            _optsFor = Counts;
+        }
+        return _opts;
+    }
 
     private static string Label(string s) => s switch
     {
@@ -37,6 +51,9 @@ else
     private ApexChartOptions<StatusCount> BuildOptions() => new()
     {
         Chart = new Chart { Toolbar = new Toolbar { Show = false }, Height = 300 },
+        // ⚠️ Labels صريحة إجبارية: ApexCharts 4.x بيبني seriesNames من الـ labels،
+        // ولو ناقصة/أقصر من السلاسل بيسقط بـ: TypeError: Cannot read properties of undefined (reading 'toString')
+        Labels = Counts.Select(c => Label(c.Status ?? "")).ToList(),
         Legend = new Legend { Position = LegendPosition.Bottom, FontSize = "11px" },
         DataLabels = new DataLabels { Enabled = false }
     };
