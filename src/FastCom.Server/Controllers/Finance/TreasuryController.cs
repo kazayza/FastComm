@@ -193,11 +193,13 @@ public class TreasuryController : ControllerBase
             .FirstOrDefaultAsync(b => b.CashBoxId == req.FromCashBoxId && !b.IsDeleted, ct);
         if (from is null) return BadRequest(new { message = "الخزينة المصروفة مش موجودة" });
         if (!from.IsActive) return BadRequest(new { message = $"«{from.NameAr}» متوقفة" });
+        if (from.Status != "Open") return BadRequest(new { message = $"«{from.NameAr}» مقفولة — التحويل من الخزائن المفتوحة بس" });
 
         var to = await _db.CashBoxes.AsNoTracking()
             .FirstOrDefaultAsync(b => b.CashBoxId == req.ToCashBoxId && !b.IsDeleted, ct);
         if (to is null) return BadRequest(new { message = "الخزينة المستلمة مش موجودة" });
         if (!to.IsActive) return BadRequest(new { message = $"«{to.NameAr}» متوقفة" });
+        if (to.Status != "Open") return BadRequest(new { message = $"«{to.NameAr}» مقفولة — التحويل للخزائن المفتوحة بس" });
 
         if (req.Amount > from.CurrentBalance)
             return BadRequest(new { message = $"رصيد «{from.NameAr}» {from.CurrentBalance:N2} — مش كفاية" });
@@ -591,6 +593,9 @@ public class TreasuryController : ControllerBase
                                                            SettingDefaults.TreasuryDefaultBox, ct);
             if (box.Code == mainCodeU && req.IsActive.Value == false)
                 return BadRequest(new { message = "الخزينة الرئيسية لا يمكن إيقافها — كل الحركات الأوتوماتيكية بتسقط عليها" });
+            /* 🔴 #70 — خزينة مقفولة ماتتفعّلش من التعديل — الطريق الصح «إعادة فتح» برصيد افتتاحي */
+            if (box.Status == "Closed")
+                return BadRequest(new { message = "الخزينة مقفولة — التفعيل يتم من «إعادة فتح» برصيد افتتاحي" });
             box.IsActive = req.IsActive.Value;
         }
         await _db.SaveChangesAsync(ct);
@@ -711,12 +716,12 @@ public class TreasuryController : ControllerBase
                 ? t.Amount : -t.Amount)
             .SumAsync(ct);
 
-        /* 🔴 #48-11: مافيش فتح برصيد سالب */
-        if (opening + net < 0)
-            return BadRequest(new { message = $"صافي حركات الصندوق ({net:N2}) مع الرصيد الافتتاحي ({opening:N2}) هيطلع رصيد سالب — راجع الرقم" });
-
-        box.OpeningBalance = opening;
-        box.CurrentBalance = opening + net;
+        /* 🔴 #70 — تاريخ الخزينة القديم (ومنه حركة التسوية BOXSETTLE) لسه محسوب في net،
+           والـ trigger بيحسب دايمًا OpeningBalance + net. فعشان الرصيد يبدأ بالرقم
+           الجديد بالظبط: الافتتاحي يتسجّل = (الجديد − net) — فيطلع الرصيد = الجديد
+           دلوقتي، وأي حركة جديدة تتجمع فوقه صح. (بدل ما كان الرصيد = جديد − افتتاحي قديم.) */
+        box.OpeningBalance = opening - net;
+        box.CurrentBalance = opening;
         box.Status         = "Open";
         box.IsActive       = true;
         await _db.SaveChangesAsync(ct);

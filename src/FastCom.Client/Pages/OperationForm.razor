@@ -2328,7 +2328,21 @@
         if (_lines.Count == 0) AddLine();
     }
 
-    private void AddLine() => _lines.Add(new RevRow { ServiceId = _f.ServiceId ?? 0, Qty = 1 });
+    private void AddLine() => _lines.Add(new RevRow { ServiceId = _f.ServiceId ?? 0, Qty = 1, Description = BuildRouteDesc() });
+
+    /* #68 — البيان يتولد أوتوماتيك من خط السير: «من {السحب} إلى {الوجهة} — تعتيق {الميناء}» */
+    private string? BuildRouteDesc()
+    {
+        var from = _ports.FirstOrDefault(p => p.Id == _f.PortId)?.Label;
+        var to   = _destinations.FirstOrDefault(d => d.Id == _f.DestinationId)?.Label;
+        var tah  = _ports.FirstOrDefault(p => p.Id == _f.TahteeqPortId)?.Label;
+        if (from is null && to is null && tah is null) return null;
+        var s = from is not null && to is not null ? $"من {from} إلى {to}"
+              : from is not null                   ? $"من {from}"
+              : to   is not null                   ? $"إلى {to}" : "";
+        if (tah is not null) s = s.Length > 0 ? $"{s} — تعتيق {tah}" : $"تعتيق {tah}";
+        return s;
+    }
 
     private void RemoveLine(RevRow ln) => _lines.Remove(ln);
 
@@ -2404,7 +2418,7 @@
                 _f.PlannedDate = d.Booking.RequestedDate + "T08:00";
 
             _lines.Clear();
-            var row = new RevRow { ServiceId = d.Booking.ServiceId ?? 0, Qty = 1 };
+            var row = new RevRow { ServiceId = d.Booking.ServiceId ?? 0, Qty = 1, Description = BuildRouteDesc() };
             _lines.Add(row);
             await SuggestAsync(row);
         }

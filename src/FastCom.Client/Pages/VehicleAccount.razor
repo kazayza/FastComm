@@ -193,6 +193,19 @@
                 </select>
             </div>
 
+            @* #66 — فاتورة نقل المورد من الكشف المجمع *@
+            @if (_consolidated && _stmt is not null)
+            {
+                <button type="button" class="va-print-btn va-invoice-btn" @onclick="CreateSupplierInvoice"
+                        disabled="@_invoicing" title="توليد فاتورة نولون للمورد من رحلات الكشف">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <path d="M14 2v6h6M12 18v-6M9 15l3 3 3-3"/>
+                    </svg>
+                    إنشاء فاتورة من الكشف
+                </button>
+            }
+
             <button type="button" class="va-print-btn va-xlsx-btn" @onclick="ExportExcel" disabled="@_exporting" title="تصدير كشف الحساب إلى إكسيل">
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
@@ -235,7 +248,7 @@
                 <span>جاري تحميل الحركات المالية للفترة المحددة...</span>
             </div>
         }
-        else if (_selectedVehicleId <= 0)
+        else if (_selectedVehicleId <= 0 && _selectedSupplierId <= 0)
         {
             <div class="pay-empty">
                 <div class="pay-empty-icon" aria-hidden="true">
@@ -246,8 +259,8 @@
                         <circle cx="18.5" cy="18.5" r="2.5"/>
                     </svg>
                 </div>
-                <div class="pay-empty-title">يرجى اختيار المركبة أولاً</div>
-                <div class="pay-empty-sub">حدد المركبة والفترة المالية لعرض كشف الحساب المفصل</div>
+                <div class="pay-empty-title">يرجى اختيار مركبة أو مورد أولاً</div>
+                <div class="pay-empty-sub">حدد المركبة — أو كشف مجمع بالمورد المالك — والفترة المالية لعرض كشف الحساب</div>
             </div>
         }
         else if (_stmt is null || _stmt.Lines.Count == 0)
@@ -402,7 +415,7 @@
 @if (_payOpen)
 {
     <div class="svc-modal-backdrop" @onclick="() => _payOpen = false" role="dialog" aria-modal="true">
-        <div class="svc-modal svc-modal-sm" @onclick:stopPropagation="true">
+        <div class="svc-modal svc-modal-sm" style="width:100%;max-width:480px" @onclick:stopPropagation="true">
 
             <div class="svc-modal-head">
                 <div class="svc-head-icon svc-icon-create" aria-hidden="true">
@@ -423,6 +436,31 @@
             </div>
 
             <div class="svc-modal-body" style="padding: 22px 24px">
+
+                @* #65 — سياق الدفع: المتبقي على السيارة والمدفوع خلال الفترة *@
+                @if (_stmt is not null)
+                {
+                    <div class="svc-sum-strip">
+                        <div class="svc-sum-item">
+                            <span class="svc-sum-label">المتبقي على السيارة</span>
+                            <span class="svc-sum-val sum-amber">@Money(_stmt.Closing) <small>ج.م</small></span>
+                        </div>
+                        <div class="svc-sum-div" aria-hidden="true"></div>
+                        <div class="svc-sum-item">
+                            <span class="svc-sum-label">المدفوع والمخصوم (@_monthLabel)</span>
+                            <span class="svc-sum-val sum-green">@Money(_stmt.TotalCredit) <small>ج.م</small></span>
+                        </div>
+                        @if (_stmt.Closing > 0)
+                        {
+                            <button type="button" class="svc-sum-fill"
+                                    @onclick="() => _payAmount = _stmt!.Closing"
+                                    title="تعبئة المبلغ بكامل المتبقي">
+                                سداد كامل المتبقي
+                            </button>
+                        }
+                    </div>
+                }
+
                 <div class="svc-grid">
 
                     <div class="svc-field">
@@ -690,6 +728,8 @@
     .va-print-btn:hover { background: var(--fc-blue); color: #fff; }
     .va-xlsx-btn { color: #15803d; }
     .va-xlsx-btn:hover { background: #15803d; color: #fff; }
+    .va-invoice-btn { color: #1558d6; }
+    .va-invoice-btn:hover { background: #1558d6; color: #fff; }
     .va-xlsx-btn:disabled { opacity: .6; cursor: default; }
     .va-print-head { display: none; }
     @@media print {
@@ -834,6 +874,18 @@
     .svc-input::placeholder { color: #b0bcc8; }
 
     .svc-modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 20px; background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%); border-top: 1px solid #edf1f7; flex: 0 0 auto; }
+
+    /* #65 — شريط المتبقي/المدفوع في مودال الدفعة */
+    .svc-sum-strip { display: flex; align-items: center; gap: 14px; padding: 12px 16px; margin-bottom: 18px; background: #f7f9fd; border: 1px solid #e3e9f2; border-radius: 12px; }
+    .svc-sum-item  { display: flex; flex-direction: column; gap: 2px; }
+    .svc-sum-label { font-size: 10px; color: #8899ae; font-weight: 700; }
+    .svc-sum-val   { font-size: 15px; font-weight: 800; color: #0A1B3B; }
+    .svc-sum-val small { font-size: 9px; font-weight: 700; color: #8899ae; }
+    .svc-sum-val.sum-amber { color: #b45309; }
+    .svc-sum-val.sum-green { color: #16a35b; }
+    .svc-sum-div   { width: 1px; align-self: stretch; background: #e3e9f2; }
+    .svc-sum-fill  { margin-inline-start: auto; border: 1.5px solid #1e6ef5; background: #eef4ff; color: #1558d6; border-radius: 8px; padding: 7px 12px; font-size: 11px; font-weight: 800; cursor: pointer; font-family: inherit; transition: background .15s ease; white-space: nowrap; }
+    .svc-sum-fill:hover { background: #dcebff; }
     .svc-foot-right { display: flex; align-items: center; gap: 8px; }
     .svc-btn-cancel { height: 38px; padding: 0 16px; border: 1.5px solid #d8e2f0; border-radius: 9px; background: #fff; color: #6B7A8F; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s; }
     .svc-btn-cancel:hover { background: #f0f4fa; color: var(--fc-text); border-color: #c0ccd8; }
@@ -1099,6 +1151,32 @@
         try { _payMethods = await Http.GetFromJsonAsync<List<PayOpt>>("api/options/payment-methods") ?? new(); }
         catch { _payMethods = new(); }
     }
+    /* #66 — إنشاء فاتورة نقل المورد من الكشف المجمع */
+    private bool _invoicing;
+    public class InvResp { public string Message { get; set; } = ""; public long Id { get; set; } }
+
+    private async Task CreateSupplierInvoice()
+    {
+        if (_selectedSupplierId <= 0) return;
+        _invoicing = true;
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/supplier-invoices/from-vehicle-statement", new
+            {
+                supplierId = _selectedSupplierId,
+                from       = _from.ToString("yyyy-MM-dd"),
+                to         = _to.ToString("yyyy-MM-dd")
+            });
+            var r = await res.Content.ReadFromJsonAsync<InvResp>();
+            var msg = r?.Message ?? (res.IsSuccessStatusCode ? "اتعملت الفاتورة" : "فشل إنشاء الفاتورة");
+            Snackbar.Add(msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode && r is not null && r.Id > 0)
+                Nav.NavigateTo($"/supplier-invoices/new/{r.Id}");
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        finally { _invoicing = false; }
+    }
+
     private async Task ExportExcel()
     {
         if (_selectedVehicleId <= 0 && _selectedSupplierId <= 0) return;

@@ -70,7 +70,9 @@ public class CustodiesController : ControllerBase
         decimal AmountIssued, string? CustodyDate, string? Notes,
         bool IsPrimary = true, long? ParentCustodyId = null,
         /* 🔴 Freight = سلفة من نولون النقله / Road = مصاريف طريق / NULL = عامة */
-        string? AllocationType = null);
+        string? AllocationType = null,
+        /* #61 — خزينة صرف العهدة الرئيسية — null = الخزينة الافتراضية */
+        int? CashBoxId = null);
 
     public record TxRequest(string? Type, decimal Amount, string? TxDate, long? ExpenseId, string? Notes);
 
@@ -81,7 +83,7 @@ public class CustodiesController : ControllerBase
         decimal AmountIssued, decimal AmountSpent, decimal AmountReturned, decimal AdditionalDue,
         decimal Remaining, string Status, int TxCount,
         bool IsPrimary, long? ParentCustodyId, string? ParentCustodyNumber, int SubCount,
-        string? AllocationType);
+        decimal Distributed, string? AllocationType);
 
     public record Detail(long CustodyId, string CustodyNumber, DateTime CustodyDate,
         string OwnerType, int OwnerId, string OwnerName, long? TripId, string? TripNumber,
@@ -137,10 +139,81 @@ public class CustodiesController : ControllerBase
                 c.IsPrimary, c.ParentCustodyId,
                 c.ParentCustody != null ? c.ParentCustody.CustodyNumber : null,
                 _db.DriverCustodies.Count(sc => sc.ParentCustodyId == c.CustodyId && !sc.IsDeleted),
+                /* #61 — إجمالي اللي اتوزع من العهدة دي على سواقين */
+                _db.DriverCustodies.Where(sc => sc.ParentCustodyId == c.CustodyId && !sc.IsDeleted)
+                    .Sum(sc => (decimal?)sc.AmountIssued) ?? 0,
                 c.AllocationType))
             .ToListAsync(ct);
 
         return Ok(rows);
+    }
+
+    // ═══════════════ #61 — خزائن متاحة لصرف العهدة ═══════════════
+
+    public record CashBoxOpt(int CashBoxId, string NameAr, string Code, decimal CurrentBalance);
+
+    [HttpGet("cash-boxes")]
+    [Authorize(Policy = "PERM:CUSTODY.CREATE")]
+    public async Task<IActionResult> CashBoxOptions(CancellationToken ct) =>
+        Ok(await _db.CashBoxes.AsNoTracking()
+            .Where(b => !b.IsDeleted && b.IsActive && b.Status == "Open")
+            .OrderBy(b => b.CashBoxId)
+            .Select(b => new CashBoxOpt(b.CashBoxId, b.NameAr, b.Code, b.CurrentBalance))
+            .ToListAsync(ct));
+
+    // ═══════════════ #61 — تسوية سلفة النولون مقابل نولون الرحلة ═══════════════
+
+    [HttpPost("{id:long}/freight-settle")]
+    [Authorize(Policy = "PERM:CUSTODY.SETTLE")]
+    public async Task<IActionResult> FreightSettle(long id, CancellationToken ct)
+    {
+        /* الفكرة: سلفة النولون (AllocationType=Freight) فلوس مدفوعة مقدّمًا من نولون النقله.
+           التسوية بتسجل إن السلفة اتخصمت مقابل نولون الرحلة — **بدون حركة خزينة جديدة**
+           (الفلوس خرجت مرة واحدة وقت الصرف). الباقي على السائق يرده أو يتصرف كمصروف. */
+        var c = await _db.DriverCustodies
+            .FirstOrDefaultAsync(x => x.CustodyId == id && !x.IsDeleted, ct);
+        if (c is null) return NotFound(new { message = "العهدة مش موجودة" });
+        if (c.OwnerType != "Driver")
+            return BadRequest(new { message = "تسوية النولون لسلف السواقين بس" });
+        if (c.AllocationType != "Freight")
+            return BadRequest(new { message = "العهدة دي مش سلفة نولون — التسوية دي للسلف المصنفة «سلفة من نولون النقله»" });
+        if (c.TripId is null)
+            return BadRequest(new { message = "العهدة مش مربوطة برحلة — اربطها برحلة الأول" });
+        if (c.Status is not ("Open" or "PartiallySettled"))
+            return BadRequest(new { message = $"حالة العهدة {StatusAr(c.Status)} — التسوية من عهدة مفتوحة بس" });
+
+        var trip = await _db.Trips.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.TripId == c.TripId && !t.IsDeleted, ct);
+        if (trip is null) return BadRequest(new { message = "الرحلة المرتبطة بالعهدة مش موجودة" });
+        var freight = trip.FreightAmount ?? 0;
+        if (freight <= 0)
+            return BadRequest(new { message = $"الرحلة {trip.TripNumber} مافيش عليها نولون مسجل — سجل نولون النقله الأول" });
+
+        var alreadySettled = await _db.CustodyTransactions.AsNoTracking()
+            .Where(t => t.CustodyId == c.CustodyId && t.TransactionType == "FreightSettle")
+            .SumAsync(t => (decimal?)t.Amount, ct) ?? 0;
+
+        /* نتسوى بحد أقصى نولون الرحلة — ولو السلفة أكبر من النولون، الزيادة تفضل على السائق */
+        var settleAmount = Math.Min(c.AmountIssued, freight) - alreadySettled;
+        if (settleAmount <= 0)
+            return BadRequest(new { message = $"السلفة مسوّاة بالكامل مقابل نولون الرحلة {trip.TripNumber}" });
+
+        _db.CustodyTransactions.Add(new CustodyTransaction
+        {
+            CustodyId       = c.CustodyId,
+            TransactionType = "FreightSettle",
+            Amount          = settleAmount,
+            TransactionDate = DateTime.Now,
+            Notes           = $"تسوية سلفة النولون مقابل نولون الرحلة {trip.TripNumber} ({freight:N2})",
+            CreatedBy       = CurrentUserId()
+        });
+        await _db.SaveChangesAsync(ct);   // الـ trigger بيحسب الباقي والحالة
+
+        await _audit.LogAsync(FastCom.Server.Services.AuditActions.Update, "Custody", c.CustodyId.ToString(),
+            description: $"تسوية نولون {c.CustodyNumber} مقابل الرحلة {trip.TripNumber} بمبلغ {settleAmount:N2}", ct: ct);
+
+        var remaining = c.AmountIssued + c.AdditionalDue - c.AmountSpent - c.AmountReturned - settleAmount;
+        return Ok(new { message = $"اتسوت السلفة بمبلغ {settleAmount:N2} ج.م مقابل نولون الرحلة {trip.TripNumber}", remaining });
     }
 
     // ═══════════════ DETAIL ═══════════════
@@ -300,6 +373,33 @@ public class CustodiesController : ControllerBase
                 return BadRequest(new { message = $"التوزيع تجاوز عهدة الموظف — المتاح {(parent.AmountIssued - distributed):N2} ج.م" });
         }
 
+        /* #64 — فحص كفاية رصيد خزينة الصرف: العهدة الرئيسية فلوسها بتخرج
+           من الخزينة مباشرةً — الخزانة لازم تغطي المبلغ، وإلا نوجّهه للتحويل
+           من شاشة الخزينة أو اختيار خزينة تانية. */
+        if (req.IsPrimary && req.AmountIssued > 0)
+        {
+            var openBoxes = _db.CashBoxes.AsNoTracking()
+                .Where(b => !b.IsDeleted && b.IsActive && b.Status == "Open");
+
+            var boxCode = await _settings.GetStringAsync(SettingKeys.TreasuryDefaultBox,
+                                                         SettingDefaults.TreasuryDefaultBox, ct);
+            if (string.IsNullOrWhiteSpace(boxCode)) boxCode = SettingDefaults.TreasuryDefaultBox;
+
+            var box = req.CashBoxId is > 0
+                ? await openBoxes.FirstOrDefaultAsync(b => b.CashBoxId == req.CashBoxId, ct)
+                : (await openBoxes.Where(b => b.Code == boxCode)
+                          .OrderBy(b => b.CashBoxId).FirstOrDefaultAsync(ct)
+                   ?? await openBoxes.OrderBy(b => b.CashBoxId).FirstOrDefaultAsync(ct));
+
+            if (req.CashBoxId is > 0 && box is null)
+                return BadRequest(new { message = "الخزينة المختارة مش متاحة (مقفولة أو محذوفة) — اختار خزينة تانية" });
+
+            if (box is not null && box.CurrentBalance < req.AmountIssued)
+                return BadRequest(new { message =
+                    $"رصيد خزينة «{box.NameAr}» {box.CurrentBalance:N2} ج.م — مش كفاية لصرف {req.AmountIssued:N2} ج.م. " +
+                    "حوّل لها من شاشة الخزينة أو اختار خزينة تانية" });
+        }
+
         var branchId = await ResolveBranchIdAsync(ct);
         if (branchId is null) return BadRequest(new { message = "مافيش فرع معرّف في النظام" });
 
@@ -344,7 +444,23 @@ public class CustodiesController : ControllerBase
                    ده بيحصل مرة واحدة بس (وقت الصرف)، والمصروفات المربوطة بالعهدة
                    **مابتعملش** حركة خزينة تانية — وإلا هتتحسب مرتين.
                    🔴 الفرعية **ماتعملش** حركة خزينة — الفلوس خرجت مع الرئيسية. */
-                if (!req.IsPrimary) { /* فرعية — مافيش حركة خزينة */ }
+                if (!req.IsPrimary)
+                {
+                    /* #63 — فرعية: مافيش حركة خزينة (الفلوس خرجت مع الرئيسية)،
+                       لكن التوزيع بيتسجل **حركة في دفتر عهدة الموظف** —
+                       الـ trigger بيحسبها ضمن المنصرف، فالباقي بينقص فعلًا
+                       والعهدة الموزعة بالكامل تتقفل من غير رد وهمي. */
+                    _db.CustodyTransactions.Add(new CustodyTransaction
+                    {
+                        CustodyId       = req.ParentCustodyId!.Value,
+                        TransactionType = "Distribute",
+                        Amount          = req.AmountIssued,
+                        TransactionDate = c.CustodyDate,
+                        Notes           = $"توزيع لسائق — {c.CustodyNumber}",
+                        CreatedBy       = CurrentUserId()
+                    });
+                    await _db.SaveChangesAsync(ct);
+                }
                 else
                 {
                 var paid = await _cash.PaymentAsync(new CashEntry(
@@ -353,7 +469,9 @@ public class CustodiesController : ControllerBase
                     PaymentMethodId : await CashMethodIdAsync(ct) ?? 0,
                     CustodyId       : c.CustodyId,
                     Description     : $"صرف عهدة {c.CustodyNumber}",
-                    Date            : DateOnly.FromDateTime(c.CustodyDate)), ct);
+                    Date            : DateOnly.FromDateTime(c.CustodyDate),
+                    /* #61 — خزينة الصرف المختارة وقت إنشاء العهدة */
+                    CashBoxId       : req.CashBoxId ?? 0), ct);
                 if (paid) await _db.SaveChangesAsync(ct);
                 }
             }
@@ -434,6 +552,23 @@ public class CustodiesController : ControllerBase
                 Description     : $"رد باقي عهدة {c.CustodyNumber}",
                 Date            : DateOnly.FromDateTime(tx.TransactionDate)), ct);
             if (toTreasury) await _db.SaveChangesAsync(ct);
+
+            /* #63 — السائق رد الفلوس للخزينة مباشرة → مسؤولية الموظف عنها بتسقط:
+               نقلل حركة «التوزيع» في دفتر الموظف بمبلغ الرد — عشان مايتحاسبش
+               على فلوس رجعت للشركة فعلًا (عد مزدوج). */
+            if (c.ParentCustodyId is not null)
+            {
+                var distTx = await _db.CustodyTransactions
+                    .FirstOrDefaultAsync(t => t.CustodyId == c.ParentCustodyId &&
+                                              t.TransactionType == "Distribute" &&
+                                              t.Notes == $"توزيع لسائق — {c.CustodyNumber}", ct);
+                if (distTx is not null)
+                {
+                    distTx.Amount -= tx.Amount;
+                    if (distTx.Amount <= 0) _db.CustodyTransactions.Remove(distTx);
+                    await _db.SaveChangesAsync(ct);
+                }
+            }
         }
 
         var now = await _db.DriverCustodies.AsNoTracking()
@@ -470,6 +605,8 @@ public class CustodiesController : ControllerBase
 
         if (tx.TransactionType == "Issue")
             return BadRequest(new { message = "حركة الصرف الأساسية بتتشال مع حذف العهدة نفسها" });
+        if (tx.TransactionType == "Distribute")
+            return BadRequest(new { message = "حركة التوزيع بتتدار من التوزيعات نفسها — ماتتحذفش من هنا" });
         if (tx.ExpenseId is not null)
             return BadRequest(new { message = "الحركة دي مربوطة بمصروف — الغِها أو عدّلها من شاشة المصروفات" });
 
@@ -616,6 +753,17 @@ public class CustodiesController : ControllerBase
         /* 🔴 لازم حركة الخزينة بتاعة الصرف تتلغى — وإلا الرصيد يفضل ناقص
            على عهدة اتمسحت. (العهدة هنا `Open` بس، فمافيش رد باقي حصل.) */
         await _cash.VoidByReferenceAsync($"CUST-ISSUE:{c.CustodyNumber}", ct);
+
+        /* #63 — عهدة فرعية اتحذفت → نشيل حركة «التوزيع» المقابلة من دفتر الموظف
+           (الـ trigger هيعيد حساب أرصدته) */
+        if (c.ParentCustodyId is not null)
+        {
+            var distTx = await _db.CustodyTransactions
+                .FirstOrDefaultAsync(t => t.CustodyId == c.ParentCustodyId &&
+                                          t.TransactionType == "Distribute" &&
+                                          t.Notes == $"توزيع لسائق — {c.CustodyNumber}", ct);
+            if (distTx is not null) _db.CustodyTransactions.Remove(distTx);
+        }
 
         c.IsDeleted = true;
         c.DeletedAt = DateTime.UtcNow;

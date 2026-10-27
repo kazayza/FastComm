@@ -248,8 +248,10 @@ public class VehicleAccountsController : ControllerBase
 
         foreach (var t in trips)
         {
-            /* #36: النولون المتفق عليه يُعد فقط لو ما اتدفعش بسلفة نولون — مافيش عد مزدوج */
-            if (t.Freight is > 0 && t.CustodyFreight is not > 0)
+            /* #60: النولون = التزام الشركة للسائق — **يتعد دايمًا**.
+               سلفة النولون بتتحسب في السطر اللي بعده كدفعة (Credit) —
+               فالصافي يطلع صح حتى لو السلفة أقل من النولون (مافيش عد مزدوج). */
+            if (t.Freight is > 0)
                 lines.Add(new StmtLine(t.Date, "Freight", t.TripNumber, "نولون النقله (أجرة السائق)", t.Freight.Value, 0, 0, t.BookingNumber, Dest: t.Dest, Driver: t.Driver));
             if (t.CustodyFreight is > 0)
                 lines.Add(new StmtLine(t.Date, "CustodyFreight", t.TripNumber, "سلفة نولون (من عهدة السائق)", 0, t.CustodyFreight.Value, 0, t.BookingNumber, Dest: t.Dest, Driver: t.Driver));
@@ -305,6 +307,25 @@ public class VehicleAccountsController : ControllerBase
             foreach (var l in built.Value.Stmt.Lines)
                 all.Add(l with { Plate = built.Value.Vehicle.PlateNumber, Balance = 0 });
         }
+
+        /* #66 — دفعات المورد (SPAY) ملهاش مركبة محددة — تتحسب في الكشف المجمع:
+           اللي قبل الفترة يخصم من الرصيد المُرحّل، واللي داخلها ينزل سطر دفعة. */
+        var supPayments = await _db.CashTransactions.AsNoTracking()
+            .Where(t => !t.IsDeleted && t.SupplierId == supplierId && t.Status == "Posted" &&
+                        (from == null || t.TransactionDate >= from) &&
+                        (to == null || t.TransactionDate < to))
+            .OrderBy(t => t.TransactionDate)
+            .Select(t => new { t.TransactionDate, t.ReferenceNumber, t.Description, Amount = (decimal?)t.Amount })
+            .ToListAsync(ct);
+        foreach (var p in supPayments)
+            all.Add(new StmtLine(p.TransactionDate, "Payment", p.ReferenceNumber ?? "—",
+                p.Description ?? $"دفعة للمورد", 0, p.Amount ?? 0, 0));
+
+        var prePayments = await _db.CashTransactions.AsNoTracking()
+            .Where(t => !t.IsDeleted && t.SupplierId == supplierId && t.Status == "Posted" &&
+                        from != null && t.TransactionDate < from)
+            .SumAsync(t => (decimal?)t.Amount, ct) ?? 0;
+        opening -= prePayments;
 
         all = all.OrderBy(l => l.Date).ToList();
         var bal = opening;
@@ -450,13 +471,11 @@ public class VehicleAccountsController : ControllerBase
     /// <summary>الرصيد = نولون النقله (أجرة السائق) − عهدة − مصاريف طريق − دفعات</summary>
     private async Task<decimal> CalcBalanceAsync(int vehicleId, DateTime from, DateTime to, CancellationToken ct)
     {
-        /* #36: نولون الرحلات اللي ليها سلفة نولون ما بيتعدش — السلفة نفسها هي الدفع */
+        /* #60: النولون بيتعد كامل — سلف النولون بتتحسب في سطر العهد كدفعة (Credit) */
         var freight = await _db.Trips.AsNoTracking()
             .Where(t => !t.IsDeleted && t.VehicleId == vehicleId &&
                         t.ActualEndAt != null &&
-                        t.ActualEndAt >= from && t.ActualEndAt < to &&
-                        !_db.DriverCustodies.Any(c => !c.IsDeleted && c.OwnerType == "Driver" &&
-                            c.TripId == t.TripId && c.AllocationType == "Freight"))
+                        t.ActualEndAt >= from && t.ActualEndAt < to)
             .SumAsync(t => t.FreightAmount, ct) ?? 0;
 
         var custody = await _db.DriverCustodies.AsNoTracking()

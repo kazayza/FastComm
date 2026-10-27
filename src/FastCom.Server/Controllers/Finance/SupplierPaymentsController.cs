@@ -324,6 +324,10 @@ public class SupplierPaymentsController : ControllerBase
             p.UpdatedAt = DateTime.UtcNow;
             p.UpdatedBy = UserId();
 
+            /* 🔴 #70 — إلغاء حركة الخزينة جوّه المعاملة نفسها (RULE #43: CashBook ما بيحفظش)
+               — نفس نمط PaymentsController: الإلغاء والحالة بيتحفظوا مع بعض أو مفيش. */
+            await _cash.VoidByReferenceAsync($"SPAY:{p.SupplierPaymentNumber}", ct);
+
             await _db.SaveChangesAsync(ct);
             await _db.Database.CommitTransactionAsync(ct);
         }
@@ -333,9 +337,6 @@ public class SupplierPaymentsController : ControllerBase
             _log.LogError(ex, "فشل إبطال دفعة مورد {Id}", id);
             return BadRequest(new { message = "فشل الإبطال: " + ex.Message });
         }
-
-        /* 🔴 إلغاء حركة الخزينة — بعد الـ Commit */
-        await _cash.VoidByReferenceAsync($"SPAY:{p.SupplierPaymentNumber}", ct);
 
         return Ok(new { message = "✅ اتبطلت الدفعة" });
     }

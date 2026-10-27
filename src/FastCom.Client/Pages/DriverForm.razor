@@ -282,19 +282,25 @@
                                             المورد المرتبط
                                             <span class="field-required" aria-label="مطلوب">*</span>
                                         </label>
-                                        <div class="field-select-wrap">
-                                            <svg class="field-select-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                                <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-                                                <path d="M9 22V12h6v10"/>
-                                            </svg>
-                                            <select class="field-input field-select @(_f.SupplierId is null && _triedSave ? "field-error" : "")"
-                                                    value="@_f.SupplierId" @onchange="e => _f.SupplierId = Nul(e.Value)">
-                                                <option value="">— اختر المورد —</option>
-                                                @foreach (var s in _suppliers)
-                                                {
-                                                    <option value="@s.Id">@s.Label</option>
-                                                }
-                                            </select>
+                                        <div class="field-inline-row">
+                                            <div class="field-select-wrap">
+                                                <svg class="field-select-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                                                    <path d="M9 22V12h6v10"/>
+                                                </svg>
+                                                <select class="field-input field-select @(_f.SupplierId is null && _triedSave ? "field-error" : "")"
+                                                        value="@_f.SupplierId" @onchange="e => _f.SupplierId = Nul(e.Value)">
+                                                    <option value="">— اختر المورد —</option>
+                                                    @foreach (var s in _suppliers)
+                                                    {
+                                                        <option value="@s.Id">@s.Label</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            @* #66b — مورد سريع بجوار الحقل *@
+                                            <button type="button" class="field-quick-add" @onclick="OpenSupQuick" title="تسجيل مورد جديد من بيانات السائق وربطه تلقائيًا">
+                                                + مورد سريع
+                                            </button>
                                         </div>
                                         @if (_f.SupplierId is null && _triedSave)
                                         {
@@ -596,6 +602,39 @@
     }
 </div>
 
+@* ═══════════════ #66 — MODAL مورد سريع ═══════════════ *@
+@if (_supQuickOpen)
+{
+    <div class="svc-modal-backdrop" @onclick="CloseSupQuick" role="dialog" aria-modal="true">
+        <div class="svc-modal" style="width:100%;max-width:420px" @onclick:stopPropagation="true">
+            <div class="svc-modal-head">
+                <div class="svc-head-text">
+                    <div class="svc-head-title">مورد سريع</div>
+                    <div class="svc-head-sub">هيتسجل مورد «شركة نقل» ببيانات السائق ويرتبط بيه تلقائيًا</div>
+                </div>
+                <button type="button" class="svc-head-close" @onclick="CloseSupQuick" aria-label="إغلاق">✕</button>
+            </div>
+            <div class="svc-modal-body" style="padding:20px 24px">
+                <div style="display:flex;flex-direction:column;gap:14px">
+                    <label class="field-label">
+                        اسم المورد
+                        <span class="field-required" aria-label="مطلوب">*</span>
+                    </label>
+                    <input class="field-input" @bind="_supQuickName" maxlength="150" />
+                    <label class="field-label">الهاتف</label>
+                    <input class="field-input" @bind="_supQuickPhone" maxlength="30" />
+                </div>
+            </div>
+            <div class="svc-modal-foot">
+                <button type="button" class="qsup-btn qsup-cancel" @onclick="CloseSupQuick">إلغاء</button>
+                <button type="button" class="qsup-btn qsup-save" @onclick="SaveSupQuick" disabled="@_supQuickSaving">
+                    @(_supQuickSaving ? "جاري الحفظ..." : "حفظ وربط")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter] public int? Id { get; set; }
     private int?   _id;
@@ -614,6 +653,56 @@
 
     private List<Opt> _employees = new();
     private List<Opt> _suppliers = new();
+
+    /* #66 — مورد سريع من بيانات السائق */
+    private bool   _supQuickOpen, _supQuickSaving;
+    private string _supQuickName = "", _supQuickPhone = "";
+
+    private void OpenSupQuick()
+    {
+        _supQuickName  = _f.FullName ?? "";
+        _supQuickPhone = _f.Mobile ?? "";
+        _supQuickOpen  = true;
+    }
+    private void CloseSupQuick() => _supQuickOpen = false;
+
+    private async Task SaveSupQuick()
+    {
+        if (string.IsNullOrWhiteSpace(_supQuickName))
+        { Snackbar.Add("اكتب اسم المورد", Severity.Error); return; }
+
+        _supQuickSaving = true;
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/suppliers", new
+            {
+                supplierType = "TransportCompany",
+                nameAr       = _supQuickName.Trim(),
+                phone        = string.IsNullOrWhiteSpace(_supQuickPhone) ? null : _supQuickPhone.Trim()
+            });
+            var body = await res.Content.ReadAsStringAsync();
+            string msg = body;
+            int newId = 0;
+            try
+            {
+                var doc = System.Text.Json.JsonDocument.Parse(body).RootElement;
+                if (doc.TryGetProperty("message", out var m)) msg = m.GetString() ?? body;
+                if (doc.TryGetProperty("id", out var i)) newId = i.GetInt32();
+            }
+            catch { /* مش JSON — نعرض الخام */ }
+
+            if (res.IsSuccessStatusCode && newId > 0)
+            {
+                _suppliers.Add(new Opt { Id = newId, Label = _supQuickName.Trim() });
+                _f.SupplierId = newId;
+                Snackbar.Add("اتعمل المورد واتربط بالسائق", Severity.Success);
+                _supQuickOpen = false;
+            }
+            else Snackbar.Add(msg, Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        finally { _supQuickSaving = false; }
+    }
     private Form _f = new();
 
     private bool IsInternal => _f.DriverType == "Internal";
@@ -1424,4 +1513,29 @@
     .badge-active    { background: rgba(34,197,94,.2);  color: #86efac; border: 1px solid rgba(34,197,94,.3); }
     .badge-inactive  { background: rgba(148,163,184,.2); color: #cbd5e1; border: 1px solid rgba(148,163,184,.3); }
     .badge-suspended { background: rgba(224,48,72,.2);   color: #fca5a5; border: 1px solid rgba(224,48,72,.3); }
+
+    /* #66 — مورد سريع */
+    .svc-modal-backdrop { position: fixed; inset: 0; z-index: 1400; background: rgba(10,27,59,.62); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .svc-modal { width: 100%; background: #fff; border-radius: 20px; box-shadow: 0 25px 60px rgba(10,27,59,.28); overflow: hidden; max-height: 92vh; display: flex; flex-direction: column; }
+    .svc-modal-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: linear-gradient(135deg, #0A1B3B 0%, #16306B 100%); color: #fff; }
+    .svc-head-title { font-size: 14px; font-weight: 800; }
+    .svc-head-sub { font-size: 10.5px; opacity: .8; margin-top: 2px; }
+    .svc-head-close { margin-inline-start: auto; background: rgba(255,255,255,.14); border: 0; color: #fff; width: 28px; height: 28px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+    .svc-modal-body { overflow-y: auto; }
+    .svc-modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px; background: #f7f9fc; border-top: 1px solid #edf1f7; }
+    .qsup-btn { border: 0; border-radius: 10px; padding: 9px 18px; font-size: 12px; font-weight: 800; cursor: pointer; font-family: inherit; }
+    .qsup-cancel { background: #eef1f6; color: #5b6b82; }
+    .qsup-save { background: linear-gradient(135deg, #1e6ef5, #1558d6); color: #fff; }
+    .qsup-save:disabled { opacity: .6; cursor: not-allowed; }
+    /* #66b — مورد سريع بجوار حقل المورد */
+    .field-inline-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+    .field-inline-row .field-select-wrap { flex: 1 1 240px; min-width: 0; }
+    .field-quick-add { border: 1.5px dashed #9db9ea; background: #f3f7ff; color: #1558d6; border-radius: 9px; padding: 0 14px; font-size: 11.5px; font-weight: 800; cursor: pointer; font-family: inherit; white-space: nowrap; display: inline-flex; align-items: center; }
+    .field-quick-add:hover { background: #e7f0ff; }
+
+    /* موبايل: المودال يبقى Bottom Sheet */
+    @@media (max-width: 680px) {
+        .svc-modal-backdrop { align-items: flex-end; padding: 0; }
+        .svc-modal { max-width: 100% !important; border-radius: 20px 20px 0 0 !important; max-height: 88vh; }
+    }
 </style>

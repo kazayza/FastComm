@@ -284,7 +284,25 @@
                                                     <span class="cu-date-tag">
                                                         @c.CustodyDate.ToString("MM/dd")
                                                     </span>
+                                                    @* #61 — شارة العهدة الفرعية *@
+                                                    @if (c.ParentCustodyNumber != null)
+                                                    {
+                                                        <span class="cu-parent-tag"
+                                                              title="عهدة فرعية موزعة من @c.ParentCustodyNumber">
+                                                            فرعية من @c.ParentCustodyNumber
+                                                        </span>
+                                                    }
                                                 </div>
+                                                @* #61 — عهدة موظف فيها توزيعات: الموزع والمتاح *@
+                                                @if (c.OwnerType == "Employee" && c.IsPrimary && c.SubCount > 0)
+                                                {
+                                                    <div class="cu-dist-line"
+                                                         title="إجمالي الموزع من العهدة دي على السواقين">
+                                                        <span>موزّع: @Money(c.Distributed)</span>
+                                                        <span class="cu-dist-sep" aria-hidden="true">·</span>
+                                                        <span>متاح: @Money(Math.Max(0, c.AmountIssued - c.Distributed))</span>
+                                                    </div>
+                                                }
                                             </div>
                                         </div>
                                     </td>
@@ -423,6 +441,25 @@
                                                         <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
                                                         <circle cx="9" cy="7" r="4"/>
                                                         <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke-linecap="round"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @* #61 — تسوية سلفة النولون مقابل نولون الرحلة *@
+                                            @if (c.OwnerType == "Driver" && c.AllocationType == "Freight" &&
+                                                 c.TripId != null && CanSettle &&
+                                                 (c.Status == "Open" || c.Status == "PartiallySettled"))
+                                            {
+                                                <button class="cu-act-btn act-info"
+                                                        @onclick="() => FreightSettle(c)"
+                                                        title="تسوية سلفة النولون مقابل نولون الرحلة"
+                                                        aria-label="تسوية نولون @c.CustodyNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M1 3h15v13H1z"/>
+                                                        <path d="M16 8h4l3 3v5h-7z"/>
+                                                        <circle cx="5.5" cy="18.5" r="2"/>
+                                                        <circle cx="18.5" cy="18.5" r="2"/>
                                                     </svg>
                                                 </button>
                                             }
@@ -766,6 +803,43 @@
                                    placeholder="0.00"
                                    @onchange="e => _nf.AmountIssued = ParseAmount(e.Value)" />
                         </div>
+                    </div>
+
+                    @* #61 — خزينة الصرف *@
+                    <div class="cu-mfield">
+                        <label class="cu-mlabel">خزينة الصرف</label>
+                        <div class="cu-mselect-wrap">
+                            <svg class="cu-mselect-icon" viewBox="0 0 24 24"
+                                 width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                <circle cx="12" cy="12" r="2.5"/>
+                                <path d="M6 12h.01M18 12h.01" stroke-linecap="round"/>
+                            </svg>
+                            <select class="cu-minput cu-mselect"
+                                    value="@_nf.CashBoxId"
+                                    @onchange="e => _nf.CashBoxId = ParseInt(e.Value)">
+                                <option value="0">الخزينة الافتراضية</option>
+                                @foreach (var b in _boxes)
+                                {
+                                    <option value="@b.CashBoxId">@b.NameAr (@b.Code) — رصيد @Money(b.CurrentBalance)</option>
+                                }
+                            </select>
+                        </div>
+                        @* #64 — تحذير لو رصيد الخزينة المختارة مش كفاية *@
+                        @{
+                            var selBox = _nf.CashBoxId == 0 ? null : _boxes.FirstOrDefault(b => b.CashBoxId == _nf.CashBoxId);
+                        }
+                        @if (selBox is not null && _nf.AmountIssued > 0 && selBox.CurrentBalance < _nf.AmountIssued)
+                        {
+                            <div class="cu-mhint cu-mhint-danger">
+                                رصيد الخزينة @Money(selBox.CurrentBalance) ج.م — مش كفاية لصرف @Money(_nf.AmountIssued) ج.م · حوّل لها من شاشة الخزينة أو اختار خزينة تانية
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="cu-mhint">مبلغ العهدة هيخرج من الخزينة دي وقت الصرف</div>
+                        }
                     </div>
 
                     @* نوع العهدة (التخصيص) *@
@@ -1621,6 +1695,40 @@
                     </div>
                 </div>
 
+                @* #61 — رحلة سلفة النولون: إجبارية علشان تتسوى مقابل نولونها *@
+                @if (_distType == "Freight")
+                {
+                    <div class="cu-mfield">
+                        <label class="cu-mlabel">
+                            الرحلة
+                            <span class="cu-mrequired">*</span>
+                        </label>
+                        <div class="cu-mselect-wrap">
+                            <svg class="cu-mselect-icon" viewBox="0 0 24 24"
+                                 width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <rect x="1" y="3" width="15" height="13" rx="1"/>
+                                <path d="M16 8h4l3 3v5h-7z"/>
+                                <circle cx="5.5" cy="18.5" r="2"/>
+                                <circle cx="18.5" cy="18.5" r="2"/>
+                            </svg>
+                            <select class="cu-minput cu-mselect"
+                                    value="@_distTripId"
+                                    @onchange="OnDistTripChanged"
+                                    aria-required="true">
+                                <option value="">— اختر رحلة —</option>
+                                @foreach (var t in _trips)
+                                {
+                                    <option value="@t.TripId">
+                                        @t.TripNumber — @t.DriverName (@TripStatusAr(t.Status))
+                                    </option>
+                                }
+                            </select>
+                        </div>
+                        <div class="cu-mhint">سلفة النولون لازم ترتبط برحلة علشان تتسوى مقابل نولونها</div>
+                    </div>
+                }
+
                 @* ملاحظات *@
                 <div class="cu-mfield">
                     <label class="cu-mlabel">ملاحظات</label>
@@ -1635,7 +1743,7 @@
 
             <div class="cu-modal-foot">
                 <button class="cu-modal-cancel" @onclick="CloseDistribute">إلغاء</button>
-                <button class="cu-modal-save"
+                <button class="cu-modal-save dist-save"
                         @onclick="SaveDistributeAsync"
                         disabled="@_distSaving">
                     @if (_distSaving)
@@ -2148,6 +2256,21 @@
         font-family: "Inter", Arial, sans-serif;
     }
 
+    /* #61 — شارة الفرعية + سطر الموزع/المتاح */
+    .cu-parent-tag {
+        display: inline-flex; padding: 1px 6px; border-radius: 4px;
+        font-size: 9.5px; font-weight: 800; white-space: nowrap;
+        background: #fdf3e0; color: #b45309; border: 1px solid #f3ddb4;
+    }
+    .cu-dist-line {
+        display: inline-flex; align-items: center; gap: 4px;
+        margin-top: 3px; padding: 2px 7px; border-radius: 6px;
+        font-size: 10px; font-weight: 800; color: #0f766e;
+        background: var(--fc-green-lt, #ecfdf5); border: 1px solid #b0e0c5;
+        width: fit-content;
+    }
+    .cu-dist-sep { opacity: 0.45; }
+
     /* ── Trip Cell ── */
     .cu-trip-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 
@@ -2406,6 +2529,7 @@
     .refund-save  { background: linear-gradient(135deg, #16a35b, #0d8a48); box-shadow: 0 4px 14px rgba(22,163,91,.28); }
     .add-save     { background: linear-gradient(135deg, #7c4dbd, #6035a0); box-shadow: 0 4px 14px rgba(124,77,189,.25); }
     .approve-save { background: linear-gradient(135deg, #16a35b, #0d8a48); box-shadow: 0 4px 14px rgba(22,163,91,.28); }
+    .dist-save    { background: linear-gradient(135deg, #0d9488, #0f766e); box-shadow: 0 4px 14px rgba(13,148,136,.28); }
 
     .cu-modal-action-btn {
         display: inline-flex; align-items: center; gap: 7px;
@@ -2465,6 +2589,7 @@
     .cu-minput.with-prefix { padding-right: 36px; }
 
     .cu-mhint { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--fc-muted); font-weight: 500; }
+    .cu-mhint-danger { color: #dc2626; font-weight: 700; }
     .selected-trip { color: var(--fc-blue); background: var(--fc-blue-lt); padding: 4px 8px; border-radius: 6px; }
 
     /* Owner Toggle */
@@ -3084,6 +3209,14 @@
     /* ── DTOs ── */
     public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
 
+    public class BoxOpt
+    {
+        public int    CashBoxId { get; set; }
+        public string NameAr    { get; set; } = "";
+        public string Code      { get; set; } = "";
+        public decimal CurrentBalance { get; set; }
+    }
+
     public class TripOpt
     {
         public long   TripId     { get; set; }
@@ -3114,6 +3247,7 @@
         public long?   ParentCustodyId { get; set; }
         public string? ParentCustodyNumber { get; set; }
         public int     SubCount        { get; set; }
+        public decimal Distributed     { get; set; }
         public string? AllocationType { get; set; }
     }
 
@@ -3190,6 +3324,7 @@
         public bool    IsPrimary    { get; set; } = true;
         public long?   ParentCustodyId { get; set; }
         public string? AllocationType { get; set; }
+        public int     CashBoxId    { get; set; }
     }
 
     public class TxForm
@@ -3294,6 +3429,8 @@
         "Expense"    => "مصروف",
         "Refund"     => "رد باقي",
         "Additional" => "إضافة مبلغ",
+        "FreightSettle" => "تسوية نولون",
+        "Distribute" => "توزيع لسائق",
         _            => t
     };
 
@@ -3303,6 +3440,8 @@
         "Expense"    => "chip-tl-expense",
         "Refund"     => "chip-tl-refund",
         "Additional" => "chip-tl-additional",
+        "FreightSettle" => "chip-tl-expense",
+        "Distribute" => "chip-tl-expense",
         _            => "chip-tl-issue"
     };
 
@@ -3312,6 +3451,8 @@
         "Expense"    => "tl-expense",
         "Refund"     => "tl-refund",
         "Additional" => "tl-additional",
+        "FreightSettle" => "tl-expense",
+        "Distribute" => "tl-expense",
         _            => "tl-issue"
     };
 
@@ -3321,6 +3462,8 @@
         "Expense"    => "amt-expense",
         "Refund"     => "amt-refund",
         "Additional" => "amt-additional",
+        "FreightSettle" => "amt-expense",
+        "Distribute" => "amt-expense",
         _            => "amt-issue"
     };
 
@@ -3361,6 +3504,7 @@
     {
         _trips     = await SafeGetT<TripOpt>("api/custodies/trips");
         _employees = await SafeGetT<Opt>("api/custodies/employees");
+        _boxes     = await SafeGetT<BoxOpt>("api/custodies/cash-boxes");
         _drivers   = await SafeGetT<Opt>("api/options/drivers");
         if (!_drivers.Any() && _trips.Any())
             _drivers = _trips.GroupBy(t => t.DriverId)
@@ -3462,7 +3606,8 @@
                 notes           = _nf.Notes,
                 isPrimary       = _nf.IsPrimary,
                 parentCustodyId = _nf.ParentCustodyId,
-                allocationType  = _nf.AllocationType
+                allocationType  = _nf.AllocationType,
+                cashBoxId       = _nf.CashBoxId == 0 ? (int?)null : _nf.CashBoxId
             });
             _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
             if (res.IsSuccessStatusCode)
@@ -3472,9 +3617,13 @@
         finally { _saving = false; }
     }
 
+    /* #61 — خزائن الصرف المتاحة */
+    private List<BoxOpt> _boxes = new();
+
     /* ── #28 — توزيع من عهدة موظف على سائق ── */
     private Item?   _distParent;
     private int     _distDriverId;
+    private long?   _distTripId;
     private decimal _distAmount;
     private string  _distType = "Road";
     private string  _distNotes = "";
@@ -3483,8 +3632,13 @@
 
     private void OpenDistribute(Item c)
     {
-        _distParent = c; _distDriverId = 0; _distAmount = 0;
+        _distParent = c; _distDriverId = 0; _distAmount = 0; _distTripId = null;
         _distType = "Road"; _distNotes = ""; _distMsg = null; _distTried = false; _distOk = true;
+    }
+
+    private void OnDistTripChanged(ChangeEventArgs e)
+    {
+        _distTripId = long.TryParse(e.Value?.ToString(), out var v) && v > 0 ? v : null;
     }
 
     private void CloseDistribute() => _distParent = null;
@@ -3494,13 +3648,16 @@
         _distTried = true; _distMsg = null;
         if (_distDriverId <= 0) { _distOk = false; _distMsg = "اختار السائق"; return; }
         if (_distAmount <= 0)   { _distOk = false; _distMsg = "ادخل مبلغ التوزيع"; return; }
+        if (_distType == "Freight" && _distTripId is null)
+        { _distOk = false; _distMsg = "اختار رحلة سلفة النولون"; return; }
 
         _distSaving = true;
         try
         {
             var res = await Http.PostAsJsonAsync("api/custodies", new
             {
-                tripId          = (long?)null,
+                /* #61 — سلفة النولون ترتبط برحلتها علشان تتسوى مقابل نولونها */
+                tripId          = _distType == "Freight" ? _distTripId : null,
                 ownerType       = "Driver",
                 ownerId         = _distDriverId,
                 amountIssued    = _distAmount,
@@ -3589,6 +3746,8 @@
 
     private Task Settle(Item c)       => Post($"api/custodies/{c.CustodyId}/settle",  null);
     private Task CloseCustody(Item c) => Post($"api/custodies/{c.CustodyId}/close",   null);
+    /* #61 — تسوية سلفة النولون مقابل نولون الرحلة */
+    private Task FreightSettle(Item c) => Post($"api/custodies/{c.CustodyId}/freight-settle", null);
 
     private void OpenApprove(Item c)
     {

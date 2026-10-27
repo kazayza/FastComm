@@ -54,7 +54,9 @@ public sealed record CashEntry(
     long    CustodyId        = 0,
     int     VehicleId        = 0,
     string? Description      = null,
-    DateOnly? Date           = null);
+    DateOnly? Date           = null,
+    /* #61 — خزينة الصرف الصريحة: 0 = الخزينة الافتراضية من الإعداد */
+    int     CashBoxId        = 0);
 
 /// <inheritdoc cref="ICashBook"/>
 public sealed class CashBook : ICashBook
@@ -112,7 +114,7 @@ public sealed class CashBook : ICashBook
             return true;
         }
 
-        var box = await ResolveBoxAsync(ct);
+        var box = await ResolveBoxAsync(e.CashBoxId, ct);
         if (box is null)
         {
             _log.LogWarning("CashBook: مافيش خزينة مفتوحة — الحركة {Ref} ما اتسجلتش",
@@ -147,8 +149,21 @@ public sealed class CashBook : ICashBook
     /// الخزينة الافتراضية: كودها من الإعداد <c>TREASURY.DEFAULT_BOX</c> (الافتراضي MAIN) —
     /// ولو مش موجودة أو مقفولة، أول خزينة نشطة ومفتوحة.
     /// </summary>
-    private async Task<CashBox?> ResolveBoxAsync(CancellationToken ct)
+    private async Task<CashBox?> ResolveBoxAsync(int requestedBoxId, CancellationToken ct)
     {
+        /* #61 — لو الطالب حدد خزينة بالاسم: نستخدمها هي — ولازم تكون نشطة ومفتوحة.
+           مش موجودة/مقفولة = الحركة ماتسجلش (ما نسكتش ونروح لخزينة تانية). */
+        if (requestedBoxId > 0)
+        {
+            var requested = await _db.CashBoxes.AsNoTracking()
+                .FirstOrDefaultAsync(b => b.CashBoxId == requestedBoxId &&
+                                          !b.IsDeleted && b.IsActive && b.Status == "Open", ct);
+            if (requested is null)
+                _log.LogWarning("CashBook: الخزينة {Id} مش متاحة (مقفولة أو مش موجودة) — الحركة ما اتسجلتش",
+                                requestedBoxId);
+            return requested;
+        }
+
         var code = await _settings.GetStringAsync(SettingKeys.TreasuryDefaultBox,
                                                   SettingDefaults.TreasuryDefaultBox, ct);
         if (string.IsNullOrWhiteSpace(code)) code = SettingDefaults.TreasuryDefaultBox;

@@ -285,6 +285,116 @@ public class SupplierInvoicesController : ControllerBase
         return Ok(new { message = $"✅ تم تسجيل الفاتورة {number}", id = inv.SupplierInvoiceId });
     }
 
+    /* ═══════════════ #66 — فاتورة نقل المورد: مولدة من كشف حساب المركبات ═══════════════ */
+
+    public record FromStatementReq(int SupplierId, string? From, string? To);
+
+    [HttpPost("from-vehicle-statement")]
+    [Authorize(Policy = "PERM:SUPPLIER.CREATE")]
+    public async Task<IActionResult> FromVehicleStatement([FromBody] FromStatementReq req, CancellationToken ct)
+    {
+        var sup = await _db.Suppliers.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.SupplierId == req.SupplierId && !s.IsDeleted, ct);
+        if (sup is null) return BadRequest(new { message = "المورد غير موجود" });
+
+        if (!DateTime.TryParse(req.From, out var from) || !DateTime.TryParse(req.To, out var to) || to <= from)
+            return BadRequest(new { message = "حدد الفترة من شاشة ملف العربية الأول" });
+
+        var vehicleIds = await _db.Vehicles.AsNoTracking()
+            .Where(v => !v.IsDeleted && v.SupplierId == req.SupplierId)
+            .Select(v => v.VehicleId).ToListAsync(ct);
+        if (vehicleIds.Count == 0)
+            return BadRequest(new { message = "مافيش مركبات مسجلة على المورد المالك ده" });
+
+        /* رحلات الفترة اللي نولونها متسجل — الإجمالي لكل رحلة (خصومات السلف بتتحاسب في الكشف والدفعات) */
+        var trips = await _db.Trips.AsNoTracking()
+            .Where(t => !t.IsDeleted && vehicleIds.Contains(t.VehicleId) &&
+                        t.ActualEndAt != null && t.ActualEndAt >= from && t.ActualEndAt < to &&
+                        t.FreightAmount > 0)
+            .OrderBy(t => t.ActualEndAt)
+            .Select(t => new
+            {
+                t.TripId, t.TripNumber, t.ActualEndAt, t.FreightAmount,
+                Plate = t.Vehicle != null ? t.Vehicle.PlateNumber : null
+            })
+            .ToListAsync(ct);
+        if (trips.Count == 0)
+            return BadRequest(new { message = "مافيش رحلات منتهية بنولون مسجل في الفترة دي على مركبات المورد" });
+
+        /* الرحلة الواحدة ماتتفوترش مرتين */
+        var tripIds = trips.Select(t => t.TripId).ToList();
+        var billed = await _db.SupplierInvoiceItems.AsNoTracking()
+            .Where(i => i.TripId != null && tripIds.Contains(i.TripId.Value) &&
+                        i.SupplierInvoice != null && i.SupplierInvoice.Status != "Cancelled" &&
+                        !i.SupplierInvoice.IsDeleted)
+            .Select(i => i.TripId!.Value).Distinct().ToListAsync(ct);
+
+        var fresh = trips.Where(t => !billed.Contains(t.TripId)).ToList();
+        if (fresh.Count == 0)
+            return BadRequest(new { message = "كل رحلات الفترة دي متفوترة بالفعل في فواتير سابقة" });
+
+        /* سطر لكل رحلة — النقل غير خاضع للضريبة (TaxRate = 0) */
+        var lines = fresh.Select(t => new LineReq(
+            t.TripId, null, null,
+            $"نولون رحلة {t.TripNumber} — {t.ActualEndAt:dd/MM/yyyy}" + (string.IsNullOrEmpty(t.Plate) ? "" : $" — {t.Plate}"),
+            1, t.FreightAmount!.Value, 0)).ToList();
+
+        int? branchId = null;
+        var bClaim = User.Claims.FirstOrDefault(c => c.Type == "branchId")?.Value;
+        if (int.TryParse(bClaim, out var bc) && bc > 0) branchId = bc;
+        branchId ??= await _db.Branches.AsNoTracking().OrderBy(x => x.BranchId)
+                        .Select(x => (int?)x.BranchId).FirstOrDefaultAsync(ct);
+        if (branchId is null) return BadRequest(new { message = "مافيش فرع معرّف في النظام" });
+
+        var (sub, tax, built) = Build(lines);
+        var number = await _num.NextAsync("SUPPLIER_INVOICE", ct);
+
+        var inv = new SupplierInvoice
+        {
+            SupplierInvoiceNumber = number,
+            BranchId              = branchId.Value,
+            SupplierId            = req.SupplierId,
+            InvoiceDate           = DateOnly.FromDateTime(DateTime.Today),
+            CurrencyCode          = "EGP",
+            SubTotal              = sub,
+            TaxTotal              = tax,
+            GrandTotal            = sub + tax,
+            PaidAmount            = 0m,
+            Status                = "Draft",
+            PaymentStatus         = "Unpaid",
+            Notes                 = $"نولون نقل — {fresh.Count} رحلة · فترة {from:dd/MM/yyyy} إلى {to.AddDays(-1):dd/MM/yyyy}",
+            IsDeleted             = false,
+            CreatedAt             = DateTime.UtcNow,
+            CreatedBy             = UserId()
+        };
+
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            _db.SupplierInvoices.Add(inv);
+            await _db.SaveChangesAsync(ct);
+            foreach (var l in built)
+            {
+                l.SupplierInvoiceId = inv.SupplierInvoiceId;
+                _db.SupplierInvoiceItems.Add(l);
+            }
+            await _db.SaveChangesAsync(ct);
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            await _db.Database.RollbackTransactionAsync(ct);
+            _log.LogError(ex, "فشل توليد فاتورة نقل المورد");
+            return BadRequest(new { message = "فشل إنشاء الفاتورة: " + ex.Message });
+        }
+
+        await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "SupplierInvoice",
+            inv.SupplierInvoiceId.ToString(),
+            description: $"فاتورة نقل من كشف المركبات — مورد {sup.NameAr} — {fresh.Count} رحلة", ct: ct);
+
+        return Ok(new { message = $"اتعملت الفاتورة {number} — {fresh.Count} رحلة بإجمالي {sub:N2} ج.م", id = inv.SupplierInvoiceId });
+    }
+
     /* ═══════════════ UPDATE ═══════════════ */
 
     [HttpPut("{id:long}")]

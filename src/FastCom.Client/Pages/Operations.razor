@@ -409,20 +409,35 @@
                                     <td>
                                         <div class="op-actions">
 
-                                            @* رحلة — فتح الموجودة أو إضافة جديدة *@
-                                            @if ((o.TripId is not null && CanTripView) ||
-                                                 (o.TripId is null && CanTripCreate))
+                                            @* رحلة — عرض الموجودة، والإضافة ممنوعة على المقفول/الملغى *@
+                                            @if (o.TripId is not null ? CanTripView
+                                                 : (CanTripCreate && o.Status is not ("Closed" or "Cancelled")))
                                             {
                                                 <button class="op-act-btn act-trip"
                                                         @onclick="() => GoTrip(o)"
-                                                        title="@(o.TripId is not null ? $"فتح الرحلة {o.TripNumber}" : "إضافة رحلة للعملية")"
-                                                        aria-label="@(o.TripId is not null ? "فتح رحلة العملية" : "إضافة رحلة للعملية")">
+                                                        title="@(o.TripId is not null ? $"عرض الرحلة {o.TripNumber}" : "إضافة رحلة للعملية")"
+                                                        aria-label="@(o.TripId is not null ? "عرض رحلة العملية" : "إضافة رحلة للعملية")">
                                                     <svg viewBox="0 0 24 24" width="14" height="14"
                                                          fill="none" stroke="currentColor" stroke-width="2">
                                                         <rect x="1" y="3" width="15" height="13" rx="2"/>
                                                         <path d="M16 8h4l3 3v5h-7V8z"/>
                                                         <circle cx="5.5" cy="18.5" r="2.5"/>
                                                         <circle cx="18.5" cy="18.5" r="2.5"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @* عرض للقراءة فقط — للمقفول والملغى *@
+                                            @if (o.Status is ("Closed" or "Cancelled") && CanView)
+                                            {
+                                                <button class="op-act-btn act-view"
+                                                        @onclick="() => GoView(o)"
+                                                        title="عرض العملية (للقراءة فقط)"
+                                                        aria-label="عرض @o.OperationNumber للقراءة فقط">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                                        <circle cx="12" cy="12" r="3"/>
                                                     </svg>
                                                 </button>
                                             }
@@ -618,6 +633,57 @@
     </div>
 }
 
+@* ═══════════════════════════════════════════
+   #67 — تأكيد إقفال / إعادة فتح
+═══════════════════════════════════════════ *@
+@if (_confirmAction is not null && _confirmTarget is not null)
+{
+    <div class="op-confirm-scrim" @onclick="CancelConfirm" role="dialog" aria-modal="true"
+         aria-label="@(_confirmAction == "close" ? "تأكيد إقفال العملية" : "تأكيد إعادة فتح العملية")">
+        <div class="op-confirm-card" @onclick:stopPropagation="true">
+
+            <div class="op-confirm-ic @(_confirmAction == "close" ? "ic-close" : "ic-reopen")" aria-hidden="true">
+                @if (_confirmAction == "close")
+                {
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2"/>
+                        <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                    </svg>
+                }
+                else
+                {
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M3 3v5h5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                }
+            </div>
+
+            <div class="op-confirm-title">@(_confirmAction == "close" ? "إقفال العملية" : "إعادة فتح العملية")</div>
+            <div><span class="op-confirm-op">@_confirmTarget.OperationNumber</span></div>
+
+            <p class="op-confirm-msg">
+                @if (_confirmAction == "close")
+                {
+                    <text>سيتم إقفال العملية، ولن يمكن تعديل بياناتها أو رحلاتها إلا بعد إعادة فتحها.</text>
+                }
+                else
+                {
+                    <text>ستعود العملية إلى حالة «تم التسليم» وسيُمسح تاريخ الإقفال، وسيعود الحجز المرتبط إلى «قيد التنفيذ».</text>
+                }
+            </p>
+
+            <div class="op-confirm-btns">
+                <button type="button" class="op-confirm-btn btn-cancel" @onclick="CancelConfirm">تراجع</button>
+                <button type="button" class="op-confirm-btn @(_confirmAction == "close" ? "btn-do-close" : "btn-do-reopen")" @onclick="ConfirmAction">
+                    @(_confirmAction == "close" ? "تأكيد الإقفال" : "تأكيد إعادة الفتح")
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
 
 @* ═══════════════════════════════════════════
    CSS
@@ -758,6 +824,52 @@
         from { opacity: 0; }
         to   { opacity: 1; }
     }
+
+    /* ================================================================
+       #67 — تأكيد إقفال / إعادة فتح
+    ================================================================ */
+    .op-confirm-scrim {
+        position: fixed; inset: 0; z-index: 1200;
+        display: flex; align-items: center; justify-content: center;
+        padding: 16px;
+        background: rgba(10, 20, 40, .45);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        animation: op-scrim-fade .18s ease;
+    }
+    .op-confirm-card {
+        width: min(400px, calc(100vw - 32px));
+        background: #fff; border-radius: 18px;
+        box-shadow: 0 25px 60px rgba(10, 27, 59, .28);
+        padding: 26px 24px 20px;
+        text-align: center;
+    }
+    .op-confirm-ic {
+        width: 46px; height: 46px; border-radius: 50%;
+        display: inline-flex; align-items: center; justify-content: center;
+        margin-bottom: 12px;
+    }
+    .op-confirm-ic.ic-close  { background: var(--fc-red-lt);   color: var(--fc-red); }
+    .op-confirm-ic.ic-reopen { background: var(--fc-amber-lt); color: var(--fc-amber); }
+    .op-confirm-title { font-size: 16px; font-weight: 800; color: var(--fc-text); }
+    .op-confirm-op {
+        display: inline-block; margin-top: 6px; padding: 3px 12px;
+        border-radius: 999px; background: var(--fc-blue-lt);
+        color: var(--fc-blue); font-size: 12px; font-weight: 800;
+    }
+    .op-confirm-msg { margin: 12px 0 18px; font-size: 13px; line-height: 1.7; color: var(--fc-muted); }
+    .op-confirm-btns { display: flex; gap: 10px; }
+    .op-confirm-btn {
+        flex: 1; padding: 10px 0; border-radius: 10px;
+        font-size: 13.5px; font-weight: 800; cursor: pointer;
+        font-family: inherit;
+        border: 1.5px solid var(--fc-border); background: #fff; color: var(--fc-text);
+    }
+    .op-confirm-btn.btn-cancel:hover { background: #f6f8fb; }
+    .op-confirm-btn.btn-do-close  { background: var(--fc-red);   border-color: var(--fc-red);   color: #fff; }
+    .op-confirm-btn.btn-do-reopen { background: var(--fc-amber); border-color: var(--fc-amber); color: #fff; }
+    .op-confirm-btn.btn-do-close:hover  { filter: brightness(1.08); }
+    .op-confirm-btn.btn-do-reopen:hover { filter: brightness(1.08); }
 
     .fc-fab-container {
         z-index: 1000 !important;
@@ -1193,12 +1305,14 @@
     .act-reopen  { color: var(--fc-amber); }
     .act-cancel  { color: var(--fc-red); }
     .act-delete  { color: var(--fc-red); }
+    .act-view    { color: var(--fc-green); }
 
     .act-trip:hover    { background: var(--fc-orange-lt); border-color: #f2c9ad; }
     .act-edit:hover    { background: var(--fc-blue-lt);   border-color: #c0d4fb; }
     .act-deliver:hover { background: var(--fc-teal-lt);   border-color: #b0e0dc; }
     .act-close:hover   { background: var(--fc-purple-lt); border-color: #d0bfef; }
     .act-reopen:hover  { background: var(--fc-amber-lt);  border-color: #f0d898; }
+    .act-view:hover    { background: var(--fc-green-lt);  border-color: #a8ddc3; }
     .act-cancel:hover  { background: var(--fc-red-lt);    border-color: #ffc8cf; }
     .act-delete:hover  { background: var(--fc-red-lt);    border-color: #ffc8cf; }
 
@@ -1464,6 +1578,7 @@
 
     private void GoNew()         => Nav.NavigateTo("/operations/new");
     private void GoEdit(Item o)  => Nav.NavigateTo($"/operations/new/{o.OperationId}");
+    private void GoView(Item o)  => Nav.NavigateTo($"/operations/new/{o.OperationId}"); /* #67 — الفورم بيقفل نفسه تلقائي على المقفول/الملغى */
 
     /* رحلة العملية: لو ليها رحلة يفتحها، ولو لأ يفتح فورم رحلة بالعملية مختارة */
     private void GoTrip(Item o)
@@ -1484,8 +1599,22 @@
         catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
     }
 
-    private async Task Close(Item o)  => await Post(o, "close");
-    private async Task Reopen(Item o) => await Post(o, "reopen");
+    /* #67 — إقفال/إعادة فتح بتمر دايلوج تأكيد الأول */
+    private string? _confirmAction;
+    private Item?   _confirmTarget;
+
+    private void Close(Item o)  { _confirmAction = "close";  _confirmTarget = o; }
+    private void Reopen(Item o) { _confirmAction = "reopen"; _confirmTarget = o; }
+
+    private void CancelConfirm() { _confirmAction = null; _confirmTarget = null; }
+
+    private async Task ConfirmAction()
+    {
+        var act    = _confirmAction!;
+        var target = _confirmTarget!;
+        CancelConfirm();
+        await Post(target, act);
+    }
 
     private async Task Post(Item o, string action)
     {

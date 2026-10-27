@@ -379,6 +379,202 @@ public class MasterDataController : ControllerBase
     }
 
     // ══════════════════════════════════════════════════════════════
+    //  المواني  Ports  (سحب + تعتيق)  #69
+    // ══════════════════════════════════════════════════════════════
+
+    public record PortItem(int PortId, string PortCode, string NameAr, string? NameEn,
+        string? CityAr, bool IsActive, int UsageCount);
+
+    public record PortUpsert(string NameAr, string? NameEn, string? CityAr, bool IsActive);
+
+    [HttpGet("ports")]
+    [Authorize(Policy = "PERM:MASTERDATA.VIEW")]
+    public async Task<IActionResult> Ports(CancellationToken ct)
+    {
+        var rows = await _db.Ports.AsNoTracking()
+            .Where(p => !p.IsDeleted)
+            .OrderBy(p => p.NameAr)
+            .Select(p => new PortItem(p.PortId, p.PortCode, p.NameAr, p.NameEn,
+                p.CityAr, p.IsActive, 0))
+            .ToListAsync(ct);
+
+        /* الاستخدام = سحب + تعتيق من الحجوزات والعمليات — 4 استعلامات GroupBy بسيطة (SelectMany بمصفوفة ما بيترجمش في EF) */
+        var bkPull = await _db.Bookings.AsNoTracking().Where(b => !b.IsDeleted && b.PortId != null)
+            .GroupBy(b => b.PortId!.Value).Select(g => new { Id = g.Key, N = g.Count() })
+            .ToListAsync(ct);
+        var bkTah = await _db.Bookings.AsNoTracking().Where(b => !b.IsDeleted && b.TahteeqPortId != null)
+            .GroupBy(b => b.TahteeqPortId!.Value).Select(g => new { Id = g.Key, N = g.Count() })
+            .ToListAsync(ct);
+        var opPull = await _db.Operations.AsNoTracking().Where(o => !o.IsDeleted && o.PortId != null)
+            .GroupBy(o => o.PortId!.Value).Select(g => new { Id = g.Key, N = g.Count() })
+            .ToListAsync(ct);
+        var opTah = await _db.Operations.AsNoTracking().Where(o => !o.IsDeleted && o.TahteeqPortId != null)
+            .GroupBy(o => o.TahteeqPortId!.Value).Select(g => new { Id = g.Key, N = g.Count() })
+            .ToListAsync(ct);
+        var map = bkPull.Concat(bkTah).Concat(opPull).Concat(opTah)
+            .GroupBy(x => x.Id).ToDictionary(g => g.Key, g => g.Sum(x => x.N));
+
+        return Ok(rows.Select(r => r with
+        {
+            UsageCount = map.TryGetValue(r.PortId, out var n) ? n : 0
+        }).ToList());
+    }
+
+    [HttpPost("ports")]
+    [Authorize(Policy = "PERM:MASTERDATA.MANAGE")]
+    public async Task<IActionResult> CreatePort([FromBody] PortUpsert req, CancellationToken ct)
+    {
+        var err = await ValidatePortAsync(req, ct);
+        if (err is not null) return BadRequest(new { message = err });
+
+        var p = new Port
+        {
+            PortCode  = await NextCodeAsync("PRT-", x => _db.Ports.AnyAsync(y => y.PortCode == x, ct), ct),
+            NameAr    = req.NameAr.Trim(),
+            NameEn    = string.IsNullOrWhiteSpace(req.NameEn) ? null : req.NameEn.Trim(),
+            CityAr    = string.IsNullOrWhiteSpace(req.CityAr) ? null : req.CityAr.Trim(),
+            IsActive  = req.IsActive,
+            CreatedAt = DateTime.UtcNow
+        };
+        _db.Ports.Add(p);
+        await _db.SaveChangesAsync(ct);
+        return Ok(new { id = p.PortId, message = $"✅ اتضاف الميناء «{p.NameAr}»" });
+    }
+
+    [HttpPut("ports/{id:int}")]
+    [Authorize(Policy = "PERM:MASTERDATA.MANAGE")]
+    public async Task<IActionResult> UpdatePort(int id, [FromBody] PortUpsert req, CancellationToken ct)
+    {
+        var p = await _db.Ports.FirstOrDefaultAsync(x => x.PortId == id && !x.IsDeleted, ct);
+        if (p is null) return NotFound(new { message = "الميناء غير موجود" });
+
+        var err = await ValidatePortAsync(req, ct, id);
+        if (err is not null) return BadRequest(new { message = err });
+
+        p.NameAr   = req.NameAr.Trim();
+        p.NameEn   = string.IsNullOrWhiteSpace(req.NameEn) ? null : req.NameEn.Trim();
+        p.CityAr   = string.IsNullOrWhiteSpace(req.CityAr) ? null : req.CityAr.Trim();
+        p.IsActive = req.IsActive;
+        p.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        return Ok(new { message = $"✅ اتعدّل الميناء «{p.NameAr}»" });
+    }
+
+    private async Task<string?> ValidatePortAsync(PortUpsert? r, CancellationToken ct, int? cur = null)
+    {
+        if (r is null) return "البيانات غير كاملة";
+        if (string.IsNullOrWhiteSpace(r.NameAr)) return "الاسم بالعربي مطلوب";
+        if (r.NameAr.Trim().Length > 150)          return "الاسم أطول من 150 حرف";
+        if (r.NameEn is { Length: > 150 })         return "الاسم الإنجليزي أطول من 150 حرف";
+        if (r.CityAr is { Length: > 100 })         return "المدينة أطول من 100 حرف";
+        if (await _db.Ports.AnyAsync(p => !p.IsDeleted && p.NameAr == r.NameAr.Trim()
+                && (cur == null || p.PortId != cur), ct))
+            return $"الميناء «{r.NameAr.Trim()}» موجود أصلًا";
+        return null;
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  الوجهات  Destinations  #69
+    // ══════════════════════════════════════════════════════════════
+
+    public record DestItem(int DestinationId, string Code, string NameAr, string? NameEn,
+        string? CityAr, decimal? DistanceKm, bool IsActive, int UsageCount);
+
+    public record DestUpsert(string NameAr, string? NameEn, string? CityAr, decimal? DistanceKm, bool IsActive);
+
+    [HttpGet("destinations")]
+    [Authorize(Policy = "PERM:MASTERDATA.VIEW")]
+    public async Task<IActionResult> Destinations(CancellationToken ct)
+    {
+        var rows = await _db.Destinations.AsNoTracking()
+            .Where(d => !d.IsDeleted)
+            .OrderBy(d => d.NameAr)
+            .Select(d => new DestItem(d.DestinationId, d.Code, d.NameAr, d.NameEn,
+                d.CityAr, d.DistanceKm, d.IsActive, 0))
+            .ToListAsync(ct);
+
+        var bk = await _db.Bookings.AsNoTracking().Where(b => !b.IsDeleted && b.DestinationId != null)
+            .GroupBy(b => b.DestinationId!.Value).Select(g => new { Id = g.Key, N = g.Count() })
+            .ToListAsync(ct);
+        var op = await _db.Operations.AsNoTracking().Where(o => !o.IsDeleted && o.DestinationId != null)
+            .GroupBy(o => o.DestinationId!.Value).Select(g => new { Id = g.Key, N = g.Count() })
+            .ToListAsync(ct);
+        var map = bk.Concat(op).GroupBy(x => x.Id).ToDictionary(g => g.Key, g => g.Sum(x => x.N));
+
+        return Ok(rows.Select(r => r with
+        {
+            UsageCount = map.TryGetValue(r.DestinationId, out var n) ? n : 0
+        }).ToList());
+    }
+
+    [HttpPost("destinations")]
+    [Authorize(Policy = "PERM:MASTERDATA.MANAGE")]
+    public async Task<IActionResult> CreateDestination([FromBody] DestUpsert req, CancellationToken ct)
+    {
+        var err = await ValidateDestAsync(req, ct);
+        if (err is not null) return BadRequest(new { message = err });
+
+        var d = new Destination
+        {
+            Code       = await NextCodeAsync("DST-", x => _db.Destinations.AnyAsync(y => y.Code == x, ct), ct),
+            NameAr     = req.NameAr.Trim(),
+            NameEn     = string.IsNullOrWhiteSpace(req.NameEn) ? null : req.NameEn.Trim(),
+            CityAr     = string.IsNullOrWhiteSpace(req.CityAr) ? null : req.CityAr.Trim(),
+            DistanceKm = req.DistanceKm,
+            IsActive   = req.IsActive
+        };
+        _db.Destinations.Add(d);
+        await _db.SaveChangesAsync(ct);
+        return Ok(new { id = d.DestinationId, message = $"✅ اتضافت الوجهة «{d.NameAr}»" });
+    }
+
+    [HttpPut("destinations/{id:int}")]
+    [Authorize(Policy = "PERM:MASTERDATA.MANAGE")]
+    public async Task<IActionResult> UpdateDestination(int id, [FromBody] DestUpsert req, CancellationToken ct)
+    {
+        var d = await _db.Destinations.FirstOrDefaultAsync(x => x.DestinationId == id && !x.IsDeleted, ct);
+        if (d is null) return NotFound(new { message = "الوجهة غير موجودة" });
+
+        var err = await ValidateDestAsync(req, ct, id);
+        if (err is not null) return BadRequest(new { message = err });
+
+        d.NameAr     = req.NameAr.Trim();
+        d.NameEn     = string.IsNullOrWhiteSpace(req.NameEn) ? null : req.NameEn.Trim();
+        d.CityAr     = string.IsNullOrWhiteSpace(req.CityAr) ? null : req.CityAr.Trim();
+        d.DistanceKm = req.DistanceKm;
+        d.IsActive   = req.IsActive;
+        await _db.SaveChangesAsync(ct);
+        return Ok(new { message = $"✅ اتعدّلت الوجهة «{d.NameAr}»" });
+    }
+
+    private async Task<string?> ValidateDestAsync(DestUpsert? r, CancellationToken ct, int? cur = null)
+    {
+        if (r is null) return "البيانات غير كاملة";
+        if (string.IsNullOrWhiteSpace(r.NameAr)) return "الاسم بالعربي مطلوب";
+        if (r.NameAr.Trim().Length > 150)          return "الاسم أطول من 150 حرف";
+        if (r.NameEn is { Length: > 150 })         return "الاسم الإنجليزي أطول من 150 حرف";
+        if (r.CityAr is { Length: > 100 })         return "المدينة أطول من 100 حرف";
+        if (r.DistanceKm is < 0)                   return "المسافة ماينفعش تكون سالبة";
+        if (r.DistanceKm is > 9999999m)            return "المسافة أكبر من المسموح";
+        if (await _db.Destinations.AnyAsync(d => !d.IsDeleted && d.NameAr == r.NameAr.Trim()
+                && (cur == null || d.DestinationId != cur), ct))
+            return $"الوجهة «{r.NameAr.Trim()}» موجودة أصلًا";
+        return null;
+    }
+
+    /* #69 — توليد كود فريد بالبادئة: PRT-001 / DST-001 ... */
+    private static async Task<string> NextCodeAsync(string prefix,
+        Func<string, Task<bool>> exists, CancellationToken ct)
+    {
+        for (var i = 1; i < 1000; i++)
+        {
+            var c = prefix + i.ToString("000");
+            if (!await exists(c)) return c;
+        }
+        return prefix + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+    }
+
+    // ══════════════════════════════════════════════════════════════
 
     private static bool CodeOk(string code) =>
         System.Text.RegularExpressions.Regex.IsMatch(code.Trim(), "^[A-Za-z0-9_-]+$");
