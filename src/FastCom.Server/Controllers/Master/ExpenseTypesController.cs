@@ -35,13 +35,15 @@ public class ExpenseTypesController : ControllerBase
 
     public record ListItem(int ExpenseTypeId, string Code, string NameAr, string? NameEn,
         bool IsCustodyAllowed, bool IsOperationCost, bool IsTaxDeductible,
-        bool IsActive, int ExpenseCount);
+        bool IsActive, int ExpenseCount, bool IsFreightAdvance = false, bool IsReceiptRequired = false);
 
     public record Detail(int ExpenseTypeId, string Code, string NameAr, string? NameEn,
-        bool IsCustodyAllowed, bool IsOperationCost, bool IsTaxDeductible, bool IsActive);
+        bool IsCustodyAllowed, bool IsOperationCost, bool IsTaxDeductible, bool IsActive,
+        bool IsFreightAdvance = false, bool IsReceiptRequired = false);
 
-    public record Upsert(string Code, string NameAr, string? NameEn,
-        bool IsCustodyAllowed, bool IsOperationCost, bool IsTaxDeductible, bool IsActive);
+    public record Upsert(string? Code, string NameAr, string? NameEn,
+        bool IsCustodyAllowed, bool IsOperationCost, bool IsTaxDeductible, bool IsActive,
+        bool IsFreightAdvance = false, bool IsReceiptRequired = false);
 
     // ═══════════════ LIST ═══════════════
 
@@ -63,7 +65,7 @@ public class ExpenseTypesController : ControllerBase
 
         var rows = await q.OrderBy(t => t.Code)
             .Select(t => new ListItem(t.ExpenseTypeId, t.Code, t.NameAr, t.NameEn,
-                t.IsCustodyAllowed, t.IsOperationCost, t.IsTaxDeductible, t.IsActive, 0))
+                t.IsCustodyAllowed, t.IsOperationCost, t.IsTaxDeductible, t.IsActive, 0, t.IsFreightAdvance, t.IsReceiptRequired))
             .ToListAsync(ct);
 
         return Ok(rows.Select(r => r with
@@ -83,7 +85,7 @@ public class ExpenseTypesController : ControllerBase
         if (t is null) return NotFound(new { message = "نوع المصروف غير موجود" });
 
         return Ok(new Detail(t.ExpenseTypeId, t.Code, t.NameAr, t.NameEn,
-            t.IsCustodyAllowed, t.IsOperationCost, t.IsTaxDeductible, t.IsActive));
+            t.IsCustodyAllowed, t.IsOperationCost, t.IsTaxDeductible, t.IsActive, t.IsFreightAdvance, t.IsReceiptRequired));
     }
 
     // ═══════════════ CREATE ═══════════════
@@ -97,10 +99,14 @@ public class ExpenseTypesController : ControllerBase
 
         var t = new ExpenseType
         {
-            Code             = req.Code.Trim().ToUpperInvariant(),
+            Code             = string.IsNullOrWhiteSpace(req.Code)
+                                   ? await GenerateCodeAsync(ct)
+                                   : req.Code.Trim().ToUpperInvariant(),
             NameAr           = req.NameAr.Trim(),
             NameEn           = req.NameEn?.Trim(),
             IsCustodyAllowed = req.IsCustodyAllowed,
+            IsFreightAdvance = req.IsFreightAdvance,
+            IsReceiptRequired = req.IsReceiptRequired,
             IsOperationCost  = req.IsOperationCost,
             IsTaxDeductible  = req.IsTaxDeductible,
             IsActive         = req.IsActive
@@ -128,18 +134,23 @@ public class ExpenseTypesController : ControllerBase
 
         /* 🔴 نوع عليه مصروفات — الكود و«تشغيلي/إداري» مقفولين.
            تغييرهم هيقلب تصنيف مصروفات موجودة ويبوّظ قائمة الدخل. */
+        /* كود فارغ في التعديل = الكود الحالي يبقى كما هو */
+        var newCode = string.IsNullOrWhiteSpace(req.Code) ? t.Code : req.Code.Trim();
+
         if (usedBy > 0)
         {
-            if (!string.Equals(t.Code, req.Code.Trim(), StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(t.Code, newCode, StringComparison.OrdinalIgnoreCase))
                 return BadRequest(new { message = $"الكود مستخدم في {usedBy} مصروف — مايتغيرش. اعمل نوع جديد" });
             if (t.IsOperationCost != req.IsOperationCost)
                 return BadRequest(new { message = $"«{t.NameAr}» عليه {usedBy} مصروف — التصنيف (تشغيلي/إداري) مايتغيرش عشان مايبوّظش التقارير" });
         }
 
-        t.Code             = req.Code.Trim().ToUpperInvariant();
+        t.Code             = newCode.ToUpperInvariant();
         t.NameAr           = req.NameAr.Trim();
         t.NameEn           = req.NameEn?.Trim();
         t.IsCustodyAllowed = req.IsCustodyAllowed;
+        t.IsFreightAdvance = req.IsFreightAdvance;
+        t.IsReceiptRequired = req.IsReceiptRequired;
         t.IsOperationCost  = req.IsOperationCost;
         t.IsTaxDeductible  = req.IsTaxDeductible;
         t.IsActive         = req.IsActive;
@@ -169,22 +180,36 @@ public class ExpenseTypesController : ControllerBase
 
     // ═══════════════ validation ═══════════════
 
+    /// <summary>كود تلقائي لنوع مصروف جديد (EXP-HHmmss) مع ضمان عدم التكرار.</summary>
+    private async Task<string> GenerateCodeAsync(CancellationToken ct)
+    {
+        var code = "EXP-" + DateTime.Now.ToString("HHmmss");
+        var n = 1;
+        while (await _db.ExpenseTypes.AnyAsync(t => !t.IsDeleted && t.Code == code, ct))
+            code = $"EXP-{DateTime.Now:HHmmss}-{++n}";
+        return code;
+    }
+
     private async Task<string?> ValidateAsync(Upsert? r, CancellationToken ct, int? currentId = null)
     {
         if (r is null) return "البيانات غير كاملة";
-        if (string.IsNullOrWhiteSpace(r.Code))   return "الكود مطلوب";
         if (string.IsNullOrWhiteSpace(r.NameAr)) return "الاسم بالعربي مطلوب";
 
-        var code = r.Code.Trim();
-        if (code.Length > 30) return "الكود أطول من 30 حرف";
-        if (!System.Text.RegularExpressions.Regex.IsMatch(code, "^[A-Za-z0-9_-]+$"))
-            return "الكود بالحروف الإنجليزية والأرقام بس (زي FUEL أو RENT-2026)";
+        /* الكود اختياري (قرار المالك): فارغ = يُولّد تلقائيًا عند الحفظ.
+           وإن كُتب يدويًا تنطبق عليه نفس قواعد الصيغة وعدم التكرار. */
+        if (!string.IsNullOrWhiteSpace(r.Code))
+        {
+            var code = r.Code.Trim();
+            if (code.Length > 30) return "الكود أطول من 30 حرف";
+            if (!System.Text.RegularExpressions.Regex.IsMatch(code, "^[A-Za-z0-9_-]+$"))
+                return "الكود بالحروف الإنجليزية والأرقام بس (زي FUEL أو RENT-2026)";
 
-        var dup = await _db.ExpenseTypes.AnyAsync(t =>
-            !t.IsDeleted &&
-            t.Code.ToLower() == code.ToLower() &&
-            (currentId == null || t.ExpenseTypeId != currentId), ct);
-        if (dup) return $"الكود «{code.ToUpperInvariant()}» موجود أصلًا";
+            var dup = await _db.ExpenseTypes.AnyAsync(t =>
+                !t.IsDeleted &&
+                t.Code.ToLower() == code.ToLower() &&
+                (currentId == null || t.ExpenseTypeId != currentId), ct);
+            if (dup) return $"الكود «{code.ToUpperInvariant()}» موجود أصلًا";
+        }
 
         return null;
     }

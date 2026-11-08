@@ -52,6 +52,7 @@ public class OperationsController : ControllerBase
         string? Notes, List<RevenueLineDto>? RevenueLines);
 
     public record ListItem(long OperationId, string OperationNumber, string? BookingNumber,
+        string? BookingReference,
         string CustomerName, string? ServiceName, string? PortName, string? DestinationName,
         string? TahteeqPortName,
         DateTime? PlannedDate, string Status, decimal RevenueNet, decimal RevenueTax,
@@ -66,7 +67,7 @@ public class OperationsController : ControllerBase
         string? BookingNumber, int CustomerId, string CustomerName, int? ServiceId, int? PortId,
         int? DestinationId, int? TahteeqPortId, string? TahteeqPortName, int? TripTypeId, string? PlannedDate, decimal EstimatedCost,
         string? Notes, string Status, decimal RevenueNet, decimal RevenueTax, decimal ActualCost,
-        DateTime CreatedAt);
+        DateTime CreatedAt, string? AgentReference = null);
 
     public record DetailResponse(Detail Operation, List<RevenueLineItem> RevenueLines);
 
@@ -102,6 +103,7 @@ public class OperationsController : ControllerBase
             .Select(o => new ListItem(
                 o.OperationId, o.OperationNumber,
                 o.Booking != null ? o.Booking.BookingNumber : null,
+                o.Booking != null ? o.Booking.BookingReference : null,
                 o.Customer.NameAr,
                 o.Service != null ? o.Service.NameAr : null,
                 o.Port != null ? o.Port.NameAr : null,
@@ -115,6 +117,72 @@ public class OperationsController : ControllerBase
                 _db.TripOperations
                     .Where(to => to.OperationId == o.OperationId && to.Status != "Cancelled")
                     .Select(to => to.Trip.TripNumber).FirstOrDefault()))
+            .ToListAsync(ct);
+
+        return Ok(rows);
+    }
+
+    // ═══════════════ شاشة طلبات النقل الموحدة: كل الطلبات ═══════════════
+
+    public record RequestItem(long OperationId, string OperationNumber,
+        long? BookingId, string? BookingNumber, string? AgentName, string? AgentReference,
+        string CustomerName, string? ServiceName, string? PortName, string? DestinationName,
+        string? TahteeqPortName, DateTime? PlannedDate, string Status,
+        int ContainersQty, int TripsCount,
+        decimal RevenueNet, decimal RevenueTax, decimal ActualCost, DateTime CreatedAt,
+        long? StartTripId, string? StartTripNumber,
+        long? CompleteTripId, string? CompleteTripNumber, bool CanCloseOp);
+
+    [HttpGet("requests")]
+    [Authorize(Policy = "PERM:OPERATION.VIEW")]
+    public async Task<IActionResult> Requests(int take = 300, CancellationToken ct = default)
+    {
+        if (take <= 0 || take > 1000) take = 300;
+
+        var rows = await _db.Operations.AsNoTracking()
+            .Where(o => !o.IsDeleted)
+            .OrderByDescending(o => o.OperationId)
+            .Take(take)
+            .Select(o => new RequestItem(
+                o.OperationId, o.OperationNumber,
+                o.BookingId,
+                o.Booking != null ? o.Booking.BookingNumber : null,
+                o.Booking != null && o.Booking.ShippingAgent != null ? o.Booking.ShippingAgent.NameAr : null,
+                o.Booking != null ? o.Booking.BookingReference : null,
+                o.Customer.NameAr,
+                o.Service != null ? o.Service.NameAr : null,
+                o.Port != null ? o.Port.NameAr : null,
+                o.Destination != null ? o.Destination.NameAr : null,
+                o.TahteeqPort != null ? o.TahteeqPort.NameAr : null,
+                o.PlannedDate, o.Status,
+                o.Booking != null ? o.Booking.BookingContainerLines.Sum(l => l.RequestedQty) : 0,
+                _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "Cancelled"),
+                o.RevenueNet, o.RevenueTax, o.ActualCost, o.CreatedAt,
+                _db.TripOperations
+                    .Where(to => to.OperationId == o.OperationId && to.Status != "Cancelled"
+                                 && (to.Trip.Status == "Planned" || to.Trip.Status == "Assigned"))
+                    .OrderBy(to => to.Trip.PlannedStartAt ?? DateTime.MaxValue).ThenBy(to => to.TripId)
+                    .Select(to => (long?)to.TripId).FirstOrDefault(),
+                _db.TripOperations
+                    .Where(to => to.OperationId == o.OperationId && to.Status != "Cancelled"
+                                 && (to.Trip.Status == "Planned" || to.Trip.Status == "Assigned"))
+                    .OrderBy(to => to.Trip.PlannedStartAt ?? DateTime.MaxValue).ThenBy(to => to.TripId)
+                    .Select(to => to.Trip.TripNumber).FirstOrDefault(),
+                _db.TripOperations
+                    .Where(to => to.OperationId == o.OperationId && to.Status != "Cancelled"
+                                 && to.Trip.Status == "Started")
+                    .OrderBy(to => to.Trip.ActualStartAt ?? DateTime.MaxValue).ThenBy(to => to.TripId)
+                    .Select(to => (long?)to.TripId).FirstOrDefault(),
+                _db.TripOperations
+                    .Where(to => to.OperationId == o.OperationId && to.Status != "Cancelled"
+                                 && to.Trip.Status == "Started")
+                    .OrderBy(to => to.Trip.ActualStartAt ?? DateTime.MaxValue).ThenBy(to => to.TripId)
+                    .Select(to => to.Trip.TripNumber).FirstOrDefault(),
+                (o.Status == "Delivered" || o.Status == "ExpensesPending" ||
+                 o.Status == "CustodyPending" || o.Status == "ReadyToClose")
+                && _db.TripOperations.Any(to => to.OperationId == o.OperationId && to.Status != "Cancelled")
+                && !_db.TripOperations.Any(to => to.OperationId == o.OperationId && to.Status != "Cancelled"
+                                 && to.Trip.Status != "Completed" && to.Trip.Status != "Cancelled")))
             .ToListAsync(ct);
 
         return Ok(rows);
@@ -135,10 +203,16 @@ public class OperationsController : ControllerBase
             .FirstOrDefaultAsync(ct) ?? "";
 
         string? bookingNumber = null;
+        string? agentReference = null;
         if (o.BookingId is not null)
-            bookingNumber = await _db.Bookings.AsNoTracking()
-                .Where(b => b.BookingId == o.BookingId).Select(b => b.BookingNumber)
+        {
+            var bk = await _db.Bookings.AsNoTracking()
+                .Where(b => b.BookingId == o.BookingId)
+                .Select(b => new { b.BookingNumber, b.BookingReference })
                 .FirstOrDefaultAsync(ct);
+            bookingNumber  = bk?.BookingNumber;
+            agentReference = bk?.BookingReference;
+        }
 
         string? tahteeqPortName = null;
         if (o.TahteeqPortId is not null)
@@ -159,7 +233,7 @@ public class OperationsController : ControllerBase
             o.CustomerId, customerName, o.ServiceId, o.PortId, o.DestinationId,
             o.TahteeqPortId, tahteeqPortName, o.TripTypeId,
             o.PlannedDate?.ToString("yyyy-MM-ddTHH:mm"), o.EstimatedCost, o.Notes, o.Status,
-            o.RevenueNet, o.RevenueTax, o.ActualCost, o.CreatedAt);
+            o.RevenueNet, o.RevenueTax, o.ActualCost, o.CreatedAt, agentReference);
 
         return Ok(new DetailResponse(detail, lines));
     }
@@ -196,19 +270,27 @@ public class OperationsController : ControllerBase
 
         var on = DateOnly.TryParse(date, out var d) ? d : DateOnly.FromDateTime(DateTime.UtcNow);
 
-        // الأبعاد الاختيارية: القاعدة الفاضية (NULL) = "أي قيمة" → بتطبق على كل الحالات
+        // الأبعاد الاختيارية: القاعدة الفاضية (NULL) = "أي قيمة" → بتطبق على كل الحالات.
+        // 🔴 قاعدة تابعة لقائمة أسعار: القائمة لازم تكون سارية هي كمان — قفل القائمة
+        //    (ValidTo) أو تعطيلها أو حذفها بيوقف قواعدها فورًا.
         var rules = await _db.CustomerPriceRules.AsNoTracking()
             .Where(r => !r.IsDeleted && r.IsActive &&
                         r.CustomerId == customerId && r.ServiceId == serviceId &&
-                        r.ValidFrom <= on && (r.ValidTo == null || r.ValidTo >= on))
+                        r.ValidFrom <= on && (r.ValidTo == null || r.ValidTo >= on) &&
+                        (r.PriceListId == null || _db.PriceLists.Any(p =>
+                            p.PriceListId == r.PriceListId && !p.IsDeleted && p.IsActive &&
+                            p.ValidFrom <= on && (p.ValidTo == null || p.ValidTo >= on))))
             .ToListAsync(ct);
 
+        /* 🔴 البُعد اللي الطلب ما حدّدوش: القاعدة اللي محدّداه **ما تطابقش** —
+           قبل كده كانت بتطابق وبتكسب بترتيب الأخصّية، فطلب ناقص كان بياخد
+           سعر قاعدة مش بتاعته. القاعدة العامة (البُعد فاضي) بس هي اللي تطابق. */
         var match = rules
-            .Where(r => portId == null || r.PortId == null || r.PortId == portId)
-            .Where(r => destinationId == null || r.DestinationId == null || r.DestinationId == destinationId)
-            .Where(r => tahteeqPortId == null || r.TahteeqPortId == null || r.TahteeqPortId == tahteeqPortId)
-            .Where(r => tripTypeId == null || r.TripTypeId == null || r.TripTypeId == tripTypeId)
-            .Where(r => containerTypeId == null || r.ContainerTypeId == null || r.ContainerTypeId == containerTypeId)
+            .Where(r => r.PortId == null || (portId != null && r.PortId == portId))
+            .Where(r => r.DestinationId == null || (destinationId != null && r.DestinationId == destinationId))
+            .Where(r => r.TahteeqPortId == null || (tahteeqPortId != null && r.TahteeqPortId == tahteeqPortId))
+            .Where(r => r.TripTypeId == null || (tripTypeId != null && r.TripTypeId == tripTypeId))
+            .Where(r => r.ContainerTypeId == null || (containerTypeId != null && r.ContainerTypeId == containerTypeId))
             // القاعدة الأخص (أبعاد معبّاة أكتر) تكسب، وبعدين الأولوية (الرقم الأصغر أعلى)
             .OrderByDescending(r => (r.PortId is not null ? 1 : 0) + (r.DestinationId is not null ? 1 : 0)
                                   + (r.TahteeqPortId is not null ? 1 : 0)
@@ -345,6 +427,12 @@ public class OperationsController : ControllerBase
         var err = await ValidateAsync(req, ct);
         if (err is not null) return BadRequest(new { message = err });
 
+        /* 🔴 حجز ↔ عملية = 1:1 (قرار المالك): الحجز الواحد له عملية واحدة
+           هي ملف الشغلانة، وجواها كل رحلاته */
+        if (req.BookingId is not null &&
+            await _db.Operations.AnyAsync(x => x.BookingId == req.BookingId && !x.IsDeleted, ct))
+            return BadRequest(new { message = "الحجز ده له عملية بالفعل — العملية الواحدة هي ملف الحجز، افتحها واشتغل جواها" });
+
         var branchId = await ResolveBranchIdAsync(ct);
         if (branchId is null) return BadRequest(new { message = "مافيش فرع معرّف في النظام" });
 
@@ -372,6 +460,11 @@ public class OperationsController : ControllerBase
             _db.Operations.Add(o);
             await _db.SaveChangesAsync(ct);
 
+            /* حاويات الحجز الفعلية تتنسخ لعملية — عملية من غير حاوياتها
+               أساس التوزيع بعدد الحاويات وملف العملية بيبقوا فاضيين */
+            if (req.BookingId is not null)
+                await CopyBookingContainersAsync(o.OperationId, req.BookingId.Value, ct);
+
             AddRevenueLines(o.OperationId, req.RevenueLines!, CurrentUserId());
             await FillTaxRateSnapshotsAsync(ct);
             await _db.SaveChangesAsync(ct);
@@ -391,6 +484,475 @@ public class OperationsController : ControllerBase
             message = $"✅ اتفتحت العملية برقم {o.OperationNumber}" });
     }
 
+    // ═══════════════ إنشاء سريع: حجز الوكيل + عمليته في خطوة واحدة ═══════════════
+
+    public record QuickLineDto(int ContainerTypeId, int RequestedQty, decimal? GuaranteePerContainer,
+        decimal? WeightKg = null, string? Notes = null);
+
+    public record QuickCreateRequest(
+        int? ShippingAgentId, string? BookingReference, string? BLNumber,
+        int CustomerId, int? ServiceId, int? PortId, int? DestinationId, int? TahteeqPortId,
+        int? TripTypeId, string? Date, int? GuaranteeSupplierId, string? Notes,
+        decimal? UnitPrice, List<QuickLineDto>? Lines,
+        int? EndCustomerId = null, int? ContactId = null, string? CustomerReference = null,
+        List<QuickTripDto>? Trips = null,
+        List<QuickDetailDto>? ContainerDetails = null);
+
+    /* تفصيلة حاوية فردية (برقمها) — نفس حقول تفاصيل الحجز الأساسية،
+       وLineIndex هو موضع السطر الأم داخل مصفوفة Lines المرسلة */
+    public record QuickDetailDto(long? ContainerId, string? ContainerNumber, string? SealNumber,
+        string? ShippingLine, string? BLNumber, string? BookingReference, decimal? WeightKg, string? Notes,
+        int? LineIndex = null);
+
+    public record QuickTripDto(int DriverId, int VehicleId, int? TrailerId,
+        decimal? FreightAmount, string? PlannedStartAt);
+
+    [HttpPost("quick-create")]
+    [Authorize(Policy = "PERM:OPERATION.CREATE")]
+    [Authorize(Policy = "PERM:BOOKING.CREATE")]
+    public async Task<IActionResult> QuickCreate([FromBody] QuickCreateRequest req, CancellationToken ct)
+    {
+        /* رقم حجز الوكيل هو أساس الشغلانة (قرار المالك) — من غيره مفيش إنشاء */
+        if (string.IsNullOrWhiteSpace(req.BookingReference))
+            return BadRequest(new { message = "رقم حجز الوكيل مطلوب — هو أساس الشغلانة" });
+        if (req.CustomerId <= 0)
+            return BadRequest(new { message = "العميل مطلوب" });
+        var lines = (req.Lines ?? new()).Where(l => l.ContainerTypeId > 0 && l.RequestedQty >= 1).ToList();
+        if (lines.Count == 0)
+            return BadRequest(new { message = "ضيف سطر حاويات واحد على الأقل (نوع + عدد)" });
+
+        /* نفس حجز الوكيل ما يتدخلش مرتين */
+        var dup = await _db.Bookings.AnyAsync(b => !b.IsDeleted &&
+            b.ShippingAgentId == req.ShippingAgentId &&
+            b.BookingReference == req.BookingReference.Trim(), ct);
+        if (dup)
+            return BadRequest(new { message = "رقم حجز الوكيل ده متسجل قبل كده لنفس الوكيل — راجع الحجوزات" });
+
+        var branchId = await ResolveBranchIdAsync(ct);
+        if (branchId is null) return BadRequest(new { message = "مافيش فرع معرّف في النظام" });
+
+        /* رحلات التعيين وقت التسجيل (اختيارية): نفس قاعدة تعارض الموارد بتاعة
+           شاشة الرحلات — عربية/سائق محجوزين في نفس اليوم أو طالعين على الطريق */
+        var qTrips = (req.Trips ?? new()).Where(t => t.DriverId > 0 && t.VehicleId > 0).ToList();
+        var seenVeh = new HashSet<(int, DateTime)>();
+        var seenDrv = new HashSet<(int, DateTime)>();
+        foreach (var t in qTrips)
+        {
+            var when = Dt(t.PlannedStartAt) ?? Dt(req.Date);
+            if (when is not null)
+            {
+                if (!seenVeh.Add((t.VehicleId, when.Value.Date)) || !seenDrv.Add((t.DriverId, when.Value.Date)))
+                    return BadRequest(new { message = "نفس العربية أو السائق متكررين في يوم واحد جوه نفس الطلب" });
+                var conflict = await QuickTripConflictAsync(t.DriverId, t.VehicleId, when, ct);
+                if (conflict is not null) return BadRequest(new { message = conflict });
+            }
+        }
+
+        var date = DateOnly.TryParse(req.Date, out var dd) ? dd : DateOnly.FromDateTime(DateTime.Today);
+
+        var b = new Booking
+        {
+            BookingNumber       = await _numbers.NextAsync("BOOKING", ct),
+            BranchId            = branchId.Value,
+            CustomerId          = req.CustomerId,
+            RequestedDate       = date,
+            ServiceId           = req.ServiceId,
+            PortId              = req.PortId,
+            DestinationId       = req.DestinationId,
+            TahteeqPortId       = req.TahteeqPortId,
+            TripTypeId          = req.TripTypeId,
+            BookingReference    = B(req.BookingReference),
+            BLNumber            = B(req.BLNumber),
+            EndCustomerId       = req.EndCustomerId,
+            ContactId           = req.ContactId,
+            CustomerReference   = B(req.CustomerReference),
+            ShippingAgentId     = req.ShippingAgentId,
+            GuaranteeSupplierId = req.GuaranteeSupplierId,
+            Notes               = B(req.Notes),
+            /* حجز الوكيل موجود فعليًا بره — بييجي مؤكد جاهز للشغل */
+            Status              = "Confirmed",
+            CreatedBy           = CurrentUserId()
+        };
+
+        var o = new Operation
+        {
+            OperationNumber = await _numbers.NextAsync("OPERATION", ct),
+            BranchId        = branchId.Value,
+            CustomerId      = req.CustomerId,
+            ServiceId       = req.ServiceId,
+            PortId          = req.PortId,
+            DestinationId   = req.DestinationId,
+            TahteeqPortId   = req.TahteeqPortId,
+            TripTypeId      = req.TripTypeId,
+            PlannedDate     = date.ToDateTime(TimeOnly.MinValue),
+            Notes           = B(req.Notes),
+            Status          = "Pending",
+            CreatedBy       = CurrentUserId()
+        };
+
+        /* أرقام الرحلات تُجلب هنا — قبل فتح المعاملة — مثل رقمي الحجز والعملية:
+           خدمة الترقيم تنفّذ أمرها على الاتصال دون ربطه بالمعاملة الجارية،
+           فاستدعاؤها داخل المعاملة يُسقط الإنشاء كله بخطأ عام */
+        var tripNumbers = new List<string>();
+        foreach (var _ in qTrips)
+            tripNumbers.Add(await _numbers.NextAsync("TRIP", ct));
+
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            _db.Bookings.Add(b);
+            await _db.SaveChangesAsync(ct);
+
+            var no = 0;
+            var createdLines = new List<BookingContainerLine>();
+            foreach (var l in lines)
+            {
+                var line = new BookingContainerLine
+                {
+                    BookingId       = b.BookingId,
+                    LineNo          = ++no,
+                    ContainerTypeId = l.ContainerTypeId,
+                    RequestedQty    = l.RequestedQty,
+                    AssignedQty     = 0,
+                    WeightKg        = l.WeightKg is > 0 ? l.WeightKg : null,
+                    Notes           = B(l.Notes),
+                    GuaranteePerContainer = l.GuaranteePerContainer is > 0 ? l.GuaranteePerContainer : null,
+                    Status          = "Pending",
+                    CreatedBy       = CurrentUserId()
+                };
+                _db.BookingContainerLines.Add(line);
+                createdLines.Add(line);
+            }
+            await _db.SaveChangesAsync(ct);
+
+            /* تفاصيل الحاويات الفردية (بأرقامها) — تُربط بسطورها بفهرس Lines،
+               بنفس قواعد شاشة الحجز الأساسية: سطر بلا رقم وبلا حاوية يُتخطى */
+            if (req.ContainerDetails is { Count: > 0 })
+            {
+                foreach (var d in req.ContainerDetails)
+                {
+                    if (string.IsNullOrWhiteSpace(d.ContainerNumber) && d.ContainerId is null) continue;
+                    var parent = (d.LineIndex is int ix && ix >= 0 && ix < createdLines.Count)
+                        ? createdLines[ix]
+                        : (createdLines.Count == 1 ? createdLines[0] : null);
+                    if (parent is null) continue;
+                    _db.BookingContainerDetails.Add(new BookingContainerDetail
+                    {
+                        BookingContainerLineId = parent.BookingContainerLineId,
+                        ContainerId            = d.ContainerId,
+                        ContainerNumberText    = B(d.ContainerNumber),
+                        SealNumber             = B(d.SealNumber),
+                        ShippingLine           = B(d.ShippingLine),
+                        Blnumber               = B(d.BLNumber),
+                        BookingReference       = B(d.BookingReference),
+                        WeightKg               = d.WeightKg is > 0 ? d.WeightKg : null,
+                        Status                 = "Pending",
+                        Notes                  = B(d.Notes),
+                        CreatedBy              = CurrentUserId()
+                    });
+                }
+            }
+
+            o.BookingId = b.BookingId;
+            _db.Operations.Add(o);
+            await _db.SaveChangesAsync(ct);
+
+            /* سطر الإيراد: بالسعر المقترح المعدّل من المستخدم، وبيانه من خط السير */
+            if (req.ServiceId is int svcId && req.UnitPrice is > 0)
+            {
+                var desc = await BuildRouteDescAsync(req.PortId, req.DestinationId, req.TahteeqPortId, ct);
+                var svcTax = await _db.Services.AsNoTracking()
+                    .Where(s => s.ServiceId == svcId).Select(s => s.TaxRateId).FirstOrDefaultAsync(ct);
+                AddRevenueLines(o.OperationId,
+                    new List<RevenueLineDto> { new(svcId, desc, 1, req.UnitPrice.Value, 0, svcTax, null) },
+                    CurrentUserId());
+                await FillTaxRateSnapshotsAsync(ct);
+                await _db.SaveChangesAsync(ct);
+            }
+
+            /* رحلات التعيين: بتتخلق مربوطة بالعملية، وخط السير والنوع وارثين منها */
+            var seq = 0;
+            foreach (var t in qTrips)
+            {
+                var trip = new Trip
+                {
+                    TripNumber     = tripNumbers[seq],
+                    BranchId       = branchId.Value,
+                    DriverId       = t.DriverId,
+                    VehicleId      = t.VehicleId,
+                    TrailerId      = t.TrailerId,
+                    TripTypeId     = o.TripTypeId,
+                    PortId         = o.PortId,
+                    DestinationId  = o.DestinationId,
+                    TahteeqPortId  = o.TahteeqPortId,
+                    PlannedStartAt = Dt(t.PlannedStartAt) ?? o.PlannedDate,
+                    FreightAmount  = t.FreightAmount is > 0 ? t.FreightAmount : null,
+                    Status         = "Planned",
+                    CreatedBy      = CurrentUserId()
+                };
+                _db.Trips.Add(trip);
+                await _db.SaveChangesAsync(ct);
+
+                _db.TripOperations.Add(new TripOperation
+                {
+                    TripId      = trip.TripId,
+                    OperationId = o.OperationId,
+                    SequenceNo  = ++seq,
+                    Status      = "Assigned",
+                    CreatedBy   = CurrentUserId()
+                });
+                await _db.SaveChangesAsync(ct);
+            }
+
+            /* الحاويات الفعلية تُنسخ للعملية فورًا — مثل إنشاء العملية الأساسي —
+               فتظهر في ملف العملية من أول فتح */
+            await CopyBookingContainersAsync(o.OperationId, b.BookingId, ct);
+
+            await TouchBookingAsync(b.BookingId, ct);
+            await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
+
+        await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "Operation", null,
+            description: $"إنشاء سريع — حجز وكيل {req.BookingReference}", ct: ct);
+
+        return Ok(new
+        {
+            bookingId = b.BookingId, bookingNumber = b.BookingNumber,
+            operationId = o.OperationId, operationNumber = o.OperationNumber,
+            message = $"✅ اتفتح ملف العملية {o.OperationNumber} على حجز الوكيل {req.BookingReference}"
+        });
+    }
+
+    /* نفس قاعدة TripsController.ResourceConflictAsync — منسوخة هنا عشان الإنشاء
+       السريع ما يفتحش رحلات متعارضة (الكنترولر التاني خاص بيه) */
+    private async Task<string?> QuickTripConflictAsync(int driverId, int vehicleId,
+        DateTime? plannedStart, CancellationToken ct)
+    {
+        var active = await _db.Trips.AsNoTracking()
+            .Where(t => !t.IsDeleted && t.Status != "Cancelled" && t.Status != "Completed" &&
+                        (t.VehicleId == vehicleId || t.DriverId == driverId))
+            .Select(t => new { t.TripNumber, t.VehicleId, t.DriverId, t.PlannedStartAt, t.ActualStartAt, t.ActualEndAt })
+            .ToListAsync(ct);
+
+        foreach (var t in active)
+        {
+            var onRoad = t.ActualStartAt is not null && t.ActualEndAt is null;
+            var sameDay = plannedStart is not null && t.PlannedStartAt is not null &&
+                          t.PlannedStartAt.Value.Date == plannedStart.Value.Date;
+            if (!onRoad && !sameDay) continue;
+
+            if (t.VehicleId == vehicleId)
+                return $"العربية دي محجوزة على الرحلة {t.TripNumber}" +
+                       (onRoad ? " — بدأت ولسه ما رجعتش" : $" في نفس اليوم ({plannedStart:yyyy-MM-dd})");
+            return $"السائق ده على الرحلة {t.TripNumber}" +
+                   (onRoad ? " — بدأت ولسه ما رجعتش" : $" في نفس اليوم ({plannedStart:yyyy-MM-dd})");
+        }
+        return null;
+    }
+
+    private async Task<string?> BuildRouteDescAsync(int? portId, int? destId, int? tahId, CancellationToken ct)
+    {
+        async Task<string?> Name(int? id, bool isPort) => id is null ? null :
+            isPort
+                ? await _db.Ports.AsNoTracking().Where(p => p.PortId == id).Select(p => p.NameAr).FirstOrDefaultAsync(ct)
+                : await _db.Destinations.AsNoTracking().Where(p => p.DestinationId == id).Select(p => p.NameAr).FirstOrDefaultAsync(ct);
+
+        var from = await Name(portId, true);
+        var to   = await Name(destId, false);
+        var tah  = await Name(tahId, true);
+        if (from is null && to is null && tah is null) return null;
+        var s = from is not null && to is not null ? $"من {from} إلى {to}"
+              : from is not null ? $"من {from}"
+              : to is not null ? $"إلى {to}" : "";
+        if (tah is not null) s = s.Length > 0 ? $"{s} — تعتيق {tah}" : $"تعتيق {tah}";
+        return s;
+    }
+
+    // ═══════════════ ملف العملية: رحلاتها وحاوياتها ═══════════════
+
+    public record OpTripLine(long TripId, string TripNumber, string DriverName, string VehiclePlate,
+        string Status, DateTime? PlannedStartAt, decimal? FreightAmount, int SequenceNo);
+
+    [HttpGet("{id:long}/trips")]
+    [Authorize(Policy = "PERM:OPERATION.VIEW")]
+    public async Task<IActionResult> OperationTrips(long id, CancellationToken ct)
+    {
+        var rows = await _db.TripOperations.AsNoTracking()
+            .Where(to => to.OperationId == id)
+            .OrderBy(to => to.SequenceNo)
+            .Select(to => new OpTripLine(
+                to.Trip.TripId, to.Trip.TripNumber, to.Trip.Driver.FullName, to.Trip.Vehicle.PlateNumber,
+                to.Trip.Status, to.Trip.PlannedStartAt, to.Trip.FreightAmount, to.SequenceNo))
+            .ToListAsync(ct);
+        return Ok(rows);
+    }
+
+    public record OpContainerLine(long OperationContainerId, string? ContainerNumber, string? TypeName,
+        string Status, string? BLNumber);
+
+    public record BookingLineView(string? TypeName, int RequestedQty, decimal? WeightKg,
+        decimal? GuaranteePerContainer, string? Notes);
+
+    /* سطور الحاويات كما سُجلت في الحجز (النوع والعدد والوزن والضمان) —
+       تُعرض في ملف العملية بجانب الحاويات الفعلية */
+    [HttpGet("{id:long}/booking-lines")]
+    [Authorize(Policy = "PERM:OPERATION.VIEW")]
+    public async Task<IActionResult> BookingLines(long id, CancellationToken ct)
+    {
+        var o = await _db.Operations.AsNoTracking()
+            .Where(x => x.OperationId == id && !x.IsDeleted)
+            .Select(x => new { x.BookingId }).FirstOrDefaultAsync(ct);
+        if (o is null) return NotFound(new { message = "العملية غير موجودة" });
+        if (o.BookingId is null) return Ok(new List<BookingLineView>());
+
+        var rows = await _db.BookingContainerLines.AsNoTracking()
+            .Where(l => l.BookingId == o.BookingId.Value)
+            .OrderBy(l => l.LineNo)
+            .Select(l => new BookingLineView(
+                l.ContainerType != null ? l.ContainerType.NameAr : null,
+                l.RequestedQty, l.WeightKg, l.GuaranteePerContainer, l.Notes))
+            .ToListAsync(ct);
+        return Ok(rows);
+    }
+
+    [HttpGet("{id:long}/containers")]
+    [Authorize(Policy = "PERM:OPERATION.VIEW")]
+    public async Task<IActionResult> OperationContainers(long id, CancellationToken ct)
+    {
+        var rows = await _db.OperationContainers.AsNoTracking()
+            .Where(oc => oc.OperationId == id)
+            .OrderBy(oc => oc.MovementSequence)
+            .Select(oc => new OpContainerLine(
+                oc.OperationContainerId,
+                oc.BookingContainerDetail != null ? oc.BookingContainerDetail.ContainerNumberText
+                    : oc.Container != null ? oc.Container.ContainerNumber : null,
+                oc.BookingContainerDetail != null ? oc.BookingContainerDetail.BookingContainerLine.ContainerType.NameAr : null,
+                oc.Status, oc.Blnumber))
+            .ToListAsync(ct);
+        return Ok(rows);
+    }
+
+    public record OpContainerAdd(string? ContainerNumber, int ContainerTypeId, string? BLNumber);
+    public record OpContainerEdit(string? BLNumber);
+
+    /* إضافة حاوية مباشرة من ملف العملية: سجل الحاوية الرئيسي بيتعمل لو جديد
+       (ملكية خط ملاحي زي ما فورم الحاويات بيبدأ)، والسطر بيتربط بالعملية */
+    [HttpPost("{id:long}/containers")]
+    [Authorize(Policy = "PERM:OPERATION.EDIT")]
+    public async Task<IActionResult> AddOperationContainer(long id, [FromBody] OpContainerAdd req, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.ContainerNumber))
+            return BadRequest(new { message = "رقم الحاوية مطلوب" });
+        if (req.ContainerTypeId <= 0)
+            return BadRequest(new { message = "اختار نوع الحاوية" });
+
+        var o = await _db.Operations.FirstOrDefaultAsync(x => x.OperationId == id && !x.IsDeleted, ct);
+        if (o is null) return NotFound(new { message = "العملية مش موجودة" });
+        if (o.Status is "Closed" or "Cancelled")
+            return BadRequest(new { message = "العملية مقفولة أو ملغاة — مفيش تعديل عليها" });
+
+        var number = req.ContainerNumber.Trim().ToUpperInvariant();
+        var container = await _db.Containers.FirstOrDefaultAsync(c => c.ContainerNumber == number, ct);
+        if (container is null)
+        {
+            container = new Container
+            {
+                ContainerNumber = number,
+                ContainerTypeId = req.ContainerTypeId,
+                OwnerType       = "ShippingLine",
+                CreatedBy       = CurrentUserId()
+            };
+            _db.Containers.Add(container);
+            await _db.SaveChangesAsync(ct);
+        }
+
+        var seq = await _db.OperationContainers.CountAsync(oc => oc.OperationId == id, ct);
+        _db.OperationContainers.Add(new OperationContainer
+        {
+            OperationId      = id,
+            ContainerId      = container.ContainerId,
+            MovementSequence = seq + 1,
+            Blnumber         = B(req.BLNumber),
+            Status           = "Planned",
+            CreatedBy        = CurrentUserId()
+        });
+        await _db.SaveChangesAsync(ct);
+        return Ok(new { message = $"✅ اتضافت الحاوية {number} لملف العملية" });
+    }
+
+    /* تعديل بوليصة سطر حاوية من ملف العملية (الرقم نفسه بيانات مستند الوكيل —
+       بيتحرر من الحجز/سجل الحاويات) */
+    [HttpPut("{id:long}/containers/{cid:long}")]
+    [Authorize(Policy = "PERM:OPERATION.EDIT")]
+    public async Task<IActionResult> EditOperationContainer(long id, long cid, [FromBody] OpContainerEdit req, CancellationToken ct)
+    {
+        var oc = await _db.OperationContainers
+            .FirstOrDefaultAsync(x => x.OperationContainerId == cid && x.OperationId == id, ct);
+        if (oc is null) return NotFound(new { message = "سطر الحاوية مش موجود" });
+        oc.Blnumber = B(req.BLNumber);
+        await _db.SaveChangesAsync(ct);
+        return Ok(new { message = "✅ اتحفظ تعديل البوليصة" });
+    }
+
+    /* مزامنة حاويات الحجز اللي اتضافت بعد إنشاء العملية — النسخ الأصلي بيحصل
+       وقت الإنشاء بس، وده بيجيب أي تفاصيل حاويات جديدة من غير تكرار القديم */
+    [HttpPost("{id:long}/sync-containers")]
+    [Authorize(Policy = "PERM:OPERATION.EDIT")]
+    public async Task<IActionResult> SyncContainers(long id, CancellationToken ct)
+    {
+        var o = await _db.Operations.FirstOrDefaultAsync(x => x.OperationId == id && !x.IsDeleted, ct);
+        if (o is null) return NotFound(new { message = "العملية مش موجودة" });
+        if (o.BookingId is null)
+            return BadRequest(new { message = "العملية دي من غير حجز — مفيش مصدر للمزامنة" });
+
+        var copiedIds = await _db.OperationContainers.AsNoTracking()
+            .Where(oc => oc.OperationId == id && oc.BookingContainerDetailId != null)
+            .Select(oc => oc.BookingContainerDetailId!.Value).ToListAsync(ct);
+
+        var missing = await _db.BookingContainerDetails.AsNoTracking()
+            .Where(d => d.BookingContainerLine.BookingId == o.BookingId &&
+                        !copiedIds.Contains(d.BookingContainerDetailId))
+            .OrderBy(d => d.BookingContainerDetailId)
+            .Select(d => new { d.BookingContainerDetailId, d.ContainerId, d.Blnumber })
+            .ToListAsync(ct);
+
+        var seq = await _db.OperationContainers.CountAsync(oc => oc.OperationId == id, ct);
+        foreach (var d in missing)
+        {
+            _db.OperationContainers.Add(new OperationContainer
+            {
+                OperationId              = id,
+                ContainerId              = d.ContainerId,
+                BookingContainerDetailId = d.BookingContainerDetailId,
+                MovementSequence         = ++seq,
+                Blnumber                 = d.Blnumber,
+                Status                   = "Planned",
+                CreatedBy                = CurrentUserId()
+            });
+        }
+        if (missing.Count > 0) await _db.SaveChangesAsync(ct);
+
+        /* رسالة صادقة: «لا جديد» تختلف عن «لا توجد أرقام حاويات مسجلة أصلًا» */
+        var totalDetails = missing.Count > 0 ? -1
+            : await _db.BookingContainerDetails.AsNoTracking()
+                .CountAsync(d => d.BookingContainerLine.BookingId == o.BookingId, ct);
+
+        return Ok(new
+        {
+            added = missing.Count,
+            message = missing.Count > 0
+                ? $"✅ اتزامنت {missing.Count} حاوية جديدة من الحجز"
+                : totalDetails == 0
+                    ? "لا توجد أرقام حاويات مسجلة في الحجز حتى الآن — سجّلها من شاشة الطلب، أو أضف الحاويات مباشرة من هذا الملف"
+                    : "الحاويات متزامنة بالفعل — مفيش جديد في الحجز"
+        });
+    }
+
     // ═══════════════ UPDATE ═══════════════
 
     [HttpPut("{id:long}")]
@@ -406,7 +968,7 @@ public class OperationsController : ControllerBase
         if (o.Status is "Closed" or "Cancelled")
             {
             await _audit.LogAsync(FastCom.Server.Services.AuditActions.Update, "Operation", null, description: "تعديل عملية", ct: ct);
-            
+            return BadRequest(new { message = "العملية مقفولة أو ملغية — ماينفعش تتعدل" });
             }
 
         o.CustomerId    = req.CustomerId;
@@ -447,6 +1009,33 @@ public class OperationsController : ControllerBase
         }
 
         return Ok(new { message = "✅ تم حفظ التعديل" });
+    }
+
+    /* نسخ حاويات الحجز الفعلية (BookingContainerDetails) إلى حاويات العملية —
+       كل تفصيلة حاوية بتبقى صف حركة على العملية مربوط بمصدره */
+    private async Task CopyBookingContainersAsync(long operationId, long bookingId, CancellationToken ct)
+    {
+        var details = await _db.BookingContainerDetails.AsNoTracking()
+            .Where(d => d.BookingContainerLine.BookingId == bookingId)
+            .OrderBy(d => d.BookingContainerDetailId)
+            .Select(d => new { d.BookingContainerDetailId, d.ContainerId, d.Blnumber })
+            .ToListAsync(ct);
+
+        var seq = 0;
+        foreach (var d in details)
+        {
+            _db.OperationContainers.Add(new OperationContainer
+            {
+                OperationId              = operationId,
+                ContainerId              = d.ContainerId,
+                BookingContainerDetailId = d.BookingContainerDetailId,
+                MovementSequence         = ++seq,
+                Blnumber                 = d.Blnumber,
+                Status                   = "Planned",
+                CreatedBy                = CurrentUserId()
+            });
+        }
+        if (details.Count > 0) await _db.SaveChangesAsync(ct);
     }
 
     private void AddRevenueLines(long operationId, List<RevenueLineDto> lines, int userId)
@@ -545,7 +1134,7 @@ public class OperationsController : ControllerBase
         if (o.Status is not ("Delivered" or "ExpensesPending" or "CustodyPending" or "ReadyToClose"))
             {
             await _audit.LogAsync(FastCom.Server.Services.AuditActions.Close, "Operation", null, description: "إقفال عملية", ct: ct);
-            
+            return BadRequest(new { message = $"حالة العملية «{o.Status}» لا تسمح بالإقفال — الإقفال من الحالات الجاهزة للإقفال بس" });
             }
 
         // CK_Expenses_Status: Draft / Posted / Cancelled — الـ Draft لسه مااتأكدش
@@ -677,7 +1266,7 @@ public class OperationsController : ControllerBase
         if (o.Status is not ("Pending" or "Cancelled"))
             {
             await _audit.LogAsync(FastCom.Server.Services.AuditActions.Delete, "Operation", null, description: "حذف عملية", ct: ct);
-            
+            return BadRequest(new { message = "حذف العملية للمعلّقة أو الملغية بس" });
             }
 
         var hasTrip = await _db.TripOperations.AnyAsync(t => t.OperationId == id, ct);

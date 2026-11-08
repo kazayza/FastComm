@@ -23,6 +23,10 @@ public partial class ExpenseType
 
     public bool IsCustodyAllowed { get; set; }
 
+    public bool IsFreightAdvance { get; set; }
+
+    public bool IsReceiptRequired { get; set; }
+
     public bool IsOperationCost { get; set; }
 
     public bool IsTaxDeductible { get; set; }

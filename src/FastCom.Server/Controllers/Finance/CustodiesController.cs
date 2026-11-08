@@ -40,6 +40,58 @@ public class CustodiesController : ControllerBase
             .Select(m => (int?)m.PaymentMethodId)
             .FirstOrDefaultAsync(ct);
 
+    /* ═══ عهدة تشغيل عامة ═══
+       عهدة موظف (رئيسية) من غير رحلة: الموظف بيصرف منها على عمليات ورحلات
+       مختلفة، وفلوسها بتخرج من **خزينة التشغيل اللي باسمه** وردّها بيرجع لها. */
+    private static bool IsGeneralOps(DriverCustody c) =>
+        c.IsPrimary && c.OwnerType == "Employee" && c.TripId is null;
+
+    /// <summary>خزينة التشغيل المفتوحة باسم الموظف (الصندوق اللي هو مسؤول عنه).</summary>
+    private async Task<CashBox?> EmployeeBoxAsync(int employeeId, CancellationToken ct) =>
+        await _db.CashBoxes.AsNoTracking()
+            .Where(b => !b.IsDeleted && b.IsActive && b.Status == "Open"
+                        && b.ResponsibleEmployeeId == employeeId)
+            .OrderBy(b => b.CashBoxId)
+            .FirstOrDefaultAsync(ct);
+
+    /// <summary>صرف/رد عهدة عامة فشل في خزينة الموظف — الإنشاء كله بيتلغي.</summary>
+    private sealed class GeneralCustodyBoxException : Exception;
+
+    /// <summary>
+    /// رد الباقي تلقائيًا لخزينة الموظف (قرار المالك): حركة «رد باقي» + إيصال
+    /// خزينة بنفس مرجع الرد اليدوي. يُستدعى داخل معاملة الاعتماد/الإغلاق —
+    /// وفشل الإيصال يرمي استثناءً يلغي المعاملة كلها فلا يضيع الباقي.
+    /// </summary>
+    private async Task<decimal> AutoRefundRemainderAsync(
+        DriverCustody c, CashBox empBox, string source, CancellationToken ct)
+    {
+        var remaining = c.AmountIssued + c.AdditionalDue - c.AmountSpent - c.AmountReturned;
+        if (remaining <= 0) return 0;
+
+        var tx = new CustodyTransaction
+        {
+            CustodyId       = c.CustodyId,
+            TransactionType = "Refund",
+            Amount          = remaining,
+            TransactionDate = DateTime.Today,
+            Notes           = source == "Approve" ? "رد باقي تلقائي عند الاعتماد" : "رد باقي تلقائي عند الإغلاق",
+            CreatedBy       = CurrentUserId()
+        };
+        _db.CustodyTransactions.Add(tx);
+        await _db.SaveChangesAsync(ct);
+
+        var ok = await _cash.ReceiptAsync(new CashEntry(
+            ReferenceNumber : $"CUST-REFUND:{c.CustodyNumber}:{tx.CustodyTransactionId}",
+            Amount          : remaining,
+            PaymentMethodId : await CashMethodIdAsync(ct) ?? 0,
+            CustodyId       : c.CustodyId,
+            Description     : $"رد باقي عهدة {c.CustodyNumber} (تلقائي)",
+            Date            : DateOnly.FromDateTime(DateTime.Today),
+            CashBoxId       : empBox.CashBoxId), ct);
+        if (!ok) throw new GeneralCustodyBoxException();
+        return remaining;
+    }
+
     private int CurrentUserId() =>
         int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : -1;
 
@@ -95,7 +147,10 @@ public class CustodiesController : ControllerBase
         decimal Amount, long? ExpenseId, string? ExpenseNumber, string? Notes);
 
     public record CustodyExpense(long ExpenseId, string ExpenseNumber, string TypeName,
-        decimal Amount, DateTime ExpenseDate, string? Description, string PaymentStatus);
+        decimal Amount, DateTime ExpenseDate, string? Description, string PaymentStatus,
+        long? OperationId = null, string? OperationNumber = null,
+        long? TripId = null, string? TripNumber = null,
+        bool IsFreightAdvance = false, decimal? BillableAmount = null, int? DriverId = null);
 
     public record TripOpt(long TripId, string TripNumber, string Status, int DriverId, string DriverName);
 
@@ -150,7 +205,8 @@ public class CustodiesController : ControllerBase
 
     // ═══════════════ #61 — خزائن متاحة لصرف العهدة ═══════════════
 
-    public record CashBoxOpt(int CashBoxId, string NameAr, string Code, decimal CurrentBalance);
+    public record CashBoxOpt(int CashBoxId, string NameAr, string Code, decimal CurrentBalance,
+        int? ResponsibleEmployeeId = null);
 
     [HttpGet("cash-boxes")]
     [Authorize(Policy = "PERM:CUSTODY.CREATE")]
@@ -158,7 +214,7 @@ public class CustodiesController : ControllerBase
         Ok(await _db.CashBoxes.AsNoTracking()
             .Where(b => !b.IsDeleted && b.IsActive && b.Status == "Open")
             .OrderBy(b => b.CashBoxId)
-            .Select(b => new CashBoxOpt(b.CashBoxId, b.NameAr, b.Code, b.CurrentBalance))
+            .Select(b => new CashBoxOpt(b.CashBoxId, b.NameAr, b.Code, b.CurrentBalance, b.ResponsibleEmployeeId))
             .ToListAsync(ct));
 
     // ═══════════════ #61 — تسوية سلفة النولون مقابل نولون الرحلة ═══════════════
@@ -176,7 +232,7 @@ public class CustodiesController : ControllerBase
         if (c.OwnerType != "Driver")
             return BadRequest(new { message = "تسوية النولون لسلف السواقين بس" });
         if (c.AllocationType != "Freight")
-            return BadRequest(new { message = "العهدة دي مش سلفة نولون — التسوية دي للسلف المصنفة «سلفة من نولون النقله»" });
+            return BadRequest(new { message = "هذه العهدة ليست نولون نقلة — التسوية خاصة بالعُهد المصنفة «نولون نقلة»" });
         if (c.TripId is null)
             return BadRequest(new { message = "العهدة مش مربوطة برحلة — اربطها برحلة الأول" });
         if (c.Status is not ("Open" or "PartiallySettled"))
@@ -204,7 +260,7 @@ public class CustodiesController : ControllerBase
             TransactionType = "FreightSettle",
             Amount          = settleAmount,
             TransactionDate = DateTime.Now,
-            Notes           = $"تسوية سلفة النولون مقابل نولون الرحلة {trip.TripNumber} ({freight:N2})",
+            Notes           = $"تسوية نولون النقلة مقابل نولون الرحلة {trip.TripNumber} ({freight:N2})",
             CreatedBy       = CurrentUserId()
         });
         await _db.SaveChangesAsync(ct);   // الـ trigger بيحسب الباقي والحالة
@@ -248,7 +304,10 @@ public class CustodiesController : ControllerBase
             .Where(e => e.CustodyId == id && !e.IsDeleted)
             .OrderByDescending(e => e.ExpenseId)
             .Select(e => new CustodyExpense(e.ExpenseId, e.ExpenseNumber, e.ExpenseType.NameAr,
-                e.Amount, e.ExpenseDate, e.Description, e.PaymentStatus))
+                e.Amount, e.ExpenseDate, e.Description, e.PaymentStatus,
+                e.OperationId, e.Operation != null ? e.Operation.OperationNumber : null,
+                e.TripId, e.Trip != null ? e.Trip.TripNumber : null,
+                e.ExpenseType.IsFreightAdvance, e.BillableAmount, e.DriverId))
             .ToListAsync(ct);
 
         string? parentNumber = null;
@@ -265,6 +324,77 @@ public class CustodiesController : ControllerBase
 
         return Ok(new { Custody = detail, Transactions = txs, Expenses = expenses });
     }
+
+    // ═══════════════ ربط مصروف عند التسوية (عهدة تشغيل عامة) ═══════════════
+
+    public record LinkRequest(long? OperationId, long? TripId);
+
+    /// <summary>
+    /// ربط مصروف العهدة العامة بعمليته (أو سلفة النولون برحلتها) — بيحصل وقت
+    /// التسوية من تفاصيل العهدة. العهدة لازم تكون لسه مفتوحة والمصروف بتاعها.
+    /// </summary>
+    [HttpPost("{id:long}/expenses/{expenseId:long}/link")]
+    [Authorize(Policy = "PERM:CUSTODY.SETTLE")]
+    public async Task<IActionResult> LinkExpense(long id, long expenseId,
+        [FromBody] LinkRequest req, CancellationToken ct)
+    {
+        if (req is null) return BadRequest(new { message = "البيانات مش كاملة" });
+
+        var c = await _db.DriverCustodies.FirstOrDefaultAsync(x => x.CustodyId == id && !x.IsDeleted, ct);
+        if (c is null) return NotFound(new { message = "العهدة مش موجودة" });
+        if (!IsGeneralOps(c)) return BadRequest(new { message = "الربط عند التسوية خاص بعهد التشغيل العامة" });
+        if (c.Status is not ("Open" or "PartiallySettled"))
+            return BadRequest(new { message = "العهدة اتقدّمت للتسوية — الربط لازم يتم قبل التقديم" });
+
+        var e = await _db.Expenses.FirstOrDefaultAsync(
+            x => x.ExpenseId == expenseId && x.CustodyId == id && !x.IsDeleted, ct);
+        if (e is null) return NotFound(new { message = "المصروف مش موجود في العهدة دي" });
+        if (e.Status == "Cancelled") return BadRequest(new { message = "المصروف ملغي — ما بيتربطش" });
+
+        var isAdvance = await _db.ExpenseTypes.AsNoTracking()
+            .Where(t => t.ExpenseTypeId == e.ExpenseTypeId)
+            .Select(t => t.IsFreightAdvance).FirstOrDefaultAsync(ct);
+
+        if (isAdvance)
+        {
+            if (req.TripId is null) return BadRequest(new { message = "نولون النقلة يجب أن يُربط برحلة" });
+            var trip = await _db.Trips.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.TripId == req.TripId && !t.IsDeleted, ct);
+            if (trip is null) return BadRequest(new { message = "الرحلة مش موجودة" });
+            e.TripId      = trip.TripId;
+            e.DriverId    = trip.DriverId;
+            e.OperationId = null;
+        }
+        else
+        {
+            if (req.OperationId is null) return BadRequest(new { message = "اختار العملية اللي المصروف عليها" });
+            var op = await _db.Operations.AsNoTracking()
+                .FirstOrDefaultAsync(o => o.OperationId == req.OperationId && !o.IsDeleted, ct);
+            if (op is null) return BadRequest(new { message = "العملية مش موجودة" });
+            if (op.Status == "Closed") return BadRequest(new { message = "العملية مقفولة — ما بيتربطش عليها مصروفات" });
+            e.OperationId = op.OperationId;
+        }
+
+        e.UpdatedAt = DateTime.UtcNow;
+        e.UpdatedBy = CurrentUserId();
+        await _db.SaveChangesAsync(ct);
+
+        return Ok(new { message = "اتربط المصروف" });
+    }
+
+    /// <summary>عمليات مفتوحة لقائمة ربط التسوية — بصلاحية العهود.</summary>
+    [HttpGet("operations")]
+    [Authorize(Policy = "PERM:CUSTODY.VIEW")]
+    public async Task<IActionResult> Operations(CancellationToken ct) =>
+        Ok(await _db.Operations.AsNoTracking()
+            .Where(o => !o.IsDeleted && o.Status != "Closed" && o.Status != "Cancelled")
+            .OrderByDescending(o => o.OperationId)
+            .Take(300)
+            .Select(o => new OpOpt(o.OperationId, o.OperationNumber,
+                o.Customer != null ? o.Customer.NameAr : "—", o.Status))
+            .ToListAsync(ct));
+
+    public record OpOpt(long OperationId, string OperationNumber, string CustomerName, string Status);
 
     // ═══════════════ TRIPS (دروبداون) ═══════════════
 
@@ -316,89 +446,36 @@ public class CustodiesController : ControllerBase
         }
         if (req.OwnerId <= 0) return BadRequest(new { message = "اختار صاحب العهدة" });
 
-        if (req.OwnerType is not ("Driver" or "Employee"))
-            return BadRequest(new { message = "نوع صاحب العهدة لازم يكون سائق أو موظف" });
-
-        Trip? trip = null;
+        /* ═══ سير العمل الجديد (قرار المالك): العهدة لموظف فقط ═══
+           لا عهدة لسائق، ولا عهدة على رحلة، ولا عهد فرعية/توزيعات —
+           ما يُدفع للسائق يُسجل بند صرف على عهدة الموظف نفسه. */
+        if (req.OwnerType != "Employee")
+            return BadRequest(new { message = "العهدة تُصرف لموظف فقط — لا توجد عهدة باسم سائق" });
         if (req.TripId is not null)
-        {
-            trip = await _db.Trips.AsNoTracking()
-                .FirstOrDefaultAsync(t => t.TripId == req.TripId && !t.IsDeleted, ct);
-            if (trip is null) return BadRequest(new { message = "الرحلة مش موجودة" });
-            if (trip.Status == "Cancelled") return BadRequest(new { message = "الرحلة ملغية — مافيش عهدة عليها" });
-        }
+            return BadRequest(new { message = "العهدة لا ترتبط برحلة — تُصرف عامة للموظف، ومصروفاتها تُربط بعملياتها عند التسوية" });
+        if (!req.IsPrimary || req.ParentCustodyId is not null)
+            return BadRequest(new { message = "لا توجد عهد فرعية — التوزيع على السائقين يُسجل كبند على عهدة الموظف نفسه" });
+        if (req.AmountIssued <= 0)
+            return BadRequest(new { message = "مبلغ العهدة لازم يكون أكبر من صفر" });
 
-        if (req.OwnerType == "Driver")
-        {
-            var d = await _db.Drivers.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.DriverId == req.OwnerId && !x.IsDeleted, ct);
-            if (d is null) return BadRequest(new { message = "السائق مش موجود" });
-            if (trip is not null && d.DriverId != trip.DriverId)
-                return BadRequest(new { message = $"السائق ده مش سائق الرحلة {trip.TripNumber}" });
-        }
-        else if (!await _db.Employees.AnyAsync(e => e.EmployeeId == req.OwnerId && !e.IsDeleted, ct))
+        if (!await _db.Employees.AnyAsync(e => e.EmployeeId == req.OwnerId && !e.IsDeleted, ct))
             return BadRequest(new { message = "الموظف مش موجود" });
 
-        // عهدة واحدة مفتوحة لكل (رحلة + صاحب) — لو فيه رحلة
-        if (req.TripId is not null)
-        {
-            var dup = await _db.DriverCustodies.AsNoTracking().AnyAsync(c =>
-                !c.IsDeleted && c.TripId == req.TripId && c.OwnerType == req.OwnerType &&
-                c.OwnerId == req.OwnerId && c.Status != "Closed", ct);
-            if (dup) return BadRequest(new { message = "في عهدة مفتوحة لنفس الشخص على الرحلة دي — صفّيها الأول" });
-        }
+        // عهدة واحدة غير مقفولة لكل موظف
+        var dupGen = await _db.DriverCustodies.AsNoTracking().AnyAsync(x =>
+            !x.IsDeleted && x.OwnerType == "Employee" &&
+            x.OwnerId == req.OwnerId && x.Status != "Closed", ct);
+        if (dupGen)
+            return BadRequest(new { message = "الموظف ده عنده عهدة لسه ما اتصفّتش — يصفّيها الأول قبل ما يستلم واحدة تانية" });
 
-        /* 🔴 #28 — عهدة فرعية (توزيع من عهدة موظف على سائق):
-           الرئيسية لازم تكون مفتوحة ورئيسية، ومجموع التوزيعات مايعديش مبلغ عهدة الموظف.
-           الفرعية مابتعملش حركة خزينة — الفلوس خرجت مرة واحدة مع الرئيسية. */
-        if (!req.IsPrimary)
-        {
-            if (req.ParentCustodyId is null)
-                return BadRequest(new { message = "العهدة الفرعية لازم ترتبط بعهدة رئيسية" });
-
-            var parent = await _db.DriverCustodies.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.CustodyId == req.ParentCustodyId && !x.IsDeleted, ct);
-            if (parent is null)
-                return BadRequest(new { message = "العهدة الرئيسية مش موجودة" });
-            if (!parent.IsPrimary)
-                return BadRequest(new { message = "ماينفعش توزيع من عهدة فرعية" });
-            if (parent.Status != "Open")
-                return BadRequest(new { message = $"العهدة الرئيسية حالتها {StatusAr(parent.Status)} — التوزيع من عهدة مفتوحة بس" });
-
-            var distributed = await _db.DriverCustodies.AsNoTracking()
-                .Where(x => !x.IsDeleted && x.ParentCustodyId == parent.CustodyId && x.Status != "Closed")
-                .SumAsync(x => (decimal?)x.AmountIssued, ct) ?? 0m;
-
-            if (distributed + req.AmountIssued > parent.AmountIssued)
-                return BadRequest(new { message = $"التوزيع تجاوز عهدة الموظف — المتاح {(parent.AmountIssued - distributed):N2} ج.م" });
-        }
-
-        /* #64 — فحص كفاية رصيد خزينة الصرف: العهدة الرئيسية فلوسها بتخرج
-           من الخزينة مباشرةً — الخزانة لازم تغطي المبلغ، وإلا نوجّهه للتحويل
-           من شاشة الخزينة أو اختيار خزينة تانية. */
-        if (req.IsPrimary && req.AmountIssued > 0)
-        {
-            var openBoxes = _db.CashBoxes.AsNoTracking()
-                .Where(b => !b.IsDeleted && b.IsActive && b.Status == "Open");
-
-            var boxCode = await _settings.GetStringAsync(SettingKeys.TreasuryDefaultBox,
-                                                         SettingDefaults.TreasuryDefaultBox, ct);
-            if (string.IsNullOrWhiteSpace(boxCode)) boxCode = SettingDefaults.TreasuryDefaultBox;
-
-            var box = req.CashBoxId is > 0
-                ? await openBoxes.FirstOrDefaultAsync(b => b.CashBoxId == req.CashBoxId, ct)
-                : (await openBoxes.Where(b => b.Code == boxCode)
-                          .OrderBy(b => b.CashBoxId).FirstOrDefaultAsync(ct)
-                   ?? await openBoxes.OrderBy(b => b.CashBoxId).FirstOrDefaultAsync(ct));
-
-            if (req.CashBoxId is > 0 && box is null)
-                return BadRequest(new { message = "الخزينة المختارة مش متاحة (مقفولة أو محذوفة) — اختار خزينة تانية" });
-
-            if (box is not null && box.CurrentBalance < req.AmountIssued)
-                return BadRequest(new { message =
-                    $"رصيد خزينة «{box.NameAr}» {box.CurrentBalance:N2} ج.م — مش كفاية لصرف {req.AmountIssued:N2} ج.م. " +
-                    "حوّل لها من شاشة الخزينة أو اختار خزينة تانية" });
-        }
+        /* ═══ التمويل: خزينة الموظف الخاصة إجبارية ═══
+           الصرف يخرج منها هي، وأي اختيار خزينة في الطلب بيتجاهل،
+           وفشل الصرف منها يلغي إنشاء العهدة بالكامل. */
+        var empBox = await EmployeeBoxAsync(req.OwnerId, ct);
+        if (empBox is null)
+            return BadRequest(new { message = "مفيش خزينة تشغيل مفتوحة باسم الموظف ده — اعمل صندوق واربطه بيه (المسؤول) وموّله بتحويل من الخزينة الرئيسية الأول" });
+        if (empBox.CurrentBalance < req.AmountIssued)
+            return BadRequest(new { message = $"رصيد خزينة الموظف «{empBox.NameAr}» {empBox.CurrentBalance:N2} مش كفاية لصرف عهدة {req.AmountIssued:N2} — حوّل له من الخزينة الرئيسية الأول" });
 
         var branchId = await ResolveBranchIdAsync(ct);
         if (branchId is null) return BadRequest(new { message = "مافيش فرع معرّف في النظام" });
@@ -407,17 +484,17 @@ public class CustodiesController : ControllerBase
         {
             CustodyNumber    = await _numbers.NextAsync("CUSTODY", ct),
             BranchId         = branchId.Value,
-            TripId           = req.TripId,
-            OwnerType        = req.OwnerType,
+            TripId           = null,
+            OwnerType        = "Employee",
             OwnerId          = req.OwnerId,
             CustodyDate      = Dt(req.CustodyDate),
             AmountIssued     = req.AmountIssued,
             Status           = "Open",
             Notes            = B(req.Notes),
             CreatedBy        = CurrentUserId(),
-            IsPrimary        = req.IsPrimary,
-            ParentCustodyId  = req.ParentCustodyId,
-            AllocationType   = req.AllocationType
+            IsPrimary        = true,
+            ParentCustodyId  = null,
+            AllocationType   = null
         };
         // 🔴 Atomicity: العهدة + سطر «صرف» في الدفتر — معاملة واحدة
         await _db.Database.BeginTransactionAsync(ct);
@@ -440,29 +517,11 @@ public class CustodiesController : ControllerBase
                 });
                 await _db.SaveChangesAsync(ct);
 
-                /* 🔴 الخزينة — صرف العهدة = فلوس **خرجت** من الخزينة للسائق.
-                   ده بيحصل مرة واحدة بس (وقت الصرف)، والمصروفات المربوطة بالعهدة
-                   **مابتعملش** حركة خزينة تانية — وإلا هتتحسب مرتين.
-                   🔴 الفرعية **ماتعملش** حركة خزينة — الفلوس خرجت مع الرئيسية. */
-                if (!req.IsPrimary)
-                {
-                    /* #63 — فرعية: مافيش حركة خزينة (الفلوس خرجت مع الرئيسية)،
-                       لكن التوزيع بيتسجل **حركة في دفتر عهدة الموظف** —
-                       الـ trigger بيحسبها ضمن المنصرف، فالباقي بينقص فعلًا
-                       والعهدة الموزعة بالكامل تتقفل من غير رد وهمي. */
-                    _db.CustodyTransactions.Add(new CustodyTransaction
-                    {
-                        CustodyId       = req.ParentCustodyId!.Value,
-                        TransactionType = "Distribute",
-                        Amount          = req.AmountIssued,
-                        TransactionDate = c.CustodyDate,
-                        Notes           = $"توزيع لسائق — {c.CustodyNumber}",
-                        CreatedBy       = CurrentUserId()
-                    });
-                    await _db.SaveChangesAsync(ct);
-                }
-                else
-                {
+                /* 🔴 الخزينة — صرف العهدة يخرج من **خزينة الموظف نفسه** فقط
+                   (CashBoxId صريح)، وفشل الصرف يلغي إنشاء العهدة بالكامل:
+                   عهدة من غير رجل خزينة معناها فلوس بره الدفاتر.
+                   المصروفات المربوطة بالعهدة **مابتعملش** حركة خزينة تانية —
+                   وإلا هتتحسب مرتين. */
                 var paid = await _cash.PaymentAsync(new CashEntry(
                     ReferenceNumber : $"CUST-ISSUE:{c.CustodyNumber}",
                     Amount          : c.AmountIssued,
@@ -470,13 +529,17 @@ public class CustodiesController : ControllerBase
                     CustodyId       : c.CustodyId,
                     Description     : $"صرف عهدة {c.CustodyNumber}",
                     Date            : DateOnly.FromDateTime(c.CustodyDate),
-                    /* #61 — خزينة الصرف المختارة وقت إنشاء العهدة */
-                    CashBoxId       : req.CashBoxId ?? 0), ct);
+                    CashBoxId       : empBox.CashBoxId), ct);
                 if (paid) await _db.SaveChangesAsync(ct);
-                }
+                else throw new GeneralCustodyBoxException();
             }
 
             await _db.Database.CommitTransactionAsync(ct);
+        }
+        catch (GeneralCustodyBoxException)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            return BadRequest(new { message = "تعذّر صرف العهدة من خزينة الموظف — الإنشاء اتلغى بالكامل. راجع إن الصندوق مفتوح ونشط" });
         }
         catch (Exception)
         {
@@ -504,13 +567,27 @@ public class CustodiesController : ControllerBase
                 description: $"محاولة تسجيل حركة عهدة فوق السقف ({req.Amount:N2} > {txMax:N2})", ct: ct);
             return BadRequest(new { message = $"أقصى مبلغ للحركة {txMax:N2} — المطلوب {req.Amount:N2}" });
         }
-        if (req.Type is not ("Additional" or "Refund"))
-            return BadRequest(new { message = "نوع الحركة لازم يكون «رد باقي» أو «إضافة مبلغ»" });
+        if (req.Type is not ("TopUp" or "Refund"))
+            return BadRequest(new { message = "نوع الحركة لازم يكون «رد باقي» أو «تغذية عهدة»" });
 
         var c = await _db.DriverCustodies.FirstOrDefaultAsync(x => x.CustodyId == id && !x.IsDeleted, ct);
         if (c is null) return NotFound(new { message = "العهدة مش موجودة" });
         if (c.Status is "Closed" or "Approved" or "Submitted")
             return BadRequest(new { message = "العهدة اتقدّمت للتسوية — مافيش حركات جديدة" });
+
+        /* 🔴 حركات العهدة المالية (رد/تغذية) بتتم على **خزينة الموظف نفسه** —
+           لو مش مفتوحة الحركة بتترفض قبل ما تتحجز في الدفتر. */
+        CashBox? empBox = null;
+        if (IsGeneralOps(c))
+        {
+            empBox = await EmployeeBoxAsync(c.OwnerId, ct);
+            if (empBox is null)
+                return BadRequest(new { message = "خزينة الموظف صاحب العهدة مش مفتوحة — حركات العهدة لازم تتم عليها. افتحها الأول" });
+            if (req.Type == "TopUp" && empBox.CurrentBalance < req.Amount)
+                return BadRequest(new { message = $"رصيد خزينة الموظف «{empBox.NameAr}» {empBox.CurrentBalance:N2} مش كفاية لتغذية {req.Amount:N2} — حوّل له من الخزينة الرئيسية الأول" });
+        }
+        else if (req.Type == "TopUp")
+            return BadRequest(new { message = "التغذية متاحة لعهد الموظفين العامة بس" });
 
         if (req.Type == "Refund")
         {
@@ -537,10 +614,9 @@ public class CustodiesController : ControllerBase
         _db.CustodyTransactions.Add(tx);
         await _db.SaveChangesAsync(ct);          // ← عشان ناخد `tx.CustodyTransactionId`
 
-        /* 🔴 الخزينة — **رد الباقي** = فلوس رجعت من السائق للخزينة → إيض.
-           المرجع فيه رقم الحركة عشان يبقى فريد (عهدة واحدة ممكن ترد أكتر من مرة).
-           ⚠️ «إضافة مبلغ» **مابتعملش** حركة خزينة — لأنها بتزود `AdditionalDue`
-           (مستحق على الشركة) بس، والفلوس لسه مااتدفعتش. */
+        /* 🔴 الخزينة — **رد الباقي** = فلوس رجعت من صاحب العهدة للخزينة → إيصال،
+           و**تغذية العهدة** = صرف فعلي من خزينة الموظف يزود مبلغ عهدته
+           (تحل محل «إضافة مبلغ» الوهمية التي لم تكن تتحرك بها أي فلوس). */
         var toTreasury = false;
         if (req.Type == "Refund")
         {
@@ -550,25 +626,34 @@ public class CustodiesController : ControllerBase
                 PaymentMethodId : await CashMethodIdAsync(ct) ?? 0,
                 CustodyId       : c.CustodyId,
                 Description     : $"رد باقي عهدة {c.CustodyNumber}",
-                Date            : DateOnly.FromDateTime(tx.TransactionDate)), ct);
-            if (toTreasury) await _db.SaveChangesAsync(ct);
-
-            /* #63 — السائق رد الفلوس للخزينة مباشرة → مسؤولية الموظف عنها بتسقط:
-               نقلل حركة «التوزيع» في دفتر الموظف بمبلغ الرد — عشان مايتحاسبش
-               على فلوس رجعت للشركة فعلًا (عد مزدوج). */
-            if (c.ParentCustodyId is not null)
+                Date            : DateOnly.FromDateTime(tx.TransactionDate),
+                CashBoxId       : empBox?.CashBoxId ?? 0), ct);
+            if (!toTreasury)
             {
-                var distTx = await _db.CustodyTransactions
-                    .FirstOrDefaultAsync(t => t.CustodyId == c.ParentCustodyId &&
-                                              t.TransactionType == "Distribute" &&
-                                              t.Notes == $"توزيع لسائق — {c.CustodyNumber}", ct);
-                if (distTx is not null)
-                {
-                    distTx.Amount -= tx.Amount;
-                    if (distTx.Amount <= 0) _db.CustodyTransactions.Remove(distTx);
-                    await _db.SaveChangesAsync(ct);
-                }
+                _db.CustodyTransactions.Remove(tx);
+                await _db.SaveChangesAsync(ct);
+                return BadRequest(new { message = "تعذّر تسجيل رد الباقي في الخزينة — اتلغت الحركة بالكامل" });
             }
+            await _db.SaveChangesAsync(ct);
+        }
+        else if (req.Type == "TopUp" && empBox is not null)
+        {
+            toTreasury = await _cash.PaymentAsync(new CashEntry(
+                ReferenceNumber : $"CUST-TOPUP:{c.CustodyNumber}:{tx.CustodyTransactionId}",
+                Amount          : tx.Amount,
+                PaymentMethodId : await CashMethodIdAsync(ct) ?? 0,
+                CustodyId       : c.CustodyId,
+                Description     : $"تغذية عهدة {c.CustodyNumber}",
+                Date            : DateOnly.FromDateTime(tx.TransactionDate),
+                CashBoxId       : empBox.CashBoxId), ct);
+            if (!toTreasury)
+            {
+                _db.CustodyTransactions.Remove(tx);
+                await _db.SaveChangesAsync(ct);
+                return BadRequest(new { message = "تعذّر صرف التغذية من خزينة الموظف — اتلغت الحركة بالكامل" });
+            }
+            c.AmountIssued += tx.Amount;
+            await _db.SaveChangesAsync(ct);
         }
 
         var now = await _db.DriverCustodies.AsNoTracking()
@@ -576,8 +661,8 @@ public class CustodiesController : ControllerBase
 
         return Ok(new
         {
-            message = (req.Type == "Refund" ? "اتسجل رد الباقي" : "اتسجلت الإضافة")
-                      + (toTreasury ? " — واتسجل إيض في الخزينة" : ""),
+            message = (req.Type == "Refund" ? "اتسجل رد الباقي" : "اتسجلت تغذية العهدة")
+                      + (toTreasury ? " — واتسجلت في الخزينة" : ""),
             spent    = now.AmountSpent,
             returned = now.AmountReturned,
             due      = now.AdditionalDue,
@@ -606,9 +691,31 @@ public class CustodiesController : ControllerBase
         if (tx.TransactionType == "Issue")
             return BadRequest(new { message = "حركة الصرف الأساسية بتتشال مع حذف العهدة نفسها" });
         if (tx.TransactionType == "Distribute")
-            return BadRequest(new { message = "حركة التوزيع بتتدار من التوزيعات نفسها — ماتتحذفش من هنا" });
+            return BadRequest(new { message = "حركات التوزيع قديمة ملغاة — لا تُحذف من هنا" });
+        if (tx.TransactionType == "TopUp")
+        {
+            /* حذف التغذية يعكسها بالكامل: إلغاء صرف الخزينة وإنقاص مبلغ العهدة */
+            var topRef = $"CUST-TOPUP:{c.CustodyNumber}:{tx.CustodyTransactionId}";
+            var topLegs = await _db.CashTransactions
+                .Where(t => !t.IsDeleted && t.Status == "Posted" && t.ReferenceNumber == topRef)
+                .ToListAsync(ct);
+            foreach (var leg in topLegs) leg.Status = "Void";
+            c.AmountIssued -= tx.Amount;
+        }
         if (tx.ExpenseId is not null)
             return BadRequest(new { message = "الحركة دي مربوطة بمصروف — الغِها أو عدّلها من شاشة المصروفات" });
+
+        /* 🔴 حذف حركة «رد باقي» لازم يُلغي إيصال الخزينة المقابل في نفس الحفظ —
+           وإلا الخزينة بتفضل حاسبة فلوس الدفتر بيقول إنها ما رجعتش.
+           المطابقة بالمرجع الكامل بالضبط (مش prefix) عشان أرقام حركات متقاربة. */
+        if (tx.TransactionType == "Refund")
+        {
+            var refundRef = $"CUST-REFUND:{c.CustodyNumber}:{tx.CustodyTransactionId}";
+            var legs = await _db.CashTransactions
+                .Where(t => !t.IsDeleted && t.Status == "Posted" && t.ReferenceNumber == refundRef)
+                .ToListAsync(ct);
+            foreach (var leg in legs) leg.Status = "Void";
+        }
 
         _db.CustodyTransactions.Remove(tx);
         await _db.SaveChangesAsync(ct);
@@ -647,10 +754,37 @@ public class CustodiesController : ControllerBase
         if (!moved)
             return BadRequest(new { message = "مافيش حركات مسجلة — سجّل المصروفات والرد الأول" });
 
+        /* 🔴 عهدة تشغيل عامة: التسوية ما تتقدّمش وفي مصروفات مش مربوطة —
+           كل مصروف لازم يبقى على عملية، وسلفة النولون لازم تبقى على رحلة.
+           الربط بيحصل من شاشة العهدة (أو من تعديل المصروف) قبل التقديم. */
+        if (IsGeneralOps(c))
+        {
+            var unlinked = await _db.Expenses.AsNoTracking()
+                .CountAsync(e => e.CustodyId == id && !e.IsDeleted && e.Status != "Cancelled"
+                                 && e.OperationId == null
+                                 && !(e.ExpenseType.IsFreightAdvance && e.TripId != null), ct);
+            if (unlinked > 0)
+                return BadRequest(new { message = $"في {unlinked} مصروف لسه مش مربوط — اربط كل مصروف بعمليته (ونولون النقلة برحلتها) من تفاصيل العهدة الأول" });
+        }
+
         c.Status    = "Submitted";
+        c.SettledBy = CurrentUserId();
         c.UpdatedAt = DateTime.UtcNow;
         c.UpdatedBy = CurrentUserId();
         await _db.SaveChangesAsync(ct);
+
+        /* إشعار لمن يملكون صلاحية الاعتماد — التقديم بلا إشعار كان يجعل
+           التسوية تنتظر من يكتشفها بالصدفة */
+        var deficitNote = c.AmountSpent + c.AmountReturned - c.AmountIssued;
+        var remainingNote = c.AmountIssued + c.AdditionalDue - c.AmountSpent - c.AmountReturned;
+        await NotifyPermissionHoldersAsync("CUSTODY.APPROVE",
+            $"تسوية عهدة بانتظار الاعتماد — {c.CustodyNumber}",
+            deficitNote > 0
+                ? $"قُدّمت تسوية العهدة {c.CustodyNumber} وبها عجز مستحق للموظف قدره {deficitNote:N2} ج.م سيُصرف له عند الاعتماد."
+                : remainingNote > 0
+                    ? $"قُدّمت تسوية العهدة {c.CustodyNumber} وبها باقٍ قدره {remainingNote:N2} ج.م سيُرد تلقائيًا إلى خزينة الموظف عند الاعتماد."
+                    : $"قُدّمت تسوية العهدة {c.CustodyNumber} وهي بانتظار اعتمادك.",
+            c, deficitNote > 0 ? "High" : "Normal", ct);
 
         return Ok(new { message = "اتقدّمت التسوية — مستنية الاعتماد" });
     }
@@ -670,22 +804,225 @@ public class CustodiesController : ControllerBase
             return BadRequest(new { message = $"العهدة حالتها {StatusAr(c.Status)} — الاعتماد بيتم على تسوية متقدّمة بس" });
         }
 
-        var extra = c.AmountSpent + c.AmountReturned - (c.AmountIssued + c.AdditionalDue);
-        if (extra > 0 && req?.AddAdditional != true)
+        /* فصل المهام (قرار المالك): الاعتماد من الإدارة، ومن قدّم التسوية
+           لا يعتمدها بنفسه أبدًا */
+        if (c.SettledBy is not null && c.SettledBy == CurrentUserId())
+            return BadRequest(new { message = "لا يمكن اعتماد تسوية قمت بتقديمها بنفسك — الاعتماد يتم من مستخدم آخر يملك صلاحية الاعتماد" });
+
+        /* العجز الحقيقي = ما صُرف ورُد فوق ما استلمه الموظف فعلًا.
+           ده مال دفعه الموظف من جيبه لصالح الشغل — واعتماده عند المالك
+           يُعالج بـ«الاستعاضة»: يُصرف له العجز نقدًا مع الاعتماد نفسه. */
+        var deficit = c.AmountSpent + c.AmountReturned - c.AmountIssued;
+        if (deficit > 0 && req?.AddAdditional != true)
             return BadRequest(new
             {
-                message = $"السائق صرف أكتر من العهدة بـ {extra:N2} — علّم «سجّل الفرق كمبلغ إضافي» واعتمد تاني"
+                message = $"الموظف صرف من ماله الخاص {deficit:N2} ج.م فوق مبلغ العهدة — علّم «صرف الاستعاضة والاعتماد» لصرفها له مع الاعتماد"
             });
 
-        // 🔴 الفرق الزيادة عن العهدة بيتسجل أصلًا في AdditionalDue بـ الـ trigger
-        //    (Spent − Issued) — مفيش حركة منفصلة محتاجة هنا: الحركة كانت بتفضل معزولة
-        //    مش بتتحسب في أي مكان. القيمة بتظهر في AdditionalDue على العهدة نفسها.
-        c.Status    = "Approved";
+        if (deficit > 0)
+        {
+            var empBox = await EmployeeBoxAsync(c.OwnerId, ct);
+            if (empBox is null)
+                return BadRequest(new { message = "خزينة الموظف صاحب العهدة مش مفتوحة — الاستعاضة لازم تتصرف منها. افتحها الأول" });
+            if (empBox.CurrentBalance < deficit)
+                return BadRequest(new { message = $"رصيد خزينة الموظف «{empBox.NameAr}» {empBox.CurrentBalance:N2} مش كفاية لصرف استعاضة {deficit:N2} — موّل الخزينة الأول" });
+
+            await _db.Database.BeginTransactionAsync(ct);
+            try
+            {
+                var paidBack = await _cash.PaymentAsync(new CashEntry(
+                    ReferenceNumber : $"CUST-REIMB:{c.CustodyNumber}",
+                    Amount          : deficit,
+                    PaymentMethodId : await CashMethodIdAsync(ct) ?? 0,
+                    CustodyId       : c.CustodyId,
+                    Description     : $"استعاضة عجز عهدة {c.CustodyNumber}",
+                    Date            : DateOnly.FromDateTime(DateTime.Today),
+                    CashBoxId       : empBox.CashBoxId), ct);
+                if (!paidBack) throw new GeneralCustodyBoxException();
+
+                _db.CustodyTransactions.Add(new CustodyTransaction
+                {
+                    CustodyId       = c.CustodyId,
+                    TransactionType = "Reimburse",
+                    Amount          = deficit,
+                    TransactionDate = DateTime.Today,
+                    Notes           = "استعاضة عجز — صُرفت للموظف عند الاعتماد",
+                    CreatedBy       = CurrentUserId()
+                });
+
+                c.Status     = "Approved";
+                c.ApprovedBy = CurrentUserId();
+                c.UpdatedAt  = DateTime.UtcNow;
+                c.UpdatedBy  = CurrentUserId();
+                await _db.SaveChangesAsync(ct);
+                await _db.Database.CommitTransactionAsync(ct);
+            }
+            catch (GeneralCustodyBoxException)
+            {
+                try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+                return BadRequest(new { message = "تعذّر صرف الاستعاضة من خزينة الموظف — الاعتماد اتلغى بالكامل" });
+            }
+            catch (Exception)
+            {
+                try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+                throw;
+            }
+
+            await NotifyUserAsync(c.SettledBy,
+                $"اعتمدت تسوية العهدة {c.CustodyNumber}",
+                $"اعتمدت تسوية عهدتك {c.CustodyNumber} وصُرفت لك استعاضة عجز قدرها {deficit:N2} ج.م من خزينتك.",
+                c, "Normal", ct);
+
+            return Ok(new { message = $"اعتمدت التسوية — وصُرفت استعاضة {deficit:N2} ج.م للموظف من خزينته" });
+        }
+
+        /* 🔴 رد الباقي تلقائيًا عند الاعتماد (قرار المالك): ما تبقّى مع الموظف
+           يرجع لخزينته داخل نفس معاملة الاعتماد، فيخرج الاعتماد والباقي صفر —
+           ولا يعود الإغلاق محبوسًا بباقٍ لا يمكن ردّه بعد الاعتماد. */
+        var remaining = c.AmountIssued + c.AdditionalDue - c.AmountSpent - c.AmountReturned;
+        if (remaining > 0 && IsGeneralOps(c))
+        {
+            var empBox = await EmployeeBoxAsync(c.OwnerId, ct);
+            if (empBox is null)
+                return BadRequest(new { message = "خزينة الموظف صاحب العهدة مش مفتوحة — رد الباقي التلقائي بيتم عليها. افتحها الأول" });
+
+            decimal refunded = 0;
+            await _db.Database.BeginTransactionAsync(ct);
+            try
+            {
+                refunded = await AutoRefundRemainderAsync(c, empBox, "Approve", ct);
+                c.Status     = "Approved";
+                c.ApprovedBy = CurrentUserId();
+                c.UpdatedAt  = DateTime.UtcNow;
+                c.UpdatedBy  = CurrentUserId();
+                await _db.SaveChangesAsync(ct);
+                await _db.Database.CommitTransactionAsync(ct);
+            }
+            catch (GeneralCustodyBoxException)
+            {
+                try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+                return BadRequest(new { message = "تعذّر رد الباقي لخزينة الموظف — الاعتماد اتلغى بالكامل" });
+            }
+            catch (Exception)
+            {
+                try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+                throw;
+            }
+
+            await NotifyUserAsync(c.SettledBy,
+                $"اعتمدت تسوية العهدة {c.CustodyNumber}",
+                $"اعتمدت تسوية عهدتك {c.CustodyNumber} ورُد باقي {refunded:N2} ج.م تلقائيًا إلى خزينتك.",
+                c, "Normal", ct);
+
+            return Ok(new { message = $"اعتمدت التسوية — ورُد باقي {refunded:N2} ج.م تلقائيًا إلى خزينة الموظف" });
+        }
+
+        c.Status     = "Approved";
+        c.ApprovedBy = CurrentUserId();
+        c.UpdatedAt  = DateTime.UtcNow;
+        c.UpdatedBy  = CurrentUserId();
+        await _db.SaveChangesAsync(ct);
+
+        await NotifyUserAsync(c.SettledBy,
+            $"اعتمدت تسوية العهدة {c.CustodyNumber}",
+            $"اعتمدت تسوية عهدتك {c.CustodyNumber} — جاهزة للإغلاق.",
+            c, "Normal", ct);
+
+        return Ok(new { message = "اعتمدت التسوية — جاهزة للإغلاق" });
+    }
+
+    // ═══════════════ إرجاع التسوية (رفض الاعتماد) ═══════════════
+
+    public record ReturnRequest(string? Reason);
+
+    [HttpPost("{id:long}/return")]
+    [Authorize(Policy = "PERM:CUSTODY.APPROVE")]
+    public async Task<IActionResult> ReturnSettlement(long id, [FromBody] ReturnRequest? req, CancellationToken ct)
+    {
+        var c = await _db.DriverCustodies.FirstOrDefaultAsync(x => x.CustodyId == id && !x.IsDeleted, ct);
+        if (c is null) return NotFound(new { message = "العهدة مش موجودة" });
+        if (c.Status != "Submitted")
+            return BadRequest(new { message = $"العهدة حالتها {StatusAr(c.Status)} — الإرجاع بيتم على تسوية متقدّمة بس" });
+
+        var settler = c.SettledBy;
+        var reason  = B(req?.Reason);
+
+        c.Status    = "Open";
+        c.SettledBy = null;
         c.UpdatedAt = DateTime.UtcNow;
         c.UpdatedBy = CurrentUserId();
         await _db.SaveChangesAsync(ct);
 
-        return Ok(new { message = "اعتمدت التسوية — جاهزة للإغلاق" });
+        await _audit.LogAsync(FastCom.Server.Services.AuditActions.Update, "Custody", c.CustodyId.ToString(),
+            description: $"إرجاع تسوية العهدة {c.CustodyNumber}" + (reason is null ? "" : $" — السبب: {reason}"), ct: ct);
+
+        await NotifyUserAsync(settler,
+            $"أُرجعت تسوية العهدة {c.CustodyNumber}",
+            reason is null
+                ? $"أُرجعت تسوية عهدتك {c.CustodyNumber} لاستكمالها — راجع البنود وقدّمها من جديد."
+                : $"أُرجعت تسوية عهدتك {c.CustodyNumber} — السبب: {reason}",
+            c, "High", ct);
+
+        return Ok(new { message = "أُرجعت التسوية لصاحب العهدة لاستكمالها" });
+    }
+
+    // ═══════════════ إشعارات سير العمل ═══════════════
+
+    /* مستخدمو صلاحية معينة — بنفس منطق تجميع الصلاحيات في TokenService
+       (أدوار + منح صريح − منع صريح) */
+    private async Task NotifyPermissionHoldersAsync(string permissionCode, string title, string message,
+        DriverCustody c, string priority, CancellationToken ct)
+    {
+        var ids = await _db.Database.SqlQuery<int>($"""
+            WITH Perm AS (SELECT PermissionId FROM AppPermissions WHERE PermissionCode = {permissionCode}),
+            FromRoles AS (SELECT DISTINCT ur.UserId FROM AspNetUserRoles ur
+                          JOIN AppRolePermissions arp ON arp.RoleId = ur.RoleId
+                          WHERE arp.PermissionId IN (SELECT PermissionId FROM Perm)),
+            Granted AS (SELECT UserId FROM AppUserPermissions
+                        WHERE PermissionId IN (SELECT PermissionId FROM Perm) AND IsGranted = 1),
+            Denied  AS (SELECT UserId FROM AppUserPermissions
+                        WHERE PermissionId IN (SELECT PermissionId FROM Perm) AND IsGranted = 0)
+            SELECT UserId FROM FromRoles
+            UNION SELECT UserId FROM Granted
+            EXCEPT SELECT UserId FROM Denied
+            """).ToListAsync(ct);
+
+        var me = CurrentUserId();
+        foreach (var uid in ids.Where(u => u != me))
+            _db.Notifications.Add(new Notification
+            {
+                UserId           = uid,
+                BranchId         = c.BranchId,
+                NotificationType = "Custody",
+                Title            = title,
+                Message          = message,
+                EntityType       = "Custody",
+                EntityId         = c.CustodyId,
+                Priority         = priority,
+                IsRead           = false,
+                CreatedAt        = DateTime.UtcNow
+            });
+        if (ids.Any(u => u != me)) await _db.SaveChangesAsync(ct);
+    }
+
+    private async Task NotifyUserAsync(int? userId, string title, string message,
+        DriverCustody c, string priority, CancellationToken ct)
+    {
+        if (userId is null || userId == CurrentUserId()) return;
+        _db.Notifications.Add(new Notification
+        {
+            UserId           = userId.Value,
+            BranchId         = c.BranchId,
+            NotificationType = "Custody",
+            Title            = title,
+            Message          = message,
+            EntityType       = "Custody",
+            EntityId         = c.CustodyId,
+            Priority         = priority,
+            IsRead           = false,
+            CreatedAt        = DateTime.UtcNow
+        });
+        await _db.SaveChangesAsync(ct);
     }
 
     // ═══════════════ إغلاق ═══════════════
@@ -703,9 +1040,42 @@ public class CustodiesController : ControllerBase
             return BadRequest(new { message = $"العهدة حالتها {StatusAr(c.Status)} — الإغلاق بيتم بعد الاعتماد بس" });
         }
 
-        /* 🔴 باج: كان بيقفل والباقي لسه مع السائق من غير ما يحاسبه.
-           الإغلاق مش مسموح غير والعهدة متصفاة تمامًا (الباقي = صفر). */
+        /* 🔴 شبكة أمان (قرار المالك): عهدة معتمدة وبها باقٍ — بدل رفض الإغلاق
+           برسالة تطلب ردًّا مستحيلًا بعد الاعتماد (الحركات مقفولة)، يُرد الباقي
+           تلقائيًا لخزينة الموظف داخل معاملة الإغلاق نفسها ثم تُقفل العهدة. */
         var remaining = c.AmountIssued + c.AdditionalDue - c.AmountSpent - c.AmountReturned;
+        if (remaining > 0 && IsGeneralOps(c))
+        {
+            var empBox = await EmployeeBoxAsync(c.OwnerId, ct);
+            if (empBox is null)
+                return BadRequest(new { message = "خزينة الموظف صاحب العهدة مش مفتوحة — رد الباقي التلقائي بيتم عليها. افتحها الأول" });
+
+            decimal refunded = 0;
+            await _db.Database.BeginTransactionAsync(ct);
+            try
+            {
+                refunded = await AutoRefundRemainderAsync(c, empBox, "Close", ct);
+                c.Status    = "Closed";
+                c.ClosedAt  = DateTime.UtcNow;
+                c.ClosedBy  = CurrentUserId();
+                c.UpdatedAt = DateTime.UtcNow;
+                c.UpdatedBy = CurrentUserId();
+                await _db.SaveChangesAsync(ct);
+                await _db.Database.CommitTransactionAsync(ct);
+            }
+            catch (GeneralCustodyBoxException)
+            {
+                try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+                return BadRequest(new { message = "تعذّر رد الباقي لخزينة الموظف — الإغلاق اتلغى بالكامل" });
+            }
+            catch (Exception)
+            {
+                try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+                throw;
+            }
+
+            return Ok(new { message = $"اتقفلت العهدة — ورُد باقي {refunded:N2} ج.م تلقائيًا إلى خزينة الموظف" });
+        }
         if (remaining > 0)
         {
             await _audit.LogAsync(FastCom.Server.Services.AuditActions.Close, "Custody", c.CustodyId.ToString(),

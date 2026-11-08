@@ -1,0 +1,708 @@
+@page "/vehicles/new"
+@page "/vehicles/new/{VehicleId:int}"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>@(VehicleId is null ? "إضافة سيارة" : "تعديل سيارة") — فاست كوم</PageTitle>
+
+<div class="hero-wrapper">
+<div class="fc-hero">
+    <div class="fc-hero-inner">
+        <div class="fc-page-head">
+            <div>
+                <div class="fc-crumb">الأسطول · السيارات</div>
+                <h1 class="fc-hero-title">@(VehicleId is null ? "إضافة سيارة جديدة" : $"تعديل سيارة {_f.PlateNumber}")</h1>
+                <p class="fc-hero-sub">بيانات السيارة وملكيتها وسائقها الافتراضي — في شاشة واحدة</p>
+            </div>
+            <div class="fc-head-actions">
+                <button type="button" class="vhf-back-btn" @onclick="GoBack">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span>رجوع</span>
+                </button>
+                @if (CanSave)
+                {
+                    <button type="button" class="vhf-save-btn" @onclick="SaveAsync" disabled="@_saving">
+                        @if (_saving) { <span class="btn-spinner sm" aria-hidden="true"></span> <span>جارٍ الحفظ...</span> }
+                        else { <span>حفظ السيارة</span> }
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+
+<div class="vhf-body">
+
+    @if (_msg is not null)
+    {
+        <div class="vhf-banner @(_ok ? "ok" : "err")" role="alert">
+            <span>@_msg</span>
+            <button type="button" class="vhf-banner-x" @onclick="() => _msg = null">✕</button>
+        </div>
+    }
+
+    @if (!CanSave)
+    {
+        <div class="vhf-card"><div class="vhf-denied">ليس لديك صلاحية @(VehicleId is null ? "إضافة" : "تعديل") السيارات</div></div>
+    }
+    else if (_loading)
+    {
+        <div class="vhf-card"><div class="vhf-denied">جارٍ التحميل...</div></div>
+    }
+    else
+    {
+        @* ═══ القسم ١: بيانات السيارة ═══ *@
+        <section class="vhf-card">
+            <div class="vhf-card-head">
+                <div>
+                    <div class="vhf-card-title">بيانات السيارة</div>
+                    <div class="vhf-card-sub">اللوحة والنوع والماركة والفئة في صف واحد — وباقي البيانات الفنية أسفلها</div>
+                </div>
+            </div>
+
+            <div class="vhf-grid g4">
+                <div class="svc-field">
+                    <label class="svc-label">رقم السيارة (اللوحة) <span class="svc-req">*</span></label>
+                    <input class="svc-input" @bind="_f.PlateNumber" placeholder="ب ب ك - 1234" maxlength="20" />
+                </div>
+                <div class="svc-field">
+                    <label class="svc-label">نوع المركبة <span class="svc-req">*</span></label>
+                    <input class="svc-input" @bind="_f.VehicleType" placeholder="تريلا" maxlength="50" />
+                </div>
+                <div class="svc-field">
+                    <label class="svc-label">الماركة</label>
+                    <input class="svc-input" @bind="_f.Brand" placeholder="فولفو، سكانيا، مان..." maxlength="50" />
+                </div>
+                <div class="svc-field">
+                    <label class="svc-label">الموديل والفئة</label>
+                    <input class="svc-input" @bind="_f.Model" placeholder="FH16، أكتروس..." maxlength="50" />
+                </div>
+            </div>
+
+            <div class="vhf-grid g4">
+                <div class="svc-field">
+                    <label class="svc-label">سنة الموديل</label>
+                    <input class="svc-input" type="number" @bind="_f.ModelYear" placeholder="2022" />
+                </div>
+                <div class="svc-field">
+                    <label class="svc-label">الحمولة (طن)</label>
+                    <input class="svc-input" type="number" step="0.5" @bind="_f.CapacityTon" placeholder="40" />
+                </div>
+                <div class="svc-field">
+                    <label class="svc-label">خانات الحاويات (20 قدم)</label>
+                    <input class="svc-input" type="number" min="0" max="4" @bind="_f.ContainerSlots20" />
+                </div>
+                <div class="svc-field">
+                    <label class="svc-label">الحالة التشغيلية</label>
+                    <select class="svc-input svc-select" value="@_f.Status" @onchange="OnStatusChanged">
+                        <option value="Available">متاحة للتشغيل</option>
+                        <option value="Maintenance">قيد الصيانة</option>
+                        <option value="OutOfService">خارج الخدمة</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="vhf-grid g2">
+                <div class="svc-field">
+                    <label class="svc-label">انتهاء رخصة السيارة</label>
+                    <input class="svc-input" type="date" value="@_f.LicenseExpiry" @onchange="e => _f.LicenseExpiry = e.Value?.ToString()" />
+                </div>
+                <div class="svc-field">
+                    <label class="svc-label">انتهاء التأمين</label>
+                    <input class="svc-input" type="date" value="@_f.InsuranceExpiry" @onchange="e => _f.InsuranceExpiry = e.Value?.ToString()" />
+                </div>
+            </div>
+
+            <div class="svc-field">
+                <label class="svc-label">ملاحظات</label>
+                <input class="svc-input" @bind="_f.Notes" placeholder="أي ملاحظات على السيارة..." maxlength="300" />
+            </div>
+        </section>
+
+        @* ═══ القسم ٢: الملكية والسائق ═══ *@
+        <section class="vhf-card">
+            <div class="vhf-card-head">
+                <div>
+                    <div class="vhf-card-title">الملكية والسائق الافتراضي</div>
+                    <div class="vhf-card-sub">السيارة الخارجية تتبع موردًا واحدًا، والسائق يرتبط بالمورد — والاختيار هنا يُقترح عند إنشاء رحلات السيارة دون إلزام</div>
+                </div>
+            </div>
+
+            <div class="vhf-own-row">
+                <button type="button" class="vhf-own-card @(_f.OwnershipType == "External" ? "sel" : "")" @onclick='() => SetOwnership("External")'>
+                    <span class="vhf-own-t">مورد خارجي</span>
+                    <span class="vhf-own-s">السيارة ملك مورد — اختر المالك وسائقه</span>
+                </button>
+                <button type="button" class="vhf-own-card @(_f.OwnershipType == "Company" ? "sel" : "")" @onclick='() => SetOwnership("Company")'>
+                    <span class="vhf-own-t">ملكية الشركة</span>
+                    <span class="vhf-own-s">من أسطول الشركة — السائقون يُسندون من الرحلات</span>
+                </button>
+            </div>
+
+            @if (_f.OwnershipType == "External")
+            {
+                <div class="vhf-grid g2">
+                    <div class="svc-field">
+                        <label class="svc-label">المورد المالك <span class="svc-req">*</span></label>
+                        <div class="field-inline-row">
+                            <div class="svc-input-wrap">
+                                <input class="svc-input with-prefix" placeholder="ابحث باسم المورد أو كوده..."
+                                       value="@_supplierSearch"
+                                       @oninput="OnSupplierInput" @onfocus="() => _showSupDd = true" />
+                                @if (_f.SupplierId is not null)
+                                {
+                                    <button type="button" class="field-clear-btn" @onclick="ClearSupplier">✕</button>
+                                }
+                            </div>
+                            <button type="button" class="field-quick-add" @onclick="() => _supQuickOpen = !_supQuickOpen">+ مورد جديد</button>
+                        </div>
+                        @if (_showSupDd && FilteredSuppliers.Count > 0)
+                        {
+                            <div class="field-dropdown">
+                                @foreach (var s in FilteredSuppliers)
+                                {
+                                    <div class="field-dropdown-item" @onmousedown="() => PickSupplier(s)">@s.Label</div>
+                                }
+                            </div>
+                        }
+                        @if (_supQuickOpen)
+                        {
+                            <div class="vhf-quick">
+                                <div class="vhf-quick-t">تسجيل مورد جديد (شركة نقل) واختياره مباشرة</div>
+                                <div class="vhf-grid g2">
+                                    <input class="svc-input" @bind="_supName" placeholder="اسم المورد *" maxlength="120" />
+                                    <input class="svc-input" @bind="_supPhone" placeholder="رقم الجوال" maxlength="20" />
+                                </div>
+                                <div class="vhf-quick-actions">
+                                    <button type="button" class="vhf-mini-save" @onclick="SaveSupplierQuick" disabled="@_supSaving">حفظ واختيار</button>
+                                    <button type="button" class="vhf-mini-cancel" @onclick="() => _supQuickOpen = false">إلغاء</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="svc-field">
+                        <label class="svc-label">السائق الافتراضي للسيارة</label>
+                        @if (_f.SupplierId is null)
+                        {
+                            <div class="svc-hint">اختر المورد المالك أولًا — وستظهر هنا قائمة سائقيه</div>
+                        }
+                        else
+                        {
+                            <div class="field-inline-row">
+                                <div class="svc-input-wrap">
+                                    <input class="svc-input with-prefix" placeholder="ابحث في سائقين المورد..."
+                                           value="@_driverSearch"
+                                           @oninput="OnDriverInput" @onfocus="() => _showDrvDd = true" />
+                                    @if (_f.DefaultDriverId is not null)
+                                    {
+                                        <button type="button" class="field-clear-btn" @onclick="ClearDriver">✕</button>
+                                    }
+                                </div>
+                                <button type="button" class="field-quick-add" @onclick="() => _drvQuickOpen = !_drvQuickOpen">+ سائق جديد</button>
+                            </div>
+                            @if (_showDrvDd && FilteredDrivers.Count > 0)
+                            {
+                                <div class="field-dropdown">
+                                    @foreach (var d in FilteredDrivers)
+                                    {
+                                        <div class="field-dropdown-item" @onmousedown="() => PickDriver(d)">@d.Label</div>
+                                    }
+                                </div>
+                            }
+                            <div class="vhf-driver-actions">
+                                <button type="button" class="vhf-self-btn" @onclick="SupplierIsDriver" disabled="@_selfBusy">المورد نفسه هو السائق</button>
+                                <span class="svc-hint">يُقترح هذا السائق تلقائيًا عند إنشاء رحلات السيارة — ويمكن تغييره في الرحلة</span>
+                            </div>
+                            @if (_drvQuickOpen)
+                            {
+                                <div class="vhf-quick">
+                                    <div class="vhf-quick-t">تسجيل سائق جديد تابع لهذا المورد واختياره مباشرة</div>
+                                    <div class="vhf-grid g2">
+                                        <input class="svc-input" @bind="_drvName" placeholder="اسم السائق *" maxlength="120" />
+                                        <input class="svc-input" @bind="_drvMobile" placeholder="رقم الجوال" maxlength="20" />
+                                        <input class="svc-input" @bind="_drvLicense" placeholder="رقم رخصة القيادة" maxlength="30" />
+                                        <input class="svc-input" type="date" value="@_drvLicenseExpiry" @onchange="OnDrvLicenseExpiryChanged" />
+                                    </div>
+                                    <div class="vhf-quick-actions">
+                                        <button type="button" class="vhf-mini-save" @onclick="SaveDriverQuick" disabled="@_drvSaving">حفظ واختيار</button>
+                                        <button type="button" class="vhf-mini-cancel" @onclick="() => _drvQuickOpen = false">إلغاء</button>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="svc-hint">سيارة شركة: لا مورد مالك ولا سائق افتراضي — الاقتران بالسائقين الداخليين يتم عند إنشاء الرحلات.</div>
+            }
+        </section>
+
+        <div class="vhf-actions">
+            <button type="button" class="vhf-cancel-btn" @onclick="GoBack">إلغاء</button>
+            <button type="button" class="vhf-save-btn big" @onclick="SaveAsync" disabled="@_saving">
+                @if (_saving) { <span class="btn-spinner sm" aria-hidden="true"></span> <span>جارٍ الحفظ...</span> }
+                else { <span>@(VehicleId is null ? "حفظ السيارة" : "حفظ التعديلات")</span> }
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int? VehicleId { get; set; }
+
+    private AuthUser? _user;
+    private bool CanCreate => _user?.Can("FLEET.CREATE") ?? false;
+    private bool CanEdit   => _user?.Can("FLEET.EDIT") ?? false;
+    private bool CanSave   => VehicleId is null ? CanCreate : CanEdit;
+
+    private bool _loading = true, _saving;
+    private string? _msg; private bool _ok;
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+    public class PairOpt { public int Id { get; set; } public string Label { get; set; } = ""; public int? SupplierId { get; set; } public bool IsCompany { get; set; } public int? DefaultDriverId { get; set; } }
+
+    private class VForm
+    {
+        public string PlateNumber { get; set; } = "";
+        public string VehicleType { get; set; } = "تريلا";
+        public string? Brand { get; set; }
+        public string? Model { get; set; }
+        public short? ModelYear { get; set; }
+        public string OwnershipType { get; set; } = "External";
+        public int? SupplierId { get; set; }
+        public int? DefaultDriverId { get; set; }
+        public decimal? CapacityTon { get; set; }
+        public byte ContainerSlots20 { get; set; } = 1;
+        public string? LicenseExpiry { get; set; }
+        public string? InsuranceExpiry { get; set; }
+        public string Status { get; set; } = "Available";
+        public string? Notes { get; set; }
+    }
+    private VForm _f = new();
+
+    private class Detail
+    {
+        public int VehicleId { get; set; } public string PlateNumber { get; set; } = "";
+        public string VehicleType { get; set; } = ""; public string? Brand { get; set; }
+        public string? Model { get; set; } public short? ModelYear { get; set; }
+        public string OwnershipType { get; set; } = "External"; public int? SupplierId { get; set; }
+        public string? SupplierName { get; set; } public decimal? CapacityTon { get; set; }
+        public byte ContainerSlots20 { get; set; } public string? LicenseExpiryDate { get; set; }
+        public string? InsuranceExpiryDate { get; set; } public string Status { get; set; } = "Available";
+        public string? Notes { get; set; } public int? DefaultDriverId { get; set; }
+        public string? DefaultDriverName { get; set; }
+    }
+
+    /* ── الموردون والسائقون ── */
+    private List<Opt> _suppliers = new();
+    private List<PairOpt> _driverPairs = new();
+    private string _supplierSearch = "", _supplierName = "";
+    private bool _showSupDd;
+    private string _driverSearch = "";
+    private bool _showDrvDd;
+
+    private List<Opt> FilteredSuppliers => _suppliers
+        .Where(s => string.IsNullOrWhiteSpace(_supplierSearch) || _f.SupplierId == s.Id
+                    || s.Label.Contains(_supplierSearch, StringComparison.OrdinalIgnoreCase))
+        .Take(12).ToList();
+
+    private List<PairOpt> FilteredDrivers => _driverPairs
+        .Where(d => d.SupplierId == _f.SupplierId
+                    && (string.IsNullOrWhiteSpace(_driverSearch) || _f.DefaultDriverId == d.Id
+                        || d.Label.Contains(_driverSearch, StringComparison.OrdinalIgnoreCase)))
+        .Take(12).ToList();
+
+    /* ── إضافات سريعة ── */
+    private bool _supQuickOpen, _supSaving;
+    private string _supName = "", _supPhone = "";
+    private bool _drvQuickOpen, _drvSaving, _selfBusy;
+    private string _drvName = "", _drvMobile = "", _drvLicense = "", _drvLicenseExpiry = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        try { _suppliers = await Http.GetFromJsonAsync<List<Opt>>("api/options/suppliers") ?? new(); } catch { }
+        await LoadDriverPairsAsync();
+
+        if (VehicleId is int id)
+        {
+            try
+            {
+                var d = await Http.GetFromJsonAsync<Detail>($"api/fleet/vehicles/{id}");
+                if (d is not null)
+                {
+                    _f = new VForm
+                    {
+                        PlateNumber = d.PlateNumber, VehicleType = d.VehicleType, Brand = d.Brand,
+                        Model = d.Model, ModelYear = d.ModelYear, OwnershipType = d.OwnershipType,
+                        SupplierId = d.SupplierId, DefaultDriverId = d.DefaultDriverId,
+                        CapacityTon = d.CapacityTon, ContainerSlots20 = d.ContainerSlots20,
+                        LicenseExpiry = d.LicenseExpiryDate, InsuranceExpiry = d.InsuranceExpiryDate,
+                        Status = d.Status, Notes = d.Notes
+                    };
+                    var sup = _suppliers.FirstOrDefault(s => s.Id == d.SupplierId);
+                    if (sup is not null) { _supplierSearch = sup.Label; _supplierName = NameOf(sup.Label); }
+                    else if (d.SupplierName is not null) { _supplierSearch = d.SupplierName; _supplierName = d.SupplierName ?? ""; }
+                    var drv = _driverPairs.FirstOrDefault(x => x.Id == d.DefaultDriverId);
+                    if (drv is not null) _driverSearch = drv.Label;
+                    else if (d.DefaultDriverName is not null) _driverSearch = d.DefaultDriverName ?? "";
+                }
+            }
+            catch { _msg = "تعذّر تحميل بيانات السيارة"; _ok = false; }
+        }
+        _loading = false;
+    }
+
+    private async Task LoadDriverPairsAsync()
+    {
+        try { _driverPairs = await Http.GetFromJsonAsync<List<PairOpt>>("api/options/drivers-pairing") ?? new(); } catch { }
+    }
+
+    private static string NameOf(string label)
+    {
+        var i = label.IndexOf(" (", StringComparison.Ordinal);
+        return i > 0 ? label[..i] : label;
+    }
+
+    private void GoBack() => Nav.NavigateTo("/vehicles");
+
+    private void OnStatusChanged(ChangeEventArgs e) => _f.Status = e.Value?.ToString() ?? "Available";
+
+    private void OnDrvLicenseExpiryChanged(ChangeEventArgs e) => _drvLicenseExpiry = e.Value?.ToString() ?? "";
+
+    private void SetOwnership(string t)
+    {
+        _f.OwnershipType = t;
+        if (t == "Company") { _f.SupplierId = null; _f.DefaultDriverId = null; _supplierSearch = ""; _driverSearch = ""; }
+    }
+
+    /* ── منتقي المورد ── */
+    private void OnSupplierInput(ChangeEventArgs e)
+    {
+        _supplierSearch = e.Value?.ToString() ?? "";
+        if (_f.SupplierId is int sid && _suppliers.FirstOrDefault(s => s.Id == sid)?.Label != _supplierSearch)
+        { _f.SupplierId = null; _f.DefaultDriverId = null; _driverSearch = ""; }
+        _showSupDd = true;
+    }
+
+    private void PickSupplier(Opt s)
+    {
+        _f.SupplierId = s.Id; _supplierSearch = s.Label; _supplierName = NameOf(s.Label);
+        _showSupDd = false;
+        _f.DefaultDriverId = null; _driverSearch = "";
+    }
+
+    private void ClearSupplier()
+    {
+        _f.SupplierId = null; _supplierSearch = ""; _supplierName = "";
+        _f.DefaultDriverId = null; _driverSearch = "";
+    }
+
+    /* ── منتقي السائق ── */
+    private void OnDriverInput(ChangeEventArgs e)
+    {
+        _driverSearch = e.Value?.ToString() ?? "";
+        if (_f.DefaultDriverId is int did && _driverPairs.FirstOrDefault(d => d.Id == did)?.Label != _driverSearch)
+            _f.DefaultDriverId = null;
+        _showDrvDd = true;
+    }
+
+    private void PickDriver(PairOpt d)
+    {
+        _f.DefaultDriverId = d.Id; _driverSearch = d.Label; _showDrvDd = false;
+    }
+
+    private void ClearDriver() { _f.DefaultDriverId = null; _driverSearch = ""; }
+
+    /* ── إضافات سريعة ── */
+    private static async Task<(bool ok, int id, string msg)> PostCreate(HttpResponseMessage res)
+    {
+        var body = await res.Content.ReadAsStringAsync();
+        var msg = body; var id = 0;
+        try
+        {
+            var doc = System.Text.Json.JsonDocument.Parse(body).RootElement;
+            if (doc.TryGetProperty("message", out var m)) msg = m.GetString() ?? body;
+            if (doc.TryGetProperty("id", out var i)) id = i.GetInt32();
+        }
+        catch { /* ليست JSON */ }
+        return (res.IsSuccessStatusCode, id, msg);
+    }
+
+    private async Task SaveSupplierQuick()
+    {
+        if (string.IsNullOrWhiteSpace(_supName)) { Snackbar.Add("اكتب اسم المورد", Severity.Error); return; }
+        _supSaving = true;
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/suppliers", new
+            {
+                supplierType = "TransportCompany",
+                nameAr = _supName.Trim(),
+                phone = string.IsNullOrWhiteSpace(_supPhone) ? null : _supPhone.Trim()
+            });
+            var (ok, id, msg) = await PostCreate(res);
+            Snackbar.Add(msg, ok ? Severity.Success : Severity.Error);
+            if (ok && id > 0)
+            {
+                var opt = new Opt { Id = id, Label = _supName.Trim() };
+                _suppliers.Add(opt); _suppliers = _suppliers.OrderBy(s => s.Label).ToList();
+                PickSupplier(opt);
+                _supQuickOpen = false; _supName = ""; _supPhone = "";
+            }
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        finally { _supSaving = false; }
+    }
+
+    private async Task SaveDriverQuick()
+    {
+        if (_f.SupplierId is null) { Snackbar.Add("اختر المورد أولًا", Severity.Error); return; }
+        if (string.IsNullOrWhiteSpace(_drvName)) { Snackbar.Add("اكتب اسم السائق", Severity.Error); return; }
+        _drvSaving = true;
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/drivers", new
+            {
+                driverType = "External", employeeId = (int?)null, supplierId = _f.SupplierId,
+                fullName = _drvName.Trim(), nationalId = (string?)null,
+                mobile = string.IsNullOrWhiteSpace(_drvMobile) ? null : _drvMobile.Trim(),
+                licenseNumber = string.IsNullOrWhiteSpace(_drvLicense) ? null : _drvLicense.Trim(),
+                licenseType = (string?)null,
+                licenseExpiryDate = string.IsNullOrWhiteSpace(_drvLicenseExpiry) ? null : _drvLicenseExpiry,
+                status = "Active", notes = (string?)null
+            });
+            var (ok, id, msg) = await PostCreate(res);
+            Snackbar.Add(msg, ok ? Severity.Success : Severity.Error);
+            if (ok && id > 0)
+            {
+                await LoadDriverPairsAsync();
+                var d = _driverPairs.FirstOrDefault(x => x.Id == id);
+                if (d is not null) PickDriver(d);
+                _drvQuickOpen = false; _drvName = ""; _drvMobile = ""; _drvLicense = ""; _drvLicenseExpiry = "";
+            }
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        finally { _drvSaving = false; }
+    }
+
+    private async Task SupplierIsDriver()
+    {
+        if (_f.SupplierId is not int sid || string.IsNullOrWhiteSpace(_supplierName)) return;
+        var existing = _driverPairs.FirstOrDefault(d => d.SupplierId == sid && NameOf(d.Label) == _supplierName);
+        if (existing is not null) { PickDriver(existing); return; }
+
+        _selfBusy = true;
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/drivers", new
+            {
+                driverType = "External", employeeId = (int?)null, supplierId = sid,
+                fullName = _supplierName, nationalId = (string?)null, mobile = (string?)null,
+                licenseNumber = (string?)null, licenseType = (string?)null, licenseExpiryDate = (string?)null,
+                status = "Active", notes = "المورد نفسه هو السائق"
+            });
+            var (ok, id, msg) = await PostCreate(res);
+            Snackbar.Add(msg, ok ? Severity.Success : Severity.Error);
+            if (ok && id > 0)
+            {
+                await LoadDriverPairsAsync();
+                var d = _driverPairs.FirstOrDefault(x => x.Id == id);
+                if (d is not null) PickDriver(d);
+            }
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        finally { _selfBusy = false; }
+    }
+
+    /* ── الحفظ ── */
+    private async Task SaveAsync()
+    {
+        if (_saving) return;
+        if (string.IsNullOrWhiteSpace(_f.PlateNumber)) { _msg = "رقم السيارة (اللوحة) مطلوب"; _ok = false; return; }
+        if (string.IsNullOrWhiteSpace(_f.VehicleType)) { _msg = "نوع المركبة مطلوب"; _ok = false; return; }
+        if (_f.OwnershipType == "External" && _f.SupplierId is null) { _msg = "الملكية «مورد خارجي» — اختر المورد المالك"; _ok = false; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var payload = new
+            {
+                plateNumber = _f.PlateNumber.Trim(),
+                vehicleType = _f.VehicleType.Trim(),
+                brand = string.IsNullOrWhiteSpace(_f.Brand) ? null : _f.Brand.Trim(),
+                model = string.IsNullOrWhiteSpace(_f.Model) ? null : _f.Model.Trim(),
+                modelYear = _f.ModelYear,
+                ownershipType = _f.OwnershipType,
+                supplierId = _f.OwnershipType == "External" ? _f.SupplierId : null,
+                capacityTon = _f.CapacityTon,
+                containerSlots20 = _f.ContainerSlots20,
+                licenseExpiryDate = string.IsNullOrWhiteSpace(_f.LicenseExpiry) ? null : _f.LicenseExpiry,
+                insuranceExpiryDate = string.IsNullOrWhiteSpace(_f.InsuranceExpiry) ? null : _f.InsuranceExpiry,
+                status = _f.Status,
+                notes = string.IsNullOrWhiteSpace(_f.Notes) ? null : _f.Notes.Trim(),
+                defaultDriverId = _f.OwnershipType == "External" ? _f.DefaultDriverId : null
+            };
+
+            var res = VehicleId is null
+                ? await Http.PostAsJsonAsync("api/fleet/vehicles", payload)
+                : await Http.PutAsJsonAsync($"api/fleet/vehicles/{VehicleId}", payload);
+
+            var body = await res.Content.ReadAsStringAsync();
+            var msg = body;
+            try
+            {
+                var doc = System.Text.Json.JsonDocument.Parse(body).RootElement;
+                if (doc.TryGetProperty("message", out var m)) msg = m.GetString() ?? body;
+            }
+            catch { }
+
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(msg, Severity.Success);
+                Nav.NavigateTo("/vehicles");
+                return;
+            }
+            _msg = msg; _ok = false;
+        }
+        catch (Exception ex) { _msg = "فشل الحفظ: " + ex.Message; _ok = false; }
+        finally { _saving = false; }
+    }
+}
+
+<style>
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px; margin: 0 auto; width: 100%;
+        box-sizing: border-box; position: relative; z-index: 1;
+    }
+
+    .vhf-body {
+        padding: 18px clamp(16px, 3vw, 40px) 96px;
+        max-width: 1440px; width: 100%;
+        margin: 0 auto; box-sizing: border-box;
+        display: flex; flex-direction: column; gap: 16px;
+    }
+
+    .vhf-card {
+        background: #fff; border: 1px solid #e3ebf5; border-radius: 18px;
+        box-shadow: 0 10px 26px rgba(10,27,59,.06);
+        padding: 20px 22px 22px;
+        display: flex; flex-direction: column; gap: 16px;
+    }
+
+    .vhf-card-title { font-size: 15px; font-weight: 900; color: #12263f; }
+    .vhf-card-sub { font-size: 12px; color: #7d8aa5; font-weight: 600; margin-top: 2px; }
+    .vhf-denied { padding: 26px; text-align: center; color: #8a2f2f; font-weight: 800; }
+
+    .vhf-grid { display: grid; gap: 14px; }
+    .vhf-grid.g4 { grid-template-columns: repeat(4, 1fr); }
+    .vhf-grid.g2 { grid-template-columns: repeat(2, 1fr); }
+
+    .vhf-own-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .vhf-own-card {
+        text-align: right; font-family: inherit; cursor: pointer;
+        background: #f7fafd; border: 1.5px solid #dbe6f3; border-radius: 14px;
+        padding: 13px 15px; display: flex; flex-direction: column; gap: 2px;
+        transition: border-color .15s, background .15s;
+    }
+    .vhf-own-card:hover { border-color: #9db9ea; }
+    .vhf-own-card.sel { border-color: #0B56DF; background: #eef4ff; box-shadow: 0 0 0 3px rgba(11,86,223,.08); }
+    .vhf-own-t { font-size: 13.5px; font-weight: 900; color: #12263f; }
+    .vhf-own-s { font-size: 11.5px; color: #7d8aa5; font-weight: 600; }
+
+    .vhf-quick {
+        margin-top: 10px; background: #f3f7ff; border: 1px dashed #9db9ea;
+        border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .vhf-quick-t { font-size: 12px; font-weight: 800; color: #1558d6; }
+    .vhf-quick-actions { display: flex; gap: 8px; }
+    .vhf-mini-save { background: #0B56DF; color: #fff; border: none; border-radius: 9px; padding: 8px 16px; font-size: 12px; font-weight: 800; cursor: pointer; font-family: inherit; }
+    .vhf-mini-save:disabled { opacity: .55; cursor: default; }
+    .vhf-mini-cancel { background: #fff; color: #5a6b84; border: 1px solid #d6e0ee; border-radius: 9px; padding: 8px 14px; font-size: 12px; font-weight: 800; cursor: pointer; font-family: inherit; }
+
+    .vhf-driver-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+    .vhf-self-btn {
+        border: 1.5px solid #FF8015; background: #fff7ef; color: #b35c05;
+        border-radius: 9px; padding: 7px 13px; font-size: 12px; font-weight: 800;
+        cursor: pointer; font-family: inherit; white-space: nowrap;
+    }
+    .vhf-self-btn:hover { background: #ffedda; }
+    .vhf-self-btn:disabled { opacity: .55; cursor: default; }
+
+    .vhf-banner { border-radius: 12px; padding: 12px 16px; font-size: 13px; font-weight: 800;
+        display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .vhf-banner.ok { background: #e8f7ee; color: #17663a; border: 1px solid #bfe6cf; }
+    .vhf-banner.err { background: #fdeeee; color: #8a2f2f; border: 1px solid #f3c2c2; }
+    .vhf-banner-x { background: none; border: none; cursor: pointer; font-size: 13px; color: inherit; }
+
+    .vhf-actions { display: flex; justify-content: flex-start; gap: 10px; }
+    .vhf-save-btn {
+        background: #FF8015; color: #fff; border: none; border-radius: 11px;
+        padding: 10px 22px; font-size: 13px; font-weight: 900; cursor: pointer; font-family: inherit;
+        display: inline-flex; align-items: center; gap: 8px;
+    }
+    .vhf-save-btn.big { padding: 12px 30px; font-size: 14px; }
+    .vhf-save-btn:disabled { opacity: .55; cursor: default; }
+    .vhf-cancel-btn {
+        background: #fff; color: #5a6b84; border: 1.5px solid #d6e0ee; border-radius: 11px;
+        padding: 10px 20px; font-size: 13px; font-weight: 800; cursor: pointer; font-family: inherit;
+    }
+    .vhf-back-btn {
+        background: rgba(255,255,255,.1); color: #dbe7f7; border: 1px solid rgba(255,255,255,.25);
+        border-radius: 10px; padding: 9px 16px; font-size: 12.5px; font-weight: 800; cursor: pointer;
+        font-family: inherit; display: inline-flex; align-items: center; gap: 7px;
+    }
+    .vhf-back-btn:hover { background: rgba(255,255,255,.18); }
+
+    .btn-spinner { width: 14px; height: 14px; border-radius: 50%; display: inline-block;
+        border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; animation: vhf-spin .7s linear infinite; }
+    @@keyframes vhf-spin { to { transform: rotate(360deg); } }
+
+.svc-field { display: flex; flex-direction: column; gap: 5px; position: relative; }
+.svc-label { font-size: 11.5px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 4px; }
+.svc-req { color: #D64545; font-size: 13px; }
+.svc-input-wrap { position: relative; display: flex; align-items: center; }
+.svc-input-wrap { flex: 1 1 240px; min-width: 0; }
+.svc-prefix { position: absolute; right: 12px; z-index: 1; display: flex; align-items: center; color: #9aaabb; pointer-events: none; }
+.svc-prefix.txt { font-size: 11px; font-weight: 800; color: #6B7A8F; }
+.svc-input { width: 100%; height: 42px; border: 1.5px solid #d8e2f0; border-radius: 10px; background: #fafcff; color: #1A2332; font-family: inherit; font-size: 13px; padding: 0 12px; outline: none; box-sizing: border-box; transition: border-color .15s, box-shadow .15s, background .15s; }
+.svc-input:focus { border-color: #0B56DF; box-shadow: 0 0 0 3px rgba(11,86,223,.1); background: #fff; }
+.svc-input::placeholder { color: #b0bcc8; }
+.svc-input.ltr { direction: ltr; text-align: left; }
+.svc-input.with-prefix { padding-right: 40px; }
+.svc-select {
+        cursor: pointer; -webkit-appearance: none; appearance: none;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B7A8F' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
+        background-repeat: no-repeat; background-position: left 12px center; background-size: 13px; padding-left: 34px;
+    }
+.svc-full { grid-column: 1 / -1; }
+.field-inline-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.field-inline-row .svc-input-wrap { flex: 1 1 240px; min-width: 0; }
+.field-clear-btn { position: absolute; left: 12px; background: none; border: none; color: #9aaabb; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 50%; font-size: 11px; font-weight: bold; }
+.field-clear-btn:hover { background: rgba(0,0,0,0.05); color: var(--fc-red); }
+.field-quick-add { border: 1.5px dashed #9db9ea; background: #f3f7ff; color: #1558d6; border-radius: 9px; padding: 0 14px; font-size: 11.5px; font-weight: 800; cursor: pointer; font-family: inherit; white-space: nowrap; display: inline-flex; align-items: center; }
+.field-quick-add:hover { background: #e7f0ff; }
+.field-dropdown { position: absolute; top: 100%; right: 0; left: 0; margin-top: 4px; background: #fafcff; border: 1px solid #d8e2f0; border-radius: 9px; box-shadow: 0 8px 24px rgba(0,0,0,.12); max-height: 240px; overflow-y: auto; z-index: 100; }
+.field-dropdown-item { padding: 10px 12px; font-size: 13px; color: var(--fc-text); cursor: pointer; transition: background .1s; }
+.field-dropdown-item:hover, .field-dropdown-item.is-focused { background: #eaf1ff; color: var(--fc-blue); font-weight: 600; }
+    @@media (max-width: 1100px) {
+        .vhf-grid.g4 { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @@media (max-width: 680px) {
+        .hero-wrapper { padding: 12px 12px 0; }
+        .vhf-body { padding: 14px 12px 90px; }
+        .vhf-grid.g4, .vhf-grid.g2, .vhf-own-row { grid-template-columns: 1fr; }
+        .vhf-card { padding: 16px 14px 18px; }
+    }
+</style>

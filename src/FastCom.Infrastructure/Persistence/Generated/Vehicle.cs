@@ -35,6 +35,8 @@ public partial class Vehicle
 
     public int? SupplierId { get; set; }
 
+    public int? DefaultDriverId { get; set; }
+
     [Column(TypeName = "decimal(10, 2)")]
     public decimal? CapacityTon { get; set; }
 
@@ -70,6 +72,8 @@ public partial class Vehicle
     [ForeignKey("SupplierId")]
     [InverseProperty("Vehicles")]
     public virtual Supplier? Supplier { get; set; }
+
+    public virtual Driver? DefaultDriver { get; set; }
 
     [InverseProperty("Vehicle")]
     public virtual ICollection<Trip> Trips { get; set; } = new List<Trip>();

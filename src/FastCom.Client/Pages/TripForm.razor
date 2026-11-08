@@ -503,7 +503,7 @@
                                                disabled="@_locked"
                                                placeholder="ابحث عن السائق..."
                                                @oninput="OnDriverSearch"
-                                               @onfocus="() => { _showDriverDropdown = true; _filteredDrivers = FilterOpts(_drivers, _driverSearch); }"
+                                               @onfocus="() => { _showDriverDropdown = true; _filteredDrivers = OrderedDrivers(_driverSearch); }"
                                                @onfocusout="() => _showDriverDropdown = false"
                                                aria-required="true" />
                                     </div>
@@ -545,7 +545,7 @@
                                                disabled="@_locked"
                                                placeholder="ابحث عن السيارة..."
                                                @oninput="OnVehicleSearch"
-                                               @onfocus="() => { _showVehicleDropdown = true; _filteredVehicles = FilterOpts(_vehicles, _vehicleSearch); }"
+                                               @onfocus="() => { _showVehicleDropdown = true; _filteredVehicles = OrderedVehicles(_vehicleSearch); }"
                                                @onfocusout="() => _showVehicleDropdown = false"
                                                aria-required="true" />
                                     </div>
@@ -1813,6 +1813,13 @@
 
     /* ── DTOs ── */
     public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+    public class PairOpt { public int Id { get; set; } public string Label { get; set; } = ""; public int? SupplierId { get; set; } public bool IsCompany { get; set; } public int? DefaultDriverId { get; set; } }
+    private List<PairOpt> _driverPairs = new(), _vehiclePairs = new();
+
+    /* نفس المصدر: داخلي↔عربية شركة، أو خارجي↔عربية نفس المورد */
+    private static bool SameSource(PairOpt a, PairOpt b) =>
+        (a.IsCompany && b.IsCompany) ||
+        (!a.IsCompany && !b.IsCompany && a.SupplierId is not null && a.SupplierId == b.SupplierId);
 
     public class Avail
     {
@@ -1953,6 +1960,8 @@
         {
             _drivers      = await SafeGet("api/options/drivers");
             _vehicles     = await SafeGet("api/options/vehicles");
+            _driverPairs  = await SafeGetPairs("api/options/drivers-pairing");
+            _vehiclePairs = await SafeGetPairs("api/options/vehicles-pairing");
             _trailers     = await SafeGet("api/options/trailers");
             _tripTypes    = await SafeGet("api/options/trip-types");
             _ports        = await SafeGet("api/options/ports");
@@ -1991,6 +2000,12 @@
         }
         catch (Exception ex) { _msg = "فشل التحميل: " + ex.Message; _ok = false; }
         finally { _loading = false; }
+    }
+
+    private async Task<List<PairOpt>> SafeGetPairs(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<PairOpt>>(url) ?? new(); }
+        catch { return new(); }
     }
 
     private async Task<List<Opt>> SafeGet(string url)
@@ -2118,7 +2133,7 @@
         _driverSearch = e.Value?.ToString() ?? "";
         _driverTouched = true;
         _showDriverDropdown = true;
-        _filteredDrivers = FilterOpts(_drivers, _driverSearch);
+        _filteredDrivers = OrderedDrivers(_driverSearch);
     }
 
     private void OnVehicleSearch(ChangeEventArgs e)
@@ -2126,7 +2141,7 @@
         _vehicleSearch = e.Value?.ToString() ?? "";
         _vehicleTouched = true;
         _showVehicleDropdown = true;
-        _filteredVehicles = FilterOpts(_vehicles, _vehicleSearch);
+        _filteredVehicles = OrderedVehicles(_vehicleSearch);
     }
 
     private void OnTrailerSearch(ChangeEventArgs e)
@@ -2143,6 +2158,7 @@
         _driverSearch = d.Label;
         _driverTouched = false;
         _showDriverDropdown = false;
+        PairAfterDriver();
     }
 
     private void PickVehicle(Opt v)
@@ -2151,6 +2167,66 @@
         _vehicleSearch = v.Label;
         _vehicleTouched = false;
         _showVehicleDropdown = false;
+        PairAfterVehicle();
+    }
+
+    /* اقتراح الربط بالمورد (من غير منع): لو الطرف التاني فاضي أو من مصدر
+       تاني وفي مرشح وحيد من نفس المصدر — بيتملى تلقائيًا */
+    private void PairAfterVehicle()
+    {
+        var v = _vehiclePairs.FirstOrDefault(x => x.Id == _f.VehicleId);
+        if (v is null) return;
+        var cur = _driverPairs.FirstOrDefault(x => x.Id == _f.DriverId);
+        if (cur is not null && SameSource(cur, v)) return;
+        // السائق الافتراضي للسيارة يُقترح قبل قاعدة المرشح الوحيد
+        if (v.DefaultDriverId is int pdd)
+        {
+            var pd = _drivers.FirstOrDefault(x => x.Id == pdd);
+            if (pd is not null) { _f.DriverId = pd.Id; _driverSearch = pd.Label; _driverTouched = false; return; }
+        }
+        var matches = _driverPairs.Where(d => SameSource(d, v)).ToList();
+        if (matches.Count != 1) return;
+        var d = _drivers.FirstOrDefault(x => x.Id == matches[0].Id);
+        if (d is null) return;
+        _f.DriverId = d.Id; _driverSearch = d.Label; _driverTouched = false;
+    }
+
+    private void PairAfterDriver()
+    {
+        var dr = _driverPairs.FirstOrDefault(x => x.Id == _f.DriverId);
+        if (dr is null) return;
+        var cur = _vehiclePairs.FirstOrDefault(x => x.Id == _f.VehicleId);
+        if (cur is not null && SameSource(cur, dr)) return;
+        var matches = _vehiclePairs.Where(v => SameSource(v, dr)).ToList();
+        if (matches.Count != 1) return;
+        var v = _vehicles.FirstOrDefault(x => x.Id == matches[0].Id);
+        if (v is null) return;
+        _f.VehicleId = v.Id; _vehicleSearch = v.Label; _vehicleTouched = false;
+    }
+
+    /* ترتيب القائمة: اللي من نفس مصدر الطرف المختار يطلع الأول */
+    private List<Opt> OrderedDrivers(string s)
+    {
+        var list = FilterOpts(_drivers, s);
+        var v = _vehiclePairs.FirstOrDefault(x => x.Id == _f.VehicleId);
+        if (v is null) return list;
+        return list.OrderByDescending(o =>
+        {
+            var p = _driverPairs.FirstOrDefault(x => x.Id == o.Id);
+            return p is not null && SameSource(p, v) ? 1 : 0;
+        }).ToList();
+    }
+
+    private List<Opt> OrderedVehicles(string s)
+    {
+        var list = FilterOpts(_vehicles, s);
+        var dr = _driverPairs.FirstOrDefault(x => x.Id == _f.DriverId);
+        if (dr is null) return list;
+        return list.OrderByDescending(o =>
+        {
+            var p = _vehiclePairs.FirstOrDefault(x => x.Id == o.Id);
+            return p is not null && SameSource(p, dr) ? 1 : 0;
+        }).ToList();
     }
 
     private void PickTrailer(Opt t)

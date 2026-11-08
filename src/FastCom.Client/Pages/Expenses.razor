@@ -57,22 +57,22 @@
                 <div class="fc-kpi fc-kpi-click @(_tab == "all" ? "fc-kpi-active" : "")"
                      @onclick='() => SetTab("all")' role="button" aria-pressed="@(_tab == "all")">
                     <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.ReceiptLong" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي المصروفات</div></div>
+                    <div><div class="fc-kpi-num">@Money(_items.Where(e => e.Status != "Cancelled").Sum(e => e.Amount))</div><div class="fc-kpi-lb">إجمالي المصروفات</div><div class="fc-kpi-sub">@_items.Count مصروف</div></div>
                 </div>
                 <div class="fc-kpi fc-kpi-click @(_tab == "Draft" ? "fc-kpi-active" : "")"
                      @onclick='() => SetTab("Draft")' role="button" aria-pressed="@(_tab == "Draft")">
                     <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.HourglassTop" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(e => e.Status == "Draft")</div><div class="fc-kpi-lb">مسودة</div></div>
+                    <div><div class="fc-kpi-num">@Money(_items.Where(e => e.Status == "Draft").Sum(e => e.Amount))</div><div class="fc-kpi-lb">مسودة</div><div class="fc-kpi-sub">@_items.Count(e => e.Status == "Draft") مصروف</div></div>
                 </div>
                 <div class="fc-kpi fc-kpi-click @(_tab == "Posted" ? "fc-kpi-active" : "")"
                      @onclick='() => SetTab("Posted")' role="button" aria-pressed="@(_tab == "Posted")">
                     <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.TaskAlt" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(e => e.Status == "Posted")</div><div class="fc-kpi-lb">مؤكد</div></div>
+                    <div><div class="fc-kpi-num">@Money(_items.Where(e => e.Status == "Posted").Sum(e => e.Amount))</div><div class="fc-kpi-lb">مؤكد</div><div class="fc-kpi-sub">@_items.Count(e => e.Status == "Posted") مصروف</div></div>
                 </div>
                 <div class="fc-kpi fc-kpi-click @(_tab == "Cancelled" ? "fc-kpi-active" : "")"
                      @onclick='() => SetTab("Cancelled")' role="button" aria-pressed="@(_tab == "Cancelled")">
                     <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Block" /></div>
-                    <div><div class="fc-kpi-num">@_items.Count(e => e.Status == "Cancelled")</div><div class="fc-kpi-lb">ملغي</div></div>
+                    <div><div class="fc-kpi-num">@Money(_items.Where(e => e.Status == "Cancelled").Sum(e => e.Amount))</div><div class="fc-kpi-lb">ملغي</div><div class="fc-kpi-sub">@_items.Count(e => e.Status == "Cancelled") مصروف</div></div>
                 </div>
             </div>
             }
@@ -115,7 +115,7 @@
                         <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
                     </svg>
                     <input class="exl-search-input"
-                           placeholder="ابحث بالرقم أو البيان أو المرجع..."
+                           placeholder="ابحث بالرقم أو البيان أو رقم حجز الوكيل أو صاحب العهدة..."
                            @bind="_search"
                            @bind:event="oninput"
                            aria-label="بحث" />
@@ -146,6 +146,38 @@
                         {
                             <option value="@t.Id">@t.Label</option>
                         }
+                    </select>
+                </div>
+
+                @* فلاتر: التاريخ + صاحب العهدة *@
+                <div class="exl-type-filter-wrap">
+                    <span class="exl-filter-lb">من</span>
+                    <input type="date" class="exl-type-select" value="@_fromDate"
+                           @onchange="e => _fromDate = e.Value?.ToString()" aria-label="من تاريخ" />
+                </div>
+                <div class="exl-type-filter-wrap">
+                    <span class="exl-filter-lb">إلى</span>
+                    <input type="date" class="exl-type-select" value="@_toDate"
+                           @onchange="e => _toDate = e.Value?.ToString()" aria-label="إلى تاريخ" />
+                </div>
+                <div class="exl-type-filter-wrap">
+                    <select class="exl-type-select" @bind="_ownerFilter" aria-label="عهدة موظف">
+                        <option value="0">كل أصحاب العُهد</option>
+                        @foreach (var o in _items.Where(e => e.CustodyOwnerId != null)
+                                                  .GroupBy(e => e.CustodyOwnerId)
+                                                  .Select(g => new { Id = g.Key!.Value, Name = g.First().CustodyOwnerName ?? "—" })
+                                                  .OrderBy(x => x.Name))
+                        {
+                            <option value="@o.Id">عهدة @o.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="exl-type-filter-wrap">
+                    <select class="exl-type-select" @bind="_boxKindFilter" aria-label="نوع خزنة الصرف">
+                        <option value="">كل خزن الصرف</option>
+                        <option value="Cash">خزنة نقدية</option>
+                        <option value="Entity">خزنة جارية (هيئة)</option>
                     </select>
                 </div>
 
@@ -287,8 +319,12 @@
                                                          aria-hidden="true">
                                                         <path d="M14 11V5a1 1 0 00-.5-.87l-5-3a1 1 0 00-1 0l-5 3A1 1 0 002 5v6a1 1 0 00.5.87l5 3a1 1 0 001 0l5-3A1 1 0 0014 11z"/>
                                                     </svg>
-                                                    عملية @e.OperationNumber
+                                                    @(e.BookingRef is not null ? $"حجز وكيل {e.BookingRef}" : $"عملية {e.OperationNumber}")
                                                 </span>
+                                                @if (e.CustomerName is not null)
+                                                {
+                                                    <div class="exl-link-customer">@e.CustomerName</div>
+                                                }
                                             }
                                             @if (e.TripNumber is not null)
                                             {
@@ -325,7 +361,7 @@
                                                         <rect x="2" y="5" width="12" height="9" rx="1"/>
                                                         <path d="M10 5V4a2 2 0 00-4 0v1"/>
                                                     </svg>
-                                                    عهدة @e.CustodyNumber
+                                                    عهدة @(e.CustodyOwnerName ?? e.CustodyNumber)
                                                 </span>
                                             }
                                             @if (e.OperationNumber is null && e.TripNumber is null &&
@@ -347,6 +383,10 @@
                                             </svg>
                                             @e.ExpenseDate.ToString("yyyy-MM-dd")
                                         </div>
+                                        @if (!string.IsNullOrWhiteSpace(e.CreatedByName))
+                                        {
+                                            <div class="exl-recorder">سجّله @e.CreatedByName</div>
+                                        }
                                     </td>
 
                                     @* ── المبلغ ── *@
@@ -361,13 +401,38 @@
                                         }
                                     </td>
 
-                                    @* ── الدفع ── *@
+                                    @* ── الدفع: المصدر ظاهر (عهدة / خزينة) ── *@
                                     <td>
-                                        <span class="exl-chip @PayChipClass(e.PaymentStatus)">
-                                            <span class="exl-chip-dot @PayDotClass(e.PaymentStatus)"
-                                                  aria-hidden="true"></span>
-                                            @PayAr(e.PaymentStatus)
-                                        </span>
+                                        @if (e.CustodyNumber is not null)
+                                        {
+                                            <span class="exl-chip chip-custody">
+                                                <span class="exl-chip-dot pdot-paid" aria-hidden="true"></span>
+                                                من العهدة
+                                            </span>
+                                            @if (!string.IsNullOrWhiteSpace(e.CustodyOwnerName))
+                                            {
+                                                <div class="exl-recorder">عهدة @e.CustodyOwnerName</div>
+                                            }
+                                        }
+                                        else if (e.PaymentStatus == "Paid")
+                                        {
+                                            <span class="exl-chip chip-paid">
+                                                <span class="exl-chip-dot pdot-paid" aria-hidden="true"></span>
+                                                مدفوع من الخزينة
+                                            </span>
+                                            @if (!string.IsNullOrWhiteSpace(e.PayBoxName))
+                                            {
+                                                <div class="exl-recorder">@e.PayBoxName</div>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="exl-chip @PayChipClass(e.PaymentStatus)">
+                                                <span class="exl-chip-dot @PayDotClass(e.PaymentStatus)"
+                                                      aria-hidden="true"></span>
+                                                @PayAr(e.PaymentStatus)
+                                            </span>
+                                        }
                                     </td>
 
                                     @* ── الحالة ── *@
@@ -431,7 +496,7 @@
                                             }
 
                                             @* علّم مدفوع *@
-                                            @if (e.Status == "Posted" && e.PaymentStatus == "Unpaid" && CanEdit)
+                                            @if (e.Status == "Posted" && e.PaymentStatus == "Unpaid" && CanEdit && e.CustodyNumber is null)
                                             {
                                                 <button class="exl-act-btn act-pay"
                                                         @onclick="() => SetPaid(e)"
@@ -614,7 +679,7 @@
                             <div class="type-form-title">
                                 @(_typeEditId is null ? "نوع جديد" : $"تعديل: {_tf.NameAr}")
                             </div>
-                            <div class="type-form-sub">الكود بالحروف الإنجليزية — زي FUEL أو RENT</div>
+                            <div class="type-form-sub">الكود اختياري — يُولّد تلقائيًا إن تُرك فارغًا، أو اكتبه بالحروف الإنجليزية زي FUEL أو RENT</div>
                         </div>
                     </div>
 
@@ -623,12 +688,12 @@
                         <div class="exl-type-field">
                             <label class="exl-type-label">
                                 الكود
-                                <span class="field-req">*</span>
+                                <span class="field-opt">(اختياري)</span>
                             </label>
                             <input class="exl-type-input"
                                    @bind="_tf.Code"
                                    maxlength="30"
-                                   placeholder="FUEL"
+                                   placeholder="اتركه فارغًا للتوليد التلقائي — أو FUEL"
                                    dir="ltr"
                                    disabled="@(_typeEditId is not null && _tf.ExpenseCount > 0)" />
                         </div>
@@ -664,7 +729,8 @@
                                     <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round"/>
                                 </svg>
                                 <select class="exl-type-input exl-type-sel"
-                                        @bind="_tf.IsOperationCost"
+                                        value="@(_tf.IsOperationCost ? "true" : "false")"
+                                        @onchange="OnClassChanged"
                                         disabled="@(_typeEditId is not null && _tf.ExpenseCount > 0)">
                                     <option value="true">تشغيلي — بيتحمل على عملية</option>
                                     <option value="false">إداري — بيتحمل على الشركة</option>
@@ -692,6 +758,16 @@
                             <input type="checkbox" @bind="_tf.IsCustodyAllowed" />
                             <div class="check-indicator" aria-hidden="true"></div>
                             <span>يُنصرف من العهدة</span>
+                        </label>
+                        <label class="exl-type-check @(_tf.IsFreightAdvance ? "check-on" : "")">
+                            <input type="checkbox" @bind="_tf.IsFreightAdvance" />
+                            <div class="check-indicator" aria-hidden="true"></div>
+                            <span>نولون نقلة (تُخصم من نولون الرحلة)</span>
+                        </label>
+                        <label class="exl-type-check @(_tf.IsReceiptRequired ? "check-on" : "")">
+                            <input type="checkbox" @bind="_tf.IsReceiptRequired" />
+                            <div class="check-indicator" aria-hidden="true"></div>
+                            <span>يستدعي إيصالًا (يظهر حقل نوع الإيصال في نموذج المصروف)</span>
                         </label>
                         <label class="exl-type-check @(_tf.IsTaxDeductible ? "check-on" : "")">
                             <input type="checkbox" @bind="_tf.IsTaxDeductible" />
@@ -1057,6 +1133,11 @@
     }
     .exl-type-select:focus { border-color: var(--fc-blue); }
 
+    .fc-kpi-sub { font-size: 10px; color: #8496b0; font-weight: 700; margin-top: 1px; }
+    .exl-link-customer { font-size: 11px; color: #8496b0; font-weight: 700; margin-top: 2px; }
+    .exl-filter-lb { font-size: 11px; font-weight: 800; color: #5a6c86; }
+    .exl-recorder { font-size: 10.5px; color: #8496b0; font-weight: 700; margin-top: 2px; }
+
     .exl-results-badge {
         display: flex; align-items: center; gap: 5px;
         margin-right: auto; font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap;
@@ -1259,6 +1340,7 @@
     /* Payment */
     .chip-unpaid  { background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898; }
     .chip-partial { background: var(--fc-blue-lt);  color: var(--fc-blue); border: 1px solid #c0d4fb; }
+    .chip-custody { background: #fff4e5; color: #9a6206; border: 1px solid #f3ddba; }
     .chip-paid    { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
 
     .pdot-unpaid  { background: var(--fc-amber); }
@@ -1308,7 +1390,7 @@
        MODAL
     ================================================================ */
     .exl-modal-backdrop {
-        position: fixed; inset: 0; z-index: 1000;
+        position: fixed; inset: 0; z-index: 1400;
         background: rgba(10,20,40,.55); backdrop-filter: blur(4px);
         display: flex; align-items: center; justify-content: center;
         padding: 20px; animation: exl-fade-in .2s ease;
@@ -1397,6 +1479,7 @@
         display: flex; align-items: center; gap: 3px;
     }
     .field-req { color: var(--fc-red); font-size: 13px; }
+    .field-opt { color: #7d8aa5; font-size: 11px; font-weight: 700; }
 
     .exl-type-input {
         height: 38px; width: 100%;
@@ -1589,13 +1672,18 @@
         ("all",       "الكل"),
         ("Draft",     "مسودة"),
         ("Posted",    "مؤكد"),
-        ("Cancelled", "ملغي")
+        ("Cancelled", "ملغي"),
+        ("Custody",   "مربوط بعهدة")
     };
 
     private List<Item>    _items = new();
     private List<ExpType> _types = new();
     private bool   _loading;
     private string _search     = "";
+    private string? _fromDate;
+    private string? _toDate;
+    private int     _ownerFilter;
+    private string  _boxKindFilter = "";
     private string _tab        = "all";
     private int    _typeFilter;
     private long?  _confirmId;
@@ -1608,6 +1696,10 @@
         public long     ExpenseId       { get; set; }
         public string   ExpenseNumber   { get; set; } = "";
         public string   TypeName        { get; set; } = "";
+        public string?  CustomerName    { get; set; }
+        public string?  BookingRef      { get; set; }
+        public int?     CustodyOwnerId  { get; set; }
+        public string?  CustodyOwnerName { get; set; }
         public string?  Description     { get; set; }
         public DateTime ExpenseDate     { get; set; }
         public decimal  Amount          { get; set; }
@@ -1617,6 +1709,9 @@
         public string?  SupplierName    { get; set; }
         public string?  DriverName      { get; set; }
         public string?  CustodyNumber   { get; set; }
+        public string?  CreatedByName   { get; set; }
+        public string?  PayBoxKind      { get; set; }
+        public string?  PayBoxName      { get; set; }
         public string   PaymentStatus   { get; set; } = "";
         public string   Status          { get; set; } = "";
         public bool     IsApproved      { get; set; }
@@ -1632,12 +1727,21 @@
         .Sum(e => e.Amount);
 
     private IEnumerable<Item> Filtered => _items.Where(e =>
-        (_tab == "all" || e.Status == _tab) &&
+        (_tab == "all" || (_tab == "Custody" ? e.CustodyNumber != null : e.Status == _tab)) &&
         (_typeFilter == 0 || e.TypeName == _types.FirstOrDefault(t => t.Id == _typeFilter)?.Label) &&
+        (_ownerFilter == 0 || e.CustodyOwnerId == _ownerFilter) &&
+        (string.IsNullOrEmpty(_fromDate) || e.ExpenseDate.Date >= DateTime.Parse(_fromDate)) &&
+        (string.IsNullOrEmpty(_toDate)   || e.ExpenseDate.Date <= DateTime.Parse(_toDate)) &&
         (string.IsNullOrWhiteSpace(_search) ||
          e.ExpenseNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-         (e.Description     ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-         (e.OperationNumber ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase)));
+         (e.Description      ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         (e.OperationNumber  ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         (e.BookingRef       ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         (e.CustodyOwnerName ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         (e.CustodyNumber    ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         (e.CustomerName     ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         (e.PayBoxName       ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase)) &&
+        (string.IsNullOrEmpty(_boxKindFilter) || e.PayBoxKind == _boxKindFilter));
 
     /* ── Helpers ── */
     private static string StatusAr(string s) => s switch
@@ -1670,6 +1774,9 @@
         "Cancelled" => "tdot-cancelled",
         _           => "tdot-all"
     };
+
+    private void OnClassChanged(ChangeEventArgs e)
+        => _tf.IsOperationCost = e.Value?.ToString() == "true";
 
     private static string PayAr(string p) => p switch
     {
@@ -1737,7 +1844,7 @@
         _loading = true;
         try   { _items = await Http.GetFromJsonAsync<List<Item>>("api/expenses?take=300") ?? new(); }
         catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
-        finally { _loading = false; }
+        finally { _loading = false; StateHasChanged(); }
     }
 
     private async Task SetStatus(Item e, string to)
@@ -1803,6 +1910,8 @@
         public bool   IsTaxDeductible  { get; set; }
         public bool   IsActive         { get; set; }
         public int    ExpenseCount     { get; set; }
+        public bool   IsFreightAdvance { get; set; }
+        public bool   IsReceiptRequired { get; set; }
     }
 
     public class TypeForm
@@ -1811,6 +1920,8 @@
         public string  NameAr           { get; set; } = "";
         public string? NameEn           { get; set; }
         public bool    IsCustodyAllowed { get; set; } = true;
+        public bool    IsFreightAdvance { get; set; }
+        public bool    IsReceiptRequired { get; set; }
         public bool    IsOperationCost  { get; set; } = true;
         public bool    IsTaxDeductible  { get; set; } = true;
         public bool    IsActive         { get; set; } = true;
@@ -1824,10 +1935,10 @@
         await LoadTypeListAsync();
     }
 
-    private void CloseTypes()
+    private async Task CloseTypes()
     {
         _typesOpen = false;
-        _ = LoadAsync();
+        await LoadAsync();
     }
 
     private void ResetTypeForm()
@@ -1843,7 +1954,9 @@
         _tf = new TypeForm
         {
             Code = t.Code, NameAr = t.NameAr, NameEn = t.NameEn,
-            IsCustodyAllowed = t.IsCustodyAllowed, IsOperationCost = t.IsOperationCost,
+            IsCustodyAllowed = t.IsCustodyAllowed, IsFreightAdvance = t.IsFreightAdvance,
+            IsReceiptRequired = t.IsReceiptRequired,
+            IsOperationCost = t.IsOperationCost,
             IsTaxDeductible = t.IsTaxDeductible, IsActive = t.IsActive,
             ExpenseCount = t.ExpenseCount
         };
@@ -1861,7 +1974,6 @@
     private async Task SaveType()
     {
         if (_typesSaving) return;
-        if (string.IsNullOrWhiteSpace(_tf.Code))   { _typesOk = false; _typesMsg = "الكود مطلوب"; return; }
         if (string.IsNullOrWhiteSpace(_tf.NameAr)) { _typesOk = false; _typesMsg = "الاسم بالعربي مطلوب"; return; }
 
         _typesSaving = true; _typesMsg = null;
@@ -1870,7 +1982,9 @@
             var payload = new
             {
                 code = _tf.Code, nameAr = _tf.NameAr, nameEn = _tf.NameEn,
-                isCustodyAllowed = _tf.IsCustodyAllowed, isOperationCost = _tf.IsOperationCost,
+                isCustodyAllowed = _tf.IsCustodyAllowed, isFreightAdvance = _tf.IsFreightAdvance,
+                isReceiptRequired = _tf.IsReceiptRequired,
+                isOperationCost = _tf.IsOperationCost,
                 isTaxDeductible = _tf.IsTaxDeductible, isActive = _tf.IsActive
             };
             var res = _typeEditId is null

@@ -28,7 +28,7 @@ public class VehicleAccountsController : ControllerBase
     /* ═══════════════ DTOs ═══════════════ */
 
     public record VehicleOpt(int VehicleId, string PlateNumber, string VehicleType, string Status,
-        string? LastDriver, string? Drivers);
+        string? LastDriver, string? Drivers, string? SupplierName, string? DefaultDriverName);
 
     public record StmtLine(DateTime Date, string Kind, string Ref, string? Description,
         decimal Debit, decimal Credit, decimal Balance, string? SubRef = null,
@@ -52,7 +52,9 @@ public class VehicleAccountsController : ControllerBase
         var opts = await _db.Vehicles.AsNoTracking()
             .Where(v => !v.IsDeleted)
             .OrderBy(v => v.PlateNumber)
-            .Select(v => new VehicleOpt(v.VehicleId, v.PlateNumber, v.VehicleType, v.Status, null, null))
+            .Select(v => new VehicleOpt(v.VehicleId, v.PlateNumber, v.VehicleType, v.Status, null, null,
+                _db.Suppliers.Where(s => s.SupplierId == v.SupplierId).Select(s => s.NameAr).FirstOrDefault(),
+                _db.Drivers.Where(d => d.DriverId == v.DefaultDriverId).Select(d => d.FullName).FirstOrDefault()))
             .ToListAsync(ct);
 
         /* 🔴 البحث باسم السائق: سائقين رحلات كل مركبة (الأحدث الأول) */
@@ -160,7 +162,7 @@ public class VehicleAccountsController : ControllerBase
     private static string KindAr(string k) => k switch
     {
         "Freight"        => "نولون النقله",
-        "CustodyFreight" => "سلفة نولون",
+        "CustodyFreight" => "نولون نقلة",
         "CustodyRoad"    => "مصاريف طريق (عهدة)",
         "Expense"        => "مصروف",
         "Payment"        => "دفعة",
@@ -183,24 +185,39 @@ public class VehicleAccountsController : ControllerBase
         var opening = await CalcBalanceAsync(vehicleId, DateTime.MinValue, start, ct);
 
         /* ── الرحلات: النولون المتفق عليه + العهد مقسومة حسب النوع (#36) ── */
+        /* النولون يُعترف به من بدء الرحلة (السائق أخذ الطريق) لا من إنهائها فقط —
+           فهو مستحق السائق الذي تُخصم منه السلف أثناء الرحلة نفسها */
         var trips = await _db.Trips.AsNoTracking()
             .Where(t => !t.IsDeleted && t.VehicleId == vehicleId &&
-                        t.ActualEndAt != null &&
-                        t.ActualEndAt >= start && t.ActualEndAt < end)
-            .OrderBy(t => t.ActualEndAt)
+                        (t.ActualStartAt ?? t.ActualEndAt) != null &&
+                        (t.ActualStartAt ?? t.ActualEndAt) >= start && (t.ActualStartAt ?? t.ActualEndAt) < end)
+            .OrderBy(t => t.ActualStartAt ?? t.ActualEndAt)
             .Select(t => new
             {
-                Date = t.ActualEndAt!.Value,
+                Date = (t.ActualStartAt ?? t.ActualEndAt)!.Value,
                 t.TripNumber,
                 Freight = (decimal?)(t.FreightAmount ?? 0m),
                 CustodyFreight = _db.DriverCustodies
                     .Where(c => !c.IsDeleted && c.TripId == t.TripId && c.OwnerType == "Driver"
                                 && c.AllocationType == "Freight")
                     .Sum(c => (decimal?)c.AmountIssued),
+                CustodyFreightReturned = _db.DriverCustodies
+                    .Where(c => !c.IsDeleted && c.TripId == t.TripId && c.OwnerType == "Driver"
+                                && c.AllocationType == "Freight")
+                    .Sum(c => (decimal?)c.AmountReturned),
                 CustodyRoad = _db.DriverCustodies
                     .Where(c => !c.IsDeleted && c.TripId == t.TripId && c.OwnerType == "Driver"
                                 && c.AllocationType != "Freight")
                     .Sum(c => (decimal?)c.AmountIssued),
+                CustodyRoadReturned = _db.DriverCustodies
+                    .Where(c => !c.IsDeleted && c.TripId == t.TripId && c.OwnerType == "Driver"
+                                && c.AllocationType != "Freight")
+                    .Sum(c => (decimal?)c.AmountReturned),
+                /* سلف نولون دفعها موظف تشغيل من عهدته العامة على الرحلة دي */
+                OpsAdvance = _db.Expenses
+                    .Where(e => !e.IsDeleted && e.TripId == t.TripId && e.CustodyId != null
+                                && e.ExpenseType.IsFreightAdvance && e.Status != "Cancelled")
+                    .Sum(e => (decimal?)e.Amount),
                 BookingNumber = _db.TripOperations
                     .Where(x => x.TripId == t.TripId && x.Operation != null && x.Operation.Booking != null)
                     .Select(x => x.Operation!.Booking!.BookingNumber)
@@ -248,15 +265,20 @@ public class VehicleAccountsController : ControllerBase
 
         foreach (var t in trips)
         {
-            /* #60: النولون = التزام الشركة للسائق — **يتعد دايمًا**.
-               سلفة النولون بتتحسب في السطر اللي بعده كدفعة (Credit) —
-               فالصافي يطلع صح حتى لو السلفة أقل من النولون (مافيش عد مزدوج). */
+            /* 🔴 النولون بيتحسب **كامل دايمًا**، والسلف بتتخصم بقيمتها الفعلية —
+               القاعدة القديمة (#36) كانت بتخفي النولون كله عند وجود أي سلفة،
+               فسلفة جزئية كانت بتمسح باقي مستحق السائق من الحساب للأبد.
+               خصم العهدة هنا **صافي الردود**: اللي رجع للخزينة مش مدفوع للسائق. */
             if (t.Freight is > 0)
                 lines.Add(new StmtLine(t.Date, "Freight", t.TripNumber, "نولون النقله (أجرة السائق)", t.Freight.Value, 0, 0, t.BookingNumber, Dest: t.Dest, Driver: t.Driver));
-            if (t.CustodyFreight is > 0)
-                lines.Add(new StmtLine(t.Date, "CustodyFreight", t.TripNumber, "سلفة نولون (من عهدة السائق)", 0, t.CustodyFreight.Value, 0, t.BookingNumber, Dest: t.Dest, Driver: t.Driver));
-            if (t.CustodyRoad is > 0)
-                lines.Add(new StmtLine(t.Date, "CustodyRoad", t.TripNumber, "مصاريف طريق (من عهدة السائق)", 0, t.CustodyRoad.Value, 0, t.BookingNumber, Dest: t.Dest, Driver: t.Driver));
+            var cfNet = (t.CustodyFreight ?? 0) - (t.CustodyFreightReturned ?? 0);
+            if (cfNet > 0)
+                lines.Add(new StmtLine(t.Date, "CustodyFreight", t.TripNumber, "نولون نقلة (من عهدة السائق)", 0, cfNet, 0, t.BookingNumber, Dest: t.Dest, Driver: t.Driver));
+            var crNet = (t.CustodyRoad ?? 0) - (t.CustodyRoadReturned ?? 0);
+            if (crNet > 0)
+                lines.Add(new StmtLine(t.Date, "CustodyRoad", t.TripNumber, "مصاريف طريق (من عهدة السائق)", 0, crNet, 0, t.BookingNumber, Dest: t.Dest, Driver: t.Driver));
+            if (t.OpsAdvance is > 0)
+                lines.Add(new StmtLine(t.Date, "OpsAdvance", t.TripNumber, "نولون نقلة (من عهدة تشغيل)", 0, t.OpsAdvance.Value, 0, t.BookingNumber, Dest: t.Dest, Driver: t.Driver));
         }
 
         foreach (var e in expenses)
@@ -471,19 +493,28 @@ public class VehicleAccountsController : ControllerBase
     /// <summary>الرصيد = نولون النقله (أجرة السائق) − عهدة − مصاريف طريق − دفعات</summary>
     private async Task<decimal> CalcBalanceAsync(int vehicleId, DateTime from, DateTime to, CancellationToken ct)
     {
-        /* #60: النولون بيتعد كامل — سلف النولون بتتحسب في سطر العهد كدفعة (Credit) */
+        /* 🔴 النولون كامل دايمًا + العهدة بصافي ردودها + سلف عهد التشغيل —
+           نفس مكونات باني الكشف بالضبط (مصدر واحد للحساب). */
         var freight = await _db.Trips.AsNoTracking()
             .Where(t => !t.IsDeleted && t.VehicleId == vehicleId &&
-                        t.ActualEndAt != null &&
-                        t.ActualEndAt >= from && t.ActualEndAt < to)
+                        (t.ActualStartAt ?? t.ActualEndAt) != null &&
+                        (t.ActualStartAt ?? t.ActualEndAt) >= from && (t.ActualStartAt ?? t.ActualEndAt) < to)
             .SumAsync(t => t.FreightAmount, ct) ?? 0;
 
         var custody = await _db.DriverCustodies.AsNoTracking()
             .Where(c => !c.IsDeleted && c.OwnerType == "Driver" &&
                         c.Trip != null && c.Trip.VehicleId == vehicleId &&
-                        c.Trip.ActualEndAt != null &&
-                        c.Trip.ActualEndAt >= from && c.Trip.ActualEndAt < to)
-            .SumAsync(c => (decimal?)c.AmountIssued, ct) ?? 0;
+                        (c.Trip.ActualStartAt ?? c.Trip.ActualEndAt) != null &&
+                        (c.Trip.ActualStartAt ?? c.Trip.ActualEndAt) >= from && (c.Trip.ActualStartAt ?? c.Trip.ActualEndAt) < to)
+            .SumAsync(c => (decimal?)(c.AmountIssued - c.AmountReturned), ct) ?? 0;
+
+        var opsAdvances = await _db.Expenses.AsNoTracking()
+            .Where(e => !e.IsDeleted && e.CustodyId != null &&
+                        e.ExpenseType.IsFreightAdvance && e.Status != "Cancelled" &&
+                        e.Trip != null && e.Trip.VehicleId == vehicleId &&
+                        (e.Trip.ActualStartAt ?? e.Trip.ActualEndAt) != null &&
+                        (e.Trip.ActualStartAt ?? e.Trip.ActualEndAt) >= from && (e.Trip.ActualStartAt ?? e.Trip.ActualEndAt) < to)
+            .SumAsync(e => (decimal?)e.Amount, ct) ?? 0;
 
         var expenses = await _db.Expenses.AsNoTracking()
             .Where(e => !e.IsDeleted && e.VehicleId == vehicleId && e.CustodyId == null &&
@@ -497,6 +528,6 @@ public class VehicleAccountsController : ControllerBase
                         t.TransactionDate >= from && t.TransactionDate < to)
             .SumAsync(t => (decimal?)t.Amount, ct) ?? 0;
 
-        return freight - custody - expenses - payments;
+        return freight - custody - opsAdvances - expenses - payments;
     }
 }

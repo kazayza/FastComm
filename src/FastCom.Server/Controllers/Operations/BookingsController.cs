@@ -45,7 +45,9 @@ public class BookingsController : ControllerBase
     public record BookingLineDto(int ContainerTypeId, int RequestedQty, decimal? WeightKg, string? Notes, decimal? GuaranteePerContainer);
 
     public record ContainerDetailDto(long? ContainerId, string? ContainerNumber, string? SealNumber,
-        string? ShippingLine, string? BLNumber, string? BookingReference, decimal? WeightKg, string? Notes);
+        string? ShippingLine, string? BLNumber, string? BookingReference, decimal? WeightKg, string? Notes,
+        /* فهرس السطر الأم في مصفوفة Lines بتاعة الطلب — من غيره التفاصيل ما تتربطش بسطرها */
+        int? LineIndex = null);
 
     public record BookingUpsert(
         int CustomerId, string? RequestedDate, int? ServiceId, int? PortId, int? DestinationId,
@@ -254,8 +256,9 @@ public class BookingsController : ControllerBase
             _db.Bookings.Add(b);
             await _db.SaveChangesAsync(ct);
 
-            AddLines(b.BookingId, req.Lines!, CurrentUserId());
-            AddContainerDetails(b.BookingId, req.ContainerDetails, CurrentUserId());
+            var createdLines = AddLines(b.BookingId, req.Lines!, CurrentUserId());
+            await _db.SaveChangesAsync(ct);   // معرفات السطور تتولد قبل ربط التفاصيل بيها
+            AddContainerDetails(createdLines, req.ContainerDetails, CurrentUserId());
             await _db.SaveChangesAsync(ct);
 
             await _db.Database.CommitTransactionAsync(ct);
@@ -287,7 +290,7 @@ public class BookingsController : ControllerBase
         if (b.Status is not ("Draft" or "Confirmed"))
             {
             await _audit.LogAsync(FastCom.Server.Services.AuditActions.Update, "Booking", null, description: "تعديل حجز", ct: ct);
-            
+            return BadRequest(new { message = $"حالة الحجز «{b.Status}» لا تسمح بالتعديل — التعديل للحجوزات المسودة أو المؤكدة بس" });
             }
 
         b.CustomerId      = req.CustomerId;
@@ -336,8 +339,9 @@ public class BookingsController : ControllerBase
                     .Where(l => l.BookingId == id).ToListAsync(ct);
                 _db.BookingContainerLines.RemoveRange(oldLines);
 
-                AddLines(id, req.Lines, CurrentUserId());
-                AddContainerDetails(id, req.ContainerDetails, CurrentUserId());
+                var createdLines = AddLines(id, req.Lines, CurrentUserId());
+                await _db.SaveChangesAsync(ct);
+                AddContainerDetails(createdLines, req.ContainerDetails, CurrentUserId());
             }
 
             await _db.SaveChangesAsync(ct);
@@ -353,11 +357,16 @@ public class BookingsController : ControllerBase
         return Ok(new { message = "تم حفظ التعديل" });
     }
 
-    private void AddLines(long bookingId, List<BookingLineDto> lines, int userId, List<ContainerDetailDto>? details = null)
+    /* بيرجع السطور اللي اتعملت فعلًا مربوطة بفهرسها في طلب الإدخال —
+       عشان تفاصيل الحاويات تتربط بسطرها الحقيقي بعد الحفظ */
+    private List<(int ReqIndex, BookingContainerLine Line)> AddLines(
+        long bookingId, List<BookingLineDto> lines, int userId)
     {
+        var created = new List<(int, BookingContainerLine)>();
         var no = 0;
-        foreach (var l in lines)
+        for (var i = 0; i < lines.Count; i++)
         {
+            var l = lines[i];
             if (l.RequestedQty < 1) continue;
             no++;
             var line = new BookingContainerLine
@@ -374,18 +383,26 @@ public class BookingsController : ControllerBase
                 CreatedBy       = userId
             };
             _db.BookingContainerLines.Add(line);
+            created.Add((i, line));
         }
+        return created;
     }
 
-    private void AddContainerDetails(long bookingId, List<ContainerDetailDto>? details, int userId)
+    private void AddContainerDetails(List<(int ReqIndex, BookingContainerLine Line)> createdLines,
+                                     List<ContainerDetailDto>? details, int userId)
     {
-        if (details is null || details.Count == 0) return;
+        if (details is null || details.Count == 0 || createdLines.Count == 0) return;
         foreach (var d in details)
         {
             if (string.IsNullOrWhiteSpace(d.ContainerNumber) && d.ContainerId is null) continue;
+            /* السطر الأم: بفهرس الطلب؛ ولو الفهرس غايب/بايظ والسطور سطر واحد يبقى هو */
+            var parent = (d.LineIndex is int ix
+                             ? createdLines.FirstOrDefault(x => x.ReqIndex == ix).Line
+                             : null)
+                         ?? (createdLines.Count == 1 ? createdLines[0].Line : createdLines[0].Line);
             _db.BookingContainerDetails.Add(new BookingContainerDetail
             {
-                BookingContainerLineId = 0, // هيتحدد بعد ما السطور تتحفظ
+                BookingContainerLineId = parent.BookingContainerLineId,
                 ContainerId            = d.ContainerId,
                 ContainerNumberText    = B(d.ContainerNumber),
                 SealNumber             = B(d.SealNumber),
@@ -470,7 +487,7 @@ public class BookingsController : ControllerBase
         if (b.Status is not ("Draft" or "Cancelled"))
             {
             await _audit.LogAsync(FastCom.Server.Services.AuditActions.Delete, "Booking", null, description: "حذف حجز", ct: ct);
-            
+            return BadRequest(new { message = $"حالة الحجز «{b.Status}» لا تسمح بالحذف — الحذف للمسودة أو الملغية بس" });
             }
 
         b.IsDeleted = true;

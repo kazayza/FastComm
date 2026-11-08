@@ -29,17 +29,18 @@ public class FleetController : ControllerBase
 
     public record VehicleItem(int VehicleId, string VehicleCode, string PlateNumber, string VehicleType,
         string? Brand, string OwnershipType, string? SupplierName,
-        decimal? CapacityTon, string Status);
+        decimal? CapacityTon, string Status, string? DefaultDriverName);
 
     public record VehicleDetail(int VehicleId, string VehicleCode, string PlateNumber, string VehicleType,
         string? Brand, string? Model, short? ModelYear, string OwnershipType, int? SupplierId,
         string? SupplierName, decimal? CapacityTon, byte ContainerSlots20,
-        DateOnly? LicenseExpiryDate, DateOnly? InsuranceExpiryDate, string Status, string? Notes);
+        DateOnly? LicenseExpiryDate, DateOnly? InsuranceExpiryDate, string Status, string? Notes,
+        int? DefaultDriverId, string? DefaultDriverName);
 
     public record VehicleUpsert(string PlateNumber, string VehicleType, string? Brand, string? Model,
         short? ModelYear, string OwnershipType, int? SupplierId, decimal? CapacityTon,
         byte ContainerSlots20, string? LicenseExpiryDate, string? InsuranceExpiryDate,
-        string Status, string? Notes);
+        string Status, string? Notes, int? DefaultDriverId = null);
 
     [HttpGet("vehicles")]
     [Authorize(Policy = "PERM:FLEET.VIEW")]
@@ -50,7 +51,8 @@ public class FleetController : ControllerBase
             .Select(v => new VehicleItem(v.VehicleId, v.VehicleCode, v.PlateNumber, v.VehicleType,
                 v.Brand, v.OwnershipType,
                 _db.Suppliers.Where(s => s.SupplierId == v.SupplierId).Select(s => s.NameAr).FirstOrDefault(),
-                v.CapacityTon, v.Status))
+                v.CapacityTon, v.Status,
+                _db.Drivers.Where(d => d.DriverId == v.DefaultDriverId).Select(d => d.FullName).FirstOrDefault()))
             .ToListAsync(ct));
 
     [HttpGet("vehicles/{id:int}")]
@@ -63,10 +65,14 @@ public class FleetController : ControllerBase
             await _db.Suppliers.AsNoTracking().Where(s => s.SupplierId == v.SupplierId)
                 .Select(s => s.NameAr).FirstOrDefaultAsync(ct);
 
+        var defDriverName = v.DefaultDriverId is null ? null :
+            await _db.Drivers.AsNoTracking().Where(d => d.DriverId == v.DefaultDriverId)
+                .Select(d => d.FullName).FirstOrDefaultAsync(ct);
+
         return Ok(new VehicleDetail(v.VehicleId, v.VehicleCode, v.PlateNumber, v.VehicleType,
             v.Brand, v.Model, v.ModelYear, v.OwnershipType, v.SupplierId, supName,
             v.CapacityTon, v.ContainerSlots20, v.LicenseExpiryDate, v.InsuranceExpiryDate,
-            v.Status, v.Notes));
+            v.Status, v.Notes, v.DefaultDriverId, defDriverName));
     }
 
     [HttpPost("vehicles")]
@@ -78,12 +84,16 @@ public class FleetController : ControllerBase
         if (await PlateTakenVehiclesAsync(req.PlateNumber.Trim(), null, ct))
             return BadRequest(new { message = "رقم اللوحة ده مستخدم في عربية تانية" });
 
+        var drvErr = await ValidateDefaultDriverAsync(req, ct);
+        if (drvErr is not null) return BadRequest(new { message = drvErr });
+
         var v = new Vehicle
         {
             VehicleCode = await _numbers.NextAsync("VEHICLE", ct),
             PlateNumber = req.PlateNumber.Trim(), VehicleType = req.VehicleType.Trim(),
             Brand = B(req.Brand), Model = B(req.Model), ModelYear = req.ModelYear,
             OwnershipType = req.OwnershipType, SupplierId = req.SupplierId,
+            DefaultDriverId = req.OwnershipType == "External" ? req.DefaultDriverId : null,
             CapacityTon = req.CapacityTon, ContainerSlots20 = req.ContainerSlots20,
             LicenseExpiryDate = D(req.LicenseExpiryDate), InsuranceExpiryDate = D(req.InsuranceExpiryDate),
             Status = req.Status, Notes = B(req.Notes),
@@ -106,9 +116,13 @@ public class FleetController : ControllerBase
         if (await PlateTakenVehiclesAsync(req.PlateNumber.Trim(), id, ct))
             return BadRequest(new { message = "رقم اللوحة ده مستخدم في عربية تانية" });
 
+        var drvErr = await ValidateDefaultDriverAsync(req, ct);
+        if (drvErr is not null) return BadRequest(new { message = drvErr });
+
         v.PlateNumber = req.PlateNumber.Trim(); v.VehicleType = req.VehicleType.Trim();
         v.Brand = B(req.Brand); v.Model = B(req.Model); v.ModelYear = req.ModelYear;
         v.OwnershipType = req.OwnershipType; v.SupplierId = req.SupplierId;
+        v.DefaultDriverId = req.OwnershipType == "External" ? req.DefaultDriverId : null;
         v.CapacityTon = req.CapacityTon; v.ContainerSlots20 = req.ContainerSlots20;
         v.LicenseExpiryDate = D(req.LicenseExpiryDate); v.InsuranceExpiryDate = D(req.InsuranceExpiryDate);
         v.Status = req.Status; v.Notes = B(req.Notes);
@@ -231,6 +245,21 @@ public class FleetController : ControllerBase
         _db.Trailers.AnyAsync(x => x.PlateNumber == plate && x.TrailerId != (exceptId ?? 0), ct);
 
     private static readonly string[] VehStatuses = { "Available", "InTrip", "Maintenance", "OutOfService" };
+
+    /// <summary>
+    /// السائق الافتراضي: اختياري، ولازم يكون سائقًا نشطًا تابعًا لنفس مورد
+    /// السيارة — الربط بيمر بالمورد طبقًا للنموذج المستقر.
+    /// </summary>
+    private async Task<string?> ValidateDefaultDriverAsync(VehicleUpsert req, CancellationToken ct)
+    {
+        if (req.OwnershipType != "External" || req.DefaultDriverId is null) return null;
+        var drv = await _db.Drivers.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.DriverId == req.DefaultDriverId && !d.IsDeleted, ct);
+        if (drv is null) return "السائق الافتراضي غير موجود";
+        if (drv.SupplierId != req.SupplierId)
+            return "السائق الافتراضي لازم يكون من سائقين نفس المورد المالك للسيارة";
+        return null;
+    }
 
     private static string? ValidateVehicle(VehicleUpsert? r)
     {

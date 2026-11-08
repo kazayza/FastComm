@@ -21,7 +21,7 @@ namespace FastCom.Server.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/dashboard")]
-[Authorize]
+[Authorize(Policy = "PERM:DASHBOARD.VIEW")]
 public class DashboardController : ControllerBase
 {
     private readonly FastComDbContext _db;
@@ -193,6 +193,22 @@ public class DashboardController : ControllerBase
                 "متبقي " + i.Due.ToString("N0"),
                 DaysBetween(i.DueDate.Value, today), "bad", "/invoices"));
 
+        // عملاء تجاوزوا حد الائتمان
+        var overLimit = await _db.Invoices.AsNoTracking()
+            .Where(i => !i.IsDeleted && i.Status != "Draft" && i.Status != "Cancelled"
+                        && i.Customer.CreditLimit > 0)
+            .GroupBy(i => new { i.CustomerId, i.Customer.NameAr, i.Customer.CreditLimit })
+            .Select(g => new
+            {
+                g.Key.CustomerId, g.Key.NameAr, g.Key.CreditLimit,
+                Open = g.Sum(x => x.GrandTotal - x.PaidAmount)
+            })
+            .ToListAsync(ct);
+        foreach (var c in overLimit.Where(x => x.Open > x.CreditLimit).Take(take))
+            list.Add(new AlertItem("تجاوز حد الائتمان", c.NameAr, "",
+                $"مستحق {c.Open:N0} والحد {c.CreditLimit:N0}",
+                0, "bad", "/customers"));
+
         // عهد مفتوحة من فترة
         var cus = await _db.DriverCustodies.AsNoTracking()
             .Where(c => !c.IsDeleted && OpenCustodyStatuses.Contains(c.Status))
@@ -235,6 +251,81 @@ public class DashboardController : ControllerBase
                 done ? "التأمين انتهى" : "سينتهى قريبا",
                 done ? DaysBetween(v.InsuranceExpiryDate.Value, today) : 0,
                 done ? "bad" : "warn", "/vehicles"));
+        }
+
+        // رخص العربيات نفسها (كانت غائبة — التنبيه كان للتأمين فقط)
+        var vehLic = await _db.Vehicles.AsNoTracking()
+            .Where(v => !v.IsDeleted && v.LicenseExpiryDate != null && v.LicenseExpiryDate <= soon)
+            .OrderBy(v => v.LicenseExpiryDate).Take(take)
+            .Select(v => new { v.PlateNumber, v.LicenseExpiryDate })
+            .ToListAsync(ct);
+        foreach (var v in vehLic)
+        {
+            var done = v.LicenseExpiryDate < today;
+            list.Add(new AlertItem("رخصة سيارة", v.PlateNumber, v.LicenseExpiryDate!.Value.ToString(),
+                done ? "الرخصة انتهت" : "تنتهي قريبًا",
+                done ? DaysBetween(v.LicenseExpiryDate.Value, today) : 0,
+                done ? "bad" : "warn", "/vehicles"));
+        }
+
+        // رخص وتأمينات المقطورات
+        var trl = await _db.Trailers.AsNoTracking()
+            .Where(x => !x.IsDeleted &&
+                        ((x.LicenseExpiryDate != null && x.LicenseExpiryDate <= soon) ||
+                         (x.InsuranceExpiryDate != null && x.InsuranceExpiryDate <= soon)))
+            .Take(take)
+            .Select(x => new { x.TrailerCode, x.LicenseExpiryDate, x.InsuranceExpiryDate })
+            .ToListAsync(ct);
+        foreach (var x in trl)
+        {
+            if (x.LicenseExpiryDate is not null && x.LicenseExpiryDate <= soon)
+            {
+                var done = x.LicenseExpiryDate < today;
+                list.Add(new AlertItem("رخصة مقطورة", x.TrailerCode, x.LicenseExpiryDate.Value.ToString(),
+                    done ? "الرخصة انتهت" : "تنتهي قريبًا",
+                    done ? DaysBetween(x.LicenseExpiryDate.Value, today) : 0,
+                    done ? "bad" : "warn", "/trailers"));
+            }
+            if (x.InsuranceExpiryDate is not null && x.InsuranceExpiryDate <= soon)
+            {
+                var done = x.InsuranceExpiryDate < today;
+                list.Add(new AlertItem("تأمين مقطورة", x.TrailerCode, x.InsuranceExpiryDate.Value.ToString(),
+                    done ? "التأمين انتهى" : "ينتهي قريبًا",
+                    done ? DaysBetween(x.InsuranceExpiryDate.Value, today) : 0,
+                    done ? "bad" : "warn", "/trailers"));
+            }
+        }
+
+        // وثائق منتهية أو قريبة
+        var docs = await _db.Documents.AsNoTracking()
+            .Where(d => !d.IsDeleted && d.ExpiryDate != null && d.ExpiryDate <= soon)
+            .OrderBy(d => d.ExpiryDate).Take(take)
+            .Select(d => new { Name = d.OriginalFileName ?? d.FileName, d.ExpiryDate })
+            .ToListAsync(ct);
+        foreach (var d in docs)
+        {
+            var done = d.ExpiryDate < today;
+            list.Add(new AlertItem("وثيقة", d.Name, d.ExpiryDate!.Value.ToString(),
+                done ? "الوثيقة انتهت" : "تنتهي قريبًا",
+                done ? DaysBetween(d.ExpiryDate.Value, today) : 0,
+                done ? "bad" : "warn", "/documents"));
+        }
+
+        // صيانة مستحقة خلال أسبوع أو متأخرة
+        var dueLimit = today.AddDays(7);
+        var maint = await _db.VehicleMaintenances.AsNoTracking()
+            .Where(m => !m.IsDeleted && m.NextDueDate != null && m.NextDueDate <= dueLimit
+                        && m.Status != "Completed" && m.Status != "Cancelled")
+            .OrderBy(m => m.NextDueDate).Take(take)
+            .Select(m => new { m.MaintenanceNumber, m.NextDueDate, Plate = m.Vehicle.PlateNumber })
+            .ToListAsync(ct);
+        foreach (var m in maint)
+        {
+            var done = m.NextDueDate < today;
+            list.Add(new AlertItem("صيانة مستحقة", m.Plate + " · " + m.MaintenanceNumber, m.NextDueDate!.Value.ToString(),
+                done ? "الصيانة متأخرة" : "تستحق قريبًا",
+                done ? DaysBetween(m.NextDueDate.Value, today) : 0,
+                done ? "bad" : "warn", "/maintenance"));
         }
 
         var order = new Dictionary<string, int> { ["bad"] = 0, ["warn"] = 1, ["info"] = 2 };

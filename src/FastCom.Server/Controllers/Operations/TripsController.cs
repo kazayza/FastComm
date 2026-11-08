@@ -194,12 +194,12 @@ public class TripsController : ControllerBase
     [Authorize(Policy = "PERM:TRIP.ASSIGN")]
     public async Task<IActionResult> AvailableOperations([FromQuery] long? exceptTripId, CancellationToken ct)
     {
+        /* 🔴 العملية الواحدة ممكن تركب على أكتر من رحلة (قرار المالك: عملية
+           واحدة للحجز وجواها كل رحلاته — كل رحلة بشوية من حاوياته)، فمافيش
+           استبعاد لعملية مربوطة برحلة تانية. exceptTripId بيتبعت للتوافق بس. */
         var rows = await _db.Operations.AsNoTracking()
             .Where(o => !o.IsDeleted &&
                         (o.Status == "Pending" || o.Status == "Assigned"))
-            .Where(o => !_db.TripOperations.Any(to => to.OperationId == o.OperationId &&
-                                                      to.Status != "Cancelled" &&
-                                                      (exceptTripId == null || to.TripId != exceptTripId)))
             .OrderByDescending(o => o.OperationId)
             .Take(150)
             .Select(o => new
@@ -225,6 +225,9 @@ public class TripsController : ControllerBase
     {
         var err = await ValidateAsync(req, ct);
         if (err is not null) return BadRequest(new { message = err });
+
+        var conflict = await ResourceConflictAsync(req.DriverId, req.VehicleId, Dt(req.PlannedStartAt), null, ct);
+        if (conflict is not null) return BadRequest(new { message = conflict });
 
         var branchId = await ResolveBranchIdAsync(ct);
         if (branchId is null) return BadRequest(new { message = "مافيش فرع معرّف في النظام" });
@@ -287,8 +290,12 @@ public class TripsController : ControllerBase
         if (t.Status is "Completed" or "Cancelled")
             {
             await _audit.LogAsync(FastCom.Server.Services.AuditActions.Update, "Trip", null, description: "تعديل رحلة", ct: ct);
-            
+            return BadRequest(new { message = "الرحلة مكتملة أو ملغية — ماينفعش تتعدل" });
             }
+
+        var conflictU = await ResourceConflictAsync(req.DriverId, req.VehicleId,
+            Dt(req.PlannedStartAt) ?? t.PlannedStartAt, id, ct);
+        if (conflictU is not null) return BadRequest(new { message = conflictU });
 
         t.DriverId      = req.DriverId;
         t.VehicleId     = req.VehicleId;
@@ -338,6 +345,34 @@ public class TripsController : ControllerBase
         return Ok(new { message = "✅ تم حفظ التعديل" });
     }
 
+    /* 🔴 فحص تعارض الموارد: نفس العربية أو نفس السائق على رحلة تانية شغالة
+       في نفس اليوم (مخططة) أو لسه على الطريق (بدأت ولسه ما رجعتش) */
+    private async Task<string?> ResourceConflictAsync(int driverId, int vehicleId,
+        DateTime? plannedStart, long? exceptTripId, CancellationToken ct)
+    {
+        var active = await _db.Trips.AsNoTracking()
+            .Where(t => !t.IsDeleted && t.Status != "Cancelled" && t.Status != "Completed" &&
+                        (exceptTripId == null || t.TripId != exceptTripId) &&
+                        (t.VehicleId == vehicleId || t.DriverId == driverId))
+            .Select(t => new { t.TripId, t.TripNumber, t.VehicleId, t.DriverId, t.PlannedStartAt, t.ActualStartAt, t.ActualEndAt })
+            .ToListAsync(ct);
+
+        foreach (var t in active)
+        {
+            var onRoad = t.ActualStartAt is not null && t.ActualEndAt is null;
+            var sameDay = plannedStart is not null && t.PlannedStartAt is not null &&
+                          t.PlannedStartAt.Value.Date == plannedStart.Value.Date;
+            if (!onRoad && !sameDay) continue;
+
+            if (t.VehicleId == vehicleId)
+                return $"العربية دي محجوزة على الرحلة {t.TripNumber}" +
+                       (onRoad ? " — بدأت ولسه ما رجعتش" : $" في نفس اليوم ({plannedStart:yyyy-MM-dd})");
+            return $"السائق ده على الرحلة {t.TripNumber}" +
+                   (onRoad ? " — بدأت ولسه ما رجعتش" : $" في نفس اليوم ({plannedStart:yyyy-MM-dd})");
+        }
+        return null;
+    }
+
     private async Task AttachOperationsAsync(long tripId, List<TripOpDto> ops, CancellationToken ct)
     {
         var existing = await _db.TripOperations
@@ -371,6 +406,45 @@ public class TripsController : ControllerBase
         }
 
         await SetOperationsStatusAsync(ops.Select(o => o.OperationId).Distinct().ToList(), "Assigned", ct);
+    }
+
+    /// <summary>
+    /// تسجيل حركة للحاويات المسجلة (ذات ContainerId) التابعة لعمليات الرحلة —
+    /// تفعيل لجدول حركات الحاويات الذي لم يكن له أي كاتب في النظام.
+    /// تُستدعى داخل معاملة بدء/إنهاء الرحلة، والحفظ بيد المستدعي.
+    /// </summary>
+    private async Task WriteContainerMovementsAsync(List<long> operationIds, string movementType,
+        DateTime when, CancellationToken ct)
+    {
+        if (operationIds.Count == 0) return;
+
+        var opcs = await _db.OperationContainers
+            .Where(oc => operationIds.Contains(oc.OperationId) && oc.ContainerId != null)
+            .Select(oc => new { oc.OperationId, oc.ContainerId })
+            .ToListAsync(ct);
+        if (opcs.Count == 0) return;
+
+        var ops = await _db.Operations
+            .Where(o => operationIds.Contains(o.OperationId))
+            .Select(o => new { o.OperationId, o.BookingId, o.PortId })
+            .ToListAsync(ct);
+        var opMap = ops.ToDictionary(o => o.OperationId);
+
+        foreach (var oc in opcs)
+        {
+            opMap.TryGetValue(oc.OperationId, out var op);
+            _db.ContainerMovements.Add(new ContainerMovement
+            {
+                ContainerId  = oc.ContainerId!.Value,
+                MovementType = movementType,
+                BookingId    = op?.BookingId,
+                OperationId  = oc.OperationId,
+                PortId       = op?.PortId,
+                MovementDate = when,
+                CreatedAt    = DateTime.UtcNow,
+                CreatedBy    = CurrentUserId()
+            });
+        }
     }
 
     private async Task SetOperationsStatusAsync(List<long> ids, string status, CancellationToken ct)
@@ -418,6 +492,7 @@ public class TripsController : ControllerBase
 
             var ids = await _db.TripOperations.Where(to => to.TripId == id)
                 .Select(to => to.OperationId).ToListAsync(ct);
+            await WriteContainerMovementsAsync(ids, "OutForDelivery", start, ct);
             await SetOperationsStatusAsync(ids, "InTransit", ct);
             await _db.SaveChangesAsync(ct);
 
@@ -441,7 +516,7 @@ public class TripsController : ControllerBase
         if (t.Status is not ("Started" or "Assigned" or "Planned"))
             {
             await _audit.LogAsync(FastCom.Server.Services.AuditActions.Close, "Trip", null, description: "إنهاء رحلة", ct: ct);
-            
+            return BadRequest(new { message = $"حالة الرحلة «{t.Status}» لا تسمح بالإنهاء" });
             }
 
         var end = Dt(req?.ActualEndAt) ?? DateTime.UtcNow;
@@ -468,6 +543,7 @@ public class TripsController : ControllerBase
 
             var ids = await _db.TripOperations.Where(to => to.TripId == id)
                 .Select(to => to.OperationId).ToListAsync(ct);
+            await WriteContainerMovementsAsync(ids, "Delivered", end, ct);
             await SetOperationsStatusAsync(ids, "Delivered", ct);
             await _db.SaveChangesAsync(ct);
 
@@ -499,6 +575,11 @@ public class TripsController : ControllerBase
         await _db.Database.BeginTransactionAsync(ct);
         try
         {
+            /* توزيعات تكلفة الرحلة الملغاة تُحذف كما في حذف الرحلة — بقاؤها
+               يبقي تكلفة وهمية على عملياتها لأن مشغّل التكلفة يجمعها كلها */
+            var allocs = await _db.TripCostAllocations.Where(a => a.TripId == id).ToListAsync(ct);
+            _db.TripCostAllocations.RemoveRange(allocs);
+
             t.Status    = "Cancelled";
             t.UpdatedAt = DateTime.UtcNow;
             t.UpdatedBy = CurrentUserId();
@@ -534,11 +615,21 @@ public class TripsController : ControllerBase
 
         var t = await _db.Trips.FirstOrDefaultAsync(x => x.TripId == id && !x.IsDeleted, ct);
         if (t is null) return NotFound(new { message = "الرحلة مش موجودة" });
+        if (t.Status is "Cancelled" or "Completed")
+            return BadRequest(new { message = "الرحلة مكتملة أو ملغية — التوزيع بيتم على رحلة شغالة بس" });
 
         var opIds = await _db.TripOperations.Where(to => to.TripId == id)
             .Select(to => to.OperationId).ToListAsync(ct);
         if (opIds.Count == 0)
             return BadRequest(new { message = "لايوجد عمليات مربوطة بالرحلة" });
+
+        /* عملية مقفولة/ملغية ماينفعش تاخد تكلفة — التوزيع يتلغي لحد ما الرابط يتشال */
+        var blockedOps = await _db.Operations.AsNoTracking()
+            .Where(o => opIds.Contains(o.OperationId) && !o.IsDeleted &&
+                        (o.Status == "Closed" || o.Status == "Cancelled"))
+            .Select(o => o.OperationNumber).ToListAsync(ct);
+        if (blockedOps.Count > 0)
+            return BadRequest(new { message = $"في عمليات مقفولة أو ملغية مربوطة بالرحلة ({string.Join("، ", blockedOps)}) — فك ربطها قبل التوزيع" });
 
         /* 🔴 باغ العدّ المزدوج — اتصلح.
 

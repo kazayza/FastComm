@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using FastCom.Infrastructure.Identity;
 using FastCom.Infrastructure.Persistence;
@@ -90,6 +91,9 @@ builder.Services
        فالـ Authorization كله لازم يكون على الـ Server (قسم 49)
    ========================================================== */
 var jwtSettings = builder.Configuration.GetSection("Jwt");
+/* 🔴 حارس الإقلاع: رفض صريح للمفتاح البديل المنشور أو القصير —
+   التوقيع بمفتاح معلوم للعامة يعني أن أي شخص يستطيع تزوير أي توكن */
+var jwtKey = FastCom.Server.Auth.JwtKeyGuard.RequireValidKey(jwtSettings["Key"]);
 builder.Services
     .AddAuthentication(options =>
     {
@@ -106,10 +110,45 @@ builder.Services
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwtSettings["Issuer"],
             ValidAudience = jwtSettings["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(jwtSettings["Key"]
-                    ?? throw new InvalidOperationException("Jwt:Key مش متعرّف في appsettings"))),
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
             ClockSkew = TimeSpan.FromMinutes(1)
+        };
+
+        /* 🔴 إبطال الجلسات: كل طلب يتحقق أن الحساب ما زال نشطًا وأن ختم
+           الأمان لم يتغير (تغيير كلمة المرور أو إعادة تعيينها يدوّر الختم
+           عبر UserManager فينهي كل الجلسات السابقة). التوكنات الصادرة قبل
+           هذا التعديل لا تحمل الختم فتُقبل حتى انتهائها الطبيعي. */
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async ctx =>
+            {
+                var rawId = ctx.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (!int.TryParse(rawId, out var uid))
+                {
+                    ctx.Fail("هوية المستخدم غير صالحة");
+                    return;
+                }
+
+                var db = ctx.HttpContext.RequestServices
+                    .GetRequiredService<FastCom.Infrastructure.Persistence.FastComDbContext>();
+                var u = await db.Users.AsNoTracking()
+                    .Where(x => x.Id == uid)
+                    .Select(x => new { x.IsActive, x.SecurityStamp })
+                    .FirstOrDefaultAsync();
+
+                if (u is null || !u.IsActive)
+                {
+                    ctx.Fail("الحساب غير نشط أو غير موجود");
+                    return;
+                }
+
+                var stampClaim = ctx.Principal?.FindFirstValue("sstamp");
+                if (stampClaim is not null && u.SecurityStamp is not null
+                    && !string.Equals(stampClaim, u.SecurityStamp, StringComparison.Ordinal))
+                {
+                    ctx.Fail("انتهت الجلسة — سجّل الدخول من جديد");
+                }
+            }
         };
     });
 
@@ -140,6 +179,7 @@ builder.Services.AddScoped<FastCom.Server.Services.ISettingsService, FastCom.Ser
 /* 🔴 ICashBook — دفتر الخزينة. المدفوعات والمصروفات والعهد كلها بتنعكس
    في الخزينة من مكان واحد (منعًا لتكرار القواعد والعدّ المزدوج). */
 builder.Services.AddScoped<FastCom.Server.Services.ICashBook, FastCom.Server.Services.CashBook>();
+builder.Services.AddHostedService<FastCom.Server.Services.AlertNotificationService>();   // 🔔 تنبيهات دورية إلى جرس الإشعارات
 builder.Services.AddScoped<FastCom.Server.Services.INumberingService, FastCom.Server.Services.NumberingService>();
 builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();

@@ -44,6 +44,17 @@ public class OptionsController : ControllerBase
             .Select(s => new Opt(s.SupplierId, s.NameAr + " (" + s.SupplierCode + ")"))
             .ToListAsync(ct));
 
+    /* موردو الضمان: مسجلين في النظام بنوع «خدمات ميناء» (قرار المالك 2026-10-28)
+       — قائمة حقل «مورد الضمان» في الحجز وطلب النقل */
+    [HttpGet("guarantee-suppliers")]
+    [Authorize(Policy = "PERM:SUPPLIER.VIEW")]
+    public async Task<IActionResult> GuaranteeSuppliers(CancellationToken ct) =>
+        Ok(await _db.Suppliers.AsNoTracking()
+            .Where(s => s.IsActive && !s.IsDeleted && s.SupplierType == "PortServices")
+            .OrderBy(s => s.NameAr)
+            .Select(s => new Opt(s.SupplierId, s.NameAr + " (" + s.SupplierCode + ")"))
+            .ToListAsync(ct));
+
     /* 🔴 كان ناقص — شاشة الصيانة محتاجاه */
     [HttpGet("branches")]
     [Authorize(Policy = "PERM:MASTERDATA.VIEW")]
@@ -61,6 +72,31 @@ public class OptionsController : ControllerBase
             .Where(d => d.Status == "Active" && !d.IsDeleted)
             .OrderBy(d => d.FullName)
             .Select(d => new Opt(d.DriverId, d.FullName + " (" + d.DriverCode + ")"))
+            .ToListAsync(ct));
+
+    /* ── ربط السائق ↔ العربية عن طريق المورد ──
+       العربية الخارجية والسائق الخارجي بيجمعهم نفس المورد، والداخلي مع عربيات
+       الشركة. الـ PairOpt بيحمل مصدر كل طرف عشان الواجهة تفلتر/تقترح — من غير منع */
+    public record PairOpt(int Id, string Label, int? SupplierId, bool IsCompany, int? DefaultDriverId);
+
+    [HttpGet("drivers-pairing")]
+    [Authorize(Policy = "PERM:DRIVER.VIEW")]
+    public async Task<IActionResult> DriversPairing(CancellationToken ct) =>
+        Ok(await _db.Drivers.AsNoTracking()
+            .Where(d => d.Status == "Active" && !d.IsDeleted)
+            .OrderBy(d => d.FullName)
+            .Select(d => new PairOpt(d.DriverId, d.FullName + " (" + d.DriverCode + ")",
+                                     d.SupplierId, d.DriverType == "Internal", null))
+            .ToListAsync(ct));
+
+    [HttpGet("vehicles-pairing")]
+    [Authorize(Policy = "PERM:FLEET.VIEW")]
+    public async Task<IActionResult> VehiclesPairing(CancellationToken ct) =>
+        Ok(await _db.Vehicles.AsNoTracking()
+            .Where(v => !v.IsDeleted && v.Status != "OutOfService")
+            .OrderBy(v => v.PlateNumber)
+            .Select(v => new PairOpt(v.VehicleId, v.PlateNumber + " — " + v.VehicleType,
+                                     v.SupplierId, v.OwnershipType == "Company", v.DefaultDriverId))
             .ToListAsync(ct));
 
     [HttpGet("employees")]
@@ -181,11 +217,11 @@ public class OptionsController : ControllerBase
             .Where(e => e.IsActive && !e.IsDeleted)
             .OrderBy(e => e.Code)
             .Select(e => new ExpenseTypeOpt(e.ExpenseTypeId, e.NameAr,
-                e.IsCustodyAllowed, e.IsOperationCost, e.IsTaxDeductible))
+                e.IsCustodyAllowed, e.IsOperationCost, e.IsTaxDeductible, e.IsFreightAdvance, e.IsReceiptRequired))
             .ToListAsync(ct));
 
     public record ExpenseTypeOpt(int Id, string Label, bool CustodyAllowed,
-        bool IsOperationCost, bool IsTaxDeductible);
+        bool IsOperationCost, bool IsTaxDeductible, bool IsFreightAdvance = false, bool IsReceiptRequired = false);
 
     /// <summary>أنواع الإيصالات (هيئة/كاشير/تعتيق…) — المستخدم بيوسعها من شاشة أنواع الإيصالات.</summary>
     [HttpGet("receipt-types")]
@@ -202,7 +238,7 @@ public class OptionsController : ControllerBase
     [Authorize(Policy = "PERM:EXPENSE.VIEW")]
     public async Task<IActionResult> Custodies(long? tripId, CancellationToken ct) =>
         Ok(await _db.DriverCustodies.AsNoTracking()
-            .Where(c => !c.IsDeleted && (tripId == null || c.TripId == tripId) &&
+            .Where(c => !c.IsDeleted && (tripId == null || c.TripId == tripId || c.TripId == null) &&
                         c.Status != "Closed" && c.Status != "Approved")
             .OrderBy(c => c.CustodyNumber)
             .Select(c => new CustodyOpt(c.CustodyId, c.CustodyNumber, c.OwnerType, c.OwnerId,

@@ -395,7 +395,7 @@
                     <div class="svc-grid">
                         <div class="svc-field">
                             <label class="svc-label" for="rt-code">
-                                الكود التعريفي <span class="svc-req">*</span>
+                                الكود التعريفي <span style="color:#7d8aa5;font-weight:600">(اختياري — يُولّد تلقائيًا إن تُرك فارغًا)</span>
                             </label>
                             <div class="svc-input-wrap">
                                 <span class="svc-prefix">
@@ -406,9 +406,9 @@
                                     </svg>
                                 </span>
                                 <input id="rt-code"
-                                       class="svc-input ltr with-prefix @(_triedSave && string.IsNullOrWhiteSpace(_f.Code) ? "svc-err" : "")"
+                                       class="svc-input ltr with-prefix"
                                        @bind="_f.Code" maxlength="30" dir="ltr"
-                                       placeholder="مثال: CUSTOMS"
+                                       placeholder="اتركه فارغًا للتوليد التلقائي — أو مثال: CUSTOMS"
                                        disabled="@(_editId is not null && _f.ExpenseCount > 0)"/>
                             </div>
                             @if (_editId is not null && _f.ExpenseCount > 0)
@@ -421,10 +421,6 @@
                                     </svg>
                                     مقفل — مستخدم في @_f.ExpenseCount مصروف
                                 </div>
-                            }
-                            @if (_triedSave && string.IsNullOrWhiteSpace(_f.Code))
-                            {
-                                <div class="svc-err-msg">الكود مطلوب</div>
                             }
                         </div>
 
@@ -483,9 +479,10 @@
                                 </span>
                                 <select id="rt-active"
                                         class="svc-input svc-select with-prefix"
-                                        @bind="_f.IsActive">
-                                    <option value="true" selected="@_f.IsActive">نشط — يظهر في فورم المصروف</option>
-                                    <option value="false" selected="@(!_f.IsActive)">معطل — مخفي من الاختيار</option>
+                                        value="@(_f.IsActive ? "true" : "false")"
+                                        @onchange="OnStatusChanged">
+                                    <option value="true">نشط — يظهر في فورم المصروف</option>
+                                    <option value="false">معطل — مخفي من الاختيار</option>
                                 </select>
                             </div>
                             <div class="svc-hint">
@@ -1263,7 +1260,7 @@
         .hero-wrapper .fc-hero { border-radius: 16px !important; }
         .doc-body { padding: 14px 12px 90px; }
         .fc-overlap { margin-top: 14px !important; }
-        .svc-modal { max-width: 100%; border-radius: 16px; }
+        .svc-modal { max-width: 520px; max-height: 88vh; border-radius: 16px; }
         .svc-modal-head { padding: 16px 18px; }
         .svc-section { padding: 18px 16px 22px; }
         .svc-modal-foot { flex-direction: column-reverse; align-items: stretch; }
@@ -1443,16 +1440,15 @@
         }
     }
 
+    // اختيار الحالة صراحة: الربط المباشر على قيمة منطقية لا يطابق قيم الخيارات النصية فلا يثبت الاختيار
+    private void OnStatusChanged(ChangeEventArgs e)
+        => _f.IsActive = e.Value?.ToString() == "true";
+
     private async Task SaveAsync()
     {
         if (_saving) return;
         _triedSave = true;
 
-        if (string.IsNullOrWhiteSpace(_f.Code))
-        {
-            _ok = false; _msg = "الكود مطلوب";
-            StateHasChanged(); return;
-        }
         if (string.IsNullOrWhiteSpace(_f.NameAr))
         {
             _ok = false; _msg = "الاسم بالعربية مطلوب";

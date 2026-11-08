@@ -298,19 +298,29 @@ public class PriceListsController : ControllerBase
 
         var on = DateOnly.TryParse(date, out var d) ? d : DateOnly.FromDateTime(DateTime.UtcNow);
 
+        /* القائمة نفسها لازم تكون سارية في التاريخ ده — معاينة قائمة مقفولة
+           ما ينفعش تطلع سعر الـ price-suggest الحقيقي عمره ما هيديه */
+        var list = await _db.PriceLists.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.PriceListId == id, ct);
+        if (list is null) return NotFound(new { message = "قائمة الأسعار مش موجودة" });
+        if (list.IsDeleted || !list.IsActive || list.ValidFrom > on ||
+            (list.ValidTo != null && list.ValidTo < on))
+            return Ok(new { matched = false, rule = (RuleItem?)null, checked_ = 0 });
+
         var q = _db.CustomerPriceRules.AsNoTracking()
             .Where(r => !r.IsDeleted && r.IsActive && r.PriceListId == id &&
                         r.CustomerId == customerId && r.ServiceId == serviceId &&
                         r.ValidFrom <= on && (r.ValidTo == null || r.ValidTo >= on));
         var all = await ProjectAsync(q, ct);
 
-        /* 🔴 نفس منطق price-suggest — الأخص تكسب */
+        /* 🔴 نفس منطق price-suggest — الأخص تكسب، والبُعد الناقص في الطلب
+           ما يطابقش قاعدة محدّداه (القاعدة العامة بس) */
         var match = all
-            .Where(r => portId == null || r.PortId == null || r.PortId == portId)
-            .Where(r => destinationId == null || r.DestinationId == null || r.DestinationId == destinationId)
-            .Where(r => tahteeqPortId == null || r.TahteeqPortId == null || r.TahteeqPortId == tahteeqPortId)
-            .Where(r => tripTypeId == null || r.TripTypeId == null || r.TripTypeId == tripTypeId)
-            .Where(r => containerTypeId == null || r.ContainerTypeId == null || r.ContainerTypeId == containerTypeId)
+            .Where(r => r.PortId == null || (portId != null && r.PortId == portId))
+            .Where(r => r.DestinationId == null || (destinationId != null && r.DestinationId == destinationId))
+            .Where(r => r.TahteeqPortId == null || (tahteeqPortId != null && r.TahteeqPortId == tahteeqPortId))
+            .Where(r => r.TripTypeId == null || (tripTypeId != null && r.TripTypeId == tripTypeId))
+            .Where(r => r.ContainerTypeId == null || (containerTypeId != null && r.ContainerTypeId == containerTypeId))
             .OrderByDescending(r => r.Specificity)
             .ThenBy(r => r.Priority)
             .ThenByDescending(r => r.ValidFrom)

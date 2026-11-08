@@ -171,7 +171,7 @@ public class SupplierPaymentsController : ControllerBase
         if (!await _db.Suppliers.AnyAsync(s => s.SupplierId == req.SupplierId && !s.IsDeleted, ct))
             {
             await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "SupplierPayment", null, description: "إنشاء دفعة مورد", ct: ct);
-            
+            return BadRequest(new { message = "المورد غير موجود" });
             }
         if (!await _db.Branches.AnyAsync(b => b.BranchId == req.BranchId && !b.IsDeleted, ct))
             return BadRequest(new { message = "الفرع مش موجود" });
@@ -252,6 +252,23 @@ public class SupplierPaymentsController : ControllerBase
             foreach (var inv in open) RecalcStatus(inv);
 
             await _db.SaveChangesAsync(ct);
+
+            /* 🔴 الخزينة داخل المعاملة نفسها: فشل رجل الخزينة يُبطل الدفعة كلها
+               بدل دفعة محفوظة بلا حركة خزينة (CashBook لا يحفظ — الحفظ هنا) */
+            if (method.IsCashBased)
+            {
+                var ok = await _cash.PaymentAsync(new CashEntry(
+                    ReferenceNumber : $"SPAY:{number}",
+                    Amount          : pay.Amount,
+                    PaymentMethodId : pay.PaymentMethodId,
+                    SupplierId      : pay.SupplierId,
+                    Description     : $"دفعة للمورد {number}",
+                    Date            : pay.PaymentDate), ct);
+                if (!ok)
+                    throw new InvalidOperationException("تعذر تسجيل حركة الخزينة للدفعة — تحقق من وجود صندوق مفتوح مناسب");
+                await _db.SaveChangesAsync(ct);
+            }
+
             await _db.Database.CommitTransactionAsync(ct);
         }
         catch (Exception ex)
@@ -259,19 +276,6 @@ public class SupplierPaymentsController : ControllerBase
             await _db.Database.RollbackTransactionAsync(ct);
             _log.LogError(ex, "فشل تسجيل دفعة مورد");
             return BadRequest(new { message = "فشل الحفظ: " + ex.Message });
-        }
-
-        /* 🔴 الخزينة — **بعد الـ Commit** عشان ما تترجعش مع rollback */
-        if (method.IsCashBased)
-        {
-            var ok = await _cash.PaymentAsync(new CashEntry(
-                ReferenceNumber : $"SPAY:{number}",
-                Amount          : pay.Amount,
-                PaymentMethodId : pay.PaymentMethodId,
-                SupplierId      : pay.SupplierId,
-                Description     : $"دفعة للمورد {number}",
-                Date            : pay.PaymentDate), ct);
-            if (ok) await _db.SaveChangesAsync(ct);
         }
 
         return Ok(new
@@ -294,7 +298,7 @@ public class SupplierPaymentsController : ControllerBase
         if (p.Status != "Posted")
             {
             await _audit.LogAsync(FastCom.Server.Services.AuditActions.Cancel, "SupplierPayment", null, description: "إلغاء دفعة مورد", ct: ct);
-            
+            return BadRequest(new { message = "لا يمكن إلغاء دفعة مورد غير مرحّلة" });
             }
 
         var allocs = await _db.SupplierInvoiceAllocations

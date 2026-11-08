@@ -291,7 +291,7 @@ public class AuditController : ControllerBase
     /// بنرجع 500 وما نحذفش حاجة — البيانات أهم من المساحة.</para>
     /// </summary>
     [HttpPost("archive")]
-    [Authorize(Policy = "PERM:AUDIT.VIEW")]
+    [Authorize(Policy = "PERM:AUDIT.ARCHIVE")]
     public async Task<IActionResult> Archive(CancellationToken ct)
     {
         var cutoff = DateTime.UtcNow.AddMonths(-RetentionMonths);

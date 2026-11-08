@@ -30,7 +30,7 @@ public class ReceiptTypesController : ControllerBase
 
     public record Detail(int ReceiptTypeId, string Code, string NameAr, string? NameEn, bool IsActive);
 
-    public record Upsert(string Code, string NameAr, string? NameEn, bool IsActive);
+    public record Upsert(string? Code, string NameAr, string? NameEn, bool IsActive);
 
     // ═══════════════ LIST ═══════════════
 
@@ -83,7 +83,9 @@ public class ReceiptTypesController : ControllerBase
 
         var t = new ReceiptType
         {
-            Code      = req.Code.Trim().ToUpperInvariant(),
+            Code      = string.IsNullOrWhiteSpace(req.Code)
+                            ? await GenerateCodeAsync(ct)
+                            : req.Code.Trim().ToUpperInvariant(),
             NameAr    = req.NameAr.Trim(),
             NameEn    = req.NameEn?.Trim(),
             IsActive  = req.IsActive,
@@ -110,11 +112,14 @@ public class ReceiptTypesController : ControllerBase
 
         var usedBy = await _db.Expenses.CountAsync(e => e.ReceiptTypeId == id && !e.IsDeleted, ct);
 
+        /* كود فارغ في التعديل = الكود الحالي يبقى كما هو */
+        var newCode = string.IsNullOrWhiteSpace(req.Code) ? t.Code : req.Code.Trim();
+
         /* 🔴 نوع عليه مصروفات — الكود مقفول (زي أنواع المصروفات بالظبط) */
-        if (usedBy > 0 && !string.Equals(t.Code, req.Code.Trim(), StringComparison.OrdinalIgnoreCase))
+        if (usedBy > 0 && !string.Equals(t.Code, newCode, StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = $"الكود مستخدم في {usedBy} مصروف — مايتغيرش. اعمل نوع جديد" });
 
-        t.Code      = req.Code.Trim().ToUpperInvariant();
+        t.Code      = newCode.ToUpperInvariant();
         t.NameAr    = req.NameAr.Trim();
         t.NameEn    = req.NameEn?.Trim();
         t.IsActive  = req.IsActive;
@@ -148,22 +153,36 @@ public class ReceiptTypesController : ControllerBase
 
     // ═══════════════ validation ═══════════════
 
+    /// <summary>كود تلقائي لنوع إيصال جديد (RC-HHmmss) مع ضمان عدم التكرار.</summary>
+    private async Task<string> GenerateCodeAsync(CancellationToken ct)
+    {
+        var code = "RC-" + DateTime.Now.ToString("HHmmss");
+        var n = 1;
+        while (await _db.ReceiptTypes.AnyAsync(t => !t.IsDeleted && t.Code == code, ct))
+            code = $"RC-{DateTime.Now:HHmmss}-{++n}";
+        return code;
+    }
+
     private async Task<string?> ValidateAsync(Upsert? r, CancellationToken ct, int? currentId = null)
     {
         if (r is null) return "البيانات غير كاملة";
-        if (string.IsNullOrWhiteSpace(r.Code))   return "الكود مطلوب";
         if (string.IsNullOrWhiteSpace(r.NameAr)) return "الاسم بالعربي مطلوب";
 
-        var code = r.Code.Trim();
-        if (code.Length > 30) return "الكود أطول من 30 حرف";
-        if (!System.Text.RegularExpressions.Regex.IsMatch(code, "^[A-Za-z0-9_-]+$"))
-            return "الكود بالحروف الإنجليزية والأرقام بس (زي CASHIER أو DEMURRAGE)";
+        /* الكود اختياري (قرار المالك): فارغ = يُولّد تلقائيًا عند الحفظ.
+           وإن كُتب يدويًا تنطبق عليه نفس قواعد الصيغة وعدم التكرار. */
+        if (!string.IsNullOrWhiteSpace(r.Code))
+        {
+            var code = r.Code.Trim();
+            if (code.Length > 30) return "الكود أطول من 30 حرف";
+            if (!System.Text.RegularExpressions.Regex.IsMatch(code, "^[A-Za-z0-9_-]+$"))
+                return "الكود بالحروف الإنجليزية والأرقام بس (زي CASHIER أو DEMURRAGE)";
 
-        var dup = await _db.ReceiptTypes.AnyAsync(t =>
-            !t.IsDeleted &&
-            t.Code.ToLower() == code.ToLower() &&
-            (currentId == null || t.ReceiptTypeId != currentId), ct);
-        if (dup) return $"الكود «{code.ToUpperInvariant()}» موجود أصلًا";
+            var dup = await _db.ReceiptTypes.AnyAsync(t =>
+                !t.IsDeleted &&
+                t.Code.ToLower() == code.ToLower() &&
+                (currentId == null || t.ReceiptTypeId != currentId), ct);
+            if (dup) return $"الكود «{code.ToUpperInvariant()}» موجود أصلًا";
+        }
 
         return null;
     }

@@ -409,7 +409,7 @@ public class SupplierInvoicesController : ControllerBase
         if (inv.Status != "Draft")
             {
             await _audit.LogAsync(FastCom.Server.Services.AuditActions.Update, "SupplierInvoice", null, description: "تعديل فاتورة مورد", ct: ct);
-            
+            return BadRequest(new { message = "لا يمكن تعديل فاتورة مورد غير مسودة — التعديل للمسودات فقط" });
             }
 
         var err = await ValidateAsync(req, ct);
@@ -469,7 +469,7 @@ public class SupplierInvoicesController : ControllerBase
         if (inv.Status != "Draft")
             {
             await _audit.LogAsync(FastCom.Server.Services.AuditActions.Approve, "SupplierInvoice", null, description: "اعتماد فاتورة مورد", ct: ct);
-            
+            return BadRequest(new { message = "لا يمكن اعتماد فاتورة مورد غير مسودة" });
             }
         if (inv.GrandTotal <= 0)
             return BadRequest(new { message = "الفاتورة فاضية — ضيف بند واحد على الأقل" });
@@ -497,7 +497,7 @@ public class SupplierInvoicesController : ControllerBase
         if (inv.Status is "Cancelled")
             {
             await _audit.LogAsync(FastCom.Server.Services.AuditActions.Cancel, "SupplierInvoice", null, description: "إلغاء فاتورة مورد", ct: ct);
-            
+            return BadRequest(new { message = "الفاتورة ملغاة أصلًا" });
             }
 
         /* 🔴 المدفوعة ما تتلغاش — فيه فلوس اتحركت */
@@ -528,7 +528,7 @@ public class SupplierInvoicesController : ControllerBase
         if (inv.Status != "Draft")
             {
             await _audit.LogAsync(FastCom.Server.Services.AuditActions.Delete, "SupplierInvoice", null, description: "حذف فاتورة مورد", ct: ct);
-            
+            return BadRequest(new { message = "لا يمكن حذف فاتورة مورد غير مسودة — الحذف للمسودات فقط" });
             }
 
         inv.IsDeleted = true;

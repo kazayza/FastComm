@@ -695,7 +695,7 @@
                                                 @bind="_f.GuaranteeSupplierId"
                                                 disabled="@_locked">
                                             <option value="">— اختار المورد —</option>
-                                            @foreach (var s in _suppliers)
+                                            @foreach (var s in GuaranteeOptions)
                                             {
                                                 <option value="@s.Id">@s.Label</option>
                                             }
@@ -2288,6 +2288,23 @@
     private List<Opt> _tripTypes      = new();
     private List<TypeOpt> _containerTypes = new();
     private List<Opt>     _suppliers      = new();
+    private List<Opt>     _guaranteeSuppliers = new();
+
+    /* مورد الضمان متفلتر على «خدمات ميناء» (قرار المالك 2026-10-28) —
+       والمورّد المحفوظ على حجز قديم بيظهر حتى لو نوعه اتغير */
+    private List<Opt> GuaranteeOptions
+    {
+        get
+        {
+            var list = _guaranteeSuppliers.ToList();
+            if (_f.GuaranteeSupplierId is int gid && gid > 0 && list.All(x => x.Id != gid))
+            {
+                var cur = _suppliers.FirstOrDefault(x => x.Id == gid);
+                if (cur is not null) list.Insert(0, cur);
+            }
+            return list;
+        }
+    }
 
     private List<LineRow> _lines = new();
     private Form          _f     = new();
@@ -2456,6 +2473,7 @@
             try { _containerTypes = await Http.GetFromJsonAsync<List<TypeOpt>>("api/options/container-types") ?? new(); }
             catch { _containerTypes = new(); }
             _suppliers      = await SafeGet("api/options/suppliers");
+            _guaranteeSuppliers = await SafeGet("api/options/guarantee-suppliers");
 
             if (_id is not null) await LoadBookingAsync(_id.Value);
             else AddLine();
@@ -2715,7 +2733,7 @@
                 guaranteePerContainer  = l.Guarantee,
                 notes                  = l.Notes
             }),
-            containerDetails    = lines.SelectMany(l => l.Details.Select(d => new
+            containerDetails    = lines.SelectMany((l, li) => l.Details.Select(d => new
             {
                 containerId      = d.ContainerId,
                 containerNumber  = d.ContainerNumber,
@@ -2724,7 +2742,8 @@
                 blNumber         = d.BLNumber,
                 bookingReference = d.BookingReference,
                 weightKg         = d.WeightKg,
-                notes            = d.Notes
+                notes            = d.Notes,
+                lineIndex        = li
             }))
         };
 

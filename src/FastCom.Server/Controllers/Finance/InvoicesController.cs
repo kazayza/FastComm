@@ -337,14 +337,39 @@ public class InvoicesController : ControllerBase
 
             await _db.Database.CommitTransactionAsync(ct);
 
+            var warning = await CreditLimitWarningAsync(cust, inv.GrandTotal, ct);
+
             return Ok(new { id = inv.InvoiceId, number = inv.InvoiceNumber,
-                message = $"✅ تم حفظ الفاتورة برقم {inv.InvoiceNumber}" });
+                message = warning is null
+                    ? $"✅ تم حفظ الفاتورة برقم {inv.InvoiceNumber}"
+                    : $"✅ تم حفظ الفاتورة برقم {inv.InvoiceNumber} — {warning}" });
         }
         catch (Exception)
         {
             try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
             throw;
         }
+    }
+
+    /// <summary>
+    /// تنبيه حد الائتمان عند إنشاء فاتورة: لا يمنع الحفظ، لكنه يجعل تجاوز
+    /// العميل حدّه مرئيًا في رسالة الحفظ نفسها بدل حدٍّ مخزن بلا أي أثر.
+    /// الفاتورة الجديدة مسودة فلا تدخل في مجموع المفتوح — تُضاف قيمتها يدويًا.
+    /// </summary>
+    private async Task<string?> CreditLimitWarningAsync(Customer cust, decimal newInvoiceTotal,
+        CancellationToken ct)
+    {
+        if (cust.CreditLimit <= 0) return null;
+
+        var open = await _db.Invoices.AsNoTracking()
+            .Where(i => i.CustomerId == cust.CustomerId && !i.IsDeleted
+                        && i.Status != "Draft" && i.Status != "Cancelled")
+            .SumAsync(i => (decimal?)(i.GrandTotal - i.PaidAmount), ct) ?? 0m;
+
+        var exposure = open + newInvoiceTotal;
+        if (exposure <= cust.CreditLimit) return null;
+
+        return $"تنبيه: العميل «{cust.NameAr}» تجاوز حد الائتمان — الحد {cust.CreditLimit:N0} ج.م والمستحق بعد هذه الفاتورة {exposure:N0} ج.م";
     }
 
     // ═══════════════ UPDATE ═══════════════
@@ -587,6 +612,22 @@ public class InvoicesController : ControllerBase
             + l.Quantity * l.UnitPrice - l.Discount);
         if (creditTotal > 0)
             return BadRequest(new { message = "الإشعار الدائن طلع بمبلغ موجب — راجع البنود" });
+
+        /* 🔴 سقف تراكمي: مجموع الإشعارات الدائنة على الفاتورة (القائمة وهذا
+           الإشعار) لا يتجاوز قيمة الفاتورة الأصلية — بلا سقف كان يمكن إصدار
+           إشعارات متكررة تفوق قيمة الفاتورة أضعافًا */
+        var priorCredit = await _db.Invoices.AsNoTracking()
+            .Where(i => i.OriginalInvoiceId == original.InvoiceId
+                        && i.DocumentTypeCode == "CreditNote"
+                        && !i.IsDeleted && i.Status != "Cancelled")
+            .SumAsync(i => (decimal?)i.GrandTotal, ct) ?? 0m;
+        if (Math.Abs(priorCredit) + Math.Abs(creditTotal) > original.GrandTotal + 0.01m)
+            return BadRequest(new
+            {
+                message = $"تجاوز سقف الإشعارات الدائنة: قيمة الفاتورة الأصلية {original.GrandTotal:N2} ج.م، " +
+                          $"وصدر عليها إشعارات سابقة بقيمة {Math.Abs(priorCredit):N2} ج.م، " +
+                          $"وهذا الإشعار بقيمة {Math.Abs(creditTotal):N2} ج.م"
+            });
 
         var branchId = await ResolveBranchIdAsync(ct);
         if (branchId is null) return BadRequest(new { message = "مافيش فرع معرّف في النظام" });

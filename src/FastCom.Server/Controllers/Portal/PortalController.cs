@@ -57,18 +57,17 @@ public class PortalController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Verify([FromQuery] string? token, CancellationToken ct)
     {
-        var (t, cust, err) = await ResolveAsync(token, ct);
+        var (t, cust, err) = await ResolveAsync(token, ct, enforceUseLimit: true);
         if (t is null) return BadRequest(new { message = err });
         if (cust is null) return BadRequest(new { message = err });
 
-        // أول استخدام للتوكن ده هو اللي بيُعدّ
-        if (t.UsedCount == 0)
-        {
-            t.UsedCount  = 1;
-            t.LastUsedAt = DateTime.UtcNow;
-            await LogAsync(t, cust.CustomerId, "Login", null, null, ct);
-            await _db.SaveChangesAsync(ct);
-        }
+        /* كل فتح للرابط (Verify) يستهلك استخدامًا واحدًا من حد MaxUses —
+           قبل هذا التعديل كان العداد يقف عند 1 فلا يُنفَّذ الحد أبدًا.
+           نقاط البيانات نفسها لا تُقيَّد بالعداد حتى لا تنكسر جلسة مفتوحة */
+        t.UsedCount += 1;
+        t.LastUsedAt = DateTime.UtcNow;
+        await LogAsync(t, cust.CustomerId, "Login", null, null, ct);
+        await _db.SaveChangesAsync(ct);
 
         var open = await _db.Invoices.AsNoTracking()
             .Where(i => i.CustomerId == cust.CustomerId && !i.IsDeleted
@@ -135,6 +134,9 @@ public class PortalController : ControllerBase
         if (t is null) return BadRequest(new { message = err });
         if (cust is null) return BadRequest(new { message = err });
 
+        /* رابط فاتورة واحدة (InvoiceView) لا يفتح قائمة الفواتير كلها */
+        if (t.Purpose == "InvoiceView") return Forbid();
+
         var q = _db.Invoices.AsNoTracking()
             .Where(i => i.CustomerId == cust.CustomerId && !i.IsDeleted
                         && (i.Status == "Issued" || i.Status == "Sent" || i.Status == "Approved"
@@ -164,6 +166,9 @@ public class PortalController : ControllerBase
         var (t, cust, err) = await ResolveAsync(token, ct);
         if (t is null) return BadRequest(new { message = err });
         if (cust is null) return BadRequest(new { message = err });
+
+        /* رابط فاتورة واحدة (InvoiceView) لا يفتح كشف حساب العميل */
+        if (t.Purpose == "InvoiceView") return Forbid();
 
         var f = DateOnly.TryParse(from, out var fd) ? fd : DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
         var tt = DateOnly.TryParse(to, out var td) ? td : DateOnly.FromDateTime(DateTime.Today);
@@ -332,7 +337,7 @@ public class PortalController : ControllerBase
     /// العميل مفعّل البوابة · ماوصلش لحد الاستخدام.
     /// </summary>
     private async Task<(CustomerPortalToken? Token, Customer? Customer, string Error)>
-        ResolveAsync(string? token, CancellationToken ct)
+        ResolveAsync(string? token, CancellationToken ct, bool enforceUseLimit = false)
     {
         if (string.IsNullOrWhiteSpace(token))
             return (null, null, "الرابط ناقص");
@@ -351,7 +356,7 @@ public class PortalController : ControllerBase
         if (t.ExpiresAt is not null && t.ExpiresAt < DateTime.UtcNow)
             return (null, null, "الرابط خلصت صلاحيته");
 
-        if (t.MaxUses is not null && t.UsedCount >= t.MaxUses)
+        if (enforceUseLimit && t.MaxUses is not null && t.UsedCount >= t.MaxUses)
             return (null, null, "الرابط اتستخدم العدد المسموح بيه");
 
         var cust = await _db.Customers.FirstOrDefaultAsync(c => c.CustomerId == t.CustomerId && !c.IsDeleted, ct);

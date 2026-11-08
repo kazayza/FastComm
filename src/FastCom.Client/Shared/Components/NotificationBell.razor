@@ -6,15 +6,86 @@
 
 @if (_visible)
 {
-    <MudBadge Content="_unread" Visible="_unread > 0" Color="Color.Error" Overlap="true">
-        <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit"
-                       title="الإشعارات" OnClick="Go" />
-    </MudBadge>
+    <div class="ntf-bell-wrap">
+        <MudBadge Content="_unread" Visible="_unread > 0" Color="Color.Error" Overlap="true">
+            <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit"
+                           title="الإشعارات" OnClick="TogglePanel" />
+        </MudBadge>
+
+        @if (_open)
+        {
+            <div class="ntf-bell-backdrop" @onclick="ClosePanel"></div>
+            <div class="ntf-bell-panel" role="dialog" aria-label="الإشعارات">
+                <div class="ntf-bell-head">
+                    <span class="ntf-bell-head-title">الإشعارات</span>
+                    <button type="button" class="ntf-bell-link" @onclick="ReadAllAsync">تحديد الكل كمقروء</button>
+                </div>
+
+                @if (_loadingPanel)
+                {
+                    <div class="ntf-bell-empty">جارٍ التحميل...</div>
+                }
+                else if (_items.Count == 0)
+                {
+                    <div class="ntf-bell-empty">لا توجد إشعارات</div>
+                }
+                else
+                {
+                    <div class="ntf-bell-list">
+                        @foreach (var n in _items)
+                        {
+                            <button type="button" class="ntf-bell-item @(n.IsRead ? "" : "unread")"
+                                    @onclick="() => OpenAsync(n)">
+                                <span class="ntf-bell-texts">
+                                    <span class="ntf-bell-title">@n.Title</span>
+                                    <span class="ntf-bell-msg">@n.Message</span>
+                                    <span class="ntf-bell-time">@n.CreatedAt.ToString("yyyy-MM-dd HH:mm")</span>
+                                </span>
+                            </button>
+                        }
+                    </div>
+                }
+
+                <button type="button" class="ntf-bell-all" @onclick="GoAll">فتح كل الإشعارات</button>
+            </div>
+        }
+    </div>
 }
+
+<style>
+    .ntf-bell-wrap { position: relative; display: inline-flex; }
+    .ntf-bell-backdrop { position: fixed; inset: 0; z-index: 1290; background: transparent; }
+    .ntf-bell-panel { position: fixed; top: 54px; inset-inline-end: 10px; z-index: 1300;
+        width: min(350px, 94vw); max-height: 72vh; display: flex; flex-direction: column;
+        background: #fff; border-radius: 14px; box-shadow: 0 18px 50px rgba(10, 30, 70, .28);
+        border: 1px solid #e4ebf5; overflow: hidden; }
+    .ntf-bell-head { display: flex; align-items: center; justify-content: space-between;
+        padding: 10px 14px; border-bottom: 1px solid #eef2f8; }
+    .ntf-bell-head-title { font-size: 13.5px; font-weight: 900; color: #16324f; }
+    .ntf-bell-link { background: none; border: none; color: var(--fc-blue, #0B56DF); font-family: inherit;
+        font-size: 11.5px; font-weight: 800; cursor: pointer; padding: 2px 4px; }
+    .ntf-bell-list { overflow-y: auto; }
+    .ntf-bell-item { display: block; width: 100%; text-align: start; background: #fff; border: none;
+        border-bottom: 1px solid #f1f5fa; padding: 10px 14px; cursor: pointer; font-family: inherit; }
+    .ntf-bell-item:hover { background: #f6f9ff; }
+    .ntf-bell-item.unread { background: #eef4ff; }
+    .ntf-bell-texts { display: flex; flex-direction: column; gap: 2px; }
+    .ntf-bell-title { font-size: 12.5px; font-weight: 900; color: #16324f; }
+    .ntf-bell-msg { font-size: 12px; color: #5a6c86; line-height: 1.5;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .ntf-bell-time { font-size: 10.5px; color: #93a5bd; font-weight: 700; }
+    .ntf-bell-empty { padding: 22px 14px; text-align: center; font-size: 12.5px; color: #8496b0; font-weight: 700; }
+    .ntf-bell-all { border: none; border-top: 1px solid #eef2f8; background: #fbfcfe; padding: 10px;
+        color: var(--fc-blue, #0B56DF); font-family: inherit; font-size: 12.5px; font-weight: 900; cursor: pointer; }
+    .ntf-bell-all:hover { background: #eef4ff; }
+</style>
 
 @code {
     private int _unread;
     private bool _visible;
+    private bool _open;
+    private bool _loadingPanel;
+    private List<NotiItem> _items = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -34,7 +105,7 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    /// <summary>بيجيب عدد اللي لسه مااتقراش — ولو فشل يسكت أحسن ما يزعّق.</summary>
+    /// <summary>عدد غير المقروء — ولو فشل يسكت.</summary>
     private async Task RefreshAsync()
     {
         try
@@ -45,9 +116,79 @@
         catch { _unread = 0; }
     }
 
-    private void Go() => Nav.NavigateTo("/notifications");
+    private async Task TogglePanel()
+    {
+        _open = !_open;
+        if (!_open) return;
+        _loadingPanel = true;
+        try { _items = await Http.GetFromJsonAsync<List<NotiItem>>("api/notifications?take=10") ?? new(); }
+        catch { _items = new(); }
+        finally { _loadingPanel = false; }
+    }
+
+    private void ClosePanel() => _open = false;
+
+    private void GoAll()
+    {
+        _open = false;
+        Nav.NavigateTo("/notifications");
+    }
+
+    private async Task ReadAllAsync()
+    {
+        try
+        {
+            var res = await Http.PostAsync("api/notifications/read-all", null);
+            if (res.IsSuccessStatusCode)
+            {
+                foreach (var n in _items) n.IsRead = true;
+                _unread = 0;
+            }
+        }
+        catch { }
+    }
+
+    private async Task OpenAsync(NotiItem n)
+    {
+        if (!n.IsRead)
+        {
+            try
+            {
+                var res = await Http.PostAsync($"api/notifications/{n.NotificationId}/read", null);
+                if (res.IsSuccessStatusCode) { n.IsRead = true; if (_unread > 0) _unread--; }
+            }
+            catch { }
+        }
+        _open = false;
+        Nav.NavigateTo(TargetFor(n));
+    }
+
+    private static string TargetFor(NotiItem n)
+    {
+        if (n.EntityId is null) return "/notifications";
+        return n.EntityType switch
+        {
+            "Custody"   => $"/custodies?openId={n.EntityId}",
+            "Expense"   => $"/expenses/new/{n.EntityId}",
+            "Trip"      => $"/trips/new/{n.EntityId}",
+            "Operation" => $"/operations/{n.EntityId}/file",
+            "Invoice"   => $"/invoices/new/{n.EntityId}",
+            _           => "/notifications"
+        };
+    }
 
     private class UnreadCount { public int Count { get; set; } }
+
+    private class NotiItem
+    {
+        public long NotificationId { get; set; }
+        public string Title { get; set; } = "";
+        public string Message { get; set; } = "";
+        public string? EntityType { get; set; }
+        public long? EntityId { get; set; }
+        public bool IsRead { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
 
     public void Dispose() => Auth.OnStateChanged -= OnAuthChanged;
 }

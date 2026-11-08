@@ -52,12 +52,7 @@ public class TokenService
         IEnumerable<string> roleCodes,
         bool rememberMe = false)
     {
-        var key = _config["Jwt:Key"]
-                  ?? throw new InvalidOperationException("Jwt:Key مش متعرّف في appsettings");
-
-        if (key.Length < 64)
-            throw new InvalidOperationException(
-                $"Jwt:Key لازم يكون 64 حرف على الأقل — الحالي {key.Length} حرف");
+        var key = JwtKeyGuard.RequireValidKey(_config["Jwt:Key"]);
 
         var minutes = rememberMe ? ExpirationMinutes * 3 : ExpirationMinutes;
         var expiresAt = DateTime.UtcNow.AddMinutes(minutes);
@@ -71,6 +66,10 @@ public class TokenService
             new("fullName", user.FullName ?? ""),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
+
+        /* ختم الأمان: تغيير كلمة المرور يدوّره فينهي الجلسات السابقة عند التحقق */
+        if (!string.IsNullOrWhiteSpace(user.SecurityStamp))
+            claims.Add(new Claim("sstamp", user.SecurityStamp));
 
         if (!string.IsNullOrWhiteSpace(user.Email))
             claims.Add(new Claim(ClaimTypes.Email, user.Email));
@@ -118,6 +117,7 @@ WITH FromRoles AS (
     SELECT DISTINCT arp.PermissionId
     FROM AspNetUserRoles ur
          INNER JOIN AppRolePermissions arp ON arp.RoleId = ur.RoleId
+         INNER JOIN AspNetRoles r ON r.Id = ur.RoleId AND r.IsActive = 1
     WHERE ur.UserId = @uid
 ),
 UserOverrides AS (

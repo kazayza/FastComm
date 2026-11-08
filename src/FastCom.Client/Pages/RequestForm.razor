@@ -1,0 +1,3033 @@
+@page "/transport-requests/new"
+@page "/transport-requests/new/{OperationId:long}"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>@(OperationId is null ? "طلب نقل جديد" : "تعديل طلب النقل") — فاست كوم</PageTitle>
+
+@* ═══════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════ *@
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
+
+            <div class="bk-hero-row">
+                <div class="bk-hero-left">
+                    <div class="bk-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M13 2L3 14h7l-1 8 11-14h-8l1-6z" stroke-linejoin="round"/>
+                        </svg>
+                        <span>التشغيل · طلبات النقل</span>
+                    </div>
+                    <h1 class="fc-hero-title fc-hero-title-slim">
+                        @if (OperationId is null)
+                        {
+                            <span>طلب نقل جديد</span>
+                        }
+                        else
+                        {
+                            <span>@_opNumber</span>
+                        }
+                    </h1>
+                    <span class="bk-hero-sub">سجّل الطلب من حجز الوكيل — الحجز وعمليته بيتنشأوا مع بعض</span>
+                </div>
+
+                <div class="bk-hero-right">
+                    @if (OperationId is not null && !string.IsNullOrEmpty(_status))
+                    {
+                        <span class="bk-hero-chip">@StatusAr(_status)</span>
+                    }
+                    <span class="bk-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                </div>
+            </div>
+
+            @* ── ملخص الطلب (يبان بس في التعديل) ── *@
+            @if (OperationId is not null && !_loading)
+            {
+                <div class="bk-hero-summary">
+
+                    <div class="bk-sum-item">
+                        <div class="bk-sum-text">
+                            <div class="bk-sum-label">العميل</div>
+                            <div class="bk-sum-val">
+                                @(_customers.FirstOrDefault(c => c.Id == _f.CustomerId)?.Label ?? "—")
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bk-sum-div" aria-hidden="true"></div>
+
+                    <div class="bk-sum-item">
+                        <div class="bk-sum-text">
+                            <div class="bk-sum-label">حجز الوكيل</div>
+                            <div class="bk-sum-val">@(string.IsNullOrWhiteSpace(_f.BookingReference) ? "—" : _f.BookingReference)</div>
+                        </div>
+                    </div>
+
+                    <div class="bk-sum-div" aria-hidden="true"></div>
+
+                    <div class="bk-sum-item">
+                        <div class="bk-sum-text">
+                            <div class="bk-sum-label">الحاويات</div>
+                            <div class="bk-sum-val">@_lines.Sum(l => l.Qty) حاوية</div>
+                        </div>
+                    </div>
+
+                    <div class="bk-sum-div" aria-hidden="true"></div>
+
+                    <div class="bk-sum-item">
+                        <div class="bk-sum-text">
+                            <div class="bk-sum-label">سعر البيع</div>
+                            <div class="bk-sum-val">@(_f.UnitPrice?.ToString("N0") ?? "—") ج.م</div>
+                        </div>
+                    </div>
+
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="bk-body">
+    @if (!CanUse)
+    {
+        <div class="bk-state-box">
+            <div class="bk-state-icon perm">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>إنشاء الطلب محتاج صلاحيات إنشاء الحجز والعملية، والتعديل محتاج صلاحيات تعديلهم.</p>
+        </div>
+    }
+    else if (_loading)
+    {
+        <div class="bk-state-box"><h3>جاري التحميل…</h3></div>
+    }
+    else
+    {
+        <div class="bk-tabs-wrap">
+        <MudTabs Elevation="0"
+                 Rounded="false"
+                 ApplyEffectsToContainer="true"
+                 PanelClass="bk-tab-panel"
+                 @bind-ActivePanelIndex="_activeTab"
+                 Class="bk-mud-tabs">
+
+            @* ══════════════════════════════════════
+               TAB 1 — بيانات العميل
+            ══════════════════════════════════════ *@
+            <MudTabPanel>
+                <TabContent>
+                    <div class="btab-label">
+                        <div class="btab-icon btab-blue" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                 fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                <circle cx="12" cy="7" r="4"/>
+                            </svg>
+                        </div>
+                        <span>بيانات العميل</span>
+                    </div>
+                </TabContent>
+
+                <ChildContent>
+                    <div class="tab-section">
+
+                        <div class="tab-section-head">
+                            <div class="tab-section-icon blue" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+                                    <circle cx="12" cy="7" r="4"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="tab-section-title">بيانات العميل</div>
+                                <div class="tab-section-sub">العميل وجهة الاتصال والمرجع وتاريخ التنفيذ</div>
+                            </div>
+                        </div>
+
+                        <div class="bk-form-grid">
+
+                            @* العميل — بحث *@
+                            <div class="form-field form-field-with-dropdown">
+                                <label class="field-label" for="rf-customer">
+                                    العميل
+                                    <span class="field-required" aria-label="مطلوب">*</span>
+                                </label>
+                                <div class="field-input-group">
+                                    <span class="field-prefix" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="11" cy="11" r="8"/>
+                                            <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                                        </svg>
+                                    </span>
+                                    <input id="rf-customer"
+                                           class="field-input with-prefix @(_f.CustomerId == 0 && _triedSave ? "field-error" : "")"
+                                           value="@CustomerText"
+                                           placeholder="ابحث بالاسم..."
+                                           @oninput="OnCustomerSearch"
+                                           @onfocus="() => { _showCustomerDropdown = true; _filteredCustomers = FilterOpts(_customers, _customerSearch); }"
+                                           @onfocusout="() => _showCustomerDropdown = false"
+                                           aria-required="true" />
+                                </div>
+                                @if (_showCustomerDropdown && _filteredCustomers.Count > 0)
+                                {
+                                    <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                        @foreach (var c in _filteredCustomers)
+                                        {
+                                            <div class="field-dropdown-item" @onmousedown="() => PickCustomer(c)">
+                                                @c.Label
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                @if (_f.CustomerId == 0 && _triedSave)
+                                {
+                                    <div class="field-err-msg" role="alert">اختيار العميل مطلوب</div>
+                                }
+                            </div>
+
+                            @* العميل النهائي (اختياري) *@
+                            <div class="form-field form-field-with-dropdown">
+                                <label class="field-label" for="rf-endcustomer">العميل النهائي (اختياري)</label>
+                                <div class="field-input-group">
+                                    <span class="field-prefix" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="11" cy="11" r="8"/>
+                                            <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                                        </svg>
+                                    </span>
+                                    <input id="rf-endcustomer"
+                                           class="field-input with-prefix"
+                                           value="@EndCustomerText"
+                                           placeholder="ابحث بالاسم... (فاضي = نفس العميل)"
+                                           @oninput="OnEndCustomerSearch"
+                                           @onfocus="() => { _showEndCustomerDropdown = true; _filteredEndCustomers = FilterOpts(_customers, _endCustomerSearch); }"
+                                           @onfocusout="() => _showEndCustomerDropdown = false" />
+                                </div>
+                                @if (_showEndCustomerDropdown && _filteredEndCustomers.Count > 0)
+                                {
+                                    <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                        @foreach (var c in _filteredEndCustomers)
+                                        {
+                                            <div class="field-dropdown-item" @onmousedown="() => PickEndCustomer(c)">
+                                                @c.Label
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                <div class="field-hint">
+                                    <svg viewBox="0 0 16 16" width="10" height="10"
+                                         fill="none" stroke="currentColor" stroke-width="1.8"
+                                         aria-hidden="true">
+                                        <circle cx="8" cy="8" r="6"/>
+                                        <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                    </svg>
+                                    سيبه فاضي لو العميل هو نفسه المستلم
+                                </div>
+                            </div>
+
+                            @* جهة الاتصال *@
+                            <div class="form-field">
+                                <label class="field-label" for="rf-contact">جهة الاتصال</label>
+                                <div class="field-select-wrap">
+                                    <svg class="field-select-icon" viewBox="0 0 24 24"
+                                         width="14" height="14" fill="none"
+                                         stroke="currentColor" stroke-width="2"
+                                         aria-hidden="true">
+                                        <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-4.99-5 19.79 19.79 0 01-3.07-8.67A2 2 0 014 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+                                    </svg>
+                                    <select id="rf-contact"
+                                            class="field-input field-select"
+                                            @bind="_f.ContactId"
+                                            disabled="@(_f.CustomerId == 0)">
+                                        <option value="">—</option>
+                                        @foreach (var c in _contacts)
+                                        {
+                                            <option value="@c.Id">@c.Label</option>
+                                        }
+                                    </select>
+                                </div>
+                                @if (_f.CustomerId == 0)
+                                {
+                                    <div class="field-hint">
+                                        <svg viewBox="0 0 16 16" width="10" height="10"
+                                             fill="none" stroke="currentColor" stroke-width="1.8"
+                                             aria-hidden="true">
+                                            <circle cx="8" cy="8" r="6"/>
+                                            <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                        </svg>
+                                        اختر العميل أولًا
+                                    </div>
+                                }
+                            </div>
+
+                            @* تاريخ التنفيذ المطلوب *@
+                            <div class="form-field">
+                                <label class="field-label" for="rf-reqdate">تاريخ التنفيذ المطلوب</label>
+                                <div class="field-input-group">
+                                    <span class="field-prefix" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                                        </svg>
+                                    </span>
+                                    <input id="rf-reqdate" type="date"
+                                           class="field-input with-prefix"
+                                           value="@_f.Date"
+                                           @onchange="e => _f.Date = e.Value?.ToString() ?? _f.Date" />
+                                </div>
+                            </div>
+
+                            @* مرجع العميل *@
+                            <div class="form-field">
+                                <label class="field-label" for="rf-custref">مرجع العميل</label>
+                                <div class="field-input-group">
+                                    <span class="field-prefix" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
+                                            <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke-linecap="round"/>
+                                        </svg>
+                                    </span>
+                                    <input id="rf-custref"
+                                           class="field-input with-prefix"
+                                           maxlength="100"
+                                           placeholder="أمر توريد / بيان جمركي"
+                                           @bind="_f.CustomerReference" />
+                                </div>
+                                <div class="field-hint">
+                                    <svg viewBox="0 0 16 16" width="10" height="10"
+                                         fill="none" stroke="currentColor" stroke-width="1.8"
+                                         aria-hidden="true">
+                                        <circle cx="8" cy="8" r="6"/>
+                                        <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                    </svg>
+                                    الرقم الذي سجّله العميل نفسه لهذه العملية في مستنداته (أمر توريد أو بيان جمركي) — يُدوَّن ليتم أي استفسار أو مطابقة بذات الرقم لدى الطرفين
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </ChildContent>
+            </MudTabPanel>
+
+
+            @* ══════════════════════════════════════
+               TAB 2 — بيانات النقل
+            ══════════════════════════════════════ *@
+            <MudTabPanel>
+                <TabContent>
+                    <div class="btab-label">
+                        <div class="btab-icon btab-green" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                 fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                <path d="M16 8h4l3 3v5h-7V8z"/>
+                                <circle cx="5.5" cy="18.5" r="2.5"/>
+                                <circle cx="18.5" cy="18.5" r="2.5"/>
+                            </svg>
+                        </div>
+                        <span>بيانات النقل</span>
+                    </div>
+                </TabContent>
+
+                <ChildContent>
+                    <div class="tab-section">
+
+                        <div class="tab-section-head">
+                            <div class="tab-section-icon green" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="tab-section-title">بيانات النقل</div>
+                                <div class="tab-section-sub">الخدمة ونوع الرحلة ومسار الشحن</div>
+                            </div>
+                        </div>
+
+                        <div class="bk-form-grid">
+
+                            @* رقم البوكينج الرسمي *@
+                            <div class="form-field">
+                                <label class="field-label" for="rf-bookingref">
+                                    رقم البوكينج الرسمي
+                                    <span class="field-required" aria-label="مطلوب">*</span>
+                                </label>
+                                <div class="field-input-group">
+                                    <span class="field-prefix" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="4" width="18" height="16" rx="2"/>
+                                            <path d="M7 8h10M7 12h10M7 16h6" stroke-linecap="round"/>
+                                        </svg>
+                                    </span>
+                                    <input id="rf-bookingref"
+                                           class="field-input with-prefix @(string.IsNullOrWhiteSpace(_f.BookingReference) && _triedSave ? "field-error" : "")"
+                                           value="@_f.BookingReference"
+                                           maxlength="100"
+                                           placeholder="الرقم اللي الوكيل سلّمهولك"
+                                           @onchange="e => _f.BookingReference = e.Value?.ToString() ?? string.Empty"
+                                           aria-required="true" />
+                                </div>
+                                <div class="field-hint">
+                                    <svg viewBox="0 0 16 16" width="10" height="10"
+                                         fill="none" stroke="currentColor" stroke-width="1.8"
+                                         aria-hidden="true">
+                                        <circle cx="8" cy="8" r="6"/>
+                                        <path d="M8 5v3M8 11h.01" stroke-linecap="round"/>
+                                    </svg>
+                                    الرقم الرسمي من الوكيل الملاحي — زي ما هو في المستند
+                                </div>
+                                @if (string.IsNullOrWhiteSpace(_f.BookingReference) && _triedSave)
+                                {
+                                    <div class="field-err-msg" role="alert">رقم البوكينج الرسمي مطلوب</div>
+                                }
+                            </div>
+
+                            @* رقم البوليصة (BL) *@
+                            <div class="form-field">
+                                <label class="field-label" for="rf-blnumber">رقم البوليصة (BL)</label>
+                                <div class="field-input-group">
+                                    <span class="field-prefix" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                             fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                            <path d="M14 2v6h6" stroke-linecap="round"/>
+                                        </svg>
+                                    </span>
+                                    <input id="rf-blnumber"
+                                           class="field-input with-prefix"
+                                           @bind="_f.BLNumber" />
+                                </div>
+                            </div>
+
+                            @* الخدمة *@
+                            <div class="form-field">
+                                <label class="field-label" for="rf-service">الخدمة</label>
+                                <div class="field-select-wrap">
+                                    <svg class="field-select-icon" viewBox="0 0 24 24"
+                                         width="14" height="14" fill="none"
+                                         stroke="currentColor" stroke-width="2"
+                                         aria-hidden="true">
+                                        <rect x="2" y="7" width="20" height="14" rx="2"/>
+                                        <path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke-linecap="round"/>
+                                    </svg>
+                                    <select id="rf-service"
+                                            class="field-input field-select"
+                                            @bind="_f.ServiceId">
+                                        <option value="">— اختر الخدمة —</option>
+                                        @foreach (var s in _services)
+                                        {
+                                            <option value="@s.Id">@s.Label</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="field-hint">
+                                    الخدمة المختارة تنتقل تلقائيًا إلى العملية وتُستخدم في اقتراح الأسعار
+                                </div>
+                            </div>
+
+                            @* نوع الرحلة *@
+                            <div class="form-field">
+                                <label class="field-label" for="rf-triptype">نوع الرحلة</label>
+                                <div class="field-select-wrap">
+                                    <svg class="field-select-icon" viewBox="0 0 24 24"
+                                         width="14" height="14" fill="none"
+                                         stroke="currentColor" stroke-width="2"
+                                         aria-hidden="true">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <path d="M12 8v4l3 3" stroke-linecap="round"/>
+                                    </svg>
+                                    <select id="rf-triptype"
+                                            class="field-input field-select"
+                                            @bind="_f.TripTypeId">
+                                        <option value="">— اختر —</option>
+                                        @foreach (var t in _tripTypes)
+                                        {
+                                            <option value="@t.Id">@t.Label</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+
+                            @* من (الميناء) *@
+                            <div class="form-field">
+                                <label class="field-label" for="rf-port">من (الميناء)</label>
+                                <div class="field-select-wrap">
+                                    <svg class="field-select-icon" viewBox="0 0 24 24"
+                                         width="14" height="14" fill="none"
+                                         stroke="currentColor" stroke-width="2"
+                                         aria-hidden="true">
+                                        <circle cx="12" cy="5" r="3"/>
+                                        <path d="M12 22V8M5 12H2a10 10 0 0020 0h-3" stroke-linecap="round"/>
+                                    </svg>
+                                    <select id="rf-port"
+                                            class="field-input field-select"
+                                            @bind="_f.PortId">
+                                        <option value="">— اختر —</option>
+                                        @foreach (var p in _ports)
+                                        {
+                                            <option value="@p.Id">@p.Label</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+
+                            @* إلى (الجهة) *@
+                            <div class="form-field">
+                                <label class="field-label" for="rf-dest">إلى (الجهة)</label>
+                                <div class="field-select-wrap">
+                                    <svg class="field-select-icon" viewBox="0 0 24 24"
+                                         width="14" height="14" fill="none"
+                                         stroke="currentColor" stroke-width="2"
+                                         aria-hidden="true">
+                                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                                        <circle cx="12" cy="10" r="3"/>
+                                    </svg>
+                                    <select id="rf-dest"
+                                            class="field-input field-select"
+                                            @bind="_f.DestinationId">
+                                        <option value="">— اختر —</option>
+                                        @foreach (var p in _destinations)
+                                        {
+                                            <option value="@p.Id">@p.Label</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+
+                            @* التعتيق (الميناء النهائي) *@
+                            <div class="form-field">
+                                <label class="field-label" for="rf-tahteeq">التعتيق (الميناء النهائي)</label>
+                                <div class="field-select-wrap">
+                                    <svg class="field-select-icon" viewBox="0 0 24 24"
+                                         width="14" height="14" fill="none"
+                                         stroke="currentColor" stroke-width="2"
+                                         aria-hidden="true">
+                                        <circle cx="12" cy="5" r="3"/>
+                                        <path d="M12 22V8M5 12H2a10 10 0 0020 0h-3" stroke-linecap="round"/>
+                                    </svg>
+                                    <select id="rf-tahteeq"
+                                            class="field-input field-select"
+                                            @bind="_f.TahteeqPortId">
+                                        <option value="">— اختر —</option>
+                                        @foreach (var p in _ports)
+                                        {
+                                            <option value="@p.Id">@p.Label</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+
+                            @* الوكيل الملاحي *@
+                            <div class="form-field">
+                                <label class="field-label" for="rf-agent">الوكيل الملاحي</label>
+                                <div class="field-select-wrap">
+                                    <svg class="field-select-icon" viewBox="0 0 24 24"
+                                         width="14" height="14" fill="none"
+                                         stroke="currentColor" stroke-width="2"
+                                         aria-hidden="true">
+                                        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                    </svg>
+                                    <select id="rf-agent"
+                                            class="field-input field-select"
+                                            @bind="_f.ShippingAgentId">
+                                        <option value="">— اختر الوكيل —</option>
+                                        @foreach (var a in _agents)
+                                        {
+                                            <option value="@a.Id">@a.Label</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+
+                            @* مورد الضمان *@
+                            <div class="form-field">
+                                <label class="field-label" for="rf-guarsup">مورد الضمان</label>
+                                <div class="field-select-wrap">
+                                    <svg class="field-select-icon" viewBox="0 0 24 24"
+                                         width="14" height="14" fill="none"
+                                         stroke="currentColor" stroke-width="2"
+                                         aria-hidden="true">
+                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                    </svg>
+                                    <select id="rf-guarsup"
+                                            class="field-input field-select"
+                                            @bind="_f.GuaranteeSupplierId">
+                                        <option value="">— اختر —</option>
+                                        @foreach (var s in GuaranteeOptions)
+                                        {
+                                            <option value="@s.Id">@s.Label</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    @* ── سطر الإيراد (من شاشة العملية) ── *@
+                    <div class="tab-section">
+
+                        <div class="tab-section-head">
+                            <div class="tab-section-icon amber" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="tab-section-title">سعر البيع للعميل</div>
+                                <div class="tab-section-sub">بيبقى سطر إيراد العملية — والمقترح جاي من قواعد تسعير العميل</div>
+                            </div>
+                        </div>
+
+                        <div class="bk-form-grid">
+                            <div class="form-field">
+                                <label class="field-label" for="rf-price">سعر الوحدة</label>
+                                <div class="field-input-group">
+                                    <span class="field-prefix" aria-hidden="true">ج.م</span>
+                                    <input id="rf-price" type="number" min="0" step="0.01"
+                                           class="field-input with-prefix"
+                                           @bind="_f.UnitPrice" />
+                                </div>
+                                @if (!string.IsNullOrEmpty(_suggestHint))
+                                {
+                                    <div class="field-hint">@_suggestHint</div>
+                                }
+                            </div>
+
+                            <div class="form-field" style="display:flex;align-items:flex-end">
+                                <button type="button" class="bk-next-btn"
+                                        @onclick="SuggestAsync"
+                                        disabled="@(_f.CustomerId <= 0 || _f.ServiceId is null)">
+                                    اقترح السعر
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </ChildContent>
+            </MudTabPanel>
+
+
+            @* ══════════════════════════════════════
+               TAB 3 — الحاويات والملاحظات
+            ══════════════════════════════════════ *@
+            <MudTabPanel>
+                <TabContent>
+                    <div class="btab-label">
+                        <div class="btab-icon btab-amber" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                 fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/>
+                                <path d="M3 8l9 5 9-5M12 13v8"/>
+                            </svg>
+                        </div>
+                        <span>الحاويات</span>
+                    </div>
+                </TabContent>
+
+                <ChildContent>
+                    <div class="tab-section">
+
+                        <div class="tab-section-head">
+                            <div class="tab-section-icon amber" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/>
+                                    <path d="M3 8l9 5 9-5M12 13v8"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="tab-section-title">الحاويات المطلوبة</div>
+                                <div class="tab-section-sub">النوع والعدد والوزن والضمان — وعدد الحاويات يحدد عدد رحلات العملية</div>
+                            </div>
+                        </div>
+
+                        @if (_linesLocked)
+                        {
+                            <div class="field-hint" style="margin-bottom:12px">
+                                في حاويات فعلية متسجلة على الحجز — السطور مقفولة ضد التعديل (أرقام الحاويات بتتعدل من شاشة الحجز).
+                            </div>
+                        }
+
+                        <div class="bk-container-cards">
+                            @foreach (var ln in _lines)
+                            {
+                                var idx = _lines.IndexOf(ln);
+
+                                <div class="bk-container-card">
+
+                                    <div class="bk-cc-head">
+                                        <div class="bk-cc-num" aria-label="رقم السطر">
+                                            @(idx + 1)
+                                        </div>
+                                        <div class="bk-cc-type-badge">
+                                            <svg viewBox="0 0 24 24" width="13" height="13"
+                                                 fill="none" stroke="currentColor" stroke-width="2"
+                                                 aria-hidden="true">
+                                                <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                            </svg>
+                                            @(_containerTypes.FirstOrDefault(t => t.Id == ln.ContainerTypeId)?.Label ?? "نوع الحاوية")
+                                        </div>
+                                        <div class="bk-cc-total">
+                                            إجمالي: <strong>@ln.Qty</strong> حاوية
+                                            @if (ln.WeightKg.HasValue)
+                                            {
+                                                <span>· @ln.WeightKg كجم</span>
+                                            }
+                                        </div>
+                                        @if (!_linesLocked)
+                                        {
+                                            <button type="button" class="bk-cc-del"
+                                                    @onclick="() => _lines.Remove(ln)"
+                                                    disabled="@(_lines.Count <= 1)"
+                                                    title="حذف السطر"
+                                                    aria-label="حذف السطر @(idx + 1)">
+                                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                </svg>
+                                            </button>
+                                        }
+                                    </div>
+
+                                    <div class="bk-cc-body">
+
+                                        <div class="form-field">
+                                            <label class="field-label">نوع الحاوية</label>
+                                            <div class="field-select-wrap">
+                                                <svg class="field-select-icon" viewBox="0 0 24 24"
+                                                     width="13" height="13" fill="none"
+                                                     stroke="currentColor" stroke-width="2"
+                                                     aria-hidden="true">
+                                                    <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                                </svg>
+                                                <select class="field-input field-select"
+                                                        value="@ln.ContainerTypeId" disabled="@_linesLocked"
+                                                        @onchange="e => OnLineTypeChange(ln, e)">
+                                                    <option value="0" selected="@(ln.ContainerTypeId == 0)">— اختر النوع —</option>
+                                                    @foreach (var t in _containerTypes)
+                                                    {
+                                                        <option value="@t.Id" selected="@(t.Id == ln.ContainerTypeId)">@t.Label</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div class="form-field">
+                                            <label class="field-label">العدد</label>
+                                            <div class="bk-qty-control">
+                                                <button type="button" class="qty-btn qty-minus"
+                                                        @onclick="() => ln.Qty = Math.Max(1, ln.Qty - 1)"
+                                                        disabled="@_linesLocked"
+                                                        aria-label="إنقاص العدد">−</button>
+                                                <input type="number" min="1"
+                                                       class="field-input qty-input"
+                                                       @bind="ln.Qty" disabled="@_linesLocked" />
+                                                <button type="button" class="qty-btn qty-plus"
+                                                        @onclick="() => ln.Qty++"
+                                                        disabled="@_linesLocked"
+                                                        aria-label="زيادة العدد">+</button>
+                                            </div>
+                                        </div>
+
+                                        <div class="form-field">
+                                            <label class="field-label">الوزن (كجم)</label>
+                                            <div class="field-input-group">
+                                                <span class="field-prefix" aria-hidden="true">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M6 7h12l2 14H4L6 7z"/>
+                                                        <path d="M9 7a3 3 0 016 0" stroke-linecap="round"/>
+                                                    </svg>
+                                                </span>
+                                                <input type="number" min="0" step="0.01"
+                                                       class="field-input with-prefix"
+                                                       @bind="ln.WeightKg" disabled="@_linesLocked" />
+                                            </div>
+                                        </div>
+
+                                        <div class="form-field">
+                                            <label class="field-label">ضمان الحاوية الواحدة (ج.م)</label>
+                                            <div class="field-input-group">
+                                                <span class="field-prefix" aria-hidden="true">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                                    </svg>
+                                                </span>
+                                                <input type="number" min="0" step="0.01"
+                                                       class="field-input with-prefix"
+                                                       @bind="ln.Guarantee" disabled="@_linesLocked" />
+                                            </div>
+                                            @if (ln.Guarantee is > 0)
+                                            {
+                                                <div class="bk-guar-linetotal">
+                                                    إجمالي ضمان السطر: <strong>@((ln.Guarantee.Value * ln.Qty).ToString("N0")) ج.م</strong>
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <div class="form-field bk-cc-notes">
+                                            <label class="field-label">ملاحظات الحاوية</label>
+                                            <div class="bk-notes-action-row">
+                                                <input class="field-input"
+                                                       @bind="ln.Notes" disabled="@_linesLocked"
+                                                       placeholder="أي تفاصيل إضافية..." />
+                                                @if (!_linesLocked)
+                                                {
+                                                    var remaining = Math.Max(0, ln.Qty - ln.Details.Count);
+                                                    <button type="button" class="bk-add-detail-inline-btn"
+                                                            @onclick="() => AddDetail(idx)"
+                                                            title="إضافة رقم حاوية فعلية">
+                                                        <svg viewBox="0 0 24 24" width="13" height="13"
+                                                             fill="none" stroke="currentColor" stroke-width="2.5">
+                                                            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                                        </svg>
+                                                        <span>تفاصيل حاوية</span>
+                                                        @if (remaining > 0)
+                                                        {
+                                                            <span class="bk-add-detail-count" title="المتبقي">@remaining</span>
+                                                        }
+                                                    </button>
+                                                }
+                                            </div>
+                                        </div>
+
+                                    </div>
+
+                                    @* أرقام الحاويات الفعلية لهذا السطر *@
+                                    @if (ln.Details.Count > 0)
+                                    {
+                                        <div class="bk-cc-details">
+                                            @foreach (var dt in ln.Details)
+                                            {
+                                                var dtIdx = ln.Details.IndexOf(dt);
+                                                <div class="bk-cc-detail-row">
+                                                    <div class="form-field">
+                                                        <label class="field-label">رقم الحاوية</label>
+                                                        <input type="text" class="field-input"
+                                                               @bind="dt.ContainerNumber"
+                                                               disabled="@_linesLocked"
+                                                               placeholder="MSCU1234567" />
+                                                    </div>
+                                                    <div class="form-field">
+                                                        <label class="field-label">رقم الرصاص</label>
+                                                        <input type="text" class="field-input"
+                                                               @bind="dt.SealNumber"
+                                                               disabled="@_linesLocked" />
+                                                    </div>
+                                                    <div class="form-field">
+                                                        <label class="field-label">شركة الشحن</label>
+                                                        <input type="text" class="field-input"
+                                                               @bind="dt.ShippingLine"
+                                                               disabled="@_linesLocked" />
+                                                    </div>
+                                                    <div class="form-field">
+                                                        <label class="field-label">رقم البوليصة</label>
+                                                        <input type="text" class="field-input"
+                                                               @bind="dt.BLNumber"
+                                                               disabled="@_linesLocked" />
+                                                    </div>
+                                                    <div class="form-field">
+                                                        <label class="field-label">رقم الحجز</label>
+                                                        <input type="text" class="field-input"
+                                                               @bind="dt.BookingReference"
+                                                               disabled="@_linesLocked" />
+                                                    </div>
+                                                    <div class="form-field">
+                                                        <label class="field-label">الوزن (كجم)</label>
+                                                        <input type="number" class="field-input"
+                                                               @bind="dt.WeightKg"
+                                                               disabled="@_linesLocked" />
+                                                    </div>
+                                                    @if (!_linesLocked)
+                                                    {
+                                                        <button type="button" class="bk-cc-detail-del"
+                                                                @onclick="() => RemoveDetail(idx, dtIdx)">
+                                                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                                                 fill="none" stroke="currentColor" stroke-width="2">
+                                                                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                            </svg>
+                                                        </button>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @if (!_linesLocked)
+                        {
+                            <button type="button" class="bk-add-line-btn mt-10" @onclick="() => _lines.Add(new())">
+                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="2.5"
+                                     aria-hidden="true">
+                                    <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                </svg>
+                                إضافة سطر حاويات
+                            </button>
+                        }
+
+                        @* ── ملاحظات الطلب ── *@
+                        <div class="tab-section-sub-head">
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                            </svg>
+                            ملاحظات الطلب
+                        </div>
+
+                        <div class="form-field">
+                            <textarea class="field-input field-textarea"
+                                      rows="3"
+                                      maxlength="1000"
+                                      placeholder="أي ملاحظات خاصة بهذا الطلب..."
+                                      @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
+                        </div>
+
+                    </div>
+                </ChildContent>
+            </MudTabPanel>
+
+
+            @* ══════════════════════════════════════
+               TAB 4 — الرحلات والتعيين
+            ══════════════════════════════════════ *@
+            <MudTabPanel>
+                <TabContent>
+                    <div class="btab-label">
+                        <div class="btab-icon btab-green" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="15" height="15"
+                                 fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                <path d="M16 8h4l3 3v5h-7V8z"/>
+                                <circle cx="5.5" cy="18.5" r="2.5"/>
+                                <circle cx="18.5" cy="18.5" r="2.5"/>
+                            </svg>
+                        </div>
+                        <span>الرحلات والتعيين</span>
+                    </div>
+                </TabContent>
+
+                <ChildContent>
+                    <div class="tab-section">
+
+                        <div class="tab-section-head">
+                            <div class="tab-section-icon green" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="tab-section-title">الرحلات والتعيين</div>
+                                <div class="tab-section-sub">أسند السائق والسيارة الآن — أو اترك الإسناد لاحقًا من ملف العملية</div>
+                            </div>
+                        </div>
+
+                        @if (OperationId is not null)
+                        {
+                            @* وضع التعديل: الرحلات المسجلة تُعرض بكروت بنفس تصميم
+                               كروت الإضافة — عرض فقط، وتعديلها من شاشة الرحلة *@
+                            @if (_existingTrips.Count == 0)
+                            {
+                                <div class="field-hint">لا توجد رحلات مسجلة على هذا الطلب بعد — أضف أول رحلة من الأسفل.</div>
+                            }
+                            else
+                            {
+                                <div class="bk-container-cards">
+                                    @for (var i = 0; i < _existingTrips.Count; i++)
+                                    {
+                                        var t = _existingTrips[i];
+                                        <div class="bk-container-card">
+                                            <div class="bk-cc-head">
+                                                <div class="bk-cc-num" aria-label="رقم الرحلة">@(i + 1)</div>
+                                                <div class="bk-cc-type-badge">
+                                                    <svg viewBox="0 0 24 24" width="13" height="13"
+                                                         fill="none" stroke="currentColor" stroke-width="2"
+                                                         aria-hidden="true">
+                                                        <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                                        <path d="M16 8h4l3 3v5h-7V8z"/>
+                                                        <circle cx="5.5" cy="18.5" r="2.5"/>
+                                                        <circle cx="18.5" cy="18.5" r="2.5"/>
+                                                    </svg>
+                                                    رحلة @t.TripNumber
+                                                </div>
+                                                <div class="bk-cc-total">@TripStatusAr(t.Status)</div>
+                                                <a href="@($"/trips/new/{t.TripId}")"
+                                                   style="font-size:12px;font-weight:800;color:var(--fc-blue);text-decoration:none">
+                                                    فتح الرحلة
+                                                </a>
+                                            </div>
+                                            <div class="bk-cc-body">
+                                                <div class="form-field">
+                                                    <label class="field-label">السائق</label>
+                                                    <div class="field-input-group">
+                                                        <input class="field-input" value="@t.DriverName" readonly />
+                                                    </div>
+                                                </div>
+                                                <div class="form-field">
+                                                    <label class="field-label">السيارة</label>
+                                                    <div class="field-input-group">
+                                                        <input class="field-input" value="@t.VehiclePlate" readonly />
+                                                    </div>
+                                                </div>
+                                                <div class="form-field">
+                                                    <label class="field-label">النولون</label>
+                                                    <div class="field-input-group">
+                                                        <input class="field-input" value="@(t.FreightAmount?.ToString("N0") ?? "—")" readonly />
+                                                    </div>
+                                                </div>
+                                                <div class="form-field">
+                                                    <label class="field-label">الحالة</label>
+                                                    <div class="field-input-group">
+                                                        <input class="field-input" value="@TripStatusAr(t.Status)" readonly />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="field-hint" style="margin-top:8px">تُعدَّل الرحلة المسجلة من شاشة الرحلة نفسها — والإضافة من الأسفل.</div>
+                            }
+                        }
+
+                        @if (OperationId is null || CanTripCreate)
+                        {
+                            @if (OperationId is not null)
+                            {
+                                <div class="tab-section-title" style="margin:18px 0 10px;font-size:14.5px">إضافة رحلة جديدة</div>
+                            }
+                            <div class="bk-container-cards">
+                                @foreach (var tr in _tripRows)
+                                {
+                                    var tidx = _tripRows.IndexOf(tr);
+
+                                    <div class="bk-container-card">
+                                        <div class="bk-cc-head">
+                                            <div class="bk-cc-num" aria-label="رقم الرحلة">@(tidx + 1)</div>
+                                            <div class="bk-cc-type-badge">
+                                                <svg viewBox="0 0 24 24" width="13" height="13"
+                                                     fill="none" stroke="currentColor" stroke-width="2"
+                                                     aria-hidden="true">
+                                                    <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                                                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                                                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                                                </svg>
+                                                رحلة @(tidx + 1)
+                                            </div>
+                                            <div class="bk-cc-total">
+                                                @(OrderedDriversFor(tr).FirstOrDefault(d => d.Id == tr.DriverId)?.Label ?? "بدون سائق بعد")
+                                            </div>
+                                            <button type="button" class="bk-cc-del"
+                                                    @onclick="() => _tripRows.Remove(tr)"
+                                                    disabled="@(OperationId is null && _tripRows.Count <= 1)"
+                                                    title="حذف الرحلة"
+                                                    aria-label="حذف الرحلة @(tidx + 1)">
+                                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+
+                                        <div class="bk-cc-body">
+
+                                            <div class="form-field form-field-with-dropdown">
+                                                <label class="field-label">السائق</label>
+                                                <div class="field-input-group">
+                                                    <span class="field-prefix" aria-hidden="true">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <circle cx="11" cy="11" r="8"/>
+                                                            <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                                                        </svg>
+                                                    </span>
+                                                    <input class="field-input with-prefix"
+                                                           value="@DriverText(tr)"
+                                                           placeholder="ابحث باسم السائق..."
+                                                           @oninput="e => OnDriverSearch(tr, e)"
+                                                           @onfocus="() => { tr.ShowDrivers = true; tr.FilteredDrivers = FilterPairs(OrderedDriversFor(tr), tr.DriverSearch); }"
+                                                           @onfocusout="() => tr.ShowDrivers = false" />
+                                                </div>
+                                                @if (tr.ShowDrivers && tr.FilteredDrivers.Count > 0)
+                                                {
+                                                    <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                                        @foreach (var d in tr.FilteredDrivers)
+                                                        {
+                                                            <div class="field-dropdown-item" @onmousedown="() => PickDriver(tr, d)">
+                                                                @d.Label
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+
+                                            <div class="form-field form-field-with-dropdown">
+                                                <label class="field-label">العربية</label>
+                                                <div class="field-input-group">
+                                                    <span class="field-prefix" aria-hidden="true">
+                                                        <svg viewBox="0 0 24 24" width="14" height="14"
+                                                             fill="none" stroke="currentColor" stroke-width="2">
+                                                            <circle cx="11" cy="11" r="8"/>
+                                                            <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                                                        </svg>
+                                                    </span>
+                                                    <input class="field-input with-prefix"
+                                                           value="@VehicleText(tr)"
+                                                           placeholder="ابحث برقم العربية..."
+                                                           @oninput="e => OnVehicleSearch(tr, e)"
+                                                           @onfocus="() => { tr.ShowVehicles = true; tr.FilteredVehicles = FilterPairs(OrderedVehiclesFor(tr), tr.VehicleSearch); }"
+                                                           @onfocusout="() => tr.ShowVehicles = false" />
+                                                </div>
+                                                @if (tr.ShowVehicles && tr.FilteredVehicles.Count > 0)
+                                                {
+                                                    <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                                        @foreach (var v in tr.FilteredVehicles)
+                                                        {
+                                                            <div class="field-dropdown-item" @onmousedown="() => PickVehicle(tr, v)">
+                                                                @v.Label
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+
+                                            <div class="form-field">
+                                                <label class="field-label">المقطورة</label>
+                                                <div class="field-select-wrap">
+                                                    <svg class="field-select-icon" viewBox="0 0 24 24"
+                                                         width="13" height="13" fill="none"
+                                                         stroke="currentColor" stroke-width="2"
+                                                         aria-hidden="true">
+                                                        <path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z"/>
+                                                        <circle cx="7" cy="17.5" r="1.8"/>
+                                                        <circle cx="17" cy="17.5" r="1.8"/>
+                                                    </svg>
+                                                    <select class="field-input field-select" @bind="tr.TrailerId">
+                                                        <option value="">— من غير مقطورة —</option>
+                                                        @foreach (var t2 in _trailers)
+                                                        {
+                                                            <option value="@t2.Id">@t2.Label</option>
+                                                        }
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <div class="form-field">
+                                                <label class="field-label">النولون (ج.م)</label>
+                                                <div class="field-input-group">
+                                                    <span class="field-prefix" aria-hidden="true">ج.م</span>
+                                                    <input type="number" min="0" step="0.01"
+                                                           class="field-input with-prefix"
+                                                           @bind="tr.Freight" />
+                                                </div>
+                                            </div>
+
+                                            <div class="form-field">
+                                                <label class="field-label">ميعاد التحرك</label>
+                                                <div class="field-input-group">
+                                                    <input type="datetime-local"
+                                                           class="field-input"
+                                                           @bind="tr.PlannedStartAt" />
+                                                </div>
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
+                            <button type="button" class="bk-add-line-btn mt-10" @onclick="AddTripRow">
+                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                     fill="none" stroke="currentColor" stroke-width="2.5"
+                                     aria-hidden="true">
+                                    <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                </svg>
+                                إضافة رحلة
+                            </button>
+
+                            <div class="field-hint" style="margin-top:10px">
+                                لا تُنشأ الرحلة دون سائق وسيارة — وعدد الحاويات هو ما يحدد غالبًا عدد الرحلات التي تحتاجها هذه العملية.
+                            </div>
+                        }
+
+                    </div>
+                </ChildContent>
+            </MudTabPanel>
+
+        </MudTabs>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_msg))
+        {
+            <div class="field-err-msg" style="font-size:13px;margin-top:12px;@(_ok ? "color:var(--fc-green)" : "")" role="alert">@_msg</div>
+        }
+
+        @* ── Bottom Actions ── *@
+        <div class="bk-bottom-actions">
+
+            <button class="bk-bottom-back" @onclick="GoBack">
+                <svg viewBox="0 0 24 24" width="15" height="15"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     aria-hidden="true">
+                    <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                رجوع للقائمة
+            </button>
+
+            <div class="bk-bottom-right">
+
+                @if (_activeTab < 3)
+                {
+                    <button class="bk-next-btn"
+                            @onclick="() => _activeTab++">
+                        التالي
+                        <svg viewBox="0 0 24 24" width="15" height="15"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                }
+
+                <button class="bk-bottom-save"
+                        @onclick="SaveAsync"
+                        disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <span class="btn-spinner sm" aria-hidden="true"></span>
+                        <span>جاري الحفظ...</span>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" width="15" height="15"
+                             fill="none" stroke="currentColor" stroke-width="2"
+                             aria-hidden="true">
+                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                            <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>@(OperationId is null ? "إنشاء الطلب" : "حفظ الطلب")</span>
+                    }
+                </button>
+
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public long? OperationId { get; set; }
+
+    private AuthUser? _user;
+    private bool CanUse => OperationId is null
+        ? (_user?.Can("OPERATION.CREATE") == true && _user?.Can("BOOKING.CREATE") == true)
+        : (_user?.Can("OPERATION.EDIT") == true && _user?.Can("BOOKING.EDIT") == true);
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+
+    /* أنواع الحاويات بتيجي من السيرفر بمبلغ ضمانها — اختيار النوع بيعبّي الضمان */
+    public class CTOpt { public int Id { get; set; } public string Label { get; set; } = ""; public decimal? GuaranteeAmount { get; set; } }
+    private List<CTOpt> _containerTypes = new();
+
+    private void OnLineTypeChange(LineRow ln, ChangeEventArgs e)
+    {
+        ln.ContainerTypeId = int.TryParse(e.Value?.ToString(), out var id) ? id : 0;
+        var t = _containerTypes.FirstOrDefault(x => x.Id == ln.ContainerTypeId);
+        if (t is null) ln.Guarantee = null;                          // رجع «اختر» — الضمان يتفضى
+        else if (t.GuaranteeAmount is not null) ln.Guarantee = t.GuaranteeAmount;
+    }
+
+    private List<Opt> _agents = new(), _customers = new(), _services = new(), _ports = new(),
+                      _destinations = new(), _tripTypes = new(), _suppliers = new(),
+                      _guaranteeSuppliers = new(), _trailers = new();
+
+    /* مورد الضمان متفلتر على «خدمات ميناء» (قرار المالك) — والمورّد المحفوظ
+       على طلب قديم بيظهر حتى لو نوعه اتغير، عشان التعديل ما يضيّعوش */
+    private List<Opt> GuaranteeOptions
+    {
+        get
+        {
+            var list = _guaranteeSuppliers.ToList();
+            if (_f.GuaranteeSupplierId is int gid && gid > 0 && list.All(x => x.Id != gid))
+            {
+                var cur = _suppliers.FirstOrDefault(x => x.Id == gid);
+                if (cur is not null) list.Insert(0, cur);
+            }
+            return list;
+        }
+    }
+
+    /* ── التعيين: سائق/عربية بيتزاوجوا عن طريق المورد (قرار المالك) ── */
+    public class PairOpt { public int Id { get; set; } public string Label { get; set; } = ""; public int? SupplierId { get; set; } public bool IsCompany { get; set; } public int? DefaultDriverId { get; set; } }
+    private List<PairOpt> _driverPairs = new(), _vehiclePairs = new();
+
+    private class TripRow
+    {
+        public int DriverId { get; set; }
+        public int VehicleId { get; set; }
+        public int? TrailerId { get; set; }
+        public decimal? Freight { get; set; }
+        public DateTime? PlannedStartAt { get; set; }
+
+        /* حالة البحث في السائق/العربية */
+        public string DriverSearch { get; set; } = "";
+        public string VehicleSearch { get; set; } = "";
+        public bool ShowDrivers { get; set; }
+        public bool ShowVehicles { get; set; }
+        public bool DriverTouched { get; set; }
+        public bool VehicleTouched { get; set; }
+        public List<PairOpt> FilteredDrivers { get; set; } = new();
+        public List<PairOpt> FilteredVehicles { get; set; } = new();
+    }
+
+    private static List<PairOpt> FilterPairs(List<PairOpt> src, string search) =>
+        string.IsNullOrWhiteSpace(search)
+            ? src.Take(20).ToList()
+            : src.Where(x => x.Label.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase)).Take(20).ToList();
+
+    private string DriverText(TripRow r) =>
+        !r.DriverTouched && r.DriverId > 0
+            ? (_driverPairs.FirstOrDefault(d => d.Id == r.DriverId)?.Label ?? "")
+            : r.DriverSearch;
+
+    private string VehicleText(TripRow r) =>
+        !r.VehicleTouched && r.VehicleId > 0
+            ? (_vehiclePairs.FirstOrDefault(v => v.Id == r.VehicleId)?.Label ?? "")
+            : r.VehicleSearch;
+
+    private void OnDriverSearch(TripRow r, ChangeEventArgs e)
+    {
+        r.DriverSearch = e.Value?.ToString() ?? "";
+        r.DriverTouched = true;
+        r.ShowDrivers = true;
+        r.FilteredDrivers = FilterPairs(OrderedDriversFor(r), r.DriverSearch);
+        if (string.IsNullOrWhiteSpace(r.DriverSearch)) r.DriverId = 0;
+    }
+
+    private void OnVehicleSearch(TripRow r, ChangeEventArgs e)
+    {
+        r.VehicleSearch = e.Value?.ToString() ?? "";
+        r.VehicleTouched = true;
+        r.ShowVehicles = true;
+        r.FilteredVehicles = FilterPairs(OrderedVehiclesFor(r), r.VehicleSearch);
+        if (string.IsNullOrWhiteSpace(r.VehicleSearch)) r.VehicleId = 0;
+    }
+
+    private void PickDriver(TripRow r, PairOpt d)
+    {
+        r.DriverId = d.Id;
+        r.DriverSearch = d.Label;
+        r.DriverTouched = false;
+        r.ShowDrivers = false;
+        AfterDriverPicked(r);
+        /* التعبئة التلقائية للعربية من الربط لازم تنعكس في خانة بحثها */
+        if (r.VehicleId > 0) { r.VehicleTouched = false; r.VehicleSearch = ""; }
+    }
+
+    private void PickVehicle(TripRow r, PairOpt v)
+    {
+        r.VehicleId = v.Id;
+        r.VehicleSearch = v.Label;
+        r.VehicleTouched = false;
+        r.ShowVehicles = false;
+        AfterVehiclePicked(r);
+        if (r.DriverId > 0) { r.DriverTouched = false; r.DriverSearch = ""; }
+    }
+    private List<TripRow> _tripRows = new();
+
+    private void AddTripRow() => _tripRows.Add(new TripRow
+    {
+        PlannedStartAt = DateTime.TryParse(_f.Date, out var d) ? d.AddHours(8) : DateTime.Today.AddHours(8)
+    });
+
+    private static string TripStatusAr(string s) => s switch
+    {
+        "Planned" => "مخططة", "InProgress" => "جارية", "Completed" => "مكتملة",
+        "Cancelled" => "ملغاة", "Closed" => "مغلقة", _ => s
+    };
+
+    private static bool SameSource(PairOpt a, PairOpt b) =>
+        (a.IsCompany && b.IsCompany) ||
+        (!a.IsCompany && !b.IsCompany && a.SupplierId is not null && a.SupplierId == b.SupplierId);
+
+    private List<PairOpt> OrderedDriversFor(TripRow r)
+    {
+        var v = _vehiclePairs.FirstOrDefault(x => x.Id == r.VehicleId);
+        if (v is null) return _driverPairs;
+        return _driverPairs.OrderByDescending(p => SameSource(p, v) ? 1 : 0).ToList();
+    }
+
+    private List<PairOpt> OrderedVehiclesFor(TripRow r)
+    {
+        var d = _driverPairs.FirstOrDefault(x => x.Id == r.DriverId);
+        if (d is null) return _vehiclePairs;
+        return _vehiclePairs.OrderByDescending(p => SameSource(p, d) ? 1 : 0).ToList();
+    }
+
+    private void AfterDriverPicked(TripRow r)
+    {
+        var dr = _driverPairs.FirstOrDefault(x => x.Id == r.DriverId);
+        if (dr is null) return;
+        var cur = _vehiclePairs.FirstOrDefault(x => x.Id == r.VehicleId);
+        if (cur is not null && SameSource(cur, dr)) return;
+        var m = _vehiclePairs.Where(v => SameSource(v, dr)).ToList();
+        if (m.Count == 1) r.VehicleId = m[0].Id;
+    }
+
+    private void AfterVehiclePicked(TripRow r)
+    {
+        var v = _vehiclePairs.FirstOrDefault(x => x.Id == r.VehicleId);
+        if (v is null) return;
+        var cur = _driverPairs.FirstOrDefault(x => x.Id == r.DriverId);
+        if (cur is not null && SameSource(cur, v)) return;
+        // السائق الافتراضي للسيارة يُقترح قبل قاعدة المرشح الوحيد
+        if (v.DefaultDriverId is int dd && _driverPairs.Any(d => d.Id == dd)) { r.DriverId = dd; return; }
+        var m = _driverPairs.Where(d => SameSource(d, v)).ToList();
+        if (m.Count == 1) r.DriverId = m[0].Id;
+    }
+
+    public class ExistingTrip
+    {
+        public long TripId { get; set; } public string TripNumber { get; set; } = "";
+        public string DriverName { get; set; } = ""; public string VehiclePlate { get; set; } = "";
+        public string Status { get; set; } = ""; public decimal? FreightAmount { get; set; }
+    }
+    private List<ExistingTrip> _existingTrips = new();
+
+    private class LineRow
+    {
+        public int ContainerTypeId { get; set; }
+        public int Qty { get; set; } = 1;
+        public decimal? WeightKg { get; set; }
+        public decimal? Guarantee { get; set; }
+        public string? Notes { get; set; }
+        public List<DetailRow> Details { get; set; } = new();
+    }
+    private class DetailRow
+    {
+        public long?    ContainerId      { get; set; }
+        public string?  ContainerNumber  { get; set; }
+        public string?  SealNumber       { get; set; }
+        public string?  ShippingLine     { get; set; }
+        public string?  BLNumber         { get; set; }
+        public string?  BookingReference { get; set; }
+        public decimal? WeightKg         { get; set; }
+        public string?  Notes            { get; set; }
+    }
+    private void AddDetail(int lineIdx)
+    {
+        if (lineIdx < 0 || lineIdx >= _lines.Count) return;
+        _lines[lineIdx].Details.Add(new DetailRow());
+    }
+    private void RemoveDetail(int lineIdx, int detailIdx)
+    {
+        if (lineIdx < 0 || lineIdx >= _lines.Count) return;
+        var details = _lines[lineIdx].Details;
+        if (detailIdx >= 0 && detailIdx < details.Count) details.RemoveAt(detailIdx);
+    }
+    private List<LineRow> _lines = new() { new() };
+    private bool _linesLocked;
+
+    private class Form
+    {
+        public int? ShippingAgentId { get; set; }
+        public string BookingReference { get; set; } = "";
+        public string? BLNumber { get; set; }
+        public int CustomerId { get; set; }
+        public int? EndCustomerId { get; set; }
+        public int? ContactId { get; set; }
+        public string? CustomerReference { get; set; }
+        public int? ServiceId { get; set; }
+        public int? PortId { get; set; }
+        public int? DestinationId { get; set; }
+        public int? TahteeqPortId { get; set; }
+        public int? TripTypeId { get; set; }
+        public string Date { get; set; } = DateTime.Today.ToString("yyyy-MM-dd");
+        public int? GuaranteeSupplierId { get; set; }
+        public string? Notes { get; set; }
+        public decimal? UnitPrice { get; set; }
+    }
+    private Form _f = new();
+
+    private int _activeTab;
+    private bool _saving, _ok, _triedSave, _loading;
+    private string? _msg, _suggestHint, _status, _opNumber;
+    private long? _bookingId;
+    private decimal _loadedEstimatedCost;
+    private List<LoadedRevLine> _loadedRevLines = new();
+    private List<Opt> _contacts = new();
+
+    /* بحث العميل */
+    private bool _showCustomerDropdown, _customerTouched;
+    private string _customerSearch = "";
+    private List<Opt> _filteredCustomers = new();
+    private string CustomerText =>
+        !_customerTouched && _f.CustomerId > 0
+            ? (_customers.FirstOrDefault(c => c.Id == _f.CustomerId)?.Label ?? "")
+            : _customerSearch;
+
+    private void OnCustomerSearch(ChangeEventArgs e)
+    {
+        _customerSearch = e.Value?.ToString() ?? "";
+        _customerTouched = true;
+        _showCustomerDropdown = true;
+        _filteredCustomers = FilterOpts(_customers, _customerSearch);
+    }
+
+    private async Task PickCustomer(Opt c)
+    {
+        _f.CustomerId = c.Id;
+        _customerSearch = c.Label;
+        _customerTouched = false;
+        _showCustomerDropdown = false;
+        _f.ContactId = null;
+        await LoadContactsAsync(c.Id);
+    }
+
+    private async Task LoadContactsAsync(int customerId)
+    {
+        try
+        {
+            _contacts = await Http.GetFromJsonAsync<List<Opt>>(
+                $"api/options/contacts?customerId={customerId}") ?? new();
+        }
+        catch { _contacts = new(); }
+    }
+
+    /* بحث العميل النهائي */
+    private bool _showEndCustomerDropdown, _endCustomerTouched;
+    private string _endCustomerSearch = "";
+    private List<Opt> _filteredEndCustomers = new();
+    private string EndCustomerText =>
+        !_endCustomerTouched && _f.EndCustomerId > 0
+            ? (_customers.FirstOrDefault(c => c.Id == _f.EndCustomerId)?.Label ?? "")
+            : _endCustomerSearch;
+
+    private void OnEndCustomerSearch(ChangeEventArgs e)
+    {
+        _endCustomerSearch = e.Value?.ToString() ?? "";
+        _endCustomerTouched = true;
+        _showEndCustomerDropdown = true;
+        _filteredEndCustomers = FilterOpts(_customers, _endCustomerSearch);
+        if (string.IsNullOrWhiteSpace(_endCustomerSearch)) _f.EndCustomerId = null;
+    }
+
+    private void PickEndCustomer(Opt c)
+    {
+        _f.EndCustomerId = c.Id;
+        _endCustomerSearch = c.Label;
+        _endCustomerTouched = false;
+        _showEndCustomerDropdown = false;
+    }
+
+    private static List<Opt> FilterOpts(List<Opt> src, string search) =>
+        string.IsNullOrWhiteSpace(search)
+            ? src.Take(20).ToList()
+            : src.Where(x => x.Label.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase)).Take(20).ToList();
+
+    /* DTOs للتحميل في وضع التعديل */
+    public class OpDetailResp { public OpDetail Operation { get; set; } = new(); public List<LoadedRevLine> RevenueLines { get; set; } = new(); }
+    public class OpDetail
+    {
+        public long OperationId { get; set; } public string OperationNumber { get; set; } = "";
+        public long? BookingId { get; set; } public string Status { get; set; } = "";
+        public decimal EstimatedCost { get; set; }
+    }
+    public class LoadedRevLine
+    {
+        public int ServiceId { get; set; } public string? Description { get; set; }
+        public decimal Quantity { get; set; } public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; } public int? TaxRateId { get; set; } public long? PriceRuleId { get; set; }
+    }
+    public class BkDetailResp { public BkDetail Booking { get; set; } = new(); public List<BkLine> Lines { get; set; } = new(); }
+    public class BkDetail
+    {
+        public long BookingId { get; set; } public int CustomerId { get; set; }
+        public string? RequestedDate { get; set; } public int? ServiceId { get; set; }
+        public int? PortId { get; set; } public int? DestinationId { get; set; }
+        public int? TahteeqPortId { get; set; } public int? TripTypeId { get; set; }
+        public int? EndCustomerId { get; set; } public int? ContactId { get; set; }
+        public string? CustomerReference { get; set; } public string? Notes { get; set; }
+        public string Status { get; set; } = "";
+        public int? ShippingAgentId { get; set; } public int? GuaranteeSupplierId { get; set; }
+        public string? BookingReference { get; set; } public string? BLNumber { get; set; }
+    }
+    public class BkLine
+    {
+        public int ContainerTypeId { get; set; } public int RequestedQty { get; set; }
+        public decimal? WeightKg { get; set; } public string? Notes { get; set; }
+        public decimal? GuaranteePerContainer { get; set; }
+        public List<LoadedDetail> ContainerDetails { get; set; } = new();
+    }
+    public class LoadedDetail
+    {
+        public long? ContainerId { get; set; } public string? ContainerNumber { get; set; }
+        public string? SealNumber { get; set; } public string? ShippingLine { get; set; }
+        public string? BLNumber { get; set; } public string? BookingReference { get; set; }
+        public decimal? WeightKg { get; set; } public string? Notes { get; set; }
+    }
+
+    private class Suggestion { public decimal UnitPrice { get; set; } public string Source { get; set; } = ""; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        _agents         = await SafeGet("api/shipping-agents/options");
+        _customers      = await SafeGet("api/options/customers");
+        _services       = await SafeGet("api/options/services");
+        _ports          = await SafeGet("api/options/ports");
+        _destinations   = await SafeGet("api/options/destinations");
+        _tripTypes      = await SafeGet("api/options/trip-types");
+        _containerTypes = await SafeGetList<CTOpt>("api/options/container-types");
+        _suppliers      = await SafeGet("api/options/suppliers");
+        _guaranteeSuppliers = await SafeGet("api/options/guarantee-suppliers");
+        _trailers       = await SafeGet("api/options/trailers");
+        _driverPairs    = await SafeGetList<PairOpt>("api/options/drivers-pairing");
+        _vehiclePairs   = await SafeGetList<PairOpt>("api/options/vehicles-pairing");
+
+        if (OperationId is null)
+        {
+            AddTripRow();
+            /* الخدمة الافتراضية بالاسم زي ما المالك حددها حرفيًا: «نقل حاوية» —
+               مش أول اسم شبهها (كانت بتقع على «نقل حاوية مبرده») */
+            _f.ServiceId = _services.FirstOrDefault(s => s.Label.Trim() == "نقل حاوية")?.Id;
+        }
+        else await LoadForEditAsync(OperationId.Value);
+    }
+
+    private async Task<List<T>> SafeGetList<T>(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<T>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    private async Task LoadForEditAsync(long operationId)
+    {
+        _loading = true;
+        try
+        {
+            var op = await Http.GetFromJsonAsync<OpDetailResp>($"api/operations/{operationId}");
+            if (op is null) { _msg = "العملية غير موجودة"; return; }
+            _opNumber = op.Operation.OperationNumber;
+            _status   = op.Operation.Status;
+            _bookingId = op.Operation.BookingId;
+            _loadedEstimatedCost = op.Operation.EstimatedCost;
+            _loadedRevLines = op.RevenueLines;
+
+            if (_bookingId is not null)
+            {
+                var bk = await Http.GetFromJsonAsync<BkDetailResp>($"api/bookings/{_bookingId}");
+                if (bk is not null)
+                {
+                    var b = bk.Booking;
+                    _f.ShippingAgentId     = b.ShippingAgentId;
+                    _f.BookingReference    = b.BookingReference ?? "";
+                    _f.BLNumber            = b.BLNumber;
+                    _f.CustomerId          = b.CustomerId;
+                    _f.ServiceId           = b.ServiceId;
+                    _f.PortId              = b.PortId;
+                    _f.DestinationId       = b.DestinationId;
+                    _f.TahteeqPortId       = b.TahteeqPortId;
+                    _f.TripTypeId          = b.TripTypeId;
+                    _f.Date                = string.IsNullOrEmpty(b.RequestedDate) ? _f.Date : b.RequestedDate[..10];
+                    _f.GuaranteeSupplierId = b.GuaranteeSupplierId;
+                    _f.Notes               = b.Notes;
+                    _f.EndCustomerId       = b.EndCustomerId;
+                    _f.ContactId           = b.ContactId;
+                    _f.CustomerReference   = b.CustomerReference;
+                    await LoadContactsAsync(b.CustomerId);
+
+                    _lines = bk.Lines.Select(l => new LineRow
+                    {
+                        ContainerTypeId = l.ContainerTypeId,
+                        Qty             = l.RequestedQty,
+                        WeightKg        = l.WeightKg,
+                        Guarantee       = l.GuaranteePerContainer,
+                        Notes           = l.Notes,
+                        Details         = l.ContainerDetails.Select(cd => new DetailRow
+                        {
+                            ContainerId      = cd.ContainerId,
+                            ContainerNumber  = cd.ContainerNumber,
+                            SealNumber       = cd.SealNumber,
+                            ShippingLine     = cd.ShippingLine,
+                            BLNumber         = cd.BLNumber,
+                            BookingReference = cd.BookingReference,
+                            WeightKg         = cd.WeightKg,
+                            Notes            = cd.Notes
+                        }).ToList()
+                    }).ToList();
+                    if (_lines.Count == 0) _lines.Add(new());
+                    _linesLocked = bk.Lines.Any(l => l.ContainerDetails.Count > 0);
+                }
+            }
+
+            var first = _loadedRevLines.FirstOrDefault();
+            if (first is not null) _f.UnitPrice = first.UnitPrice;
+
+            _existingTrips = await SafeGetList<ExistingTrip>($"api/operations/{operationId}/trips");
+        }
+        catch (Exception ex) { _msg = "فشل التحميل: " + ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task<List<Opt>> SafeGet(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<Opt>>(url) ?? new(); }
+        catch { return new(); }
+    }
+
+    private void GoBack() => Nav.NavigateTo("/transport-requests");
+
+    private async Task SuggestAsync()
+    {
+        if (_f.CustomerId <= 0 || _f.ServiceId is null) return;
+        var url = $"api/operations/price-suggest?customerId={_f.CustomerId}&serviceId={_f.ServiceId}" +
+                  (_f.PortId is not null ? $"&portId={_f.PortId}" : "") +
+                  (_f.DestinationId is not null ? $"&destinationId={_f.DestinationId}" : "") +
+                  (_f.TahteeqPortId is not null ? $"&tahteeqPortId={_f.TahteeqPortId}" : "") +
+                  (_f.TripTypeId is not null ? $"&tripTypeId={_f.TripTypeId}" : "") +
+                  (_lines.FirstOrDefault()?.ContainerTypeId > 0 ? $"&containerTypeId={_lines[0].ContainerTypeId}" : "") +
+                  $"&date={_f.Date}";
+        try
+        {
+            var s = await Http.GetFromJsonAsync<Suggestion>(url);
+            if (s is not null) { _f.UnitPrice = s.UnitPrice; _suggestHint = $"المصدر: {s.Source}"; }
+        }
+        catch { _suggestHint = "مفيش اقتراح متاح — دخل السعر يدوي"; }
+    }
+
+    private async Task SaveAsync()
+    {
+        _triedSave = true;
+        if (_f.CustomerId <= 0) { _ok = false; _msg = "اختر العميل"; _activeTab = 0; return; }
+        if (string.IsNullOrWhiteSpace(_f.BookingReference)) { _ok = false; _msg = "رقم البوكينج الرسمي مطلوب"; _activeTab = 1; return; }
+
+        /* سعر سطر الإيراد إجباري — الطلب ما يتحفظش من غيره (تعليمات المالك) */
+        if (_f.UnitPrice is null or <= 0)
+        { _ok = false; _msg = "سجّل سعر سطر الإيراد (سعر البيع للعميل) أولًا"; _activeTab = 1; return; }
+
+        /* نولون العربية إجباري لكل رحلة متعيّنة — ورحلة ناقصة (سائق بلا عربية
+           أو العكس) بتقف بدل ما تتسجل ناقصة (تعليمات المالك) — في الإنشاء
+           والتعديل على السواء (في التعديل الصفوف دي رحلات جديدة هتتضاف) */
+        {
+            foreach (var r in _tripRows)
+            {
+                var partial = (r.DriverId > 0) != (r.VehicleId > 0);
+                if (partial)
+                { _ok = false; _msg = "توجد رحلة غير مكتملة: اختر السائق والسيارة معًا أو احذف الرحلة"; _activeTab = 3; return; }
+                if (r.DriverId > 0 && r.VehicleId > 0 && (r.Freight is null or <= 0))
+                { _ok = false; _msg = "سجّل نولون السيارة لكل رحلة مُسندة قبل الحفظ"; _activeTab = 3; return; }
+            }
+        }
+
+        _saving = true;
+        try
+        {
+            if (OperationId is null) await CreateAsync();
+            else await EditAsync();
+        }
+        catch (Exception ex) { _ok = false; _msg = "تعذر الاتصال بالخادم: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task CreateAsync()
+    {
+        var payload = new
+        {
+            shippingAgentId     = _f.ShippingAgentId,
+            bookingReference    = _f.BookingReference,
+            blNumber            = _f.BLNumber,
+            customerId          = _f.CustomerId,
+            endCustomerId       = _f.EndCustomerId,
+            contactId           = _f.ContactId,
+            customerReference   = _f.CustomerReference,
+            serviceId           = _f.ServiceId,
+            portId              = _f.PortId,
+            destinationId       = _f.DestinationId,
+            tahteeqPortId       = _f.TahteeqPortId,
+            tripTypeId          = _f.TripTypeId,
+            date                = _f.Date,
+            guaranteeSupplierId = _f.GuaranteeSupplierId,
+            notes               = _f.Notes,
+            unitPrice           = _f.UnitPrice,
+            lines = _lines.Where(l => l.ContainerTypeId > 0 && l.Qty >= 1)
+                          .Select(l => new { containerTypeId = l.ContainerTypeId, requestedQty = l.Qty, guaranteePerContainer = l.Guarantee, weightKg = l.WeightKg, notes = l.Notes })
+                          .ToList(),
+            containerDetails = _lines.Where(l => l.ContainerTypeId > 0 && l.Qty >= 1)
+                          .SelectMany((l, li) => l.Details.Select(d => new
+                          {
+                              containerId      = d.ContainerId,
+                              containerNumber  = d.ContainerNumber,
+                              sealNumber       = d.SealNumber,
+                              shippingLine     = d.ShippingLine,
+                              blNumber         = d.BLNumber,
+                              bookingReference = d.BookingReference,
+                              weightKg         = d.WeightKg,
+                              notes            = d.Notes,
+                              lineIndex        = li
+                          }))
+                          .ToList(),
+            trips = _tripRows.Where(t => t.DriverId > 0 && t.VehicleId > 0)
+                          .Select(t => new
+                          {
+                              driverId       = t.DriverId,
+                              vehicleId      = t.VehicleId,
+                              trailerId      = t.TrailerId,
+                              freightAmount  = t.Freight,
+                              plannedStartAt = t.PlannedStartAt?.ToString("yyyy-MM-ddTHH:mm")
+                          })
+                          .ToList()
+        };
+        var res = await Http.PostAsJsonAsync("api/operations/quick-create", payload);
+        _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+        if (res.IsSuccessStatusCode)
+        {
+            Snackbar.Add(_msg, Severity.Success);
+            Nav.NavigateTo("/transport-requests");
+        }
+    }
+
+    private async Task EditAsync()
+    {
+        object? bkLines = null;
+        object? bkDetails = null;
+        if (!_linesLocked)
+        {
+            bkLines = _lines.Where(l => l.ContainerTypeId > 0 && l.Qty >= 1)
+                .Select(l => new { containerTypeId = l.ContainerTypeId, requestedQty = l.Qty, weightKg = l.WeightKg, notes = l.Notes, guaranteePerContainer = l.Guarantee })
+                .ToList();
+            bkDetails = _lines.Where(l => l.ContainerTypeId > 0 && l.Qty >= 1)
+                .SelectMany((l, li) => l.Details.Select(d => new
+                {
+                    containerId = d.ContainerId, containerNumber = d.ContainerNumber, sealNumber = d.SealNumber,
+                    shippingLine = d.ShippingLine, blNumber = d.BLNumber, bookingReference = d.BookingReference,
+                    weightKg = d.WeightKg, notes = d.Notes, lineIndex = li
+                }))
+                .ToList();
+        }
+
+        var bkPayload = new
+        {
+            customerId          = _f.CustomerId,
+            requestedDate       = _f.Date,
+            serviceId           = _f.ServiceId,
+            portId              = _f.PortId,
+            destinationId       = _f.DestinationId,
+            tahteeqPortId       = _f.TahteeqPortId,
+            endCustomerId       = _f.EndCustomerId,
+            tripTypeId          = _f.TripTypeId,
+            customerReference   = _f.CustomerReference,
+            contactId           = _f.ContactId,
+            notes               = _f.Notes,
+            lines               = bkLines,
+            containerDetails    = bkDetails,
+            guaranteeSupplierId = _f.GuaranteeSupplierId,
+            shippingAgentId     = _f.ShippingAgentId,
+            bookingReference    = _f.BookingReference,
+            blNumber            = _f.BLNumber
+        };
+        var res1 = await Http.PutAsJsonAsync($"api/bookings/{_bookingId}", bkPayload);
+        var bookingLocked = false;
+        if (!res1.IsSuccessStatusCode)
+        {
+            var m1 = await MsgOf(res1);
+            /* الحجز مقفول للتعديل بعد التعيين (Assigned) — ده مش فشل يوقف
+               الشغل كله: العملية والرحلات ليهم حياتهم المستقلة، فبنكمّل بيهم
+               وبنبلّغ إن بيانات الحجز الأساسية بس هي اللي ما اتغيرتش */
+            if (m1.Contains("لا تسمح بالتعديل")) bookingLocked = true;
+            else { _ok = false; _msg = "تعديل الحجز فشل: " + m1; return; }
+        }
+
+        var revLines = _loadedRevLines.Select(l => new
+        {
+            serviceId   = l.ServiceId,
+            description = l.Description,
+            quantity    = l.Quantity,
+            unitPrice   = l.UnitPrice,
+            discount    = l.Discount,
+            taxRateId   = l.TaxRateId,
+            priceRuleId = l.PriceRuleId
+        }).ToList<object>();
+        if (revLines.Count > 0 && _f.UnitPrice is > 0)
+        {
+            var l0 = _loadedRevLines[0];
+            revLines[0] = new
+            {
+                serviceId   = l0.ServiceId, description = l0.Description, quantity = l0.Quantity,
+                unitPrice   = _f.UnitPrice.Value, discount = l0.Discount,
+                taxRateId   = l0.TaxRateId, priceRuleId = l0.PriceRuleId
+            };
+        }
+        else if (revLines.Count == 0 && _f.UnitPrice is > 0 && _f.ServiceId is not null)
+        {
+            revLines.Add(new
+            {
+                serviceId   = _f.ServiceId.Value, description = (string?)null, quantity = 1m,
+                unitPrice   = _f.UnitPrice.Value, discount = 0m, taxRateId = (int?)null, priceRuleId = (long?)null
+            });
+        }
+
+        var opPayload = new
+        {
+            bookingId       = _bookingId,
+            customerId      = _f.CustomerId,
+            serviceId       = _f.ServiceId,
+            portId          = _f.PortId,
+            destinationId   = _f.DestinationId,
+            tahteeqPortId   = _f.TahteeqPortId,
+            tripTypeId      = _f.TripTypeId,
+            plannedDate     = _f.Date,
+            estimatedCost   = _loadedEstimatedCost,
+            notes           = _f.Notes,
+            revenueLines    = revLines
+        };
+        var res2 = await Http.PutAsJsonAsync($"api/operations/{OperationId}", opPayload);
+        _msg = await MsgOf(res2); _ok = res2.IsSuccessStatusCode;
+        if (res2.IsSuccessStatusCode)
+        {
+            /* رحلات جديدة من تاب التعيين: بتتضاف على العملية الموجودة بعد
+               حفظ التعديل (نفس آلية ملف العملية) — الفاشلة بتفضل في مكانها
+               والرسالة بتقول وقفت ليه، والتعديل نفسه محفوظ */
+            var tripErrors = await CreateAddedTripsAsync();
+            if (tripErrors.Count == 0)
+            {
+                if (bookingLocked)
+                    Snackbar.Add("⚠️ تم حفظ العملية والرحلات — لم تُعدَّل بيانات الحجز الأساسية لأن الحجز مقفل للتعديل بعد التعيين", Severity.Warning);
+                else
+                    Snackbar.Add("✅ تم حفظ تعديل الطلب", Severity.Success);
+                Nav.NavigateTo("/transport-requests");
+            }
+            else
+            {
+                _ok = false;
+                _msg = "تم حفظ التعديل، لكن توجد رحلات لم تُضف: " + string.Join(" · ", tripErrors)
+                     + (bookingLocked ? " · ولم تُعدَّل بيانات الحجز الأساسية لأن الحجز مقفل للتعديل بعد التعيين" : "");
+                _existingTrips = await SafeGetList<ExistingTrip>($"api/operations/{OperationId}/trips");
+            }
+        }
+        else _msg = (bookingLocked ? "فشل تعديل العملية: " : "تم تعديل الحجز لكن فشل تعديل العملية: ") + _msg;
+    }
+
+    private bool CanTripCreate => _user?.Can("TRIP.CREATE") ?? false;
+
+    private async Task<List<string>> CreateAddedTripsAsync()
+    {
+        var errors = new List<string>();
+        if (OperationId is null || !CanTripCreate) return errors;
+        var rows = _tripRows.Where(r => r.DriverId > 0 && r.VehicleId > 0).ToList();
+        var seq = _existingTrips.Count;
+        foreach (var r in rows)
+        {
+            var payload = new
+            {
+                driverId       = r.DriverId,
+                vehicleId      = r.VehicleId,
+                trailerId      = r.TrailerId,
+                tripTypeId     = _f.TripTypeId,
+                plannedStartAt = r.PlannedStartAt?.ToString("yyyy-MM-ddTHH:mm"),
+                notes          = (string?)null,
+                freightAmount  = r.Freight,
+                portId         = (int?)null,
+                destinationId  = (int?)null,
+                tahteeqPortId  = (int?)null,
+                operations     = new[] { new { operationId = OperationId.Value, sequenceNo = ++seq, pickupAt = (string?)null, deliveryAt = (string?)null, notes = (string?)null } }
+            };
+            try
+            {
+                var res = await Http.PostAsJsonAsync("api/trips", payload);
+                if (res.IsSuccessStatusCode) _tripRows.Remove(r);
+                else errors.Add(await MsgOf(res));
+            }
+            catch (Exception ex) { errors.Add(ex.Message); }
+        }
+        return errors;
+    }
+
+    private static string StatusAr(string s) => s switch
+    {
+        "Pending"         => "قيد الانتظار",
+        "Assigned"        => "مُعيّنة",
+        "DriverReceived"  => "استلم السائق",
+        "InTransit"       => "في الطريق",
+        "Delivered"       => "تم التسليم",
+        "ExpensesPending" => "بانتظار المصروفات",
+        "CustodyPending"  => "بانتظار العهدة",
+        "ReadyToClose"    => "جاهزة للإغلاق",
+        "Closed"          => "مغلقة",
+        "Cancelled"       => "ملغاة",
+        _                 => s
+    };
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+    }
+}
+<style>
+
+    /* ================================================================
+       VARIABLES
+    ================================================================ */
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ================================================================
+       HERO ADDITIONS
+    ================================================================ */
+    .bk-hero-badge {
+        display: inline-flex; align-items: center;
+        padding: 3px 10px; border-radius: 20px;
+        font-size: 11px; font-weight: 800;
+    }
+
+    .badge-new      { background: rgba(34,197,94,.2);  color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+    .badge-draft    { background: rgba(255,255,255,.12); color: rgba(255,255,255,.75); border: 1px solid rgba(255,255,255,.2); }
+    .badge-confirmed { background: rgba(59,130,246,.25); color: #93c5fd; border: 1px solid rgba(59,130,246,.3); }
+    .badge-assigned  { background: rgba(168,85,247,.25); color: #d8b4fe; border: 1px solid rgba(168,85,247,.3); }
+    .badge-inprogress { background: rgba(234,179,8,.25); color: #fde68a; border: 1px solid rgba(234,179,8,.3); }
+    .badge-completed  { background: rgba(34,197,94,.25); color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+    .badge-cancelled  { background: rgba(239,68,68,.25); color: #fca5a5; border: 1px solid rgba(239,68,68,.3); }
+
+    /* Hero Buttons */
+    .bk-back-btn {
+        display: inline-flex; align-items: center; gap: 5px;
+        height: 36px; padding: 0 13px;
+        border: 1px solid rgba(255,255,255,.2); border-radius: 9px;
+        background: rgba(255,255,255,.08); color: rgba(255,255,255,.75);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: background .15s ease;
+    }
+    .bk-back-btn:hover { background: rgba(255,255,255,.14); }
+    .bk-back-btn svg { transform: rotate(180deg); }
+
+    /* ── Hero Wrapper ── */
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px;
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 1;
+    }
+
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important;
+        overflow: hidden;
+        box-shadow:
+            0 12px 32px rgba(13, 38, 84, 0.15),
+            0 4px 12px rgba(13, 38, 84, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .hero-wrapper .fc-hero.fc-hero-slim {
+        padding-top: 18px !important;
+        padding-bottom: 22px !important;
+    }
+
+    .bk-hero-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .bk-hero-left { flex: 1; min-width: 200px; }
+
+    .bk-hero-crumb {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        color: rgba(255, 255, 255, 0.55);
+        margin-bottom: 6px;
+    }
+
+    .bk-hero-sub {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.55);
+    }
+
+    .bk-hero-right {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .bk-hero-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, .1);
+        border: 1px solid rgba(255, 255, 255, .2);
+        font-size: 11.5px;
+        color: #fff;
+    }
+
+    .bk-hero-chip.badge-new { background: rgba(30, 110, 245, .2); border-color: rgba(30, 110, 245, .4); }
+    .bk-hero-chip.badge-progress { background: rgba(251, 191, 36, .2); border-color: rgba(251, 191, 36, .4); }
+    .bk-hero-chip.badge-done { background: rgba(22, 163, 91, .2); border-color: rgba(22, 163, 91, .4); }
+    .bk-hero-chip.badge-cancelled { background: rgba(224, 48, 72, .2); border-color: rgba(224, 48, 72, .4); }
+
+    /* ── Glow FAB ── */
+    .glow-fab-wrap {
+        position: fixed;
+        left: 28px;
+        bottom: 28px;
+        /* 🔴 أعلى من الـscrim (1298) — الزر والقايمة لازم يفضلوا فوقه وشغالين */
+        z-index: 1299;
+    }
+
+    .glow-fab-container {
+        position: relative;
+        z-index: 2;
+        width: 64px;
+        height: 64px;
+    }
+
+    .glow-fab-btn {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #1e6ef5, #0d47a1);
+        border: 2.5px solid #fbbf24;
+        color: #fff;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 16px rgba(30, 110, 245, .4);
+        transition: transform .2s, box-shadow .2s;
+        z-index: 2;
+    }
+
+    .glow-fab-btn:hover {
+        transform: translate(-50%, -50%) scale(1.05);
+        box-shadow: 0 6px 24px rgba(30, 110, 245, .5);
+    }
+
+    .glow-fab-icon { transition: transform .3s; }
+    .glow-fab-wrap.is-open .glow-fab-icon { transform: rotate(130deg); }
+
+    .glow-halo, .glow-ring {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        pointer-events: none;
+    }
+
+    .glow-halo {
+        width: 60px;
+        height: 60px;
+        background: radial-gradient(circle, rgba(30, 110, 245, .3) 0%, transparent 70%);
+        animation: glow-breath 2s ease-in-out infinite;
+    }
+
+    .glow-ring {
+        width: 60px;
+        height: 60px;
+        border: 2px solid rgba(30, 110, 245, .4);
+        animation: glow-expand 2s ease-out infinite;
+    }
+
+    .glow-ring-2 { animation-delay: .3s; }
+    .glow-ring-3 { animation-delay: .6s; }
+
+    @@keyframes glow-breath {
+        0%, 100% { opacity: .5; transform: translate(-50%, -50%) scale(1); }
+        50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+    }
+
+    @@keyframes glow-expand {
+        0% { opacity: .8; transform: translate(-50%, -50%) scale(1); }
+        100% { opacity: 0; transform: translate(-50%, -50%) scale(2.5); }
+    }
+
+    .glow-fab-menu {
+        position: absolute;
+        bottom: 80px;
+        left: 0;
+        z-index: 3;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(10px);
+        transition: opacity .2s, transform .2s;
+    }
+
+    .glow-fab-wrap.is-open .glow-fab-menu {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0);
+    }
+
+    .glow-fab-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        border-radius: 12px;
+        background: #fff;
+        border: 1px solid #dde5f0;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, .1);
+        cursor: pointer;
+        font-size: 13px;
+        color: #1c2c44;
+        transition: background .15s, border-color .15s;
+        white-space: nowrap;
+    }
+
+    .glow-fab-item:hover {
+        background: #f4f7fb;
+        border-color: #1e6ef5;
+    }
+
+    .glow-fab-item-ic {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: #eaf1ff;
+        color: #1e6ef5;
+    }
+
+    /* 🔴 الـscrim بقى شقيق للـ .glow-fab-wrap مش جوّاه.
+       لما كان جوّه: الـ wrap بيعمل stacking context، فالـ 1298 كان بيترسم
+       فوق القايمة (auto) وفوق الزر (2) ⇒ يبلع الكليك ويمنع استخدام الزر العائم. */
+    .glow-fab-scrim {
+        position: fixed;
+        inset: 0;
+        background: rgba(9, 18, 35, .45);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        z-index: 1298;
+        animation: glow-fadein .18s ease both;
+    }
+
+    @@keyframes glow-fadein {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+
+    /* ── Mobile ── */
+    @@media (max-width: 768px) {
+        .hero-wrapper { padding: 12px 12px 0; }
+        .hero-wrapper .fc-hero { border-radius: 16px !important; }
+        .bk-hero-row { flex-direction: column; align-items: flex-start; }
+        .bk-hero-right { width: 100%; justify-content: flex-start; }
+    }
+
+    .bk-save-btn {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 38px; padding: 0 18px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: #fff; font-family: inherit;
+        font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(22,163,74,.35);
+        transition: all .15s ease;
+    }
+    .bk-save-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(22,163,74,.4); }
+    .bk-save-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* Hero Summary Strip */
+    .bk-hero-summary {
+        display: flex; align-items: stretch;
+        background: rgba(0,0,0,.15); border: 1px solid rgba(255,255,255,.10);
+        border-radius: 12px; overflow: hidden; backdrop-filter: blur(8px);
+        margin-top: 4px;
+    }
+
+    .bk-sum-item {
+        flex: 1; display: flex; align-items: center; gap: 10px;
+        padding: 12px 16px;
+    }
+
+    .bk-sum-div { width: 1px; background: rgba(255,255,255,.10); align-self: stretch; }
+
+    .bk-sum-icon {
+        width: 32px; height: 32px; flex: 0 0 32px; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(255,255,255,.10); color: rgba(255,255,255,.7);
+    }
+
+    .bk-sum-label { font-size: 9.5px; color: rgba(255,255,255,.5); font-weight: 600; }
+    .bk-sum-val   { font-size: 13px; font-weight: 800; color: #fff; margin-top: 2px; }
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    /* 🔴 نفس عرض .hero-wrapper بالحرف (1440px + نفس البادينج الأفقي)
+       ⇒ حدّ كارت الهيرو = حدّ المحتوى اللي تحته على أي مقاس شاشة.
+       الـ 96px تحت مساحة للزر العائم. */
+    .bk-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 180px);
+        padding: 18px clamp(16px, 3vw, 40px) 96px;
+        max-width: 1440px; width: 100%;
+        margin: 0 auto;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 2;
+        display: flex; flex-direction: column; gap: 14px;
+    }
+
+    /* ================================================================
+       STATES
+    ================================================================ */
+    .bk-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 280px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .bk-state-icon {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .bk-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+
+    .bk-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .bk-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    .bk-state-back {
+        margin-top: 8px; padding: 9px 20px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-text);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: background .15s ease;
+    }
+    .bk-state-back:hover { background: #f0f4fa; }
+
+    /* ================================================================
+       LOADING
+    ================================================================ */
+    .bk-loading-wrap {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 14px; min-height: 260px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .bk-spinner {
+        width: 36px; height: 36px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: bk-spin .75s linear infinite;
+    }
+    @@keyframes bk-spin { to { transform: rotate(360deg); } }
+
+    .bk-loading-text { font-size: 13px; font-weight: 600; color: var(--fc-muted); }
+
+    /* ================================================================
+       BANNERS
+    ================================================================ */
+    .bk-locked-banner {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px; border-radius: 12px;
+        background: linear-gradient(135deg, #fffbeb, #fff8e0);
+        border: 1px solid #fde68a;
+        box-shadow: 0 2px 10px rgba(234,179,8,.10);
+    }
+
+    .locked-icon { flex: 0 0 auto; color: #d97706; }
+
+    .locked-text { display: flex; flex-direction: column; gap: 2px; }
+    .locked-text strong { font-size: 13px; font-weight: 800; color: #92400e; }
+    .locked-text span   { font-size: 11.5px; color: #b45309; }
+
+    .bk-banner {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 16px; border-radius: 10px;
+        font-size: 13px; font-weight: 600;
+        animation: bk-banner-in .25s ease;
+    }
+    @@keyframes bk-banner-in {
+        from { opacity: 0; transform: translateY(-6px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .banner-success { background: #e9f8f0; color: #0e7a43; border: 1px solid #b5e8d0; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8d0; }
+
+    .banner-close {
+        margin-right: auto; background: none; border: none;
+        color: inherit; opacity: .6; cursor: pointer; font-size: 13px;
+        padding: 2px 6px; border-radius: 5px;
+    }
+    .banner-close:hover { opacity: 1; }
+
+    /* ================================================================
+       TABS
+    ================================================================ */
+    .bk-tabs-wrap {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden; flex: 1;
+    }
+
+    .bk-mud-tabs .mud-tabs-toolbar {
+        background: linear-gradient(180deg, #f9fafd 0%, #f3f6fb 100%);
+        border-bottom: 2px solid #e8edf5;
+        padding: 0 16px; min-height: 54px;
+    }
+
+    .bk-mud-tabs .mud-tab {
+        font-family: "Cairo","Tajawal","Inter",Arial,sans-serif;
+        font-size: 12px; font-weight: 700; color: var(--fc-muted);
+        padding: 0 6px; min-width: unset; transition: color .15s ease;
+    }
+
+    .bk-mud-tabs .mud-tab.mud-tab-active { color: var(--fc-blue) !important; font-weight: 800; }
+
+    .bk-mud-tabs .mud-tab-slider {
+        background: var(--fc-blue) !important;
+        height: 3px; border-radius: 3px 3px 0 0;
+    }
+
+    .bk-mud-tabs .mud-tab:hover:not(.mud-tab-active) {
+        color: var(--fc-text); background: rgba(0,0,0,.03); border-radius: 8px;
+    }
+
+    .bk-tab-panel { padding: 0; }
+
+    /* Tab Labels */
+    .btab-label {
+        display: flex; align-items: center; gap: 7px;
+        padding: 0 4px; white-space: nowrap;
+    }
+
+    .btab-icon {
+        width: 26px; height: 26px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 7px;
+    }
+
+    .btab-blue  { background: var(--fc-blue-lt);  color: var(--fc-blue); }
+    .btab-green { background: var(--fc-green-lt); color: var(--fc-green); }
+    .btab-amber { background: var(--fc-amber-lt); color: var(--fc-amber); }
+
+    .btab-err-dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--fc-red); flex: 0 0 7px;
+        animation: bk-pulse 1.5s ease infinite;
+    }
+    @@keyframes bk-pulse {
+        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.4); }
+        50%      { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
+    }
+
+    .btab-count {
+        min-width: 18px; height: 18px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 5px; padding: 0 4px;
+        background: var(--fc-amber-lt); color: #9a6d08;
+        font-size: 10px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    /* ================================================================
+       TAB SECTION
+    ================================================================ */
+    .tab-section {
+        padding: 24px clamp(16px, 3vw, 40px) 28px;
+        max-width: 1440px;
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .tab-section-head {
+        display: flex; align-items: flex-start; gap: 12px;
+        margin-bottom: 22px; padding-bottom: 18px;
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .tab-section-icon {
+        width: 42px; height: 42px; flex: 0 0 42px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 12px;
+    }
+    .tab-section-icon.blue  { background: var(--fc-blue-lt);  color: var(--fc-blue);  border: 1px solid #bdd4fc; }
+    .tab-section-icon.green { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .tab-section-icon.amber { background: var(--fc-amber-lt); color: var(--fc-amber); border: 1px solid #f0d070; }
+
+    .tab-section-title { font-size: 15px; font-weight: 800; color: #1c2b43; line-height: 1.2; }
+    .tab-section-sub   { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
+
+    .tab-section-sub-head {
+        display: flex; align-items: center; gap: 7px;
+        font-size: 12px; font-weight: 800; color: #344258;
+        margin: 22px 0 10px;
+        padding-top: 18px; border-top: 1px solid #edf1f7;
+    }
+
+    /* ================================================================
+       FORM
+    ================================================================ */
+    .bk-form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 18px;
+        width: 100%;
+    }
+
+    @@media (max-width: 768px) {
+        .bk-form-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .form-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        position: relative;
+    }
+
+    .field-label {
+        font-size: 12px; font-weight: 800; color: #344258;
+        display: flex; align-items: center; gap: 4px;
+    }
+
+    .field-required { color: var(--fc-red); font-size: 14px; line-height: 1; }
+
+    .field-input {
+        height: 42px; width: 100%;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 13px; padding: 0 12px;
+        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+        outline: none;
+    }
+    .field-input:focus {
+        border-color: var(--fc-blue);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.10);
+        background: #fff;
+    }
+    .field-input:disabled { opacity: .7; background: #f3f5f8; cursor: not-allowed; }
+    .field-input.field-error {
+        border-color: var(--fc-red);
+        box-shadow: 0 0 0 3px rgba(224,48,72,.08);
+    }
+    .field-input::placeholder { color: #b0bcc8; }
+
+    .field-textarea {
+        height: auto; padding: 10px 12px;
+        resize: vertical; min-height: 80px;
+    }
+
+    /* Select with icon */
+    .field-select-wrap {
+        position: relative; display: flex; align-items: center;
+    }
+
+    .field-select-icon {
+        position: absolute; right: 12px; color: #9aaabb;
+        pointer-events: none; z-index: 1;
+    }
+
+    .field-select {
+        padding-right: 36px; cursor: pointer;
+        -webkit-appearance: none; appearance: none;
+    }
+    .field-select:disabled { cursor: not-allowed; }
+
+    /* Input with prefix */
+    .field-input-group { position: relative; display: flex; align-items: center; }
+
+    .field-prefix {
+        position: absolute; right: 12px;
+        display: flex; align-items: center;
+        color: #9aaabb; pointer-events: none; z-index: 1;
+    }
+
+    .field-input.with-prefix { padding-right: 36px; }
+
+    /* Field Dropdown — للبحث (نفس تصميم field-input) */
+    .field-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        left: 0;
+        margin-top: 4px;
+        background: #fafcff;
+        border: 1px solid #d8e2f0;
+        border-radius: 9px;
+        box-shadow: 0 8px 24px rgba(0,0,0,.12);
+        max-height: 240px;
+        overflow-y: auto;
+        z-index: 100;
+    }
+
+    .field-dropdown-item {
+        padding: 10px 12px;
+        font-family: inherit;
+        font-size: 13px;
+        color: var(--fc-text);
+        cursor: pointer;
+        transition: background .1s;
+    }
+
+    .field-dropdown-item:hover {
+        background: #eaf1ff;
+    }
+
+    .field-hint {
+        display: flex; align-items: center; gap: 5px;
+        font-size: 10.5px; color: var(--fc-muted); font-weight: 500;
+    }
+
+    .field-err-msg { font-size: 10.5px; color: var(--fc-red); font-weight: 700; }
+
+    /* ================================================================
+       ROUTE VISUAL
+    ================================================================ */
+    .bk-route-visual {
+        display: flex; align-items: center; gap: 0;
+        margin-top: 22px; padding: 14px 20px;
+        background: linear-gradient(135deg, #f5f8ff, #eef4ff);
+        border: 1px solid #c8d8fb; border-radius: 12px;
+        animation: bk-banner-in .25s ease;
+    }
+
+    .route-point { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+
+    .route-dot {
+        width: 14px; height: 14px; border-radius: 50%;
+        border: 3px solid;
+    }
+    .dot-from { background: var(--fc-blue-lt);  border-color: var(--fc-blue); }
+    .dot-to   { background: var(--fc-green-lt); border-color: var(--fc-green); }
+
+    .route-label { display: flex; flex-direction: column; gap: 2px; }
+    .route-caption { font-size: 9px; font-weight: 600; color: #8899ae; }
+    .route-label strong { font-size: 13px; font-weight: 800; color: var(--fc-text); }
+
+    .route-line {
+        flex: 1; display: flex; flex-direction: column;
+        align-items: center; gap: 0; position: relative; margin: 0 10px;
+    }
+    .route-truck { font-size: 20px; margin-top: -4px; }
+
+    /* ================================================================
+       CONTAINER CARDS
+    ================================================================ */
+    .bk-containers-empty {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 10px; min-height: 180px;
+        border: 2px dashed #d8e8f8; border-radius: 12px;
+        background: #f8fbff; text-align: center; padding: 30px;
+    }
+
+    .containers-empty-icon {
+        width: 70px; height: 70px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: #edf3fb; color: #b0c4d8;
+    }
+    .containers-empty-title { font-size: 14px; font-weight: 800; color: var(--fc-text); }
+    .containers-empty-sub   { font-size: 12px; color: var(--fc-muted); }
+
+    .bk-add-line-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 14px;
+        border: 1.5px solid var(--fc-amber);
+        border-radius: 9px;
+        background: var(--fc-amber-lt); color: #9a6d08;
+        font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; white-space: nowrap; flex-shrink: 0;
+        transition: all .15s ease;
+    }
+    .bk-add-line-btn:hover { background: var(--fc-amber); color: #fff; }
+    .bk-add-line-btn.mt-10 { margin-top: 10px; }
+
+    .bk-container-cards { display: flex; flex-direction: column; gap: 12px; }
+
+    .bk-container-card {
+        border: 1px solid #e4edf8; border-radius: 12px;
+        background: linear-gradient(180deg, #fafcff, #f5f8fb);
+        overflow: hidden;
+        transition: border-color .18s ease, box-shadow .18s ease;
+    }
+    .bk-container-card:hover {
+        border-color: #c8d8f0;
+        box-shadow: 0 4px 14px rgba(15,41,82,.06);
+    }
+
+    .bk-cc-head {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px;
+        background: linear-gradient(180deg, #f0f5fc, #eaf1f9);
+        border-bottom: 1px solid #dce8f5;
+    }
+
+    .bk-cc-num {
+        width: 26px; height: 26px; border-radius: 8px; flex: 0 0 26px;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--fc-blue); color: #fff;
+        font-size: 11px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .bk-cc-type-badge {
+        display: flex; align-items: center; gap: 5px;
+        padding: 3px 10px; border-radius: 7px;
+        background: rgba(30,110,245,.08); border: 1px solid rgba(30,110,245,.15);
+        color: var(--fc-blue); font-size: 11px; font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .bk-cc-total {
+        flex: 1; font-size: 11px; color: #6b7d95; font-weight: 600;
+    }
+    .bk-cc-total strong { color: var(--fc-text); font-weight: 900; }
+    .bk-cc-total span   { color: #9aaabb; }
+
+    .bk-cc-del {
+        width: 30px; height: 30px; border-radius: 7px; flex: 0 0 30px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; background: transparent;
+        color: var(--fc-red); cursor: pointer;
+        transition: all .15s ease;
+    }
+    .bk-cc-del:hover { background: var(--fc-red-lt); border-color: #ffc8cf; }
+
+    .bk-cc-body {
+        /* السطر كله في شريط واحد متناسق:
+           النوع · العدد · الوزن · الضمان · الملاحظات + زر «إضافة حاوية» */
+        display: grid;
+        grid-template-columns: 1.35fr .85fr .85fr 1.05fr 2.1fr;
+        gap: 14px; padding: 14px 16px;
+        align-items: start;
+    }
+
+    .bk-cc-notes { grid-column: auto; }
+
+    /* زر «إضافة حاوية» بجانب حقل الملاحظات + عرض الباقي */
+    .bk-notes-action-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .bk-notes-action-row .field-input {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .bk-add-detail-inline-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 42px;
+        padding: 0 14px;
+        flex-shrink: 0;
+        border: 1.5px dashed var(--fc-blue);
+        border-radius: 9px;
+        background: var(--fc-blue-lt);
+        color: var(--fc-blue);
+        font-family: inherit;
+        font-size: 11.5px;
+        font-weight: 800;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: all .15s ease;
+    }
+    .bk-add-detail-inline-btn:hover {
+        background: var(--fc-blue);
+        border-style: solid;
+        color: #fff;
+        box-shadow: 0 4px 12px rgba(30,110,245,.28);
+    }
+    .bk-add-detail-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: 9px;
+        background: var(--fc-blue);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 800;
+    }
+    .bk-add-detail-inline-btn:hover .bk-add-detail-count {
+        background: #fff;
+        color: var(--fc-blue);
+    }
+
+    /* إجمالي الضمان — سطر + حجز */
+    .bk-guar-linetotal {
+        margin-top: 6px;
+        font-size: 11.5px;
+        font-weight: 700;
+        color: #b45309;
+    }
+    .bk-guar-linetotal span { color: #8a94a3; font-weight: 600; }
+    .bk-guar-total-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 4px 0 14px;
+        padding: 12px 16px;
+        border: 1.5px solid rgba(217, 119, 6, .35);
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(217, 119, 6, .07), rgba(217, 119, 6, .02));
+        color: #b45309;
+        font-size: 12.5px;
+        font-weight: 700;
+    }
+    .bk-guar-total-bar strong { font-size: 15px; margin-inline-start: auto; }
+    .bk-guar-cur { color: #8a94a3; font-size: 11px; }
+
+    /* صفوف الحاويات الفعلية */
+    .bk-cc-details {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 0 16px 14px;
+    }
+
+    .bk-cc-detail-row {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr)) auto;
+        gap: 12px;
+        align-items: end;
+        padding: 12px;
+        background: #f8fafd;
+        border: 1px dashed #cfdcef;
+        border-radius: 10px;
+    }
+
+    .bk-cc-detail-del {
+        width: 42px;
+        height: 42px;
+        flex: 0 0 42px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #ffd3d9;
+        border-radius: 9px;
+        background: var(--fc-red-lt);
+        color: var(--fc-red);
+        cursor: pointer;
+        transition: all .15s ease;
+    }
+    .bk-cc-detail-del:hover {
+        background: var(--fc-red);
+        border-color: var(--fc-red);
+        color: #fff;
+        box-shadow: 0 4px 12px rgba(224,48,72,.28);
+    }
+
+    /* Qty Control */
+    .bk-qty-control {
+        display: flex; align-items: center; gap: 0;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        overflow: hidden; background: #fafcff;
+    }
+
+    .qty-btn {
+        width: 36px; height: 42px; flex: 0 0 36px;
+        display: flex; align-items: center; justify-content: center;
+        border: none; background: transparent;
+        cursor: pointer; font-size: 18px; font-weight: 900;
+        transition: background .12s ease;
+    }
+
+    .qty-minus { color: var(--fc-red); border-left: 1px solid #d8e2f0; }
+    .qty-plus  { color: var(--fc-green); border-right: 1px solid #d8e2f0; }
+
+    .qty-minus:hover { background: var(--fc-red-lt); }
+    .qty-plus:hover  { background: var(--fc-green-lt); }
+
+    .qty-input {
+        flex: 1; text-align: center; border: none !important;
+        border-radius: 0 !important; background: transparent !important;
+        box-shadow: none !important;
+        font-weight: 800; font-size: 14px;
+    }
+
+    /* ================================================================
+       BOTTOM ACTIONS
+    ================================================================ */
+    .bk-bottom-actions {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; padding: 14px 20px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 8px rgba(15,41,82,.04);
+    }
+
+    .bk-bottom-back {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 16px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .bk-bottom-back:hover { background: #f0f4fa; color: var(--fc-text); }
+    .bk-bottom-back svg { transform: rotate(180deg); }
+
+    .bk-bottom-right { display: flex; align-items: center; gap: 10px; }
+
+    .bk-next-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 16px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .bk-next-btn:hover { background: var(--fc-blue); color: #fff; }
+    .bk-next-btn svg { transform: rotate(180deg); }
+
+    .bk-bottom-save {
+        display: inline-flex; align-items: center; gap: 8px;
+        height: 40px; padding: 0 22px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #1e6ef5, #1558d6);
+        color: #fff; font-family: inherit;
+        font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(30,110,245,.30);
+        transition: all .15s ease;
+    }
+    .bk-bottom-save:hover:not(:disabled) {
+        transform: translateY(-1px); box-shadow: 0 6px 18px rgba(30,110,245,.38);
+    }
+    .bk-bottom-save:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* ================================================================
+       SPINNER
+    ================================================================ */
+    .btn-spinner {
+        width: 15px; height: 15px;
+        border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+        border-radius: 50%; animation: bk-spin .7s linear infinite;
+    }
+    .btn-spinner.sm { width: 13px; height: 13px; }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 900px) {
+        .bk-form-grid { grid-template-columns: 1fr; }
+        .bk-cc-body   { grid-template-columns: 1fr 1fr; }
+        .bk-cc-notes  { grid-column: 1 / -1; }
+        .bk-cc-detail-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .bk-hero-summary { flex-wrap: wrap; }
+        .bk-sum-item { flex: 0 0 50%; }
+        .bk-sum-div:nth-child(4) { display: none; }
+        .tab-section { padding: 18px 16px 22px; }
+    }
+
+    @@media (max-width: 680px) {
+        .bk-body { padding: 10px 12px 88px; }
+        .glow-fab-wrap { left: 18px; bottom: 18px; }
+        .bk-cc-body { grid-template-columns: 1fr; }
+        .bk-cc-notes { grid-column: 1; }
+        .bk-notes-action-row { flex-wrap: wrap; }
+        .bk-notes-action-row .field-input { flex: 1 1 100%; }
+        .bk-add-detail-inline-btn { width: 100%; justify-content: center; }
+        .bk-cc-details { padding: 0 12px 12px; }
+        .bk-cc-detail-row { grid-template-columns: 1fr; }
+        .bk-bottom-actions { flex-direction: column; }
+        .bk-bottom-back, .bk-bottom-save { width: 100%; justify-content: center; }
+        .bk-bottom-right { width: 100%; flex-direction: column; }
+        .bk-next-btn { width: 100%; justify-content: center; }
+        .bk-sum-item { flex: 0 0 100%; }
+        .bk-sum-div { display: none; }
+        .route-label strong { font-size: 11px; }
+    }
+
+    @@media (max-width: 480px) {
+        .bk-hero-summary { display: none; }
+    }
+
+</style>
+<style>
+    /* قوائم البحث (سائق/عربية) جوه كروت الرحلات: الكارت والغلاف كانوا
+       بيقصّوا القائمة تحت السيكشن (overflow:hidden) — بتتفتح بحرية دلوقتي */
+    .bk-tabs-wrap { overflow: visible; }
+    .bk-mud-tabs .mud-tabs-toolbar { border-radius: 13px 13px 0 0; }
+    .bk-container-card { overflow: visible; }
+    .bk-cc-head { border-radius: 11px 11px 0 0; }
+    .field-dropdown { z-index: 3000; }
+</style>

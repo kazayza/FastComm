@@ -92,14 +92,22 @@ public class ReportsController : ControllerBase
         if (!await Can("REPORT.OPERATIONS", ct)) return Forbid();
 
         var (f, t, fs, ts) = Range(from, to);
-        var (rows, tot) = await BuildOperationsAsync(f, t, fs, ts, customerId, status, ct);
-        return Ok(new { range = new { from = fs, to = ts }, totals = tot, rows });
+        var (rows, tot, truncated) = await BuildOperationsAsync(f, t, fs, ts, customerId, status, ct);
+        return Ok(new { range = new { from = fs, to = ts }, totals = tot, rows, truncated });
     }
 
-    private async Task<(List<OpRow> Rows, OpTotals Tot)> BuildOperationsAsync(
+    private async Task<(List<OpRow> Rows, OpTotals Tot, bool Truncated)> BuildOperationsAsync(
         DateTime f, DateTime t, string fs, string ts,
         int? customerId, string? status, CancellationToken ct)
     {
+        /* عدّاد كامل قبل الاقتطاع: الإجماليات تُبنى من الصفوف المعروضة،
+           وعلم الاقتطاع يصل العميل حتى لا تُقرأ إجماليات ناقصة كاملة */
+        var totalMatching = await _db.Operations.AsNoTracking()
+            .Where(o => !o.IsDeleted && o.CreatedAt >= f && o.CreatedAt <= t)
+            .Where(o => customerId == null || o.CustomerId == customerId)
+            .Where(o => status == null || o.Status == status)
+            .CountAsync(ct);
+
         var ops = await _db.Operations.AsNoTracking()
             .Where(o => !o.IsDeleted && o.CreatedAt >= f && o.CreatedAt <= t)
             .Where(o => customerId == null || o.CustomerId == customerId)
@@ -115,7 +123,7 @@ public class ReportsController : ControllerBase
             .ToListAsync(ct);
 
         if (ops.Count == 0)
-            return (new List<OpRow>(), new OpTotals(0, 0, 0, 0, 0, 0, 0, 0, 0));
+            return (new List<OpRow>(), new OpTotals(0, 0, 0, 0, 0, 0, 0, 0, 0), totalMatching > MaxRows);
 
         var opIds = ops.Select(o => o.OperationId).ToList();
         var custIds = ops.Select(o => o.CustomerId).Distinct().ToList();
@@ -152,7 +160,12 @@ public class ReportsController : ControllerBase
                 .Select(to => new { to.TripId, to.OperationId })
                 .ToListAsync(ct);
             var freights = (await _db.Trips.AsNoTracking()
-                    .Where(t => tripIds.Contains(t.TripId) && !t.IsDeleted && t.FreightAmount != null)
+                    /* التعريف الموحد للاعتراف بالنولون: من بدء الرحلة
+                       (ActualStartAt ?? ActualEndAt) — نفسه في كشف حساب
+                       السيارة وقائمة الدخل، والرحلات الملغاة لا نولون لها */
+                    .Where(t => tripIds.Contains(t.TripId) && !t.IsDeleted && t.FreightAmount != null
+                                && t.Status != "Cancelled"
+                                && (t.ActualStartAt != null || t.ActualEndAt != null))
                     .Select(t => new { t.TripId, t.FreightAmount })
                     .ToListAsync(ct))
                 .ToDictionary(x => x.TripId, x => x.FreightAmount!.Value);
@@ -190,6 +203,16 @@ public class ReportsController : ControllerBase
 
         var paidByInv = head.ToDictionary(x => x.InvoiceId, x => (No: x.InvoiceNumber, Paid: x.PaidAmount));
 
+        // ── إجمالي كل فاتورة من بنودها كلها — أساس توزيع «المحصّل» على عملياتها ──
+        var invFullTotal = invIds.Count == 0
+            ? new Dictionary<long, decimal>()
+            : (await _db.InvoiceItems.AsNoTracking()
+                    .Where(ii => invIds.Contains(ii.InvoiceId))
+                    .Select(ii => new { ii.InvoiceId, Amount = ii.LineTotal ?? 0m })
+                    .ToListAsync(ct))
+                .GroupBy(x => x.InvoiceId)
+                .ToDictionary(g => g.Key, g => g.Sum(x => x.Amount));
+
         var rows = new List<OpRow>(ops.Count);
         decimal tRev = 0, tCost = 0, tProfit = 0, tInv = 0, tCol = 0;
         int open = 0, notInv = 0;
@@ -210,8 +233,16 @@ public class ReportsController : ControllerBase
 
             var lines = invItems.Where(x => x.OpId == o.OperationId).ToList();
             var invoiced = lines.Sum(x => x.Amount);
-            var collected = lines.Select(x => x.InvoiceId).Distinct()
-                .Sum(id => paidByInv.TryGetValue(id, out var h) ? h.Paid : 0m);
+            /* المحصّل يوزَّع على عمليات الفاتورة بنسبة مفوتر كل عملية من إجمالي
+               الفاتورة — جمع PaidAmount كاملًا في كل عملية مرتبطة كان يضاعفه
+               في إجمالي التقرير عند اشتراك فاتورة واحدة في أكثر من عملية */
+            var collected = lines.GroupBy(x => x.InvoiceId).Sum(g =>
+            {
+                if (!paidByInv.TryGetValue(g.Key, out var h) || h.Paid <= 0) return 0m;
+                var full = invFullTotal.TryGetValue(g.Key, out var ft) ? ft : 0m;
+                if (full <= 0) return 0m;
+                return Math.Round(h.Paid * g.Sum(x => x.Amount) / full, 4, MidpointRounding.AwayFromZero);
+            });
             var invNo = lines.Select(x => x.InvoiceId).Distinct()
                 .Select(id => paidByInv.TryGetValue(id, out var h) ? h.No : null)
                 .FirstOrDefault(x => x is not null);
@@ -235,7 +266,7 @@ public class ReportsController : ControllerBase
 
         var tot = new OpTotals(ops.Count, tRev, tCost, tProfit,
             tRev > 0 ? Math.Round(tProfit / tRev * 100m, 2) : 0m, tInv, tCol, open, notInv);
-        return (rows, tot);
+        return (rows, tot, totalMatching > MaxRows);
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -411,14 +442,19 @@ public class ReportsController : ControllerBase
             .Select(e => new { e.ExpenseDate, e.Amount, e.ExpenseType.IsOperationCost })
             .ToListAsync(ct);
 
-        // ── نولون السائقين: نولون النقلات اللي خلصت في الفترة (تكلفة مباشرة
-        //    مش بتعدي على جدول Expenses — نفس معاملة تقرير العمليات) ──
-        var freightTrips = await _db.Trips.AsNoTracking()
-            .Where(x => !x.IsDeleted && x.ActualEndAt != null
-                        && x.ActualEndAt >= f && x.ActualEndAt <= t
+        // ── نولون السائقين (تكلفة مباشرة لا تمر بجدول المصروفات) ──
+        //    التعريف الموحد للاعتراف: من بدء الرحلة (ActualStartAt ?? ActualEndAt)
+        //    وبتاريخ البدء تُنسب للفترة — نفسه في تقرير العمليات وكشف حساب السيارة
+        var freightTripsAll = await _db.Trips.AsNoTracking()
+            .Where(x => !x.IsDeleted && x.Status != "Cancelled"
+                        && (x.ActualStartAt != null || x.ActualEndAt != null)
                         && x.FreightAmount != null && x.FreightAmount > 0)
-            .Select(x => new { x.ActualEndAt, x.FreightAmount })
+            .Select(x => new { x.ActualStartAt, x.ActualEndAt, x.FreightAmount })
             .ToListAsync(ct);
+        var freightTrips = freightTripsAll
+            .Select(x => new { Date = (x.ActualStartAt ?? x.ActualEndAt)!.Value, x.FreightAmount })
+            .Where(x => x.Date >= f && x.Date <= t)
+            .ToList();
         var freightTotal = freightTrips.Sum(x => x.FreightAmount!.Value);
 
         // ── أسماء أنواع المصروفات (للتفصيل) ──
@@ -460,8 +496,8 @@ public class ReportsController : ControllerBase
                                      Rev: 0m, Tax: 0m,
                                      Cost: x.IsOperationCost ? x.Amount : 0m,
                                      Opex: x.IsOperationCost ? 0m : x.Amount)))
-            .Concat(freightTrips.Select(x => (DateOnly.FromDateTime(x.ActualEndAt!.Value).Year,
-                                              DateOnly.FromDateTime(x.ActualEndAt!.Value).Month,
+            .Concat(freightTrips.Select(x => (DateOnly.FromDateTime(x.Date).Year,
+                                              DateOnly.FromDateTime(x.Date).Month,
                                               Rev: 0m, Tax: 0m,
                                               Cost: x.FreightAmount!.Value, Opex: 0m)))
             .GroupBy(x => (x.Year, x.Month))
@@ -627,7 +663,7 @@ public class ReportsController : ControllerBase
         if (!await Can("REPORT.OPERATIONS", ct)) return Forbid();
 
         var (f, t, fs, ts) = Range(from, to);
-        var ops = await LoadOpProfitAsync(f, t, ct);
+        var (ops, truncated) = await LoadOpProfitAsync(f, t, ct);
 
         // ── الموانئ ──
         var portIds = ops.Where(x => x.PortId is not null).Select(x => x.PortId!.Value).Distinct().ToList();
@@ -678,7 +714,8 @@ public class ReportsController : ControllerBase
             ports,
             destinations = dests,
             tahteeqs,
-            noPort
+            noPort,
+            truncated
         });
     }
 
@@ -691,7 +728,7 @@ public class ReportsController : ControllerBase
         if (!await Can("REPORT.OPERATIONS", ct)) return Forbid();
 
         var (f, t, fs, ts) = Range(from, to);
-        var ops = await LoadOpProfitAsync(f, t, ct);
+        var (ops, truncated) = await LoadOpProfitAsync(f, t, ct);
 
         var ids = ops.Where(x => x.ServiceId is not null).Select(x => x.ServiceId!.Value).Distinct().ToList();
         var names = ids.Count == 0
@@ -710,7 +747,8 @@ public class ReportsController : ControllerBase
         {
             range     = new { from = fs, to = ts },
             rows,
-            noService = ops.Count(x => x.ServiceId is null)
+            noService = ops.Count(x => x.ServiceId is null),
+            truncated
         });
     }
 
@@ -787,18 +825,22 @@ public class ReportsController : ControllerBase
 
     /// <summary>عملية + إيرادها + تكلفتها — أساس تقارير الربحية.</summary>
     private sealed record OpProfit(long OperationId, int? PortId, int? DestinationId,
-        int? TahteeqPortId, int? ServiceId, decimal Revenue, decimal Cost);
+        int? TahteeqPortId, int? ServiceId, decimal Revenue, decimal Cost, int CustomerId = 0);
 
-    private async Task<List<OpProfit>> LoadOpProfitAsync(DateTime f, DateTime t, CancellationToken ct)
+    private async Task<(List<OpProfit> Rows, bool Truncated)> LoadOpProfitAsync(DateTime f, DateTime t, CancellationToken ct)
     {
+        var totalMatching = await _db.Operations.AsNoTracking()
+            .Where(o => !o.IsDeleted && o.CreatedAt >= f && o.CreatedAt <= t)
+            .CountAsync(ct);
+
         var ops = await _db.Operations.AsNoTracking()
             .Where(o => !o.IsDeleted && o.CreatedAt >= f && o.CreatedAt <= t)
             .OrderByDescending(o => o.OperationId)
             .Take(MaxRows)
-            .Select(o => new { o.OperationId, o.PortId, o.DestinationId, o.TahteeqPortId, o.ServiceId, o.RevenueNet })
+            .Select(o => new { o.OperationId, o.PortId, o.DestinationId, o.TahteeqPortId, o.ServiceId, o.RevenueNet, o.CustomerId })
             .ToListAsync(ct);
 
-        if (ops.Count == 0) return new List<OpProfit>();
+        if (ops.Count == 0) return (new List<OpProfit>(), totalMatching > MaxRows);
 
         var opIds = ops.Select(o => o.OperationId).ToList();
 
@@ -832,7 +874,10 @@ public class ReportsController : ControllerBase
                 .Select(to => new { to.TripId, to.OperationId })
                 .ToListAsync(ct);
             var freights = (await _db.Trips.AsNoTracking()
-                    .Where(tp => tripIds.Contains(tp.TripId) && !tp.IsDeleted && tp.FreightAmount != null)
+                    /* التعريف الموحد للاعتراف بالنولون: رحلة بدأت فعلًا وغير ملغاة */
+                    .Where(tp => tripIds.Contains(tp.TripId) && !tp.IsDeleted && tp.FreightAmount != null
+                                && tp.Status != "Cancelled"
+                                && (tp.ActualStartAt != null || tp.ActualEndAt != null))
                     .Select(tp => new { tp.TripId, tp.FreightAmount })
                     .ToListAsync(ct))
                 .ToDictionary(x => x.TripId, x => x.FreightAmount!.Value);
@@ -848,14 +893,16 @@ public class ReportsController : ControllerBase
             }
         }
 
-        return ops.Select(o => new OpProfit(
+        var rows = ops.Select(o => new OpProfit(
             o.OperationId, o.PortId, o.DestinationId, o.TahteeqPortId, o.ServiceId,
             // الإيراد الحقيقي = نولون الحاويات + المحمّل على العميل — نفس تقرير العمليات
             o.RevenueNet + (bilByOp.TryGetValue(o.OperationId, out var b) ? b : 0m),
             (expByOp.TryGetValue(o.OperationId, out var e) ? e : 0m) +
             (alByOp.TryGetValue(o.OperationId, out var a) ? a : 0m) +
-            (freightByOp.TryGetValue(o.OperationId, out var fr) ? fr : 0m)))
+            (freightByOp.TryGetValue(o.OperationId, out var fr) ? fr : 0m),
+            o.CustomerId))
             .ToList();
+        return (rows, totalMatching > MaxRows);
     }
 
     /// <summary>يحوّل مجموعات لصفوف Excel مرتبة من الأعلى ربحًا.</summary>
@@ -943,6 +990,356 @@ public class ReportsController : ControllerBase
             })
             .OrderByDescending(x => x.Balance)
             .ToList();
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       تقارير جديدة (2026-10-29): أعمار العملاء · ربحية العميل ·
+       ربحية المسار · التدفق المتوقع الصافي
+       ═══════════════════════════════════════════════════════════════ */
+
+    /// <summary>
+    /// 📥 <c>GET api/reports/customer-aging</c> — **أعمار مديونية العملاء**
+    /// بنفس شرائح أعمار الموردين ومنطقها حرفيًا (تماثل الاتجاهين).
+    /// </summary>
+    [HttpGet("customer-aging")]
+    public async Task<IActionResult> CustomerAging(CancellationToken ct)
+    {
+        if (!await Can("REPORT.FINANCIAL", ct)) return Forbid();
+
+        var rows = await BuildCustomerAgingAsync(ct);
+        return Ok(new
+        {
+            asOf  = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            total = rows.Sum(x => x.Balance),
+            rows
+        });
+    }
+
+    private async Task<List<CustomerAgingRow>> BuildCustomerAgingAsync(CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+
+        var inv = await _db.Invoices.AsNoTracking()
+            .Where(i => !i.IsDeleted && i.Status != "Draft" && i.Status != "Cancelled"
+                        && i.PaymentStatus != "Paid")
+            .Select(i => new { i.CustomerId, i.DueDate, i.GrandTotal, i.PaidAmount })
+            .ToListAsync(ct);
+
+        var ids = inv.Select(x => x.CustomerId).Distinct().ToList();
+        var names = ids.Count == 0
+            ? new Dictionary<int, string>()
+            : (await _db.Customers.AsNoTracking()
+                    .Where(c => ids.Contains(c.CustomerId))
+                    .Select(c => new { c.CustomerId, c.NameAr }).ToListAsync(ct))
+                .ToDictionary(x => x.CustomerId, x => x.NameAr);
+
+        return inv
+            .Where(x => x.GrandTotal - x.PaidAmount > 0)
+            .GroupBy(x => x.CustomerId)
+            .Select(g =>
+            {
+                var open = g.Select(x => (
+                    Bal : x.GrandTotal - x.PaidAmount,
+                    Days: x.DueDate is null ? (int?)null : today.DayNumber - x.DueDate.Value.DayNumber
+                )).ToList();
+
+                decimal Sum(Func<(decimal Bal, int? Days), bool> f) =>
+                    open.Where(f).Sum(x => x.Bal);
+
+                return new CustomerAgingRow(
+                    names.TryGetValue(g.Key, out var n) ? n : "—",
+                    open.Count,
+                    Sum(x => x.Days is not null && x.Days <= 30),
+                    Sum(x => x.Days is not null && x.Days > 30 && x.Days <= 60),
+                    Sum(x => x.Days is not null && x.Days > 60 && x.Days <= 90),
+                    Sum(x => x.Days is not null && x.Days > 90),
+                    Sum(x => x.Days is null),
+                    open.Sum(x => x.Bal));
+            })
+            .OrderByDescending(x => x.Balance)
+            .ToList();
+    }
+
+    /// <summary>
+    /// 🏆 <c>GET api/reports/customer-profitability</c> — **ربحية العميل**:
+    /// عمليات الفترة مجمعة بالعميل بنفس تعريف ربحية العمليات.
+    /// </summary>
+    [HttpGet("customer-profitability")]
+    public async Task<IActionResult> CustomerProfitability(string? from, string? to, CancellationToken ct)
+    {
+        if (!await Can("REPORT.OPERATIONS", ct)) return Forbid();
+
+        var (f, t, fs, ts) = Range(from, to);
+        var (ops, truncated) = await LoadOpProfitAsync(f, t, ct);
+
+        var ids = ops.Select(x => x.CustomerId).Distinct().ToList();
+        var names = ids.Count == 0
+            ? new Dictionary<int, string>()
+            : (await _db.Customers.AsNoTracking()
+                    .Where(c => ids.Contains(c.CustomerId))
+                    .Select(c => new { c.CustomerId, c.NameAr }).ToListAsync(ct))
+                .ToDictionary(x => x.CustomerId, x => x.NameAr);
+
+        var rows = ops.GroupBy(x => x.CustomerId)
+            .Select(g => GroupRow(names.TryGetValue(g.Key, out var n) ? n : "—", g))
+            .OrderByDescending(x => x.Profit)
+            .ToList();
+
+        return Ok(new { range = new { from = fs, to = ts }, rows, truncated });
+    }
+
+    /// <summary>
+    /// 🛣️ <c>GET api/reports/routes</c> — **ربحية المسار (ميناء × وجهة)**:
+    /// وحدة التسعير الفعلية؛ الموانئ والوجهات منفصلة في تبويبات أخرى.
+    /// </summary>
+    [HttpGet("routes")]
+    public async Task<IActionResult> Routes(string? from, string? to, CancellationToken ct)
+    {
+        if (!await Can("REPORT.OPERATIONS", ct)) return Forbid();
+
+        var (f, t, fs, ts) = Range(from, to);
+        var (ops, truncated) = await LoadOpProfitAsync(f, t, ct);
+
+        var pIds = ops.Where(x => x.PortId is not null).Select(x => x.PortId!.Value).Distinct().ToList();
+        var pNames = pIds.Count == 0
+            ? new Dictionary<int, string>()
+            : (await _db.Ports.AsNoTracking().Where(x => pIds.Contains(x.PortId))
+                    .Select(x => new { x.PortId, x.NameAr }).ToListAsync(ct))
+                .ToDictionary(x => x.PortId, x => x.NameAr);
+
+        var dIds = ops.Where(x => x.DestinationId is not null).Select(x => x.DestinationId!.Value).Distinct().ToList();
+        var dNames = dIds.Count == 0
+            ? new Dictionary<int, string>()
+            : (await _db.Destinations.AsNoTracking().Where(x => dIds.Contains(x.DestinationId))
+                    .Select(x => new { x.DestinationId, x.NameAr }).ToListAsync(ct))
+                .ToDictionary(x => x.DestinationId, x => x.NameAr);
+
+        var rows = ops.Where(x => x.PortId is not null && x.DestinationId is not null)
+            .GroupBy(x => (x.PortId!.Value, x.DestinationId!.Value))
+            .Select(g => GroupRow(
+                $"{(pNames.TryGetValue(g.Key.Item1, out var pn) ? pn : "—")} إلى {(dNames.TryGetValue(g.Key.Item2, out var dn) ? dn : "—")}", g))
+            .OrderByDescending(x => x.Profit)
+            .ToList();
+
+        return Ok(new
+        {
+            range = new { from = fs, to = ts },
+            rows,
+            noRoute = ops.Count(x => x.PortId is null || x.DestinationId is null),
+            truncated
+        });
+    }
+
+    /// <summary>
+    /// ⏱️ <c>GET api/reports/detention</c> — **التعتيق ودوران الحاويات**:
+    /// أيام بقاء حاويات كل عملية من الاستلام (PickupAt على روابط رحلاتها)
+    /// حتى التسليم، وما زال خارجًا منها، والضمانات المحتجزة لدى كل وكيل
+    /// ملاحي عن حجوزات لم تُغلق عملياتها. لا توجد أيام سماح تعاقدية مخزنة
+    /// في النظام، فالتقرير يعرض أيام البقاء الفعلية ويعلّم ما تجاوز 7 أيام.
+    /// </summary>
+    [HttpGet("detention")]
+    public async Task<IActionResult> Detention(string? from, string? to, CancellationToken ct)
+    {
+        if (!await Can("REPORT.OPERATIONS", ct)) return Forbid();
+
+        var (f, t, fs, ts) = Range(from, to);
+        var now = DateTime.UtcNow;
+
+        var ops = await _db.Operations.AsNoTracking()
+            .Where(o => !o.IsDeleted && o.CreatedAt >= f && o.CreatedAt <= t)
+            .OrderByDescending(o => o.OperationId)
+            .Take(MaxRows)
+            .Select(o => new
+            {
+                o.OperationId, o.OperationNumber, o.Status, o.CustomerId,
+                o.BookingId, o.PortId, o.ActualDeliveryAt
+            })
+            .ToListAsync(ct);
+
+        var opIds = ops.Select(o => o.OperationId).ToList();
+
+        var custIds = ops.Select(o => o.CustomerId).Distinct().ToList();
+        var custNames = custIds.Count == 0
+            ? new Dictionary<int, string>()
+            : (await _db.Customers.AsNoTracking()
+                    .Where(c => custIds.Contains(c.CustomerId))
+                    .Select(c => new { c.CustomerId, c.NameAr }).ToListAsync(ct))
+                .ToDictionary(x => x.CustomerId, x => x.NameAr);
+
+        var portIds = ops.Where(o => o.PortId != null).Select(o => o.PortId!.Value).Distinct().ToList();
+        var portNames = portIds.Count == 0
+            ? new Dictionary<int, string>()
+            : (await _db.Ports.AsNoTracking()
+                    .Where(p => portIds.Contains(p.PortId))
+                    .Select(p => new { p.PortId, p.NameAr }).ToListAsync(ct))
+                .ToDictionary(x => x.PortId, x => x.NameAr);
+
+        var links = opIds.Count == 0
+            ? new List<(long OpId, DateTime? Pickup, DateTime? Delivery)>()
+            : (await _db.TripOperations.AsNoTracking()
+                    .Where(x => opIds.Contains(x.OperationId))
+                    .Select(x => new { x.OperationId, x.PickupAt, x.DeliveryAt })
+                    .ToListAsync(ct))
+                .Select(x => (OpId: x.OperationId, Pickup: x.PickupAt, Delivery: x.DeliveryAt))
+                .ToList();
+
+        var dwell = links.GroupBy(x => x.OpId).ToDictionary(g => g.Key, g => (
+            Pickup:   g.Select(x => x.Pickup).Where(x => x != null).DefaultIfEmpty(null).Min(),
+            Delivery: g.Select(x => x.Delivery).Where(x => x != null).DefaultIfEmpty(null).Max()));
+
+        var contCounts = opIds.Count == 0
+            ? new Dictionary<long, int>()
+            : (await _db.OperationContainers.AsNoTracking()
+                    .Where(oc => opIds.Contains(oc.OperationId))
+                    .GroupBy(oc => oc.OperationId)
+                    .Select(g => new { OperationId = g.Key, Count = g.Count() })
+                    .ToListAsync(ct))
+                .ToDictionary(x => x.OperationId, x => x.Count);
+
+        var rows = ops.Select(o =>
+        {
+            dwell.TryGetValue(o.OperationId, out var dw);
+            var pickup   = dw.Pickup;
+            var delivery = dw.Delivery ?? o.ActualDeliveryAt;
+            decimal? days = pickup is null
+                ? null
+                : Math.Round((decimal)((delivery ?? now) - pickup.Value).TotalDays, 1);
+            return new DetentionRow(
+                o.OperationId, o.OperationNumber,
+                custNames.TryGetValue(o.CustomerId, out var cn) ? cn : "—",
+                o.PortId != null && portNames.TryGetValue(o.PortId.Value, out var pn) ? pn : "—",
+                contCounts.TryGetValue(o.OperationId, out var cc) ? cc : 0,
+                pickup, delivery, days,
+                pickup != null && delivery == null,
+                o.Status);
+        })
+        .OrderByDescending(r => r.DwellDays ?? -1m)
+        .ToList();
+
+        /* الضمانات المحتجزة: خطوط حجوزات عمليات لم تُغلق ولم تُلغَ */
+        var openBookingIds = ops
+            .Where(o => o.BookingId != null && o.Status != "Closed" && o.Status != "Cancelled")
+            .Select(o => o.BookingId!.Value).Distinct().ToList();
+
+        var agents = new List<AgentGuaranteeRow>();
+        if (openBookingIds.Count > 0)
+        {
+            var bk = await _db.Bookings.AsNoTracking()
+                .Where(b => openBookingIds.Contains(b.BookingId) && !b.IsDeleted)
+                .Select(b => new { b.BookingId, b.ShippingAgentId })
+                .ToListAsync(ct);
+
+            var gLines = await _db.BookingContainerLines.AsNoTracking()
+                .Where(l => openBookingIds.Contains(l.BookingId))
+                .Select(l => new { l.BookingId, l.RequestedQty, l.GuaranteePerContainer })
+                .ToListAsync(ct);
+
+            var gByBooking = gLines.GroupBy(l => l.BookingId)
+                .ToDictionary(g => g.Key, g => (
+                    Amount: g.Sum(l => (l.GuaranteePerContainer ?? 0m) * l.RequestedQty),
+                    Containers: g.Sum(l => l.RequestedQty)));
+
+            var agentIds = bk.Where(b => b.ShippingAgentId != null)
+                .Select(b => b.ShippingAgentId!.Value).Distinct().ToList();
+            var agentNames = agentIds.Count == 0
+                ? new Dictionary<int, string>()
+                : (await _db.ShippingAgents.AsNoTracking()
+                        .Where(a => agentIds.Contains(a.ShippingAgentId))
+                        .Select(a => new { a.ShippingAgentId, a.NameAr }).ToListAsync(ct))
+                    .ToDictionary(x => x.ShippingAgentId, x => x.NameAr);
+
+            agents = bk.GroupBy(b => b.ShippingAgentId)
+                .Select(g => new AgentGuaranteeRow(
+                    g.Key != null && agentNames.TryGetValue(g.Key.Value, out var an) ? an : "بدون وكيل محدد",
+                    g.Count(),
+                    g.Sum(b => gByBooking.TryGetValue(b.BookingId, out var v) ? v.Containers : 0),
+                    g.Sum(b => gByBooking.TryGetValue(b.BookingId, out var v) ? v.Amount : 0m)))
+                .OrderByDescending(x => x.GuaranteeTotal)
+                .ToList();
+        }
+
+        return Ok(new
+        {
+            range = new { from = fs, to = ts },
+            rows,
+            agents,
+            summary = new
+            {
+                containersOut = rows.Where(r => r.StillOut).Sum(r => r.Containers),
+                overWeek      = rows.Count(r => r.DwellDays > 7m),
+                avgDwell      = rows.Where(r => r.DwellDays != null).Select(r => r.DwellDays!.Value)
+                                    .DefaultIfEmpty(0m).Average(),
+                guaranteeHeld = agents.Sum(a => a.GuaranteeTotal)
+            }
+        });
+    }
+
+    /// <summary>
+    /// ⚖️ <c>GET api/reports/cashflow-net</c> — **التدفق المتوقع الصافي**:
+    /// وارد العملاء المتوقع أسبوعيًا بجانب مستحقات الموردين في الأسابيع
+    /// نفسها وبالشرائح نفسها، وصافي كل أسبوع.
+    /// </summary>
+    [HttpGet("cashflow-net")]
+    public async Task<IActionResult> CashflowNet(CancellationToken ct)
+    {
+        if (!await Can("REPORT.FINANCIAL", ct)) return Forbid();
+
+        var inflow  = await BuildCashflowAsync(ct);
+        var outflow = await BuildPayablesCashflowAsync(ct);
+        var outMap  = outflow.ToDictionary(x => x.Key);
+
+        var rows = inflow.Select(x =>
+        {
+            var o = outMap.TryGetValue(x.Key, out var oo) ? oo : new CashWeek(x.Key, x.Label, 0m, 0);
+            return new CashWeekNet(x.Key, x.Label, x.Expected, o.Expected,
+                x.Expected - o.Expected, x.Invoices, o.Invoices);
+        }).ToList();
+
+        return Ok(new
+        {
+            asOf = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            totalIn  = rows.Sum(x => x.Inflow),
+            totalOut = rows.Sum(x => x.Outflow),
+            totalNet = rows.Sum(x => x.Net),
+            rows
+        });
+    }
+
+    /// <summary>مستحقات الموردين المفتوحة مجمعة بنفس شرائح التدفق المتوقع للعملاء.</summary>
+    private async Task<List<CashWeek>> BuildPayablesCashflowAsync(CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        const int Weeks = 8;
+
+        var inv = await _db.SupplierInvoices.AsNoTracking()
+            .Where(i => !i.IsDeleted && i.Status != "Draft" && i.Status != "Cancelled"
+                        && i.PaymentStatus != "Paid")
+            .Select(i => new { i.DueDate, i.GrandTotal, i.PaidAmount })
+            .ToListAsync(ct);
+
+        var open = inv.Where(x => x.GrandTotal - x.PaidAmount > 0).ToList();
+        var buckets = new List<CashWeek>();
+
+        var overdue = open.Where(x => x.DueDate is null || x.DueDate < today).ToList();
+        buckets.Add(new CashWeek("overdue", "متأخرة", overdue.Sum(x => x.GrandTotal - x.PaidAmount), overdue.Count));
+
+        for (var w = 0; w < Weeks; w++)
+        {
+            var ws = today.AddDays(w * 7);
+            var we = today.AddDays(w * 7 + 6);
+            var inW = open.Where(x => x.DueDate is not null
+                                      && x.DueDate >= ws && x.DueDate <= we).ToList();
+            buckets.Add(new CashWeek(
+                $"w{w + 1}",
+                $"{ws.ToString("dd/MM", CultureInfo.InvariantCulture)} – {we.ToString("dd/MM", CultureInfo.InvariantCulture)}",
+                inW.Sum(x => x.GrandTotal - x.PaidAmount), inW.Count));
+        }
+
+        var limit = today.AddDays(Weeks * 7);
+        var later = open.Where(x => x.DueDate is not null && x.DueDate > limit).ToList();
+        buckets.Add(new CashWeek("later", "بعد كده", later.Sum(x => x.GrandTotal - x.PaidAmount), later.Count));
+
+        return buckets;
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -1176,8 +1573,10 @@ public class ReportsController : ControllerBase
         return k switch
         {
             "PAY"           => "تحصيل فواتير العملاء",
-            "CUST-ISSUE"    => "صرف عهد السائقين",
-            "CUST-REFUND"   => "مرتجع عهد السائقين",
+            "CUST-ISSUE"    => "صرف عهد الموظفين",
+            "CUST-REFUND"   => "مرتجعات عهد الموظفين",
+            "CUST-TOPUP"    => "تغذية عهد الموظفين",
+            "CUST-REIMB"    => "استعاضة عهد الموظفين",
             "EXP"           => "مصروفات التشغيل",
             "SPAY"          => "سداد فواتير الموردين",
             "RCV"           => "سند قبض يدوي",
@@ -1262,13 +1661,17 @@ public class ReportsController : ControllerBase
         if (!await Can("REPORT.FLEET", ct)) return Forbid();
 
         var (f, t, fs, ts) = Range(from, to);
-        var (drivers, vehicles, tot) = await BuildFleetAsync(f, t, ct);
-        return Ok(new { range = new { from = fs, to = ts }, totals = tot, drivers, vehicles });
+        var (drivers, vehicles, tot, truncated) = await BuildFleetAsync(f, t, ct);
+        return Ok(new { range = new { from = fs, to = ts }, totals = tot, drivers, vehicles, truncated });
     }
 
-    private async Task<(List<DriverRow>, List<VehicleRow>, FleetTotals)>
+    private async Task<(List<DriverRow>, List<VehicleRow>, FleetTotals, bool Truncated)>
         BuildFleetAsync(DateTime f, DateTime t, CancellationToken ct)
     {
+        var totalTrips = await _db.Trips.AsNoTracking()
+            .Where(x => !x.IsDeleted && x.PlannedStartAt >= f && x.PlannedStartAt <= t)
+            .CountAsync(ct);
+
         var trips = await _db.Trips.AsNoTracking()
             .Where(x => !x.IsDeleted && x.PlannedStartAt >= f && x.PlannedStartAt <= t)
             .OrderByDescending(x => x.TripId)
@@ -1318,11 +1721,19 @@ public class ReportsController : ControllerBase
                     (costByTrip.TryGetValue(x.TripId, out var v) ? v : 0m) + x.AllocatedAmount;
         }
 
-        // ── العُهد ──
+        // ── العُهد: لم تعد تصدر للسائقين — الإصدار للموظفين فقط.
+        //    إجماليات التقرير من عهد الفترة كلها، ونصيب السائق يُقاس بما دُفع
+        //    له فعليًا من سلف النولون (مصروفات نولون نقلة مرتبطة به) ──
         var custody = await _db.DriverCustodies.AsNoTracking()
-            .Where(c => !c.IsDeleted && c.OwnerType == "Driver"
+            .Where(c => !c.IsDeleted
                         && c.CustodyDate >= f && c.CustodyDate <= t)
             .Select(c => new { c.OwnerId, c.AmountIssued, c.Status }).ToListAsync(ct);
+
+        var drvAdv = await _db.Expenses.AsNoTracking()
+            .Where(e => !e.IsDeleted && e.Status != "Cancelled"
+                        && e.DriverId != null && e.ExpenseType.IsFreightAdvance
+                        && e.ExpenseDate >= f && e.ExpenseDate <= t)
+            .Select(e => new { DriverId = e.DriverId!.Value, e.Amount }).ToListAsync(ct);
 
         var dIds = trips.Select(x => x.DriverId).Distinct().ToList();
         var driverName = dIds.Count == 0
@@ -1358,8 +1769,8 @@ public class ReportsController : ControllerBase
                     Math.Round(ts.Average(x => x.ActualStartAt is not null && x.ActualEndAt is not null
                         ? (decimal?)(decimal)(x.ActualEndAt.Value - x.ActualStartAt.Value).TotalHours
                         : null) ?? 0m, 1),
-                    custody.Where(x => x.OwnerId == id).Sum(x => x.AmountIssued),
-                    custody.Count(x => x.OwnerId == id && OpenCustodyStatuses.Contains(x.Status)));
+                    drvAdv.Where(x => x.DriverId == id).Sum(x => x.Amount),
+                    drvAdv.Count(x => x.DriverId == id));
             })
             .OrderByDescending(x => x.Trips)
             .ToList();
@@ -1396,7 +1807,7 @@ public class ReportsController : ControllerBase
             custody.Count(x => OpenCustodyStatuses.Contains(x.Status)),
             custody.Where(x => OpenCustodyStatuses.Contains(x.Status)).Sum(x => x.AmountIssued));
 
-        return (drivers, vehicles, tot);
+        return (drivers, vehicles, tot, totalTrips > MaxRows);
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -1418,7 +1829,7 @@ public class ReportsController : ControllerBase
         if (report == "operations")
         {
             if (!await Can("REPORT.OPERATIONS", ct)) return Forbid();
-            var (rows, tot) = await BuildOperationsAsync(f, t, fs, ts, customerId, status, ct);
+            var (rows, tot, _) = await BuildOperationsAsync(f, t, fs, ts, customerId, status, ct);
             var cols = new[] { "رقم العملية", "العميل", "الحالة", "تاريخ مخطط", "تاريخ التسليم",
                 "الإيراد الكلي", "منه: محمّل على العميل", "نولون السائق",
                 "تكلفة مباشرة", "تكلفة رحلات", "إجمالي التكلفة", "صافي الربح",
@@ -1466,7 +1877,7 @@ public class ReportsController : ControllerBase
         else if (report == "fleet")
         {
             if (!await Can("REPORT.FLEET", ct)) return Forbid();
-            var (drs, vehs, _) = await BuildFleetAsync(f, t, ct);
+            var (drs, vehs, _, _) = await BuildFleetAsync(f, t, ct);
 
             Write(wb, "السائقون", "أداء السائقين", fs, ts,
                 new[] { "السائق", "الرحلات", "المكتملة", "المسافة (كم)", "متوسط الساعات",
@@ -1567,7 +1978,7 @@ public class ReportsController : ControllerBase
         else if (report == "ports" || report == "services")
         {
             if (!await Can("REPORT.OPERATIONS", ct)) return Forbid();
-            var o2 = await LoadOpProfitAsync(f, t, ct);
+            var (o2, _) = await LoadOpProfitAsync(f, t, ct);
 
             if (report == "ports")
             {
@@ -1602,6 +2013,48 @@ public class ReportsController : ControllerBase
                     new[] { "الخدمة", "عدد العمليات", "الإيراد", "التكلفة", "الربح", "الهامش %" },
                     Rows(o2.Where(x => x.ServiceId is not null).GroupBy(x => x.ServiceId!.Value),
                          k => sn.TryGetValue(k, out var n) ? n : "—"));
+            }
+
+            name = $"{report}_{fs}_{ts}.xlsx";
+        }
+        else if (report == "customer-profitability" || report == "routes")
+        {
+            if (!await Can("REPORT.OPERATIONS", ct)) return Forbid();
+            var (o3, _) = await LoadOpProfitAsync(f, t, ct);
+
+            if (report == "customer-profitability")
+            {
+                var cids = o3.Select(x => x.CustomerId).Distinct().ToList();
+                var cn = cids.Count == 0 ? new Dictionary<int, string>()
+                    : (await _db.Customers.AsNoTracking().Where(x => cids.Contains(x.CustomerId))
+                            .Select(x => new { x.CustomerId, x.NameAr }).ToListAsync(ct))
+                        .ToDictionary(x => x.CustomerId, x => x.NameAr);
+                Write(wb, "ربحية العملاء", "ربحية العملاء", fs, ts,
+                    new[] { "العميل", "عدد العمليات", "الإيراد", "التكلفة", "الربح", "الهامش %" },
+                    Rows(o3.GroupBy(x => x.CustomerId),
+                         k => cn.TryGetValue(k, out var n) ? n : "—"));
+            }
+            else
+            {
+                var pids = o3.Where(x => x.PortId is not null).Select(x => x.PortId!.Value).Distinct().ToList();
+                var pn = pids.Count == 0 ? new Dictionary<int, string>()
+                    : (await _db.Ports.AsNoTracking().Where(x => pids.Contains(x.PortId))
+                            .Select(x => new { x.PortId, x.NameAr }).ToListAsync(ct))
+                        .ToDictionary(x => x.PortId, x => x.NameAr);
+                var dids = o3.Where(x => x.DestinationId is not null).Select(x => x.DestinationId!.Value).Distinct().ToList();
+                var dn = dids.Count == 0 ? new Dictionary<int, string>()
+                    : (await _db.Destinations.AsNoTracking().Where(x => dids.Contains(x.DestinationId))
+                            .Select(x => new { x.DestinationId, x.NameAr }).ToListAsync(ct))
+                        .ToDictionary(x => x.DestinationId, x => x.NameAr);
+                var routeRows = o3.Where(x => x.PortId is not null && x.DestinationId is not null)
+                    .GroupBy(x => (x.PortId!.Value, x.DestinationId!.Value))
+                    .Select(g => GroupRow(
+                        $"{(pn.TryGetValue(g.Key.Item1, out var a) ? a : "—")} إلى {(dn.TryGetValue(g.Key.Item2, out var b) ? b : "—")}", g))
+                    .OrderByDescending(r => r.Profit)
+                    .Select(r => new object[] { r.Name, r.Operations, r.Revenue, r.Cost, r.Profit, r.MarginPct });
+                Write(wb, "ربحية المسارات", "ربحية المسار (ميناء إلى وجهة)", fs, ts,
+                    new[] { "المسار", "عدد العمليات", "الإيراد", "التكلفة", "الربح", "الهامش %" },
+                    routeRows);
             }
 
             name = $"{report}_{fs}_{ts}.xlsx";
@@ -1641,6 +2094,90 @@ public class ReportsController : ControllerBase
 
             name = $"supplier-aging_{fs}_{ts}.xlsx";
         }
+        else if (report == "customer-aging")
+        {
+            if (!await Can("REPORT.FINANCIAL", ct)) return Forbid();
+            var ag = await BuildCustomerAgingAsync(ct);
+
+            Write(wb, "أعمار العملاء", "أعمار مديونية العملاء", fs, ts,
+                new[] { "العميل", "فواتير", "0–30 يوم", "31–60", "61–90", "أكثر من 90",
+                        "بدون استحقاق", "الإجمالي" },
+                ag.Select(x => new object[] { x.CustomerName, x.Invoices, x.D0_30, x.D31_60,
+                    x.D61_90, x.D90Plus, x.NoDue, x.Balance }));
+
+            name = $"customer-aging_{fs}_{ts}.xlsx";
+        }
+        else if (report == "cashflow-net")
+        {
+            if (!await Can("REPORT.FINANCIAL", ct)) return Forbid();
+            var inflow  = await BuildCashflowAsync(ct);
+            var outflow = await BuildPayablesCashflowAsync(ct);
+            var outMap  = outflow.ToDictionary(x => x.Key);
+            var rows = inflow.Select(x =>
+            {
+                var o = outMap.TryGetValue(x.Key, out var oo) ? oo : new CashWeek(x.Key, x.Label, 0m, 0);
+                return new CashWeekNet(x.Key, x.Label, x.Expected, o.Expected,
+                    x.Expected - o.Expected, x.Invoices, o.Invoices);
+            }).ToList();
+
+            Write(wb, "التدفق الصافي", "التدفق النقدي المتوقع الصافي", fs, ts,
+                new[] { "الفترة", "وارد متوقع", "مستحقات موردين", "الصافي", "فواتير عملاء", "فواتير موردين" },
+                rows.Select(x => new object[] { x.Label, x.Inflow, x.Outflow, x.Net, x.InInvoices, x.OutInvoices }));
+
+            name = $"cashflow-net_{fs}_{ts}.xlsx";
+        }
+        else if (report == "detention")
+        {
+            if (!await Can("REPORT.OPERATIONS", ct)) return Forbid();
+            // إعادة بناء مختصرة للتصدير: نفس استعلامات نقطة النهاية عبر إعادة الاستدعاء غير متاحة هنا،
+            // فنبني الصفوف من الاستعلام الأساسي ذاته (عمليات الفترة وروابط رحلاتها)
+            var nowX = DateTime.UtcNow;
+            var opsX = await _db.Operations.AsNoTracking()
+                .Where(o => !o.IsDeleted && o.CreatedAt >= f && o.CreatedAt <= t)
+                .OrderByDescending(o => o.OperationId)
+                .Take(MaxRows)
+                .Select(o => new { o.OperationId, o.OperationNumber, o.Status, o.CustomerId, o.ActualDeliveryAt })
+                .ToListAsync(ct);
+            var opIdsX = opsX.Select(o => o.OperationId).ToList();
+            var cnX = (await _db.Customers.AsNoTracking()
+                    .Where(c => opsX.Select(o => o.CustomerId).Distinct().Contains(c.CustomerId))
+                    .Select(c => new { c.CustomerId, c.NameAr }).ToListAsync(ct))
+                .ToDictionary(x => x.CustomerId, x => x.NameAr);
+            var linksX = opIdsX.Count == 0
+                ? new List<(long OpId, DateTime? Pickup, DateTime? Delivery)>()
+                : (await _db.TripOperations.AsNoTracking()
+                        .Where(x => opIdsX.Contains(x.OperationId))
+                        .Select(x => new { x.OperationId, x.PickupAt, x.DeliveryAt })
+                        .ToListAsync(ct))
+                    .Select(x => (OpId: x.OperationId, Pickup: x.PickupAt, Delivery: x.DeliveryAt))
+                    .ToList();
+            var dwellX = linksX.GroupBy(x => x.OpId).ToDictionary(g => g.Key, g => (
+                Pickup:   g.Select(x => x.Pickup).Where(x => x != null).DefaultIfEmpty(null).Min(),
+                Delivery: g.Select(x => x.Delivery).Where(x => x != null).DefaultIfEmpty(null).Max()));
+
+            Write(wb, "التعتيق", "التعتيق ودوران الحاويات", fs, ts,
+                new[] { "رقم العملية", "العميل", "الاستلام", "التسليم", "أيام البقاء", "ما زالت خارجًا", "الحالة" },
+                opsX.Select(o =>
+                {
+                    dwellX.TryGetValue(o.OperationId, out var dw);
+                    var pickup = dw.Pickup;
+                    var delivery = dw.Delivery ?? o.ActualDeliveryAt;
+                    var days = pickup is null ? (decimal?)null
+                        : Math.Round((decimal)((delivery ?? nowX) - pickup.Value).TotalDays, 1);
+                    return new object[]
+                    {
+                        o.OperationNumber,
+                        cnX.TryGetValue(o.CustomerId, out var n) ? n : "—",
+                        pickup?.ToString("yyyy-MM-dd") ?? "—",
+                        delivery?.ToString("yyyy-MM-dd") ?? "—",
+                        days is null ? (object)"—" : days.Value,
+                        pickup != null && delivery == null ? "نعم" : "لا",
+                        o.Status
+                    };
+                }));
+
+            name = $"detention_{fs}_{ts}.xlsx";
+        }
         else if (report == "cashflow-actual")
         {
             if (!await Can("REPORT.FINANCIAL", ct)) return Forbid();
@@ -1671,12 +2208,12 @@ public class ReportsController : ControllerBase
                 "Approved" => "معتمدة", "PartiallySettled" => "مسواة جزئيًا",
                 "Closed" => "مقفولة", _ => st
             };
-            static string AlAr(string? a) => a == "Freight" ? "سلفة نولون"
+            static string AlAr(string? a) => a == "Freight" ? "نولون نقلة"
                 : (a == "Road" ? "مصاريف طريق" : "غير محددة");
 
             Write(wb, "ملخص العهد", "ملخص العهد لكل سائق / أمين عهدة", fs, ts,
                 new[] { "الاسم", "النوع", "عدد العهد", "المصروف",
-                    "منه: سلفة نولون", "منه: مصاريف طريق", "المنفق", "المرتجع", "المتبقي" },
+                    "منه: نولون نقلة", "منه: مصاريف طريق", "المنفق", "المرتجع", "المتبقي" },
                 cust.Summary.Select(r => new object[]
                 {
                     r.OwnerName, r.OwnerType == "Driver" ? "سائق" : "موظف", r.CustodyCount,
@@ -1800,6 +2337,24 @@ public class ReportsController : ControllerBase
         decimal D0_30, decimal D31_60, decimal D61_90, decimal D90Plus,
         decimal NoDue, decimal Balance);
 
+    /// <summary>صف في أعمار مديونية العملاء — نفس شرائح الموردين.</summary>
+    public record CustomerAgingRow(string CustomerName, int Invoices,
+        decimal D0_30, decimal D31_60, decimal D61_90, decimal D90Plus,
+        decimal NoDue, decimal Balance);
+
+    /// <summary>أسبوع في التدفق المتوقع الصافي (وارد عملاء − مستحقات موردين).</summary>
+    public record CashWeekNet(string Key, string Label, decimal Inflow, decimal Outflow,
+        decimal Net, int InInvoices, int OutInvoices);
+
+    /// <summary>صف عملية في تقرير التعتيق ودوران الحاويات.</summary>
+    public record DetentionRow(long OperationId, string OperationNumber, string CustomerName,
+        string PortName, int Containers, DateTime? PickupAt, DateTime? DeliveryAt,
+        decimal? DwellDays, bool StillOut, string Status);
+
+    /// <summary>ضمانات محتجزة لدى وكيل ملاحي عن حجوزات عملياتها مفتوحة.</summary>
+    public record AgentGuaranteeRow(string AgentName, int Bookings, int Containers,
+        decimal GuaranteeTotal);
+
     /// <summary>حركة في كشف حساب مورد (قبل الرصيد الجاري).</summary>
     public record StmtRow(string Kind, string RefNo, string Date, decimal Debit, decimal Credit);
 
@@ -1876,7 +2431,8 @@ public class ReportsController : ControllerBase
         decimal Issued, decimal Spent, decimal Returned, decimal Remaining,
         string? AllocationType);
 
-    public record CustodyReportOut(List<CustodySummaryRow> Summary, List<CustodyDetailRow> Details);
+    public record CustodyReportOut(List<CustodySummaryRow> Summary, List<CustodyDetailRow> Details,
+        bool Truncated = false);
 
     /// <summary>
     /// تقرير العهد — ملخص لكل سائق/أمين عهدة + تفاصيل كل عهدة.
@@ -1900,6 +2456,8 @@ public class ReportsController : ControllerBase
 
         if (ownerType is "Driver" or "Employee") q = q.Where(c => c.OwnerType == ownerType);
         if (ownerId is not null)                 q = q.Where(c => c.OwnerId == ownerId);
+
+        var totalCust = await q.CountAsync(ct);
 
         var rows = await q
             .OrderByDescending(c => c.CustodyId)
@@ -1958,7 +2516,7 @@ public class ReportsController : ControllerBase
             .OrderByDescending(x => x.Remaining)
             .ToList();
 
-        return new CustodyReportOut(summary, details);
+        return new CustodyReportOut(summary, details, totalCust > MaxRows);
     }
 
     public record VehicleAccountRow(int VehicleId, string PlateNumber,
@@ -1990,21 +2548,54 @@ public class ReportsController : ControllerBase
 
         var freight = (await _db.Trips.AsNoTracking()
             .Where(x => !x.IsDeleted && vehIds.Contains(x.VehicleId) &&
-                        x.ActualEndAt != null && x.ActualEndAt >= f && x.ActualEndAt <= t)
+                        (x.ActualStartAt ?? x.ActualEndAt) != null && (x.ActualStartAt ?? x.ActualEndAt) >= f && (x.ActualStartAt ?? x.ActualEndAt) <= t)
             .GroupBy(x => x.VehicleId)
             .Select(g => new { VehicleId = g.Key, Total = g.Sum(x => (decimal?)x.FreightAmount) })
             .ToListAsync(ct)).ToDictionary(x => x.VehicleId, x => x.Total ?? 0);
 
-        var custody = (await _db.DriverCustodies.AsNoTracking()
-            .Where(c => !c.IsDeleted && c.OwnerType == "Driver" &&
-                        c.Trip != null && vehIds.Contains(c.Trip.VehicleId) &&
-                        c.Trip.ActualEndAt != null && c.Trip.ActualEndAt >= f && c.Trip.ActualEndAt <= t)
-            .GroupBy(c => c.Trip!.VehicleId)
-            .Select(g => new { VehicleId = g.Key, Total = g.Sum(x => (decimal?)x.AmountIssued) })
-            .ToListAsync(ct)).ToDictionary(x => x.VehicleId, x => x.Total ?? 0);
+        /* العهدة بنفس تعريف كشف حساب السيارة حرفيًا: عهد سائق الرحلات التي
+           بدأت في الفترة بصافي المرتجعات (مصدَّر − مُرَدّ) + سلف نولون
+           موظفي التشغيل المدفوعة من عهدهم العامة على هذه الرحلات.
+           قبل هذا التوحيد كان التقرير يجمع المصدَّر إجماليًا من نموذج
+           عهدة السائق وحدها فاختلف صافي السيارة بين الشاشتين */
+        var periodTrips = await _db.Trips.AsNoTracking()
+            .Where(x => !x.IsDeleted && vehIds.Contains(x.VehicleId) &&
+                        (x.ActualStartAt ?? x.ActualEndAt) != null && (x.ActualStartAt ?? x.ActualEndAt) >= f && (x.ActualStartAt ?? x.ActualEndAt) <= t)
+            .Select(x => new { x.TripId, x.VehicleId })
+            .ToListAsync(ct);
+        var tripVeh  = periodTrips.ToDictionary(x => x.TripId, x => x.VehicleId);
+        var pTripIds = periodTrips.Select(x => x.TripId).ToList();
+
+        var custodyNet = pTripIds.Count == 0
+            ? new Dictionary<int, decimal>()
+            : (await _db.DriverCustodies.AsNoTracking()
+                .Where(c => !c.IsDeleted && c.OwnerType == "Driver" && c.TripId != null
+                            && pTripIds.Contains(c.TripId.Value))
+                .Select(c => new { TripId = c.TripId!.Value, Net = c.AmountIssued - c.AmountReturned })
+                .ToListAsync(ct))
+              .GroupBy(x => tripVeh[x.TripId])
+              .ToDictionary(g => g.Key, g => g.Sum(x => x.Net));
+
+        var opsAdv = pTripIds.Count == 0
+            ? new Dictionary<int, decimal>()
+            : (await _db.Expenses.AsNoTracking()
+                .Where(e => !e.IsDeleted && e.TripId != null && pTripIds.Contains(e.TripId.Value)
+                            && e.CustodyId != null && e.ExpenseType.IsFreightAdvance
+                            && e.Status != "Cancelled")
+                .Select(e => new { TripId = e.TripId!.Value, e.Amount })
+                .ToListAsync(ct))
+              .GroupBy(x => tripVeh[x.TripId])
+              .ToDictionary(g => g.Key, g => g.Sum(x => x.Amount));
+
+        var custody = custodyNet
+            .Concat(opsAdv)
+            .GroupBy(kv => kv.Key)
+            .ToDictionary(g => g.Key, g => g.Sum(kv => kv.Value));
 
         var expenses = (await _db.Expenses.AsNoTracking()
+            /* مصروفات العهدة مستبعدة كما في الكشف — مالها خُصم عند صرف العهدة */
             .Where(e => !e.IsDeleted && e.VehicleId != null && vehIds.Contains(e.VehicleId.Value) &&
+                        e.CustodyId == null &&
                         e.ExpenseDate >= f && e.ExpenseDate <= t && e.Status != "Cancelled")
             .GroupBy(e => e.VehicleId!.Value)
             .Select(g => new { VehicleId = g.Key, Total = g.Sum(x => (decimal?)x.Amount) })

@@ -122,6 +122,7 @@ public partial class FastComDbContext : IdentityDbContext<ApplicationUser, Appli
             .Where(x => x.Table is not null &&
                         x.Table != "AuditLogs" &&
                         x.Table != "NumberSequences" &&
+                        x.Table != "AspNetUsers" &&
                         x.Table != "AspNetUserTokens" &&
                         x.Table != "AspNetUserLogins" &&
                         x.Table != "AspNetUserClaims" &&

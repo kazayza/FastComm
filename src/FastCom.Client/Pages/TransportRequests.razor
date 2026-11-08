@@ -1,0 +1,2140 @@
+@page "/transport-requests"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>طلبات النقل — فاست كوم</PageTitle>
+
+@* ═══════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════ *@
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
+
+            <div class="op-hero-row">
+                <div class="op-hero-left">
+                    <div class="op-hero-crumb">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M13 2L3 14h7l-1 8 11-14h-8l1-6z" stroke-linejoin="round"/>
+                        </svg>
+                        <span>التشغيل · طلبات النقل</span>
+                    </div>
+                    <h1 class="fc-hero-title">طلبات النقل</h1>
+                    <p class="fc-hero-sub">كل الطلبات في شاشة واحدة — ضيف وعدّل وتابع من نفس المكان، ورقم حجز الوكيل هو الأساس</p>
+                </div>
+
+                <div class="op-hero-right">
+                    <span class="op-hero-chip">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/>
+                        </svg>
+                        @DateTime.Now.ToString("dddd، dd MMMM yyyy")
+                    </span>
+                </div>
+            </div>
+
+            @if (CanView)
+            {
+                <div class="fc-kpis fc-kpis-glass">
+                    <div class="fc-kpi fc-kpi-click @(_tab == "all" ? "fc-kpi-active" : "")"
+                         @onclick='() => SetTab("all")' role="button" aria-pressed="@(_tab == "all")">
+                        <div class="fc-kpi-ic fc-kpi-blue"><MudIcon Icon="@Icons.Material.Filled.LocalShipping" /></div>
+                        <div><div class="fc-kpi-num">@_items.Count</div><div class="fc-kpi-lb">إجمالي الطلبات</div></div>
+                    </div>
+                    <div class="fc-kpi fc-kpi-click @(_tab == "open" ? "fc-kpi-active" : "")"
+                         @onclick='() => SetTab("open")' role="button" aria-pressed="@(_tab == "open")">
+                        <div class="fc-kpi-ic fc-kpi-gold"><MudIcon Icon="@Icons.Material.Filled.HourglassTop" /></div>
+                        <div><div class="fc-kpi-num">@_items.Count(o => OpenStatuses.Contains(o.Status))</div><div class="fc-kpi-lb">جارية</div></div>
+                    </div>
+                    <div class="fc-kpi fc-kpi-click @(_tab == "Delivered" ? "fc-kpi-active" : "")"
+                         @onclick='() => SetTab("Delivered")' role="button" aria-pressed="@(_tab == "Delivered")">
+                        <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
+                        <div><div class="fc-kpi-num">@_items.Count(o => o.Status == "Delivered")</div><div class="fc-kpi-lb">مُسلّمة</div></div>
+                    </div>
+                    <div class="fc-kpi fc-kpi-click @(_tab == "Closed" ? "fc-kpi-active" : "")"
+                         @onclick='() => SetTab("Closed")' role="button" aria-pressed="@(_tab == "Closed")">
+                        <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
+                        <div>
+                            <div class="fc-kpi-num @(_items.Sum(o => o.RevenueNet - o.ActualCost) >= 0 ? "" : "kpi-negative")">
+                                @Money(_items.Sum(o => o.RevenueNet - o.ActualCost))
+                            </div>
+                            <div class="fc-kpi-lb">صافي الربح</div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@* ═══════════════════════════════════════════
+   BODY
+═══════════════════════════════════════════ *@
+<div class="op-body">
+
+    @if (!CanView)
+    {
+        <div class="op-state-box">
+            <div class="op-state-icon perm" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="34" height="34"
+                     fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h3>ليس لديك صلاحية</h3>
+            <p>ليس لديك صلاحية عرض طلبات النقل — تواصل مع المسؤول</p>
+        </div>
+    }
+    else
+    {
+        <div class="op-card">
+
+            @* ── Toolbar ── *@
+            <div class="op-toolbar">
+
+                <div class="op-search-wrap">
+                    <svg class="op-search-icon" viewBox="0 0 24 24"
+                         width="16" height="16" fill="none" stroke="currentColor"
+                         stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+                    </svg>
+                    <input class="op-search-input"
+                           placeholder="ابحث برقم العملية أو حجز الوكيل أو العميل..."
+                           @bind="_search"
+                           @bind:event="oninput"
+                           aria-label="بحث" />
+                    @if (!string.IsNullOrWhiteSpace(_search))
+                    {
+                        <button class="op-search-clear"
+                                @onclick="() => _search = string.Empty"
+                                aria-label="مسح البحث">
+                            <svg viewBox="0 0 24 24" width="14" height="14"
+                                 fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    }
+                </div>
+
+                <div class="op-status-tabs" role="group" aria-label="فلتر الحالة">
+                    @foreach (var t in _statusTabs)
+                    {
+                        var count = t.Key == "all"
+                            ? _items.Count
+                            : t.Key == "open"
+                                ? _items.Count(o => OpenStatuses.Contains(o.Status))
+                                : _items.Count(o => o.Status == t.Key);
+
+                        <button class="op-status-tab @(_tab == t.Key ? "active" : "")"
+                                @onclick="() => SetTab(t.Key)"
+                                aria-pressed="@(_tab == t.Key)">
+                            <span class="op-tab-dot @StatusDotColor(t.Key)"
+                                  aria-hidden="true"></span>
+                            <span>@t.Value</span>
+                            <span class="op-tab-count">@count</span>
+                        </button>
+                    }
+                </div>
+
+                @if (_items.Any() && !_loading)
+                {
+                    <div class="op-fin-summary">
+                        <div class="op-fin-item">
+                            <span class="op-fin-label">الإيرادات</span>
+                            <span class="op-fin-val fin-green">
+                                @Money(Filtered.Sum(o => o.RevenueNet))
+                            </span>
+                        </div>
+                        <div class="op-fin-sep" aria-hidden="true"></div>
+                        <div class="op-fin-item">
+                            <span class="op-fin-label">التكاليف</span>
+                            <span class="op-fin-val fin-red">
+                                @Money(Filtered.Sum(o => o.ActualCost))
+                            </span>
+                        </div>
+                        <div class="op-fin-sep" aria-hidden="true"></div>
+                        <div class="op-fin-item">
+                            <span class="op-fin-label">الربح</span>
+                            @{
+                                var profit = Filtered.Sum(o => o.RevenueNet - o.ActualCost);
+                            }
+                            <span class="op-fin-val @(profit >= 0 ? "fin-green" : "fin-red")">
+                                @Money(profit)
+                            </span>
+                        </div>
+                    </div>
+                }
+
+                <div class="op-results-badge">
+                    عرض <strong>@Filtered.Count()</strong> من <strong>@_items.Count</strong>
+                </div>
+
+            </div>
+
+            @* ── Content ── *@
+            @if (_loading)
+            {
+                <div class="op-loading">
+                    <div class="op-spinner" aria-label="جاري التحميل"></div>
+                    <span>جاري تحميل الطلبات...</span>
+                </div>
+            }
+            else if (!Filtered.Any())
+            {
+                <div class="op-empty">
+                    <div class="op-empty-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="40" height="40"
+                             fill="none" stroke="currentColor" stroke-width="1.4">
+                            <rect x="1" y="3" width="15" height="13" rx="2"/>
+                            <path d="M16 8h4l3 3v5h-7V8z"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                        </svg>
+                    </div>
+                    <div class="op-empty-title">
+                        @(string.IsNullOrWhiteSpace(_search) ? "لا توجد طلبات في هذا الفلتر" : "لا توجد نتائج")
+                    </div>
+                    <div class="op-empty-sub">
+                        @(string.IsNullOrWhiteSpace(_search)
+                            ? "جرّب فلتر مختلف أو أنشئ طلب نقل جديد"
+                            : "جرّب كلمة بحث مختلفة")
+                    </div>
+                    @if (CanCreate && string.IsNullOrWhiteSpace(_search))
+                    {
+                        <button class="op-add-btn" @onclick="OpenCreate">
+                            <svg viewBox="0 0 24 24" width="16" height="16"
+                                 fill="none" stroke="currentColor" stroke-width="2.5"
+                                 aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                            </svg>
+                            طلب نقل جديد
+                        </button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="op-table-wrap">
+                    <table class="op-table" aria-label="قائمة طلبات النقل">
+                        <thead>
+                            <tr>
+                                <th class="th-start">الطلب والعميل</th>
+                                <th>حجز الوكيل</th>
+                                <th>المسار</th>
+                                <th>التاريخ</th>
+                                <th>حاويات / رحلات</th>
+                                <th>الحالة</th>
+                                <th>الإيراد</th>
+                                <th>الربح</th>
+                                <th>إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var o in Filtered)
+                            {
+                                var profit = o.RevenueNet - o.ActualCost;
+                                <tr class="@(o.Status == "Cancelled" ? "row-cancelled" : "")">
+
+                                    @* ── الطلب والعميل ── *@
+                                    <td class="td-start">
+                                        <div class="op-op-cell">
+                                            <div class="op-avatar @AvatarClass(o.Status)"
+                                                 aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" width="16" height="16"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                                                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                                                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                                                </svg>
+                                            </div>
+                                            <div class="op-op-info">
+                                                <div class="op-op-num">
+                                                    <span class="op-code-chip">@o.OperationNumber</span>
+                                                </div>
+                                                <div class="op-customer-name">@o.CustomerName</div>
+                                                <div class="op-op-meta">
+                                                    @if (!string.IsNullOrWhiteSpace(o.ServiceName))
+                                                    {
+                                                        <span class="op-service-tag">@o.ServiceName</span>
+                                                    }
+                                                    @if (o.BookingNumber is not null)
+                                                    {
+                                                        <span class="op-booking-tag">
+                                                            <svg viewBox="0 0 16 16" width="9" height="9"
+                                                                 fill="none" stroke="currentColor" stroke-width="1.8"
+                                                                 aria-hidden="true">
+                                                                <path d="M2 5h12M5 2v3M11 2v3M3 5v8a1 1 0 001 1h8a1 1 0 001-1V5H3z"/>
+                                                            </svg>
+                                                            @o.BookingNumber
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    @* ── حجز الوكيل ── *@
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(o.AgentReference))
+                                        {
+                                            <div class="op-op-num"><strong>@o.AgentReference</strong></div>
+                                            <div class="td-muted">@(o.AgentName ?? "—")</div>
+                                        }
+                                        else
+                                        {
+                                            <span class="td-muted">— بدون حجز وكيل —</span>
+                                        }
+                                    </td>
+
+                                    @* ── المسار ── *@
+                                    <td>
+                                        @if (o.PortName is not null || o.DestinationName is not null)
+                                        {
+                                            <div class="op-route-cell">
+                                                <span class="op-route-from">@(o.PortName ?? "—")</span>
+                                                <span class="op-route-arrow" aria-hidden="true">
+                                                    <svg viewBox="0 0 24 24" width="11" height="11"
+                                                         fill="none" stroke="currentColor" stroke-width="2.5">
+                                                        <path d="M5 12h14M12 5l7 7-7 7"
+                                                              stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                </span>
+                                                <span class="op-route-to">@(o.DestinationName ?? "—")</span>
+                                                @if (o.TahteeqPortName is not null)
+                                                {
+                                                    <span class="op-route-arrow" aria-hidden="true">
+                                                        <svg viewBox="0 0 24 24" width="11" height="11"
+                                                             fill="none" stroke="currentColor" stroke-width="2.5">
+                                                            <path d="M5 12h14M12 5l7 7-7 7"
+                                                                  stroke-linecap="round" stroke-linejoin="round"/>
+                                                        </svg>
+                                                    </span>
+                                                    <span class="op-route-tah" title="ميناء التعتيق">
+                                                        <span class="op-route-tah-tag">تعتيق</span>@o.TahteeqPortName
+                                                    </span>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="td-muted">—</span>
+                                        }
+                                    </td>
+
+                                    @* ── التاريخ ── *@
+                                    <td class="td-muted">
+                                        @if (o.PlannedDate.HasValue)
+                                        {
+                                            <div class="op-date-cell">
+                                                <svg viewBox="0 0 16 16" width="11" height="11"
+                                                     fill="none" stroke="currentColor" stroke-width="1.7"
+                                                     aria-hidden="true">
+                                                    <rect x="2" y="3" width="12" height="11" rx="2"/>
+                                                    <path d="M5 1v3M11 1v3M2 7h12" stroke-linecap="round"/>
+                                                </svg>
+                                                @o.PlannedDate.Value.ToString("yyyy-MM-dd")
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span>—</span>
+                                        }
+                                    </td>
+
+                                    @* ── حاويات / رحلات ── *@
+                                    <td>
+                                        <span class="op-code-chip">@o.ContainersQty حاوية</span>
+                                        <span class="td-muted"> · @o.TripsCount رحلة</span>
+                                    </td>
+
+                                    @* ── الحالة ── *@
+                                    <td>
+                                        <span class="op-chip @ChipClass(o.Status)">
+                                            <span class="op-chip-dot @ChipDotClass(o.Status)"
+                                                  aria-hidden="true"></span>
+                                            @StatusAr(o.Status)
+                                        </span>
+                                    </td>
+
+                                    @* ── الإيراد ── *@
+                                    <td>
+                                        <div class="op-money-cell">
+                                            <span class="op-money-main">@Money(o.RevenueNet)</span>
+                                            @if (o.RevenueTax > 0)
+                                            {
+                                                <span class="op-money-sub">+ ضريبة @Money(o.RevenueTax)</span>
+                                            }
+                                        </div>
+                                    </td>
+
+                                    @* ── الربح ── *@
+                                    <td>
+                                        <span class="op-profit-badge @(profit >= 0 ? "profit-pos" : "profit-neg")">
+                                            <span aria-hidden="true">@(profit >= 0 ? "↑" : "↓")</span>
+                                            @Money(profit)
+                                        </span>
+                                    </td>
+
+                                    @* ── إجراءات ── *@
+                                    <td>
+                                        <div class="op-actions">
+                                            <button class="op-act-btn act-file"
+                                                    @onclick="() => GoFile(o)"
+                                                    title="ملف العملية"
+                                                    aria-label="ملف @o.OperationNumber">
+                                                <svg viewBox="0 0 24 24" width="14" height="14"
+                                                     fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+                                                </svg>
+                                            </button>
+                                            @if (CanEdit && o.Status is not ("Closed" or "Cancelled"))
+                                            {
+                                                <button class="op-act-btn act-edit"
+                                                        @onclick="() => OpenEdit(o)"
+                                                        title="تعديل الطلب"
+                                                        aria-label="تعديل طلب @o.OperationNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                                                    </svg>
+                                                </button>
+                                            }
+                                            @if (CanTripEdit && o.StartTripId is not null)
+                                            {
+                                                <button class="op-act-btn act-start"
+                                                        @onclick="() => StartTripAsync(o)"
+                                                        title="بدء الرحلة @o.StartTripNumber"
+                                                        aria-label="بدء رحلة طلب @o.OperationNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="currentColor" stroke="none">
+                                                        <path d="M8 5.5v13l11-6.5z"/>
+                                                    </svg>
+                                                </button>
+                                            }
+                                            @if (CanTripEdit && o.CompleteTripId is not null)
+                                            {
+                                                <button class="op-act-btn act-complete"
+                                                        @onclick="() => CompleteTripAsync(o)"
+                                                        title="إنهاء الرحلة @o.CompleteTripNumber"
+                                                        aria-label="إنهاء رحلة طلب @o.OperationNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2.2">
+                                                        <rect x="6" y="6" width="12" height="12" rx="2"/>
+                                                    </svg>
+                                                </button>
+                                            }
+                                            @if (CanOpClose && o.CanCloseOp)
+                                            {
+                                                <button class="op-act-btn act-closeop"
+                                                        @onclick="() => CloseOperationAsync(o)"
+                                                        title="إقفال العملية — كل رحلاتها انتهت"
+                                                        aria-label="إقفال عملية طلب @o.OperationNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@* ══════════════ FAB ══════════════ *@
+@if (CanCreate && !_loading)
+{
+    @if (_fabOpen)
+    {
+        <div class="fc-fab-scrim" @onclick="ToggleFab" aria-hidden="true"></div>
+    }
+
+    <div class="fc-fab-container">
+        <div class="fc-fab-menu @(_fabOpen ? "fc-fab-menu--open" : "")" role="menu">
+            <button type="button" class="fc-fab-item" role="menuitem"
+                    @onclick="HandleOpenCreate">
+                <span class="fc-fab-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small"/>
+                </span>
+                <span class="fc-fab-label">طلب نقل جديد</span>
+            </button>
+            <button type="button" class="fc-fab-item" role="menuitem"
+                    @onclick="HandleReload">
+                <span class="fc-fab-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small"/>
+                </span>
+                <span class="fc-fab-label">تحديث البيانات</span>
+            </button>
+        </div>
+
+        <button type="button"
+                class="fc-fab-main fc-glow-gold @(_fabOpen ? "is-open" : "")"
+                @onclick="ToggleFab"
+                aria-label="التحكم"
+                aria-expanded="@(_fabOpen ? "true" : "false")">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none"
+                 stroke="currentColor" stroke-width="2.5"
+                 class="fc-fab-svg" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+            </svg>
+        </button>
+    </div>
+}
+
+@code {
+    private AuthUser? _user;
+    private bool CanView   => _user?.Can("OPERATION.VIEW") ?? false;
+    private bool CanCreate => (_user?.Can("OPERATION.CREATE") ?? false) && (_user?.Can("BOOKING.CREATE") ?? false);
+    private bool CanEdit   => (_user?.Can("OPERATION.EDIT") ?? false) && (_user?.Can("BOOKING.EDIT") ?? false);
+    private bool CanTripEdit => _user?.Can("TRIP.EDIT") ?? false;
+    private bool CanOpClose => _user?.Can("OPERATION.CLOSE") ?? false;
+
+    /* ── القائمة ── */
+    public class Item
+    {
+        public long    OperationId     { get; set; }
+        public string  OperationNumber { get; set; } = "";
+        public long?   BookingId       { get; set; }
+        public string? BookingNumber   { get; set; }
+        public string? AgentName       { get; set; }
+        public string? AgentReference  { get; set; }
+        public string  CustomerName    { get; set; } = "";
+        public string? ServiceName     { get; set; }
+        public string? PortName        { get; set; }
+        public string? DestinationName { get; set; }
+        public string? TahteeqPortName { get; set; }
+        public DateTime? PlannedDate   { get; set; }
+        public string  Status          { get; set; } = "";
+        public int     ContainersQty   { get; set; }
+        public int     TripsCount      { get; set; }
+        public long?   StartTripId     { get; set; }
+        public string? StartTripNumber { get; set; }
+        public long?   CompleteTripId     { get; set; }
+        public string? CompleteTripNumber { get; set; }
+        public bool    CanCloseOp         { get; set; }
+        public decimal RevenueNet      { get; set; }
+        public decimal RevenueTax      { get; set; }
+        public decimal ActualCost      { get; set; }
+        public DateTime CreatedAt      { get; set; }
+    }
+
+    private List<Item> _items = new();
+    private bool   _loading;
+    private string _search = "";
+    private string _tab    = "all";
+    private bool   _fabOpen;
+
+    private static readonly string[] OpenStatuses =
+    {
+        "Pending", "Assigned", "DriverReceived", "InTransit",
+        "Delivered", "ExpensesPending", "CustodyPending", "ReadyToClose"
+    };
+
+    private static readonly (string Key, string Value)[] _statusTabs =
+    {
+        ("all",        "الكل"),
+        ("open",       "جارية"),
+        ("Pending",    "قيد الانتظار"),
+        ("InTransit",  "في الطريق"),
+        ("Delivered",  "مُسلّمة"),
+        ("Closed",     "مغلقة"),
+        ("Cancelled",  "ملغاة")
+    };
+
+    private IEnumerable<Item> Filtered
+    {
+        get
+        {
+            IEnumerable<Item> q = _items;
+            if (_tab == "open") q = q.Where(o => OpenStatuses.Contains(o.Status));
+            else if (_tab != "all") q = q.Where(o => o.Status == _tab);
+
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                var s = _search.Trim();
+                q = q.Where(o =>
+                    o.OperationNumber.Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                    o.CustomerName.Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                    (o.AgentReference?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    (o.AgentName?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    (o.BookingNumber?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false));
+            }
+            return q;
+        }
+    }
+
+    private void SetTab(string t) => _tab = t;
+    private void GoFile(Item o) => Nav.NavigateTo($"/operations/{o.OperationId}/file");
+    private void ToggleFab() => _fabOpen = !_fabOpen;
+
+    private async Task HandleReload()
+    {
+        _fabOpen = false;
+        await LoadAsync();
+        Snackbar.Add("تم تحديث البيانات", Severity.Success);
+    }
+
+    private async Task HandleOpenCreate()
+    {
+        _fabOpen = false;
+        StateHasChanged();
+        await Task.Delay(180);
+        Nav.NavigateTo("/transport-requests/new");
+    }
+
+    private void OpenCreate() => Nav.NavigateTo("/transport-requests/new");
+    private void OpenEdit(Item o) => Nav.NavigateTo($"/transport-requests/new/{o.OperationId}");
+
+    /* بدء أقدم رحلة مخططة في الطلب مباشرة من القائمة — وقت البدء هو الآن،
+       وعدّاد الكيلومترات يُسجل من شاشة الرحلات عند الحاجة */
+    private async Task StartTripAsync(Item o)
+    {
+        if (o.StartTripId is null) return;
+        try
+        {
+            var res = await Http.PostAsJsonAsync($"api/trips/{o.StartTripId}/start",
+                new { actualStartAt = (string?)null, startOdometer = (string?)null });
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل بدء الرحلة: " + ex.Message, Severity.Error); }
+    }
+
+    /* إنهاء أقدم رحلة بدأت في الطلب — وقت الانتهاء الآن؛ إنهاء الرحلة
+       يجعل العملية «مسلّمة» ولا يُقفلها */
+    private async Task CompleteTripAsync(Item o)
+    {
+        if (o.CompleteTripId is null) return;
+        try
+        {
+            var res = await Http.PostAsJsonAsync($"api/trips/{o.CompleteTripId}/complete",
+                new { actualEndAt = (string?)null, endOdometer = (string?)null });
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل إنهاء الرحلة: " + ex.Message, Severity.Error); }
+    }
+
+    /* إقفال العملية بعد انتهاء كل رحلاتها — قرار مستقل عن إنهاء الرحلات */
+    private async Task CloseOperationAsync(Item o)
+    {
+        try
+        {
+            var res = await Http.PostAsync($"api/operations/{o.OperationId}/close", null);
+            Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل إقفال العملية: " + ex.Message, Severity.Error); }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _items = await Http.GetFromJsonAsync<List<Item>>("api/operations/requests") ?? new();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
+        finally { _loading = false; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        if (!CanView) return;
+        await LoadAsync();
+    }
+
+    /* ── مساعدات العرض (نفس شاشة العمليات) ── */
+    private static string StatusAr(string s) => s switch
+    {
+        "Pending"         => "قيد الانتظار",
+        "Assigned"        => "مُعيّنة",
+        "DriverReceived"  => "استلم السائق",
+        "InTransit"       => "في الطريق",
+        "Delivered"       => "تم التسليم",
+        "ExpensesPending" => "بانتظار المصروفات",
+        "CustodyPending"  => "بانتظار العهدة",
+        "ReadyToClose"    => "جاهزة للإغلاق",
+        "Closed"          => "مغلقة",
+        "Cancelled"       => "ملغاة",
+        _                 => s
+    };
+
+    private static string ChipClass(string s) => s switch
+    {
+        "Pending"         => "chip-pending",
+        "Assigned"        => "chip-assigned",
+        "DriverReceived"  => "chip-driverrec",
+        "InTransit"       => "chip-intransit",
+        "Delivered"       => "chip-delivered",
+        "ExpensesPending" => "chip-expspend",
+        "CustodyPending"  => "chip-custpend",
+        "ReadyToClose"    => "chip-readyclose",
+        "Closed"          => "chip-closed",
+        "Cancelled"       => "chip-cancelled",
+        _                 => "chip-pending"
+    };
+
+    private static string ChipDotClass(string s) => s switch
+    {
+        "Pending"         => "cdot-pending",
+        "Assigned"        => "cdot-assigned",
+        "DriverReceived"  => "cdot-driverrec",
+        "InTransit"       => "cdot-intransit",
+        "Delivered"       => "cdot-delivered",
+        "ExpensesPending" => "cdot-expspend",
+        "CustodyPending"  => "cdot-custpend",
+        "ReadyToClose"    => "cdot-readyclose",
+        "Closed"          => "cdot-closed",
+        "Cancelled"       => "cdot-cancelled",
+        _                 => "cdot-pending"
+    };
+
+    private static string AvatarClass(string s) => s switch
+    {
+        "Pending"         => "av-pending",
+        "Assigned"        => "av-assigned",
+        "DriverReceived"  => "av-driverrec",
+        "InTransit"       => "av-intransit",
+        "Delivered"       => "av-delivered",
+        "ExpensesPending" => "av-expspending",
+        "CustodyPending"  => "av-custpending",
+        "ReadyToClose"    => "av-readyclose",
+        "Closed"          => "av-closed",
+        "Cancelled"       => "av-cancelled",
+        _                 => "av-pending"
+    };
+
+    private static string StatusDotColor(string s) => s switch
+    {
+        "all"       => "tdot-all",
+        "open"      => "tdot-assigned",
+        "Pending"   => "tdot-pending",
+        "InTransit" => "tdot-intransit",
+        "Delivered" => "tdot-delivered",
+        "Closed"    => "tdot-closed",
+        "Cancelled" => "tdot-cancelled",
+        _           => "tdot-all"
+    };
+
+    private static string Money(decimal v) => v.ToString("N0");
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+    }
+}
+<style>
+
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-orange:    #e06520;
+        --fc-orange-lt: #fff3ec;
+        --fc-teal:      #0d9488;
+        --fc-teal-lt:   #e6faf8;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ================================================================
+       KPI NEGATIVE
+    ================================================================ */
+    .kpi-negative { color: #fca5a5 !important; }
+
+    /* ================================================================
+       HERO — كارت دائري مستقل (نفس نمط شاشة الحجوزات)
+       عرض الهيرو والجسم لازم يبقى نفس القيمة عشان يبقوا على خط واحد
+    ================================================================ */
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px;
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 1;
+    }
+
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important;
+        overflow: hidden;
+        box-shadow:
+            0 12px 32px rgba(13, 38, 84, 0.15),
+            0 4px 12px rgba(13, 38, 84, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .hero-wrapper .fc-hero.fc-hero-slim {
+        padding-top: 18px !important;
+        padding-bottom: 22px !important;
+    }
+
+    .hero-wrapper .fc-hero-sub { font-size: 13px; color: rgba(255, 255, 255, .55); }
+
+    .op-hero-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+
+    .op-hero-left { flex: 1; min-width: 200px; }
+
+    .op-hero-crumb {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10.5px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.55);
+        margin-bottom: 6px;
+    }
+
+    .op-hero-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    .op-hero-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, .1);
+        border: 1px solid rgba(255, 255, 255, .2);
+        font-size: 11.5px;
+        color: #fff;
+    }
+
+    /* ================================================================
+       شيبس فلترة الحجز — الرابط المباشر من شاشة الحجوزات
+    ================================================================ */
+    .op-booking-filter {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 10px 6px 8px;
+        border-radius: 20px;
+        background: var(--fc-amber-lt);
+        border: 1px solid #f0d9a8;
+        color: #8a5a06;
+        font-size: 11.5px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .op-booking-filter strong { color: #6b4404; }
+    .op-bf-clear {
+        display: flex; align-items: center; justify-content: center;
+        width: 18px; height: 18px; border-radius: 50%;
+        border: none; background: rgba(138, 90, 6, .12); color: #8a5a06;
+        cursor: pointer; transition: all .12s ease;
+    }
+    .op-bf-clear:hover { background: rgba(138, 90, 6, .25); }
+
+    /* ================================================================
+       FAB — زر عائم أسفل يسار (نفس وميض شاشة الحجوزات)
+    ================================================================ */
+    .op-fab-scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 998;
+        background: rgba(10, 20, 40, .28);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        animation: op-scrim-fade .18s ease;
+    }
+    @@keyframes op-scrim-fade {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+
+    /* ================================================================
+       #67 — تأكيد إقفال / إعادة فتح
+    ================================================================ */
+    .op-confirm-scrim {
+        position: fixed; inset: 0; z-index: 1200;
+        display: flex; align-items: center; justify-content: center;
+        padding: 16px;
+        background: rgba(10, 20, 40, .45);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        animation: op-scrim-fade .18s ease;
+    }
+    .op-confirm-card {
+        width: min(400px, calc(100vw - 32px));
+        background: #fff; border-radius: 18px;
+        box-shadow: 0 25px 60px rgba(10, 27, 59, .28);
+        padding: 26px 24px 20px;
+        text-align: center;
+    }
+    .op-confirm-ic {
+        width: 46px; height: 46px; border-radius: 50%;
+        display: inline-flex; align-items: center; justify-content: center;
+        margin-bottom: 12px;
+    }
+    .op-confirm-ic.ic-close  { background: var(--fc-red-lt);   color: var(--fc-red); }
+    .op-confirm-ic.ic-reopen { background: var(--fc-amber-lt); color: var(--fc-amber); }
+    .op-confirm-title { font-size: 16px; font-weight: 800; color: var(--fc-text); }
+    .op-confirm-op {
+        display: inline-block; margin-top: 6px; padding: 3px 12px;
+        border-radius: 999px; background: var(--fc-blue-lt);
+        color: var(--fc-blue); font-size: 12px; font-weight: 800;
+    }
+    .op-confirm-msg { margin: 12px 0 18px; font-size: 13px; line-height: 1.7; color: var(--fc-muted); }
+    .op-confirm-btns { display: flex; gap: 10px; }
+    .op-confirm-btn {
+        flex: 1; padding: 10px 0; border-radius: 10px;
+        font-size: 13.5px; font-weight: 800; cursor: pointer;
+        font-family: inherit;
+        border: 1.5px solid var(--fc-border); background: #fff; color: var(--fc-text);
+    }
+    .op-confirm-btn.btn-cancel:hover { background: #f6f8fb; }
+    .op-confirm-btn.btn-do-close  { background: var(--fc-red);   border-color: var(--fc-red);   color: #fff; }
+    .op-confirm-btn.btn-do-reopen { background: var(--fc-amber); border-color: var(--fc-amber); color: #fff; }
+    .op-confirm-btn.btn-do-close:hover  { filter: brightness(1.08); }
+    .op-confirm-btn.btn-do-reopen:hover { filter: brightness(1.08); }
+
+    /* ملحوظة: قواعد .fc-fab-container/.fc-fab-menu اللي كانت هنا من بلوك العمليات
+       (z-index:1000 !important) اتشالت — كانت بتنزّل الزر تحت طبقة الـ scrim (1200)
+       فالزر وقائمته بيبقوا تحت طبقة شفافة والضغطات بتروح للـ scrim.
+       تعريفات الـ FAB المعتمدة هي بتاعة بلوك الموانئ تحت (حاوية 1300 فوق سكريم 1200). */
+
+    .fc-glow-gold {
+        position: relative;
+        background: linear-gradient(135deg, #0B56DF 0%, #083CA8 100%) !important;
+        border: 2px solid #FF8015 !important;
+        color: #fff;
+        box-shadow: 0 4px 16px rgba(11, 86, 223, .4);
+        animation: fc-gold-pulse-op 2.2s infinite;
+    }
+
+    .fc-glow-gold::before {
+        content: "";
+        position: absolute; inset: -2px;
+        border-radius: 50%;
+        border: 2px solid #FF8015;
+        opacity: 0; pointer-events: none;
+        animation: fc-ring-expand-op 2.2s cubic-bezier(.24,0,.38,1) infinite;
+    }
+
+    @@keyframes fc-gold-pulse-op {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(255,128,21,.6), 0 8px 24px rgba(11,86,223,.4); }
+        50%      { box-shadow: 0 0 0 12px rgba(255,128,21,0), 0 12px 32px rgba(11,86,223,.55); }
+    }
+
+    @@keyframes fc-ring-expand-op {
+        0%   { transform: scale(1); opacity: .8; border-width: 3px; }
+        100% { transform: scale(1.6); opacity: 0; border-width: 1px; }
+    }
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    .op-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 200px);
+        padding: 18px clamp(16px, 3vw, 40px) 96px;
+        max-width: 1440px; width: 100%;
+        margin: 0 auto;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 2;
+    }
+
+    /* ================================================================
+       STATES
+    ================================================================ */
+    .op-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .op-state-icon {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .op-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+
+    .op-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .op-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    /* ================================================================
+       CARD
+    ================================================================ */
+    .op-card {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden;
+    }
+
+    /* ================================================================
+       TOOLBAR
+    ================================================================ */
+    .op-toolbar {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+        border-bottom: 1px solid #edf1f7;
+        flex-wrap: wrap;
+    }
+
+    .op-search-wrap {
+        position: relative; display: flex; align-items: center;
+        flex: 1; min-width: 200px; max-width: 380px;
+    }
+
+    .op-search-icon {
+        position: absolute; right: 12px; color: #9aaabb; pointer-events: none;
+    }
+
+    .op-search-input {
+        width: 100%; height: 38px;
+        padding: 0 36px 0 12px;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 12px; outline: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .op-search-input:focus {
+        border-color: var(--fc-blue);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.10);
+    }
+    .op-search-input::placeholder { color: #b0bcc8; }
+
+    .op-search-clear {
+        position: absolute; left: 10px;
+        display: flex; align-items: center; justify-content: center;
+        width: 22px; height: 22px; border-radius: 50%;
+        border: none; background: #edf1f7; color: #8899ae;
+        cursor: pointer; transition: all .12s ease;
+    }
+    .op-search-clear:hover { background: #dde5f0; color: var(--fc-text); }
+
+    /* Financial Summary in Toolbar */
+    .op-fin-summary {
+        display: flex; align-items: center; gap: 0;
+        padding: 6px 12px;
+        background: #f5f7fa; border: 1px solid #e4eaf3;
+        border-radius: 9px; flex-shrink: 0;
+    }
+
+    .op-fin-item {
+        display: flex; flex-direction: column; align-items: center;
+        gap: 1px; padding: 0 12px;
+    }
+
+    .op-fin-sep { width: 1px; height: 28px; background: #e4eaf3; flex: 0 0 1px; }
+
+    .op-fin-label { font-size: 9px; font-weight: 600; color: #9aaabb; }
+    .op-fin-val {
+        font-family: "Inter", Arial, sans-serif;
+        font-size: 13px; font-weight: 900;
+    }
+    .fin-green { color: var(--fc-green); }
+    .fin-red   { color: var(--fc-red); }
+
+    .op-results-badge {
+        display: flex; align-items: center; gap: 5px;
+        margin-right: auto;
+        font-size: 10.5px; color: #8899ae; font-weight: 600; white-space: nowrap;
+    }
+    .op-results-badge strong { color: #5a6e88; }
+
+    /* ================================================================
+       STATUS TABS
+    ================================================================ */
+    .op-status-tabs {
+        display: flex; gap: 4px;
+        padding: 3px; border-radius: 10px; background: #f0f3f8;
+        width: fit-content;
+    }
+
+    .op-status-tab {
+        display: flex; align-items: center; gap: 5px;
+        height: 32px; padding: 0 10px;
+        border: none; border-radius: 7px;
+        background: transparent; color: #6b7d95;
+        font-family: inherit; font-size: 10.5px; font-weight: 700;
+        cursor: pointer; white-space: nowrap;
+        transition: all .15s ease;
+    }
+    .op-status-tab:hover:not(.active) { color: var(--fc-text); background: rgba(255,255,255,.6); }
+
+    .op-status-tab.active {
+        background: var(--fc-card); color: var(--fc-text);
+        box-shadow: 0 1px 4px rgba(15,41,82,.10); font-weight: 800;
+    }
+
+    .op-tab-dot {
+        width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px;
+    }
+
+    .op-tab-count {
+        min-width: 16px; height: 16px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 4px; padding: 0 3px;
+        font-size: 9px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .op-status-tab.active .op-tab-count { background: var(--fc-blue-lt); color: var(--fc-blue); }
+    .op-status-tab:not(.active) .op-tab-count { background: #e4eaf3; color: #8899ae; }
+
+    /* Dot Colors */
+    .tdot-all        { background: var(--fc-blue); }
+    .tdot-pending    { background: #9aaabb; }
+    .tdot-assigned   { background: var(--fc-blue); }
+    .tdot-intransit  { background: var(--fc-orange); }
+    .tdot-delivered  { background: var(--fc-teal); }
+    .tdot-closed     { background: var(--fc-amber); }
+    .tdot-cancelled  { background: var(--fc-red); }
+
+    /* ================================================================
+       LOADING / EMPTY
+    ================================================================ */
+    .op-loading {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 200px;
+        color: var(--fc-muted); font-size: 12px; font-weight: 600;
+    }
+
+    .op-spinner {
+        width: 32px; height: 32px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: op-spin .75s linear infinite;
+    }
+    @@keyframes op-spin { to { transform: rotate(360deg); } }
+
+    .op-empty {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 10px; min-height: 240px; padding: 40px 20px;
+        text-align: center;
+    }
+    .op-empty-icon {
+        width: 72px; height: 72px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: #f0f4fa; color: #b0c4d8;
+    }
+    .op-empty-title { font-size: 15px; font-weight: 800; color: var(--fc-text); }
+    .op-empty-sub   { font-size: 12px; color: var(--fc-muted); }
+
+    .op-add-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 16px; margin-top: 6px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; transition: all .15s ease;
+    }
+    .op-add-btn:hover { background: var(--fc-blue); color: #fff; }
+
+    /* ================================================================
+       TABLE
+    ================================================================ */
+    .op-table-wrap { overflow-x: auto; }
+
+    .op-table {
+        width: 100%; border-collapse: collapse; font-size: 12.5px;
+    }
+
+    .op-table thead th {
+        padding: 10px 12px;
+        background: linear-gradient(180deg, #f7f9fc, #f0f3f8);
+        color: #4a5a74; font-size: 10.5px; font-weight: 800;
+        text-align: center; border-bottom: 2px solid #e4eaf3;
+        white-space: nowrap; position: sticky; top: 0; z-index: 1;
+    }
+    .op-table .th-start { text-align: right; }
+
+    .op-table tbody tr {
+        border-bottom: 1px solid #f0f3f8; transition: background .12s ease;
+    }
+    .op-table tbody tr:last-child { border-bottom: none; }
+    .op-table tbody tr:hover { background: #fafcff; }
+    .op-table tbody tr.row-cancelled { opacity: .55; }
+    .op-table tbody tr.row-closed    { background: #fafbff; }
+
+    .op-table tbody td {
+        padding: 11px 12px; color: #526070; text-align: center; vertical-align: middle;
+    }
+
+    .td-start { text-align: right !important; }
+    .td-muted { color: #8899ae; font-size: 11px; }
+
+    /* ── Operation Cell ── */
+    .op-op-cell { display: flex; align-items: center; gap: 10px; }
+
+    .op-avatar {
+        width: 36px; height: 36px; flex: 0 0 36px; border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.10);
+    }
+
+    .av-pending     { background: linear-gradient(135deg, #7a8a9a, #5c6e80); }
+    .av-assigned    { background: linear-gradient(135deg, #1558d6, #1e6ef5); }
+    .av-driverrec   { background: linear-gradient(135deg, #6035a0, #7c4dbd); }
+    .av-intransit   { background: linear-gradient(135deg, #c0501a, #e06520); }
+    .av-delivered   { background: linear-gradient(135deg, #0a7a6e, #0d9488); }
+    .av-expspending { background: linear-gradient(135deg, #9a6507, #e09a10); }
+    .av-custpending { background: linear-gradient(135deg, #9a6507, #e09a10); }
+    .av-readyclose  { background: linear-gradient(135deg, #0d8a48, #16a35b); }
+    .av-closed      { background: linear-gradient(135deg, #b87d08, #e09a10); }
+    .av-cancelled   { background: linear-gradient(135deg, #b02040, #e03048); }
+
+    .op-op-info { min-width: 0; }
+
+    .op-op-num { display: flex; align-items: center; gap: 6px; }
+
+    .op-code-chip {
+        display: inline-flex; align-items: center;
+        padding: 2px 8px; border-radius: 6px;
+        background: #f0f4fa; border: 1px solid #e0e8f4;
+        font-size: 10.5px; font-weight: 800; color: #5a6e88;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .op-customer-name {
+        font-size: 12.5px; font-weight: 800; color: #1c2c44;
+        margin-top: 3px; white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis; max-width: 160px;
+    }
+
+    .op-op-meta {
+        display: flex; align-items: center; gap: 5px; margin-top: 3px; flex-wrap: wrap;
+    }
+
+    .op-service-tag {
+        display: inline-flex; align-items: center;
+        padding: 1px 6px; border-radius: 4px;
+        background: #f0f4fa; font-size: 9px; font-weight: 700; color: #6b7d95;
+    }
+
+    .op-booking-tag {
+        display: inline-flex; align-items: center; gap: 3px;
+        padding: 1px 6px; border-radius: 4px;
+        background: var(--fc-blue-lt); font-size: 9px; font-weight: 700; color: var(--fc-blue);
+        border: 1px solid #d0e4fc;
+    }
+
+    /* ── Route Cell ── */
+    .op-route-cell {
+        display: flex; align-items: center; gap: 4px; justify-content: center;
+    }
+
+    .op-route-from { font-size: 11px; font-weight: 700; color: var(--fc-blue); }
+    .op-route-to   { font-size: 11px; font-weight: 700; color: var(--fc-green); }
+    .op-route-arrow { color: #c0ccd8; display: flex; }
+    .op-route-tah  { font-size: 11px; font-weight: 700; color: #b45309; display: inline-flex; align-items: center; gap: 3px; }
+    .op-route-tah-tag {
+        background: rgba(217, 119, 6, .12);
+        border: 1px solid rgba(217, 119, 6, .28);
+        color: #b45309;
+        font-size: 9px;
+        font-weight: 800;
+        padding: 1px 4px;
+        border-radius: 4px;
+        letter-spacing: .2px;
+    }
+
+    /* ── Date Cell ── */
+    .op-date-cell {
+        display: flex; align-items: center; gap: 4px;
+        justify-content: center; color: #6b7d95; font-size: 11px;
+    }
+
+    /* ── Status Chips ── */
+    .op-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 3px 9px; border-radius: 7px;
+        font-size: 10px; font-weight: 800; white-space: nowrap;
+    }
+
+    .op-chip-dot {
+        width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px;
+    }
+
+    .chip-pending    { background: #f0f3f8; color: #6b7d95; border: 1px solid #dde5f0; }
+    .chip-assigned   { background: var(--fc-blue-lt); color: var(--fc-blue); border: 1px solid #c0d4fb; }
+    .chip-driverrec  { background: var(--fc-purple-lt); color: var(--fc-purple); border: 1px solid #d0bfef; }
+    .chip-intransit  { background: var(--fc-orange-lt); color: var(--fc-orange); border: 1px solid #f0c8a8; }
+    .chip-delivered  { background: var(--fc-teal-lt); color: var(--fc-teal); border: 1px solid #b0e0dc; }
+    .chip-expspend   { background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898; }
+    .chip-custpend   { background: var(--fc-amber-lt); color: #9a6d08; border: 1px solid #f0d898; }
+    .chip-readyclose { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .chip-closed     { background: linear-gradient(135deg, #fff8e0, var(--fc-amber-lt)); color: #9a6d08; border: 1px solid #f0d898; }
+    .chip-cancelled  { background: var(--fc-red-lt); color: var(--fc-red); border: 1px solid #ffc8cf; }
+
+    .cdot-pending    { background: #9aaabb; }
+    .cdot-assigned   { background: var(--fc-blue); }
+    .cdot-driverrec  { background: var(--fc-purple); }
+    .cdot-intransit  { background: var(--fc-orange); }
+    .cdot-delivered  { background: var(--fc-teal); }
+    .cdot-expspend   { background: var(--fc-amber); }
+    .cdot-custpend   { background: var(--fc-amber); }
+    .cdot-readyclose { background: var(--fc-green); }
+    .cdot-closed     { background: var(--fc-amber); }
+    .cdot-cancelled  { background: var(--fc-red); }
+
+    /* ── Money ── */
+    .op-money-cell { display: flex; flex-direction: column; gap: 2px; align-items: center; }
+
+    .op-money-main {
+        font-family: "Inter", Arial, sans-serif;
+        font-size: 13px; font-weight: 800; color: var(--fc-text);
+    }
+    .op-money-main.cost { color: #6b7d95; font-weight: 700; }
+
+    .op-money-sub { font-size: 9.5px; color: #9aaabb; font-weight: 500; }
+
+    /* ── Profit Badge ── */
+    .op-profit-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 4px 10px; border-radius: 8px;
+        font-family: "Inter", Arial, sans-serif;
+        font-size: 12px; font-weight: 900;
+    }
+
+    .profit-pos { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .profit-neg { background: var(--fc-red-lt);   color: var(--fc-red);   border: 1px solid #ffc8cf; }
+
+    /* ── Actions ── */
+    .op-actions {
+        display: flex; align-items: center; gap: 3px; justify-content: center; flex-wrap: wrap;
+    }
+
+    .op-act-btn {
+        width: 28px; height: 28px; border-radius: 7px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; cursor: pointer;
+        transition: all .15s ease; background: transparent;
+    }
+
+    .act-file    { color: var(--fc-blue); }
+    .act-file:hover { background: var(--fc-blue-lt); border-color: #c0d4fb; }
+    .act-trip    { color: var(--fc-orange); }
+    .act-edit    { color: var(--fc-blue); }
+    .act-deliver { color: var(--fc-teal); }
+    .act-close   { color: var(--fc-purple); }
+    .act-reopen  { color: var(--fc-amber); }
+    .act-cancel  { color: var(--fc-red); }
+    .act-delete  { color: var(--fc-red); }
+    .act-view    { color: var(--fc-green); }
+    .act-start   { color: var(--fc-green); }
+    .act-complete { color: #d97706; }
+    .act-complete:hover { background: #fef3e0; border-color: #f0d9a8; }
+    .act-closeop { color: var(--fc-blue); }
+    .act-closeop:hover { background: #e8f0fe; border-color: #b9d2fb; }
+
+    .act-trip:hover    { background: var(--fc-orange-lt); border-color: #f2c9ad; }
+    .act-edit:hover    { background: var(--fc-blue-lt);   border-color: #c0d4fb; }
+    .act-deliver:hover { background: var(--fc-teal-lt);   border-color: #b0e0dc; }
+    .act-close:hover   { background: var(--fc-purple-lt); border-color: #d0bfef; }
+    .act-reopen:hover  { background: var(--fc-amber-lt);  border-color: #f0d898; }
+    .act-view:hover    { background: var(--fc-green-lt);  border-color: #a8ddc3; }
+    .act-start:hover   { background: var(--fc-green-lt);  border-color: #a8ddc3; }
+    .act-cancel:hover  { background: var(--fc-red-lt);    border-color: #ffc8cf; }
+    .act-delete:hover  { background: var(--fc-red-lt);    border-color: #ffc8cf; }
+
+    .op-confirm-del {
+        height: 26px; padding: 0 9px;
+        border: none; border-radius: 6px;
+        background: linear-gradient(135deg, #e03048, #c0182e);
+        color: #fff; font-family: inherit;
+        font-size: 9.5px; font-weight: 800; cursor: pointer;
+        animation: op-pulse-del 1s ease infinite;
+        white-space: nowrap;
+    }
+    @@keyframes op-pulse-del {
+        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.35); }
+        50%     { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
+    }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 1200px) {
+        .op-customer-name { max-width: 130px; }
+        .op-fin-summary   { display: none; }
+    }
+
+    @@media (max-width: 900px) {
+        .op-toolbar { flex-direction: column; align-items: stretch; }
+        .op-search-wrap { max-width: 100%; }
+        .op-results-badge { margin-right: 0; }
+        .op-status-tabs { flex-wrap: wrap; }
+    }
+
+    @@media (max-width: 680px) {
+        .hero-wrapper { padding: 12px 12px 0; }
+        .hero-wrapper .fc-hero { border-radius: 16px !important; }
+        .op-hero-row { flex-direction: column; align-items: flex-start; }
+        .op-hero-right { width: 100%; justify-content: flex-start; }
+        .op-body { padding: 10px 12px 88px; }
+        .fc-fab-container { left: 16px; bottom: 16px; }
+        .op-toolbar { padding: 10px 12px; }
+        .op-avatar { display: none; }
+        .op-status-bar { padding: 8px 12px; }
+        .op-customer-name { max-width: 100px; }
+    }
+
+    @@media (max-width: 480px) {
+        .op-status-tabs { gap: 2px; }
+        .op-status-tab { padding: 0 7px; font-size: 9.5px; }
+        .op-tab-dot { display: none; }
+        .op-booking-tag { display: none; }
+    }
+
+</style>
+<style>
+    .hero-wrapper {
+        padding: 16px clamp(14px, 2.4vw, 34px) 0;
+        max-width: var(--fc-page-w, 1440px);
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 1;
+    }
+
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important;
+        overflow: hidden;
+        box-shadow: 0 12px 32px rgba(13,38,84,.15), 0 4px 12px rgba(13,38,84,.08);
+        border: 1px solid rgba(255,255,255,.08);
+    }
+
+    .hero-wrapper .fc-hero.fc-hero-slim {
+        padding-top: 18px !important;
+        padding-bottom: 22px !important;
+    }
+
+    .fc-overlap { margin-top: 20px !important; position: relative; z-index: 2; }
+
+    .doc-body {
+        padding: 18px clamp(16px, 3vw, 40px) 100px;
+        max-width: var(--fc-page-w, 1440px);
+        margin-inline: auto;
+        box-sizing: border-box;
+        width: 100%;
+        position: relative;
+        z-index: 2;
+    }
+
+    .doc-card {
+        background: #fff;
+        border: 1px solid #dde5f0;
+        border-radius: 18px;
+        box-shadow: 0 4px 24px rgba(15,41,82,.05);
+        overflow: hidden;
+    }
+
+    .doc-hero-row {
+        display: flex; align-items: center;
+        justify-content: space-between;
+        gap: 16px; flex-wrap: wrap;
+        margin-bottom: 10px;
+    }
+
+    .doc-hero-left  { display: flex; flex-direction: column; gap: 2px; }
+
+    .doc-hero-crumb {
+        display: flex; align-items: center; gap: 5px;
+        font-size: 10.5px; font-weight: 700;
+        color: rgba(255,255,255,.55);
+        margin-bottom: 2px;
+    }
+
+    .fc-hero-sub {
+        font-size: 10.5px;
+        color: rgba(255,255,255,.55);
+        font-weight: 600;
+    }
+
+    .doc-hero-right {
+        display: flex; align-items: center;
+        gap: 8px; flex-shrink: 0;
+    }
+
+    .doc-hero-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 5px 11px; border-radius: 8px;
+        background: rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.14);
+        color: rgba(255,255,255,.7);
+        font-size: 10.5px; font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .doc-kpis-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .doc-kpi {
+        background: rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.12);
+        backdrop-filter: blur(12px);
+        border-radius: 10px;
+        padding: 10px 12px;
+    }
+
+    .doc-kpi-inner { display: flex; align-items: center; gap: 10px; }
+
+    .doc-kpi-icon {
+        width: 34px; height: 34px; border-radius: 9px;
+        display: flex; align-items: center;
+        justify-content: center; flex-shrink: 0;
+    }
+
+    .doc-kpi-blue .doc-kpi-icon  { background: rgba(125,211,252,.15); color: #7dd3fc; }
+    .doc-kpi-green .doc-kpi-icon { background: rgba(110,231,183,.15); color: #6ee7b7; }
+    .doc-kpi-amber .doc-kpi-icon { background: rgba(251,191,36,.15);  color: #fbbf24; }
+
+    .doc-kpi-data   { flex: 1; min-width: 0; }
+
+    .doc-kpi-num {
+        font-size: 18px; font-weight: 900;
+        color: #fff; line-height: 1;
+    }
+
+    .doc-kpi-label {
+        font-size: 10.5px; font-weight: 700;
+        color: rgba(255,255,255,.6); margin-top: 3px;
+    }
+
+    .doc-banner {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 14px 18px; font-size: 13px; font-weight: 600;
+        line-height: 1.6; border-bottom: 1px solid transparent;
+    }
+
+    .banner-info {
+        background: #f4f8ff; color: #1a56db;
+        border-bottom-color: #dbe8fc;
+    }
+
+    .banner-icon { flex: 0 0 auto; margin-top: 2px; }
+
+    .doc-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 300px;
+        background: #fff; border: 1px solid #dde5f0;
+        border-radius: 14px; padding: 40px; text-align: center;
+    }
+
+    .state-icon-wrap {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+
+    .state-icon-wrap.perm { background: #fff0f2; color: #D64545; }
+    .doc-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; }
+    .doc-state-box p  { margin: 0; font-size: 13px; color: #6B7A8F; }
+
+    .doc-toolbar {
+        display: flex; align-items: center;
+        justify-content: space-between; gap: 12px;
+        padding: 14px 18px;
+        background: linear-gradient(180deg,#fff,#fafbfd);
+        border-bottom: 1px solid #edf1f7;
+        flex-wrap: wrap;
+    }
+
+    .doc-search-wrap {
+        position: relative; display: flex; align-items: center;
+        flex: 0 1 280px; min-width: 180px;
+    }
+
+    .doc-search-icon {
+        position: absolute; right: 10px;
+        color: #9aaabb; pointer-events: none;
+    }
+
+    .doc-search-input {
+        width: 100%; height: 36px;
+        padding: 0 32px 0 10px;
+        border: 1px solid #d8e2f0; border-radius: 8px;
+        background: #fafcff;
+        font-family: inherit; font-size: 12px; outline: none;
+    }
+
+    .doc-search-input:focus {
+        border-color: #0B56DF;
+        box-shadow: 0 0 0 3px rgba(11,86,223,.08);
+    }
+
+    .doc-search-clear {
+        position: absolute; left: 8px;
+        display: flex; align-items: center; justify-content: center;
+        width: 20px; height: 20px; border-radius: 50%;
+        border: none; background: #edf1f7;
+        color: #8899ae; cursor: pointer;
+    }
+
+    .doc-results-badge {
+        display: flex; align-items: center; gap: 5px;
+        font-size: 11px; color: #8899ae; font-weight: 600;
+    }
+
+    .doc-results-badge strong { color: #5a6e88; }
+
+    .doc-table-wrap { overflow-x: auto; }
+
+    .doc-table {
+        width: 100%; border-collapse: collapse; font-size: 13px;
+    }
+
+    .doc-table thead th {
+        padding: 11px 14px;
+        background: linear-gradient(180deg,#f7f9fc,#f0f3f8);
+        color: #4a5a74; font-size: 11px; font-weight: 800;
+        text-align: center;
+        border-bottom: 2px solid #e4eaf3;
+        white-space: nowrap;
+    }
+
+    .doc-table .th-start { text-align: right; }
+
+    .doc-table tbody tr {
+        border-bottom: 1px solid #f0f3f8;
+        transition: background .12s;
+    }
+
+    .doc-table tbody tr:last-child { border-bottom: none; }
+    .doc-table tbody tr:hover      { background: #fafcff; }
+    .doc-table tbody tr.row--editing { background: #f0f6ff !important; }
+
+    .doc-table tbody td {
+        padding: 12px 14px; color: #526070;
+        text-align: center; vertical-align: middle;
+    }
+
+    .td-start { text-align: right !important; }
+    .td-muted  { color: #8899ae; font-size: 11.5px; }
+
+    .doc-type-badge {
+        display: inline-flex; padding: 2.5px 10px; border-radius: 6px;
+        background: #f0f4fa; border: 1px solid #e0e8f4;
+        font-size: 10.5px; font-weight: 800; color: #344258;
+        font-family: 'Courier New', monospace;
+        letter-spacing: .5px;
+    }
+
+    .doc-file-info  { display: flex; flex-direction: column; gap: 2px; }
+    .doc-file-title { font-size: 13px; font-weight: 700; color: #1A2332; }
+    .doc-file-desc  { font-size: 11px; color: #8899ae; }
+
+    .tax-badge {
+        display: inline-block;
+        padding: 3px 10px; border-radius: 20px;
+        font-size: 11px; font-weight: 700;
+    }
+
+    .tax-badge--none { background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; }
+    .tax-badge--has  { background: #dcfce7; color: #16a34a; border: 1px solid #bbf7d0; }
+
+    .usage-badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 28px; height: 24px; padding: 0 8px;
+        border-radius: 20px; font-size: 12px; font-weight: 700;
+    }
+
+    .usage-badge--active { background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .usage-badge--zero   { background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; }
+
+    .doc-row-actions {
+        display: flex; align-items: center;
+        gap: 6px; justify-content: center;
+    }
+
+    .doc-btn-download {
+        display: inline-flex; align-items: center; gap: 4px;
+        height: 28px; padding: 0 10px;
+        border: 1px solid #bdd4fc; border-radius: 6px;
+        background: #eaf1ff; color: #0B56DF;
+        font-family: inherit; font-size: 10.5px; font-weight: 800;
+        cursor: pointer; transition: all .12s;
+    }
+
+    .doc-btn-download:hover { background: #0B56DF; color: #fff; }
+
+    .doc-empty-table {
+        padding: 40px; text-align: center;
+        color: #9aaabb; font-size: 13px; font-weight: 700;
+    }
+
+    .doc-loading {
+        display: flex; align-items: center; justify-content: center;
+        gap: 10px; min-height: 200px;
+        color: #6B7A8F; font-size: 12.5px; font-weight: 700;
+    }
+
+    .doc-spinner {
+        width: 28px; height: 28px;
+        border: 2.5px solid #dde5f0;
+        border-top-color: #0B56DF;
+        border-radius: 50%;
+        animation: doc-spin .7s linear infinite;
+    }
+
+    @@keyframes doc-spin { to { transform: rotate(360deg); } }
+
+    /* ══════ FAB ══════ */
+    .fc-fab-scrim {
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,.25);
+        backdrop-filter: blur(3px);
+        z-index: 1200;
+    }
+
+    .fc-fab-container {
+        position: fixed;
+        left: 28px; bottom: 28px;
+        z-index: 1300;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .fc-fab-menu {
+        display: flex; flex-direction: column; gap: 8px;
+        margin-bottom: 12px;
+        opacity: 0; visibility: hidden;
+        pointer-events: none;
+        transform: translateY(8px);
+        transition: opacity .22s ease, transform .22s ease, visibility .22s;
+    }
+
+    .fc-fab-menu--open {
+        opacity: 1; visibility: visible;
+        pointer-events: auto;
+        transform: translateY(0);
+    }
+
+    .fc-fab-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 16px; border-radius: 12px;
+        background: #fff; border: 1.5px solid #dde5f0;
+        box-shadow: 0 4px 16px rgba(0,0,0,.12);
+        cursor: pointer; font-size: 13px; font-weight: 600;
+        color: #1c2c44; font-family: inherit;
+        transition: background .15s, border-color .15s, transform .15s;
+        white-space: nowrap; width: 100%;
+    }
+
+    .fc-fab-item:hover {
+        background: #f4f7fb;
+        border-color: #0B56DF;
+        transform: translateX(2px);
+    }
+
+    .fc-fab-icon {
+        display: flex; align-items: center; justify-content: center;
+        width: 30px; height: 30px; border-radius: 8px;
+        background: #eaf1ff; color: #0B56DF; flex-shrink: 0;
+    }
+
+    .fc-fab-main {
+        width: 60px; height: 60px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; border: none;
+        transition: transform .2s, box-shadow .2s;
+        position: relative;
+    }
+
+    .fc-fab-main:hover { transform: scale(1.06); }
+
+    .fc-fab-svg {
+        transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+    }
+
+    .fc-fab-main.is-open .fc-fab-svg { transform: rotate(135deg); }
+
+    .fc-glow-gold {
+        background: linear-gradient(135deg, #0B56DF 0%, #083CA8 100%) !important;
+        border: 2px solid #FF8015 !important;
+        color: #fff;
+        box-shadow: 0 4px 16px rgba(11,86,223,.4);
+        animation: fc-gold-pulse 2.2s infinite;
+    }
+
+    .fc-glow-gold::before {
+        content: "";
+        position: absolute; inset: -2px;
+        border-radius: 50%;
+        border: 2px solid #FF8015;
+        opacity: 0; pointer-events: none;
+        animation: fc-ring-expand 2.2s cubic-bezier(.24,0,.38,1) infinite;
+    }
+
+    @@keyframes fc-gold-pulse {
+        0%,100% { box-shadow: 0 0 0 0 rgba(255,128,21,.6), 0 8px 24px rgba(11,86,223,.4); }
+        50%     { box-shadow: 0 0 0 12px rgba(255,128,21,0), 0 12px 32px rgba(11,86,223,.55); }
+    }
+
+    @@keyframes fc-ring-expand {
+        0%   { transform: scale(1); opacity: .8; border-width: 3px; }
+        100% { transform: scale(1.6); opacity: 0; border-width: 1px; }
+    }
+
+    .fc-glow-gold.is-open {
+        background: linear-gradient(135deg, #D64545 0%, #991b1b 100%) !important;
+        border-color: #fca5a5 !important;
+        animation: none !important;
+    }
+
+    .fc-glow-gold.is-open::before { animation: none !important; }
+
+    /* ══════ MODAL ══════ */
+    .svc-modal-backdrop {
+        position: fixed; inset: 0; z-index: 1400;
+        background: rgba(10,27,59,.62);
+        backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px;
+        animation: svc-fade .2s ease both;
+    }
+
+    @@keyframes svc-fade { from { opacity: 0; } to { opacity: 1; } }
+
+    .svc-modal {
+        width: 100%; max-width: 560px;
+        background: #fff; border-radius: 20px;
+        box-shadow: 0 25px 60px rgba(10,27,59,.28), 0 8px 20px rgba(10,27,59,.12);
+        overflow: hidden;
+        animation: svc-pop .28s cubic-bezier(.22,.9,.36,1.1) both;
+        max-height: 92vh;
+        display: flex; flex-direction: column;
+    }
+
+    @@keyframes svc-pop {
+        from { opacity: 0; transform: translateY(20px) scale(.96); }
+        to   { opacity: 1; transform: none; }
+    }
+
+    .svc-modal-head {
+        display: flex; align-items: center; gap: 14px;
+        padding: 20px 24px;
+        background: linear-gradient(135deg, #0A1B3B 0%, #16306B 100%);
+        color: #fff; flex: 0 0 auto;
+        position: relative; overflow: hidden;
+    }
+
+    .svc-modal-head::before {
+        content: "";
+        position: absolute; top: -50px; right: -50px;
+        width: 200px; height: 200px; border-radius: 50%;
+        background: radial-gradient(circle, rgba(255,128,21,.15) 0%, transparent 70%);
+        pointer-events: none;
+    }
+
+    .svc-head-icon {
+        width: 46px; height: 46px; flex: 0 0 46px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 13px; position: relative; z-index: 1;
+    }
+
+    .svc-icon-create {
+        background: rgba(27,158,94,.2); color: #6ee7b7;
+        border: 1px solid rgba(110,231,183,.3);
+    }
+
+    .svc-icon-edit {
+        background: rgba(255,128,21,.2); color: #FFD9B8;
+        border: 1px solid rgba(255,128,21,.3);
+    }
+
+    .svc-head-text  { flex: 1; min-width: 0; position: relative; z-index: 1; }
+    .svc-head-title { font-size: 16px; font-weight: 800; color: #fff; line-height: 1.3; }
+    .svc-head-sub   { font-size: 11.5px; color: rgba(255,255,255,.62); margin-top: 3px; }
+    .svc-head-sub strong { color: #FFD9B8; font-weight: 700; }
+
+    .svc-head-close {
+        width: 34px; height: 34px; flex: 0 0 34px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid rgba(255,255,255,.15); border-radius: 9px;
+        background: rgba(255,255,255,.06); color: rgba(255,255,255,.7);
+        cursor: pointer; transition: all .15s; position: relative; z-index: 1;
+    }
+
+    .svc-head-close:hover {
+        background: rgba(255,255,255,.14);
+        color: #fff; transform: rotate(90deg);
+    }
+
+    .svc-banner {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 20px; flex: 0 0 auto;
+        font-size: 12.5px; font-weight: 600;
+    }
+
+    .svc-banner-ok  { background: #e9f8f0; color: #0e7a43; border-bottom: 1px solid #b5e8d0; }
+    .svc-banner-err { background: #fff0f2; color: #D64545; border-bottom: 1px solid #ffc8cf; }
+    .svc-banner-ic  { flex: 0 0 auto; }
+    .svc-banner-msg { flex: 1; }
+
+    .svc-banner-x {
+        background: none; border: none;
+        color: inherit; opacity: .5;
+        cursor: pointer; display: flex;
+    }
+
+    .svc-banner-x:hover { opacity: 1; }
+
+    .svc-modal-body { flex: 1 1 auto; overflow-y: auto; padding: 0; }
+
+    .svc-section { padding: 22px 24px 26px; }
+
+    .svc-section-head {
+        display: flex; align-items: flex-start; gap: 12px;
+        margin-bottom: 20px; padding-bottom: 16px;
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .svc-section-ic {
+        width: 40px; height: 40px; flex: 0 0 40px;
+        display: flex; align-items: center;
+        justify-content: center; border-radius: 11px;
+    }
+
+    .svc-section-ic.blue {
+        background: #eaf1ff; color: #0B56DF;
+        border: 1px solid #bdd4fc;
+    }
+
+    .svc-section-title { font-size: 14.5px; font-weight: 800; color: #1A2332; line-height: 1.2; }
+    .svc-section-sub   { font-size: 11px; font-weight: 500; color: #6B7A8F; margin-top: 3px; }
+
+    .svc-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+    }
+
+    .svc-field  { display: flex; flex-direction: column; gap: 5px; }
+
+    .svc-label {
+        font-size: 11.5px; font-weight: 800; color: #344258;
+        display: flex; align-items: center; gap: 4px;
+    }
+
+    .svc-req { color: #D64545; font-size: 13px; }
+
+    .svc-input-wrap {
+        position: relative; display: flex; align-items: center;
+    }
+
+    .svc-prefix {
+        position: absolute; right: 12px; z-index: 1;
+        display: flex; align-items: center;
+        color: #9aaabb; pointer-events: none;
+    }
+
+    .svc-input {
+        width: 100%; height: 42px;
+        border: 1.5px solid #d8e2f0; border-radius: 10px;
+        background: #fafcff; color: #1A2332;
+        font-family: inherit; font-size: 13px;
+        padding: 0 12px; outline: none;
+        box-sizing: border-box;
+        transition: border-color .15s, box-shadow .15s, background .15s;
+    }
+
+    .svc-input:focus {
+        border-color: #0B56DF;
+        box-shadow: 0 0 0 3px rgba(11,86,223,.1);
+        background: #fff;
+    }
+
+    .svc-input.svc-err {
+        border-color: #D64545;
+        box-shadow: 0 0 0 3px rgba(214,69,69,.08);
+    }
+
+    .svc-input:disabled {
+        background: #f5f7fa; color: #8899ae; cursor: not-allowed;
+    }
+
+    .svc-input::placeholder { color: #b0bcc8; }
+    .svc-input.ltr { direction: ltr; text-align: left; }
+    .svc-input.with-prefix { padding-right: 40px; }
+
+    .svc-select {
+        cursor: pointer;
+        -webkit-appearance: none; appearance: none;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B7A8F' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: left 12px center;
+        background-size: 13px;
+        padding-left: 34px;
+    }
+
+    .svc-hint {
+        font-size: 10.5px; color: #8899ae; font-weight: 500;
+        display: flex; align-items: center; gap: 5px;
+    }
+
+    .svc-hint.warn { color: #E8A317; font-weight: 700; }
+
+    .svc-err-msg {
+        font-size: 10.5px; color: #D64545; font-weight: 700;
+    }
+
+    .svc-modal-foot {
+        display: flex; align-items: center;
+        justify-content: space-between; gap: 10px;
+        padding: 14px 20px;
+        background: linear-gradient(180deg, #fafbfd 0%, #f4f6fb 100%);
+        border-top: 1px solid #edf1f7;
+        flex: 0 0 auto;
+    }
+
+    .svc-foot-left, .svc-foot-right {
+        display: flex; align-items: center; gap: 8px;
+    }
+
+    .svc-foot-right { margin-right: auto; }
+
+    .svc-btn-reset {
+        display: inline-flex; align-items: center; gap: 5px;
+        height: 38px; padding: 0 14px;
+        border: 1px solid #fde68a; border-radius: 9px;
+        background: #fffbeb; color: #92400e;
+        font-family: inherit; font-size: 11.5px; font-weight: 800;
+        cursor: pointer; transition: all .15s;
+    }
+
+    .svc-btn-reset:hover { background: #fef3c7; border-color: #fbbf24; }
+
+    .svc-btn-cancel {
+        height: 38px; padding: 0 16px;
+        border: 1.5px solid #d8e2f0; border-radius: 9px;
+        background: #fff; color: #6B7A8F;
+        font-family: inherit; font-size: 12px; font-weight: 700;
+        cursor: pointer; transition: all .15s;
+    }
+
+    .svc-btn-cancel:hover {
+        background: #f0f4fa; color: #1A2332; border-color: #c0ccd8;
+    }
+
+    .svc-btn-save {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 40px; padding: 0 22px;
+        border: none; border-radius: 10px;
+        background: linear-gradient(135deg, #0B56DF, #083CA8);
+        color: #fff; font-family: inherit;
+        font-size: 12.5px; font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(11,86,223,.28);
+        transition: all .18s;
+    }
+
+    .svc-btn-save:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 18px rgba(11,86,223,.4);
+    }
+
+    .svc-btn-save:disabled { opacity: .6; cursor: not-allowed; }
+
+    .svc-spinner {
+        width: 15px; height: 15px;
+        border: 2px solid rgba(255,255,255,.3);
+        border-top-color: #fff; border-radius: 50%;
+        animation: doc-spin .7s linear infinite;
+    }
+
+    @@media (max-width: 900px) {
+        .doc-toolbar { flex-direction: column; align-items: stretch; gap: 10px; }
+        .doc-search-wrap { width: 100% !important; flex: 1 1 100%; }
+        .svc-grid { grid-template-columns: 1fr; }
+        .doc-kpis-row { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @@media (max-width: 680px) {
+        .hero-wrapper  { padding: 12px 12px 0; }
+        .hero-wrapper .fc-hero { border-radius: 16px !important; }
+        .doc-body { padding: 14px 12px 90px; }
+        .fc-overlap { margin-top: 14px !important; }
+        .svc-modal-backdrop { align-items: flex-end; padding: 0; }
+        .svc-modal { max-width: 100% !important; border-radius: 20px 20px 0 0 !important; max-height: 88vh; }
+        .svc-modal-head { padding: 16px 18px; }
+        .svc-section { padding: 18px 16px 22px; }
+        .svc-modal-foot { flex-direction: column-reverse; align-items: stretch; }
+        .svc-foot-left, .svc-foot-right { width: 100%; justify-content: center; }
+        .svc-btn-cancel, .svc-btn-save, .svc-btn-reset { flex: 1; justify-content: center; }
+        .fc-fab-container { left: 16px; bottom: 16px; }
+    }
+
+    @@media (max-width: 480px) {
+        .doc-kpis-row { grid-template-columns: 1fr 1fr; }
+    }
+</style>
+<style>
+    /* متغيرات إضافية لشاشة طلبات النقل — نفس عائلة svc-modal */
+    .svc-modal-wide { max-width: 920px; }
+
+    .rq-line-row {
+        display: flex; gap: 12px; align-items: flex-end;
+        padding: 10px 12px; margin-bottom: 10px;
+        border: 1px solid var(--fc-border, #dde5f0); border-radius: 12px;
+        background: #fbfcfe;
+    }
+    .rq-line-row .svc-field { margin-bottom: 0; }
+    .rq-line-type { flex: 2; }
+    .rq-line-qty  { flex: 1; }
+    .rq-line-grt  { flex: 1.4; }
+    .rq-line-del  { margin-bottom: 4px; white-space: nowrap; }
+
+    @@media (max-width: 640px) {
+        .rq-line-row { flex-wrap: wrap; }
+        .rq-line-type, .rq-line-qty, .rq-line-grt { flex: 1 1 100%; }
+    }
+</style>

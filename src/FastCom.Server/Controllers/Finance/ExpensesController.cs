@@ -55,9 +55,12 @@ public class ExpensesController : ControllerBase
         decimal? BillableAmount = null, decimal? BillableTaxRate = null, int? ReceiptTypeId = null);
 
     public record ListItem(long ExpenseId, string ExpenseNumber, string TypeName,
+        string? CustomerName, string? BookingRef, int? CustodyOwnerId, string? CustodyOwnerName,
         string? Description, DateTime ExpenseDate, decimal Amount, decimal TaxRate,
         string? OperationNumber, string? TripNumber, string? VehiclePlate, string? SupplierName, string? DriverName, string? CustodyNumber,
-        string PaymentStatus, string Status, bool IsApproved);
+        string PaymentStatus, string Status, bool IsApproved,
+        string? CreatedByName, string? PayBoxKind, string? PayBoxName,
+        string? ReceiptTypeName, string? ReferenceNumber);
 
     public record Detail(long ExpenseId, string ExpenseNumber, int ExpenseTypeId,
         string? ExpenseDate, string? Description, decimal Amount, int? TaxRateId,
@@ -97,7 +100,15 @@ public class ExpensesController : ControllerBase
             .OrderByDescending(e => e.ExpenseId)
             .Take(take)
             .Select(e => new ListItem(
-                e.ExpenseId, e.ExpenseNumber, e.ExpenseType.NameAr, e.Description,
+                e.ExpenseId, e.ExpenseNumber, e.ExpenseType.NameAr,
+                e.Operation != null && e.Operation.Customer != null ? e.Operation.Customer.NameAr : null,
+                e.Operation != null && e.Operation.Booking != null ? e.Operation.Booking.BookingReference : null,
+                e.Custody != null ? e.Custody.OwnerId : (int?)null,
+                e.Custody == null ? null
+                    : e.Custody.OwnerType == "Employee"
+                        ? _db.Employees.Where(x => x.EmployeeId == e.Custody.OwnerId).Select(x => x.FullNameAr).FirstOrDefault()
+                        : _db.Drivers.Where(x => x.DriverId == e.Custody.OwnerId).Select(x => x.FullName).FirstOrDefault(),
+                e.Description,
                 e.ExpenseDate, e.Amount, e.TaxRate,
                 e.Operation != null ? e.Operation.OperationNumber : null,
                 e.Trip != null ? e.Trip.TripNumber : null,
@@ -105,8 +116,42 @@ public class ExpensesController : ControllerBase
                 e.Supplier != null ? e.Supplier.NameAr : null,
                 e.Driver != null ? e.Driver.FullName : null,
                 e.Custody != null ? e.Custody.CustodyNumber : null,
-                e.PaymentStatus, e.Status, e.IsApproved))
+                e.PaymentStatus, e.Status, e.IsApproved,
+                e.CreatedBy == null ? null
+                    : _db.Users.Where(u => u.Id == e.CreatedBy.Value)
+                        .Select(u => u.FullName != "" ? u.FullName : u.UserName).FirstOrDefault(),
+                null, null,
+                e.ReceiptType != null ? e.ReceiptType.NameAr : null,
+                e.ReferenceNumber))
             .ToListAsync(ct);
+
+        /* خزنة الصرف: للمصروف المباشر قيد الخزينة EXP:{رقم المصروف}،
+           ولمصروف العهدة قيد صرف العهدة CUST-ISSUE:{رقم العهدة} */
+        var expRefs = rows.Select(r => $"EXP:{r.ExpenseNumber}").ToList();
+        var cusRefs = rows.Where(r => r.CustodyNumber != null)
+                          .Select(r => $"CUST-ISSUE:{r.CustodyNumber}").Distinct().ToList();
+        var legs = await _db.CashTransactions.AsNoTracking()
+            .Where(t => !t.IsDeleted && t.Status == "Posted" && t.ReferenceNumber != null &&
+                        (expRefs.Contains(t.ReferenceNumber) || cusRefs.Contains(t.ReferenceNumber)))
+            .Select(t => new { t.ReferenceNumber, t.CashBoxId })
+            .ToListAsync(ct);
+        var legBox = legs.GroupBy(l => l.ReferenceNumber!)
+                         .ToDictionary(g => g.Key, g => g.First().CashBoxId);
+        var boxIds = legBox.Values.Distinct().ToList();
+        var boxes = await _db.CashBoxes.AsNoTracking()
+            .Where(b => boxIds.Contains(b.CashBoxId))
+            .Select(b => new { b.CashBoxId, b.BoxKind, b.NameAr })
+            .ToListAsync(ct);
+        var boxMap = boxes.ToDictionary(b => b.CashBoxId);
+
+        rows = rows.Select(r =>
+        {
+            var key = r.CustodyNumber != null && legBox.ContainsKey($"CUST-ISSUE:{r.CustodyNumber}")
+                ? $"CUST-ISSUE:{r.CustodyNumber}" : $"EXP:{r.ExpenseNumber}";
+            return legBox.TryGetValue(key, out var bid) && boxMap.TryGetValue(bid, out var box)
+                ? r with { PayBoxKind = box.BoxKind, PayBoxName = box.NameAr }
+                : r;
+        }).ToList();
 
         return Ok(rows);
     }
@@ -240,6 +285,18 @@ public class ExpensesController : ControllerBase
                 .FirstOrDefaultAsync(c => c.CustodyId == e.CustodyId && !c.IsDeleted, ct);
             if (cus is not null && cus.Status is not ("Open" or "PartiallySettled"))
                 return BadRequest(new { message = "العهدة مقدّمة للتسوية أو معتمدة — فك ربط المصروف أو ألغِه قبل تغيير المبلغ" });
+        }
+
+        // 🔴 تجميد التسوية من باب الربط نفسه: مصروف عهدة مقدّمة/معتمدة
+        //    لا يُفك ربطه بعهدته ولا يتغير ربطه بعملية/رحلة — التلاعب بالربط
+        //    كان يحرّك أموال تسوية مجمّدة من خلف حرّاس كنترولر العهدة
+        if (e.CustodyId is not null &&
+            (req.CustodyId != e.CustodyId || req.OperationId != e.OperationId || req.TripId != e.TripId))
+        {
+            var cus = await _db.DriverCustodies.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.CustodyId == e.CustodyId && !c.IsDeleted, ct);
+            if (cus is not null && cus.Status is not ("Open" or "PartiallySettled"))
+                return BadRequest(new { message = "العهدة مقدّمة للتسوية أو معتمدة — لا يمكن فك ربط مصروفاتها أو تغيير ربطها إلا بعد إرجاع التسوية" });
         }
 
         /* 🔴 امسك القيم **قبل** أي تعديل — عشان القفل والمزامنة */
@@ -442,6 +499,16 @@ public class ExpensesController : ControllerBase
         if (e is null) return NotFound(new { message = "المصروف غير موجود" });
 
         if (e.Status == to) return BadRequest(new { message = "المصروف في الحالة دي بالفعل" });
+
+        /* 🔴 مصروف عهدة مقدمة/معتمدة/مغلقة لا يُلغى ولا يرجع مسودة —
+           إلغاؤه يغيّر أرقام تسوية مجمّدة؛ تُرجع التسوية أولًا */
+        if (to is ("Cancelled" or "Draft") && e.CustodyId is not null)
+        {
+            var cus = await _db.DriverCustodies.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.CustodyId == e.CustodyId && !c.IsDeleted, ct);
+            if (cus is not null && cus.Status is ("Submitted" or "Approved" or "Closed"))
+                return BadRequest(new { message = "هذا المصروف ضمن عهدة مقدَّمة أو معتمدة — أرجع تسوية العهدة أولًا قبل تغيير حالته" });
+        }
 
         if (to == "Posted" && e.PaymentStatus == "Paid")
             return BadRequest(new { message = "المصروف مدفوع — مش هيتلغى التأكيد" });
@@ -649,10 +716,17 @@ public class ExpensesController : ControllerBase
             if (linkChanged && cus.Status is not ("Open" or "PartiallySettled"))
                 return "العهدة مقدّمة للتسوية أو مغلقة — لايمكن ربطها بمصروف جديد";
 
-            if (r.TripId is null)
-                return "المصروف المربوط بعهدة لابد ان يكون على رحلة العهدة نفسها";
-            if (r.TripId != cus.TripId)
-                return "العهدة على رحلة اخرى — اختار رحلة العهدة نفسها";
+            if (cus.TripId is not null)
+            {
+                if (r.TripId is null)
+                    return "المصروف المربوط بعهدة لابد ان يكون على رحلة العهدة نفسها";
+                if (r.TripId != cus.TripId)
+                    return "العهدة على رحلة اخرى — اختار رحلة العهدة نفسها";
+            }
+            /* 🔴 عهدة تشغيل عامة (TripId = null): مافيش قيد رحلة —
+               الموظف بيصرف من عهدة واحدة على عمليات ورحلات مختلفة،
+               وربط المصروف بعمليته/رحلته ممكن يتأجل لوقت تسوية العهدة
+               (حارس التسوية في CustodiesController بيمنع التقديم من غير ربط). */
         }
 
         /* 🔴 كان الشرط بيجبر **أي** مصروف يتربط بعملية/رحلة/مورد — وده غلط:
@@ -663,9 +737,14 @@ public class ExpensesController : ControllerBase
                 • مصروف **تشغيلي** (`IsOperationCost = 1`) → لازم يتربط،
                   عشان يدخل في تكلفة العملية ويظهر في ربحيتها.
                 • مصروف **إداري** (`IsOperationCost = 0`) → الربط اختياري.           */
-        if (type.IsOperationCost &&
+        if (type.IsOperationCost && r.CustodyId is null &&
             r.OperationId is null && r.TripId is null && r.SupplierId is null)
             return $"«{type.NameAr}» مصروف تشغيلي — لازم يتربط بعملية أو رحلة أو مورد عشان يتحمل على مين";
+
+        /* 🔴 سلفة النولون لازم تتمسك من حاجة: رحلة (هتتخصم من نولونها)
+           أو عهدة (هتتربط برحلتها وقت التسوية) — سلفة سايبة ممنوعة. */
+        if (type.IsFreightAdvance && r.TripId is null && r.CustodyId is null)
+            return $"«{type.NameAr}» نولون نقلة — يجب أن تُربط برحلة أو بعهدة تشغيل";
 
         return null;
     }

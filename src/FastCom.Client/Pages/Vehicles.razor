@@ -5,6 +5,7 @@
 @inject HttpClient Http
 @inject AuthService Auth
 @inject ISnackbar Snackbar
+@inject NavigationManager Nav
 
 <PageTitle>أسطول المركبات والمقطورات — فاست كوم</PageTitle>
 
@@ -250,7 +251,7 @@
                                     <th class="th-start">بيانات المركبة</th>
                                     <th>النوع والماركة</th>
                                     <th>الملكية</th>
-                                    <th>الحمولة</th>
+                                    <th>السائق</th>
                                     <th>الرخصة والتأمين</th>
                                     <th>الحالة</th>
                                     @if (CanEdit) { <th style="width:110px">إجراءات</th> }
@@ -315,7 +316,7 @@
                                         </td>
 
                                         <td class="td-muted">
-                                            @(v.CapacityTon.HasValue ? $"{v.CapacityTon:0.##} طن" : "—")
+                                            @(string.IsNullOrWhiteSpace(v.DefaultDriverName) ? "—" : v.DefaultDriverName)
                                         </td>
 
                                         <td>
@@ -1561,6 +1562,7 @@
         public string OwnershipType { get; set; } = "";
         public string? SupplierName { get; set; }
         public decimal? CapacityTon { get; set; }
+        public string? DefaultDriverName { get; set; }
         public string Status { get; set; } = "";
         public DateOnly? LicenseExpiryDate { get; set; }
         public DateOnly? InsuranceExpiryDate { get; set; }
@@ -1763,7 +1765,8 @@
         (string.IsNullOrWhiteSpace(_search) ||
          NormalizeArabic(v.PlateNumber).Contains(NormalizeArabic(_search)) ||
          NormalizeArabic(v.VehicleCode).Contains(NormalizeArabic(_search)) ||
-         NormalizeArabic(v.SupplierName ?? "").Contains(NormalizeArabic(_search))));
+         NormalizeArabic(v.SupplierName ?? "").Contains(NormalizeArabic(_search)) ||
+         NormalizeArabic(v.DefaultDriverName ?? "").Contains(NormalizeArabic(_search))));
 
     private IEnumerable<TItem> TrailersFiltered => _trailers.Where(t =>
         (_kpiFilter == "" || t.Status == _kpiFilter) &&
@@ -1925,20 +1928,12 @@
         _filteredSuppliers = new();
     }
 
-    private void NewVehicle()
-    {
-        _vId = null;
-        _vf = new VForm();
-        _supplierSearch = "";
-        _msg = null;
-        _tOpen = false;
-        _vOpen = true;
-        _vActiveTab = 0;
-        _fabOpen = false;
-    }
+    // إضافة/تعديل السيارة صارتا صفحة كاملة (قرار المالك) — الدايلوج القديم باقٍ للمقطورات فقط
+    private void NewVehicle() => Nav.NavigateTo("/vehicles/new");
 
     private void NewTrailer()
     {
+        _vId = null;
         _tId = null;
         _tf = new TForm();
         _supplierSearch = "";
@@ -1948,36 +1943,7 @@
         _fabOpen = false;
     }
 
-    private async Task EditVehicle(VItem v)
-    {
-        try
-        {
-            var d = await Http.GetFromJsonAsync<VDetail>($"api/fleet/vehicles/{v.VehicleId}");
-            if (d is null) return;
-            _vId = v.VehicleId;
-            _vf = new VForm
-            {
-                PlateNumber = d.PlateNumber,
-                VehicleType = d.VehicleType,
-                Brand = d.Brand,
-                Model = d.Model,
-                ModelYear = d.ModelYear,
-                OwnershipType = d.OwnershipType,
-                SupplierId = d.SupplierId,
-                CapacityTon = d.CapacityTon,
-                ContainerSlots20 = d.ContainerSlots20,
-                LicenseExpiryDate = d.LicenseExpiryDate?.ToString("yyyy-MM-dd"),
-                InsuranceExpiryDate = d.InsuranceExpiryDate?.ToString("yyyy-MM-dd"),
-                Status = d.Status
-            };
-            _supplierSearch = d.SupplierName ?? "";
-            _msg = null;
-            _tOpen = false;
-            _vOpen = true;
-            _vActiveTab = 0;
-        }
-        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
-    }
+    private void EditVehicle(VItem v) => Nav.NavigateTo($"/vehicles/new/{v.VehicleId}");
 
     private async Task EditTrailer(TItem t)
     {

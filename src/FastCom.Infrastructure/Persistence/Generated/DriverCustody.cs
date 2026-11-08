@@ -79,6 +79,11 @@ public partial class DriverCustody
 
     public int? ClosedBy { get; set; }
 
+    /* فصل المهام: من قدّم التسوية (لا يعتمدها بنفسه) ومن اعتمدها */
+    public int? SettledBy { get; set; }
+
+    public int? ApprovedBy { get; set; }
+
     [ForeignKey("BranchId")]
     [InverseProperty("DriverCustodies")]
     public virtual Branch Branch { get; set; } = null!;

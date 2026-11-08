@@ -166,7 +166,8 @@
                             <span class="ntf-item-date">@n.CreatedAt.ToString("yyyy-MM-dd HH:mm")</span>
                         </div>
 
-                        <div class="ntf-item-content">
+                        <div class="ntf-item-content ntf-item-nav" @onclick="() => OpenAsync(n)"
+                             title="فتح الشاشة المرتبطة بالإشعار">
                             <h3 class="ntf-item-title">@n.Title</h3>
                             <p class="ntf-item-msg">@n.Message</p>
                         </div>
@@ -522,6 +523,8 @@
     .ntf-item-date { font-size: 11px; color: #8899ae; font-weight: 700; font-family: "Inter", Arial, sans-serif; }
 
     .ntf-item-content { padding-right: 8px; }
+    .ntf-item-nav { cursor: pointer; }
+    .ntf-item-nav:hover .ntf-item-title { color: var(--fc-blue); }
     .ntf-item-title { font-size: 13px; font-weight: 800; color: #1c2c44; margin: 0 0 4px; }
     .ntf-item-msg { font-size: 11.5px; color: #6b7d95; margin: 0; line-height: 1.6; }
 
@@ -755,6 +758,37 @@
         try { _items = await Http.GetFromJsonAsync<List<Item>>("api/notifications?take=200") ?? new(); }
         catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
         finally { _loading = false; }
+    }
+
+    /* الضغط على الإشعار: يُعلَّم مقروءًا ويُنقل لشاشته المرتبطة */
+    private async Task OpenAsync(Item n)
+    {
+        if (!n.IsRead)
+        {
+            try
+            {
+                var res = await Http.PostAsync($"api/notifications/{n.NotificationId}/read", null);
+                if (res.IsSuccessStatusCode) n.IsRead = true;
+            }
+            catch { }
+        }
+        var target = TargetFor(n);
+        if (target is not null) Nav.NavigateTo(target);
+        else StateHasChanged();
+    }
+
+    private static string? TargetFor(Item n)
+    {
+        if (n.EntityId is null) return null;
+        return n.EntityType switch
+        {
+            "Custody"   => $"/custodies?openId={n.EntityId}",
+            "Expense"   => $"/expenses/new/{n.EntityId}",
+            "Trip"      => $"/trips/new/{n.EntityId}",
+            "Operation" => $"/operations/{n.EntityId}/file",
+            "Invoice"   => $"/invoices/new/{n.EntityId}",
+            _           => null
+        };
     }
 
     private async Task Read(Item n)

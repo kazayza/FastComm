@@ -1,0 +1,2339 @@
+@page "/operations/{Id:long}/file"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>ملف العملية — فاست كوم</PageTitle>
+
+<div class="hero-wrapper">
+    <div class="fc-hero fc-hero-slim">
+        <div class="fc-hero-inner">
+            <div class="doc-hero-row">
+                <div class="doc-hero-left">
+                    <div class="doc-hero-crumb"><span>التشغيل · ملف العملية</span></div>
+                    <h1 class="fc-hero-title">ملف العملية @(_d?.OperationNumber ?? "")</h1>
+                    @if (_d is not null)
+                    {
+                        <p class="fc-hero-sub">
+                            حجز الوكيل: <b>@(_d.AgentReference ?? "—")</b> · العميل: @_d.CustomerName · الحالة: @_d.Status
+                        </p>
+                    }
+                </div>
+                <div class="doc-hero-right">
+                    @if (CanInvoiceCreate && _d is not null && _d.Status != "Cancelled" && _lines.Count > 0)
+                    {
+                        <a class="doc-hero-btn solid" href="@($"/invoices/new?operationId={Id}&customerId={_d.CustomerId}")">إنشاء فاتورة العميل</a>
+                    }
+                    <a class="doc-hero-btn solid" href="@($"/transport-requests/new/{Id}")">تعديل الطلب</a>
+                    <a class="doc-hero-btn" href="@($"/operations/new/{Id}")">تعديل العملية</a>
+                </div>
+            </div>
+
+            @if (_d is not null)
+            {
+                <div class="doc-kpis-row">
+                    <div class="doc-kpi doc-kpi-blue">
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke-linecap="round"/></svg></div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@_d.RevenueNet.ToString("N2")</div>
+                                <div class="doc-kpi-label">إيراد (صافي)</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="doc-kpi doc-kpi-amber">
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><path d="M8 7h8M8 11h8M8 15h5" stroke-linecap="round"/></svg></div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@_d.ActualCost.ToString("N2")</div>
+                                <div class="doc-kpi-label">تكلفة فعلية</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="doc-kpi doc-kpi-green">
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 6l-9.5 9.5-5-5L1 18" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 6h6v6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@((_d.RevenueNet - _d.ActualCost).ToString("N2"))</div>
+                                <div class="doc-kpi-label">الربح التقديري</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="doc-kpi doc-kpi-blue">
+                        <div class="doc-kpi-inner">
+                            <div class="doc-kpi-icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
+                            <div class="doc-kpi-data">
+                                <div class="doc-kpi-num">@_trips.Count / @_containers.Count</div>
+                                <div class="doc-kpi-label">رحلات / حاويات</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (_d is null)
+{
+    <div class="doc-loading">جارٍ تحميل ملف العملية...</div>
+}
+else
+{
+    <div class="bk-body">
+        <div class="tab-section">
+            <div class="doc-sec-head">
+                <div class="tab-section-head" style="margin-bottom:0">
+                    <div class="tab-section-icon blue" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke-linecap="round"/></svg>
+                    </div>
+                    <div>
+                        <div class="tab-section-title">سطور الإيراد</div>
+                        <div class="tab-section-sub">ما يدفعه العميل عن هذه العملية — تُعدَّل الكمية والسعر والخصم من هنا</div>
+                    </div>
+                </div>
+                @if (CanEditLines)
+                {
+                    <button type="button" class="doc-btn primary" @onclick="SaveRevenueAsync" disabled="@_savingRev">حفظ السطور</button>
+                }
+            </div>
+            <div class="doc-table-wrap">
+                <table class="doc-table">
+                    <thead>
+                        <tr><th>الخدمة</th><th>البيان</th><th>الكمية</th><th>السعر</th><th>الخصم</th><th>الصافي</th>@if (CanEditLines) { <th></th> }</tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in _lines)
+                        {
+                            <tr>
+                                <td>@l.ServiceName</td>
+                                <td>@l.Description</td>
+                                @if (CanEditLines)
+                                {
+                                    <td><input type="number" class="doc-inline-input" style="width:78px" min="0" step="any" value="@Fmt(l.Quantity)" @onchange="e => l.Quantity = ParseDec(e.Value)" /></td>
+                                    <td><input type="number" class="doc-inline-input" style="width:104px" min="0" step="any" value="@Fmt(l.UnitPrice)" @onchange="e => l.UnitPrice = ParseDec(e.Value)" /></td>
+                                    <td><input type="number" class="doc-inline-input" style="width:88px" min="0" step="any" value="@Fmt(l.Discount)" @onchange="e => l.Discount = ParseDec(e.Value)" /></td>
+                                }
+                                else
+                                {
+                                    <td>@l.Quantity</td>
+                                    <td>@l.UnitPrice.ToString("N2")</td>
+                                    <td>@l.Discount.ToString("N2")</td>
+                                }
+                                <td><b>@l.LineNet.ToString("N2")</b></td>
+                                @if (CanEditLines)
+                                {
+                                    <td>
+                                        <button type="button" class="doc-icon-btn danger" title="حذف السطر" @onclick="() => _lines.Remove(l)">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                        </button>
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (CanEditLines)
+            {
+                <div class="doc-form-row">
+                    <div class="form-field" style="flex:2">
+                        <label class="field-label">خدمة جديدة</label>
+                        <div class="field-select-wrap">
+                            <select class="field-input field-select" @bind="_newRevServiceId">
+                                <option value="0">— اختر الخدمة —</option>
+                                @foreach (var sv in _services) { <option value="@sv.Id">@sv.Label</option> }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-field" style="flex:1">
+                        <label class="field-label">السعر</label>
+                        <div class="field-input-group">
+                            <input type="number" class="field-input" min="0" step="any" value="@Fmt(_newRevPrice)" @onchange="e => _newRevPrice = ParseDec(e.Value)" />
+                        </div>
+                    </div>
+                    <div class="form-field doc-form-action">
+                        <button type="button" class="doc-btn outline" @onclick="AddRevenueLine">إضافة سطر</button>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="tab-section">
+            <div class="doc-sec-head">
+                <div class="tab-section-head" style="margin-bottom:0">
+                    <div class="tab-section-icon green" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+                    </div>
+                    <div>
+                        <div class="tab-section-title">الحاويات (@_containers.Count)</div>
+                        <div class="tab-section-sub">الحاويات الفعلية المربوطة بالعملية</div>
+                    </div>
+                </div>
+                @if (CanOpEdit) { <button type="button" class="doc-btn outline" @onclick="SyncContainersAsync" disabled="@_syncing">مزامنة من الحجز</button> }
+            </div>
+            @if (_bkLines.Count > 0)
+            {
+                <div class="doc-table-wrap" style="margin-bottom:14px">
+                    <table class="doc-table">
+                        <thead>
+                            <tr><th>سطور الحاويات المسجلة في الطلب — النوع</th><th>العدد</th><th>الوزن (كجم)</th><th>ضمان الحاوية</th><th>ملاحظات</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var l in _bkLines)
+                            {
+                                <tr>
+                                    <td>@(l.TypeName ?? "—")</td>
+                                    <td>@l.RequestedQty</td>
+                                    <td>@(l.WeightKg?.ToString("N0") ?? "—")</td>
+                                    <td>@(l.GuaranteePerContainer?.ToString("N0") ?? "—")</td>
+                                    <td>@(l.Notes ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            @if (_containers.Count == 0)
+            {
+                <p class="doc-empty">لا توجد حاويات فعلية مرتبطة بعد — تُنسخ تلقائيًا من تفاصيل حجز الوكيل عند إنشاء العملية، أو أضفها من النموذج التالي.</p>
+            }
+            else
+            {
+                <div class="doc-table-wrap">
+                    <table class="doc-table">
+                        <thead>
+                            <tr><th>رقم الحاوية</th><th>النوع</th><th>البوليصة</th><th>الحالة</th>@if (CanOpEdit && !IsClosed) { <th></th> }</tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var c in _containers)
+                            {
+                                <tr>
+                                    <td>@(c.ContainerNumber ?? "—")</td>
+                                    <td>@(c.TypeName ?? "—")</td>
+                                    @if (CanOpEdit && !IsClosed)
+                                    {
+                                        <td><input type="text" class="doc-inline-input" style="width:170px" placeholder="رقم البوليصة" @bind="c.EditBl" /></td>
+                                    }
+                                    else
+                                    {
+                                        <td>@(c.BLNumber ?? "—")</td>
+                                    }
+                                    <td>@c.Status</td>
+                                    @if (CanOpEdit && !IsClosed)
+                                    {
+                                        <td>
+                                            <button type="button" class="doc-icon-btn" title="حفظ البوليصة" @onclick="() => SaveContainerBlAsync(c)">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                            </button>
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            @if (CanOpEdit && !IsClosed)
+            {
+                <div class="doc-form-row">
+                    <div class="form-field" style="flex:2">
+                        <label class="field-label">رقم حاوية جديد</label>
+                        <div class="field-input-group">
+                            <input type="text" class="field-input" @bind="_newContNumber" />
+                        </div>
+                    </div>
+                    <div class="form-field" style="flex:1">
+                        <label class="field-label">النوع</label>
+                        <div class="field-select-wrap">
+                            <select class="field-input field-select" @bind="_newContTypeId">
+                                <option value="0">— اختر النوع —</option>
+                                @foreach (var t in _containerTypes) { <option value="@t.Id">@t.Label</option> }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-field" style="flex:1">
+                        <label class="field-label">البوليصة</label>
+                        <div class="field-input-group">
+                            <input type="text" class="field-input" @bind="_newContBl" />
+                        </div>
+                    </div>
+                    <div class="form-field doc-form-action">
+                        <button type="button" class="doc-btn outline" @onclick="AddContainerAsync" disabled="@_addingCont">إضافة حاوية</button>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="tab-section">
+            <div class="doc-sec-head">
+                <div class="tab-section-head" style="margin-bottom:0">
+                    <div class="tab-section-icon blue" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                    </div>
+                    <div>
+                        <div class="tab-section-title">الرحلات (@_trips.Count)</div>
+                        <div class="tab-section-sub">رحلة لكل حاوية — يُربط السائق والسيارة من المورد نفسه تلقائيًا</div>
+                    </div>
+                </div>
+                @if (CanTripCreate) { <button type="button" class="doc-btn primary" @onclick="() => _showTripForm = !_showTripForm">إضافة رحلة</button> }
+            </div>
+
+            @if (_showTripForm)
+            {
+                <div class="doc-form-row wrap">
+                    <div class="form-field" style="flex:2">
+                        <label class="field-label">نوع المصروف <span class="field-required">*</span></label>
+                        <div class="form-field-with-dropdown">
+                            <div class="field-select-wrap">
+                                <input class="field-input field-select"
+                                       value="@QeTypeText"
+                                       placeholder="ابحث عن النوع..."
+                                       @oninput="OnQeTypeSearch"
+                                       @onfocus="() => { _showQeTypeDd = true; _qeFilteredTypes = QeFilterTypes(); }"
+                                       @onfocusout="() => _showQeTypeDd = false" />
+                            </div>
+                            @if (_showQeTypeDd && _qeFilteredTypes.Count > 0)
+                            {
+                                <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                    @foreach (var t in _qeFilteredTypes)
+                                    {
+                                        <div class="field-dropdown-item" @onmousedown="() => PickQeType(t)">@t.Label</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    @if (QeCurrentType?.IsReceiptRequired == true)
+                    {
+                        <div class="form-field" style="flex:1.4">
+                            <label class="field-label">نوع الإيصال <span class="field-required">*</span></label>
+                            <div class="field-select-wrap">
+                                <select class="field-input field-select" @bind="_qe.ReceiptTypeId">
+                                    <option value="">— اختر —</option>
+                                    @foreach (var r in _qeReceiptTypes) { <option value="@r.Id">@r.Label</option> }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-field" style="flex:1">
+                            <label class="field-label">رقم الإيصال</label>
+                            <div class="field-input-group">
+                                <input type="text" class="field-input" @bind="_qe.ReceiptNumber" />
+                            </div>
+                        </div>
+                    }
+                    <div class="form-field" style="flex:1">
+                        <label class="field-label">المبلغ المدفوع <span class="field-required">*</span></label>
+                        <div class="field-input-group">
+                            <input type="number" class="field-input" min="0" step="any" value="@Fmt(_qe.Amount)" @onchange="e => _qe.Amount = ParseDec(e.Value)" />
+                        </div>
+                    </div>
+                    <div class="form-field" style="flex:1">
+                        <label class="field-label">يتحمّله العميل</label>
+                        <div class="field-input-group">
+                            <input type="number" class="field-input" min="0" step="any" value="@FmtN(_qe.Billable)" @onchange="e => _qe.Billable = ParseDecN(e.Value)" />
+                        </div>
+                    </div>
+                    <div class="form-field" style="flex:1.3">
+                        <label class="field-label">مصدر المال</label>
+                        <div class="qe-src-toggle">
+                            <button type="button" class="@(_qe.Source == "Custody" ? "on" : "")" @onclick='() => _qe.Source = "Custody"'>من عهدة</button>
+                            <button type="button" class="@(_qe.Source == "Treasury" ? "on" : "")" @onclick='() => _qe.Source = "Treasury"'>من الخزينة</button>
+                        </div>
+                    </div>
+                    @if (_qe.Source == "Custody")
+                    {
+                        <div class="form-field" style="flex:1.8">
+                            <label class="field-label">العهدة <span class="field-required">*</span></label>
+                            <div class="field-select-wrap">
+                                <select class="field-input field-select"
+                                        value="@_qe.CustodyId"
+                                        @onchange="e => _qe.CustodyId = long.TryParse(e.Value?.ToString(), out var cv) && cv > 0 ? cv : (long?)null">
+                                    <option value="">— اختر العهدة —</option>
+                                    @foreach (var c in _qeCustodies) { <option value="@c.Id">@c.Label — @c.AmountIssued.ToString("N2") ج.م</option> }
+                                </select>
+                            </div>
+                        </div>
+                    }
+                    <div class="form-field" style="flex:1.6">
+                        <label class="field-label">البيان</label>
+                        <div class="field-input-group">
+                            <input type="text" class="field-input" @bind="_qe.Description" />
+                        </div>
+                    </div>
+                    <div class="form-field doc-form-action">
+                        <button type="button" class="doc-btn primary" @onclick="QuickExpenseAsync" disabled="@_savingExp">إضافة سريعة</button>
+                    </div>
+                </div>
+            }
+            <div class="doc-table-wrap">
+                <table class="doc-table">
+                    <thead>
+                        <tr><th>الخدمة</th><th>البيان</th><th>الكمية</th><th>السعر</th><th>الخصم</th><th>الصافي</th>@if (CanEditLines) { <th></th> }</tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in _lines)
+                        {
+                            <tr>
+                                <td>@l.ServiceName</td>
+                                <td>@l.Description</td>
+                                @if (CanEditLines)
+                                {
+                                    <td><input type="number" class="doc-inline-input" style="width:78px" min="0" step="any" value="@Fmt(l.Quantity)" @onchange="e => l.Quantity = ParseDec(e.Value)" /></td>
+                                    <td><input type="number" class="doc-inline-input" style="width:104px" min="0" step="any" value="@Fmt(l.UnitPrice)" @onchange="e => l.UnitPrice = ParseDec(e.Value)" /></td>
+                                    <td><input type="number" class="doc-inline-input" style="width:88px" min="0" step="any" value="@Fmt(l.Discount)" @onchange="e => l.Discount = ParseDec(e.Value)" /></td>
+                                }
+                                else
+                                {
+                                    <td>@l.Quantity</td>
+                                    <td>@l.UnitPrice.ToString("N2")</td>
+                                    <td>@l.Discount.ToString("N2")</td>
+                                }
+                                <td><b>@l.LineNet.ToString("N2")</b></td>
+                                @if (CanEditLines)
+                                {
+                                    <td>
+                                        <button type="button" class="doc-icon-btn danger" title="حذف السطر" @onclick="() => _lines.Remove(l)">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                        </button>
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (CanEditLines)
+            {
+                <div class="doc-form-row">
+                    <div class="form-field" style="flex:2">
+                        <label class="field-label">خدمة جديدة</label>
+                        <div class="field-select-wrap">
+                            <select class="field-input field-select" @bind="_newRevServiceId">
+                                <option value="0">— اختر الخدمة —</option>
+                                @foreach (var sv in _services) { <option value="@sv.Id">@sv.Label</option> }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-field" style="flex:1">
+                        <label class="field-label">السعر</label>
+                        <div class="field-input-group">
+                            <input type="number" class="field-input" min="0" step="any" value="@Fmt(_newRevPrice)" @onchange="e => _newRevPrice = ParseDec(e.Value)" />
+                        </div>
+                    </div>
+                    <div class="form-field doc-form-action">
+                        <button type="button" class="doc-btn outline" @onclick="AddRevenueLine">إضافة سطر</button>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="tab-section">
+            <div class="doc-sec-head">
+                <div class="tab-section-head" style="margin-bottom:0">
+                    <div class="tab-section-icon green" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+                    </div>
+                    <div>
+                        <div class="tab-section-title">الحاويات (@_containers.Count)</div>
+                        <div class="tab-section-sub">الحاويات الفعلية المربوطة بالعملية</div>
+                    </div>
+                </div>
+                @if (CanOpEdit) { <button type="button" class="doc-btn outline" @onclick="SyncContainersAsync" disabled="@_syncing">مزامنة من الحجز</button> }
+            </div>
+            @if (_bkLines.Count > 0)
+            {
+                <div class="doc-table-wrap" style="margin-bottom:14px">
+                    <table class="doc-table">
+                        <thead>
+                            <tr><th>سطور الحاويات المسجلة في الطلب — النوع</th><th>العدد</th><th>الوزن (كجم)</th><th>ضمان الحاوية</th><th>ملاحظات</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var l in _bkLines)
+                            {
+                                <tr>
+                                    <td>@(l.TypeName ?? "—")</td>
+                                    <td>@l.RequestedQty</td>
+                                    <td>@(l.WeightKg?.ToString("N0") ?? "—")</td>
+                                    <td>@(l.GuaranteePerContainer?.ToString("N0") ?? "—")</td>
+                                    <td>@(l.Notes ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            @if (_containers.Count == 0)
+            {
+                <p class="doc-empty">لا توجد حاويات فعلية مرتبطة بعد — تُنسخ تلقائيًا من تفاصيل حجز الوكيل عند إنشاء العملية، أو أضفها من النموذج التالي.</p>
+            }
+            else
+            {
+                <div class="doc-table-wrap">
+                    <table class="doc-table">
+                        <thead>
+                            <tr><th>رقم الحاوية</th><th>النوع</th><th>البوليصة</th><th>الحالة</th>@if (CanOpEdit && !IsClosed) { <th></th> }</tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var c in _containers)
+                            {
+                                <tr>
+                                    <td>@(c.ContainerNumber ?? "—")</td>
+                                    <td>@(c.TypeName ?? "—")</td>
+                                    @if (CanOpEdit && !IsClosed)
+                                    {
+                                        <td><input type="text" class="doc-inline-input" style="width:170px" placeholder="رقم البوليصة" @bind="c.EditBl" /></td>
+                                    }
+                                    else
+                                    {
+                                        <td>@(c.BLNumber ?? "—")</td>
+                                    }
+                                    <td>@c.Status</td>
+                                    @if (CanOpEdit && !IsClosed)
+                                    {
+                                        <td>
+                                            <button type="button" class="doc-icon-btn" title="حفظ البوليصة" @onclick="() => SaveContainerBlAsync(c)">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                            </button>
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            @if (CanOpEdit && !IsClosed)
+            {
+                <div class="doc-form-row">
+                    <div class="form-field" style="flex:2">
+                        <label class="field-label">رقم حاوية جديد</label>
+                        <div class="field-input-group">
+                            <input type="text" class="field-input" @bind="_newContNumber" />
+                        </div>
+                    </div>
+                    <div class="form-field" style="flex:1">
+                        <label class="field-label">النوع</label>
+                        <div class="field-select-wrap">
+                            <select class="field-input field-select" @bind="_newContTypeId">
+                                <option value="0">— اختر النوع —</option>
+                                @foreach (var t in _containerTypes) { <option value="@t.Id">@t.Label</option> }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-field" style="flex:1">
+                        <label class="field-label">البوليصة</label>
+                        <div class="field-input-group">
+                            <input type="text" class="field-input" @bind="_newContBl" />
+                        </div>
+                    </div>
+                    <div class="form-field doc-form-action">
+                        <button type="button" class="doc-btn outline" @onclick="AddContainerAsync" disabled="@_addingCont">إضافة حاوية</button>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="tab-section">
+            <div class="doc-sec-head">
+                <div class="tab-section-head" style="margin-bottom:0">
+                    <div class="tab-section-icon blue" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                    </div>
+                    <div>
+                        <div class="tab-section-title">الرحلات (@_trips.Count)</div>
+                        <div class="tab-section-sub">رحلة لكل حاوية — يُربط السائق والسيارة من المورد نفسه تلقائيًا</div>
+                    </div>
+                </div>
+                @if (CanTripCreate) { <button type="button" class="doc-btn primary" @onclick="() => _showTripForm = !_showTripForm">إضافة رحلة</button> }
+            </div>
+
+            @if (_showTripForm)
+            {
+                <div class="doc-form-row wrap">
+                    <div class="form-field" style="flex:2">
+                        <label class="field-label">السائق <span class="field-required">*</span></label>
+                        <div class="field-select-wrap">
+                            <select class="field-input field-select" value="@_tf.DriverId" @onchange="e => OnDriverPicked(ParseInt(e.Value))">
+                                <option value="0">— اختر السائق —</option>
+                                @foreach (var d in OrderedDriverOpts()) { <option value="@d.Id">@d.Label</option> }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-field" style="flex:2">
+                        <label class="field-label">العربية <span class="field-required">*</span></label>
+                        <div class="field-select-wrap">
+                            <select class="field-input field-select" value="@_tf.VehicleId" @onchange="e => OnVehiclePicked(ParseInt(e.Value))">
+                                <option value="0">— اختر العربية —</option>
+                                @foreach (var v in OrderedVehicleOpts()) { <option value="@v.Id">@v.Label</option> }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-field" style="flex:1">
+                        <label class="field-label">المقطورة</label>
+                        <div class="field-select-wrap">
+                            <select class="field-input field-select" value="@(_tf.TrailerId?.ToString() ?? "")" @onchange="e => _tf.TrailerId = ParseIntN(e.Value)">
+                                <option value="">— بدون —</option>
+                                @foreach (var v in _trailers) { <option value="@v.Id">@v.Label</option> }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-field" style="flex:1">
+                        <label class="field-label">ميعاد التحرك</label>
+                        <div class="field-input-group">
+                            <input type="datetime-local" class="field-input" value="@_tf.PlannedStartAt" @onchange="e => _tf.PlannedStartAt = e.Value?.ToString()" />
+                        </div>
+                    </div>
+                    <div class="form-field" style="flex:1">
+                        <label class="field-label">النولون</label>
+                        <div class="field-input-group">
+                            <input type="number" class="field-input" min="0" step="any" value="@FmtN(_tf.Freight)" @onchange="e => _tf.Freight = ParseDecN(e.Value)" />
+                        </div>
+                    </div>
+                    <div class="form-field doc-form-action">
+                        <button type="button" class="doc-btn primary" @onclick="AddTripAsync" disabled="@_savingTrip">حفظ الرحلة</button>
+                    </div>
+                </div>
+            }
+
+            <div class="doc-table-wrap">
+                <table class="doc-table">
+                    <thead>
+                        <tr><th>الرحلة</th><th>السائق</th><th>العربية</th><th>المخطط</th><th>النولون</th><th>الحالة</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in _trips)
+                        {
+                            <tr>
+                                <td><a class="doc-link" href="@($"/trips/new/{t.TripId}")">@t.TripNumber</a></td>
+                                <td>@t.DriverName</td>
+                                <td>@t.VehiclePlate</td>
+                                <td>@(t.PlannedStartAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                                <td>@(t.FreightAmount?.ToString("N2") ?? "—")</td>
+                                <td>@TripStatusAr(t.Status)</td>
+                                <td>
+                                    <a class="doc-icon-btn" title="تعديل الرحلة" href="@($"/trips/new/{t.TripId}")">
+                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9" stroke-linecap="round"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke-linejoin="round"/></svg>
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="tab-section">
+            <div class="doc-sec-head">
+                <div class="tab-section-head" style="margin-bottom:0">
+                    <div class="tab-section-icon amber" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><path d="M8 7h8M8 11h8M8 15h5" stroke-linecap="round"/></svg>
+                    </div>
+                    <div>
+                        <div class="tab-section-title">المصروفات (@_expenses.Count)</div>
+                        <div class="tab-section-sub">مصروفات التشغيل المربوطة بالعملية دي</div>
+                    </div>
+                </div>
+                <a class="doc-btn outline" href="/expenses/new">مصروف جديد (شاشة كاملة)</a>
+            </div>
+            @if (CanExpenseCreate && !IsClosed)
+            {
+                <div class="doc-form-row wrap">
+                    <div class="form-field" style="flex:2">
+                        <label class="field-label">نوع المصروف <span class="field-required">*</span></label>
+                        <div class="field-select-wrap">
+                            <select class="field-input field-select" @bind="_qe.TypeId">
+                                <option value="0">— اختر النوع —</option>
+                                @foreach (var t in _expenseTypes) { <option value="@t.Id">@t.Label</option> }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-field" style="flex:1">
+                        <label class="field-label">المبلغ المدفوع <span class="field-required">*</span></label>
+                        <div class="field-input-group">
+                            <input type="number" class="field-input" min="0" step="any" value="@Fmt(_qe.Amount)" @onchange="e => _qe.Amount = ParseDec(e.Value)" />
+                        </div>
+                    </div>
+                    <div class="form-field" style="flex:1">
+                        <label class="field-label">يتحمّله العميل</label>
+                        <div class="field-input-group">
+                            <input type="number" class="field-input" min="0" step="any" value="@FmtN(_qe.Billable)" @onchange="e => _qe.Billable = ParseDecN(e.Value)" />
+                        </div>
+                    </div>
+                    <div class="form-field" style="flex:2">
+                        <label class="field-label">البيان</label>
+                        <div class="field-input-group">
+                            <input type="text" class="field-input" @bind="_qe.Description" />
+                        </div>
+                    </div>
+                    <div class="form-field doc-form-action">
+                        <button type="button" class="doc-btn primary" @onclick="QuickExpenseAsync" disabled="@_savingExp">إضافة سريعة</button>
+                    </div>
+                </div>
+            }
+            <div class="doc-table-wrap">
+                <table class="doc-table">
+                    <thead>
+                        <tr><th>الرقم</th><th>النوع</th><th>الإيصال</th><th>التاريخ</th><th>المبلغ</th><th>الحالة</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var x in _expenses)
+                        {
+                            <tr>
+                                <td>@x.ExpenseNumber</td>
+                                <td>@x.TypeName</td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(x.ReceiptTypeName))
+                                    {
+                                        <span>@x.ReceiptTypeName</span>
+                                        @if (!string.IsNullOrWhiteSpace(x.ReferenceNumber))
+                                        {
+                                            <div class="doc-sub">@x.ReferenceNumber</div>
+                                        }
+                                    }
+                                    else { <span class="doc-sub">—</span> }
+                                </td>
+                                <td>@x.ExpenseDate.ToString("yyyy-MM-dd")</td>
+                                <td>@x.Amount.ToString("N2")</td>
+                                <td>@x.Status</td>
+                                <td>
+                                    <a class="doc-icon-btn" title="تعديل المصروف" href="@($"/expenses/new/{x.ExpenseId}")">
+                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9" stroke-linecap="round"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke-linejoin="round"/></svg>
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public long Id { get; set; }
+
+    private AuthUser? _user;
+    private bool CanTripCreate => _user?.Can("TRIP.CREATE") ?? false;
+    private bool CanOpEdit => _user?.Can("OPERATION.EDIT") ?? false;
+    private bool CanExpenseCreate => _user?.Can("EXPENSE.CREATE") ?? false;
+    private bool CanInvoiceCreate => _user?.Can("INVOICE.CREATE") ?? false;
+    private bool IsClosed => _d?.Status is "Closed" or "Cancelled";
+    private bool CanEditLines => CanOpEdit && !IsClosed;
+    private bool _syncing;
+
+    /* ── تحرير مباشر من الملف: إيراد/حاويات/مصروف سريع ── */
+    private List<Opt> _services = new(), _containerTypes = new(), _expenseTypes = new();
+    private bool _savingRev;
+    private int _newRevServiceId;
+    private decimal _newRevPrice;
+    private string? _newContNumber, _newContBl;
+    private int _newContTypeId;
+    private bool _addingCont;
+
+    private class QuickExp
+    {
+        public int TypeId { get; set; } public decimal Amount { get; set; }
+        public decimal? Billable { get; set; } public string? Description { get; set; }
+        public int? ReceiptTypeId { get; set; } public string? ReceiptNumber { get; set; }
+        public string Source { get; set; } = "Treasury"; public long? CustodyId { get; set; }
+    }
+    private QuickExp _qe = new();
+    private bool _savingExp;
+
+    public class QExpType { public int Id { get; set; } public string Label { get; set; } = ""; public bool IsReceiptRequired { get; set; } public bool IsFreightAdvance { get; set; } }
+    public class QCustody { public long Id { get; set; } public string Label { get; set; } = ""; public decimal AmountIssued { get; set; } }
+    public class QMethod { public int Id { get; set; } public bool IsCashBased { get; set; } }
+    private List<QExpType> _qeTypes = new();
+    private List<QCustody> _qeCustodies = new();
+    private List<Opt> _qeReceiptTypes = new();
+    private int? _qeCashMethodId;
+    private string _qeTypeSearch = "";
+    private bool _qeTypeTouched, _showQeTypeDd;
+    private List<QExpType> _qeFilteredTypes = new();
+
+    private QExpType? QeCurrentType => _qeTypes.FirstOrDefault(t => t.Id == _qe.TypeId);
+    private string QeTypeText =>
+        !_qeTypeTouched && _qe.TypeId > 0
+            ? (_qeTypes.FirstOrDefault(t => t.Id == _qe.TypeId)?.Label ?? "")
+            : _qeTypeSearch;
+
+    private void OnQeTypeSearch(ChangeEventArgs e)
+    {
+        _qeTypeSearch = e.Value?.ToString() ?? ""; _qeTypeTouched = true; _showQeTypeDd = true;
+        _qeFilteredTypes = QeFilterTypes();
+    }
+
+    private List<QExpType> QeFilterTypes() =>
+        string.IsNullOrWhiteSpace(_qeTypeSearch)
+            ? _qeTypes
+            : _qeTypes.Where(t => t.Label.Contains(_qeTypeSearch, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private void PickQeType(QExpType t)
+    { _showQeTypeDd = false; _qeTypeTouched = true; _qeTypeSearch = t.Label; _qe.TypeId = t.Id; }
+
+    private void AddRevenueLine()
+    {
+        if (_newRevServiceId <= 0) { Snackbar.Add("اختر الخدمة أولًا", Severity.Warning); return; }
+        _lines.Add(new RevLine
+        {
+            ServiceId   = _newRevServiceId,
+            ServiceName = _services.FirstOrDefault(s => s.Id == _newRevServiceId)?.Label ?? "",
+            Quantity    = 1,
+            UnitPrice   = _newRevPrice
+        });
+        _newRevPrice = 0;
+    }
+
+    private async Task SaveRevenueAsync()
+    {
+        if (_d is null) return;
+        _savingRev = true;
+        try
+        {
+            var payload = new
+            {
+                bookingId     = _d.BookingId,
+                customerId    = _d.CustomerId,
+                serviceId     = _d.ServiceId,
+                portId        = _d.PortId,
+                destinationId = _d.DestinationId,
+                tahteeqPortId = _d.TahteeqPortId,
+                tripTypeId    = _d.TripTypeId,
+                plannedDate   = string.IsNullOrEmpty(_d.PlannedDate) ? null : _d.PlannedDate[..10],
+                estimatedCost = _d.EstimatedCost,
+                notes         = _d.Notes,
+                revenueLines  = _lines.Select(l => new
+                {
+                    serviceId   = l.ServiceId,
+                    description = l.Description,
+                    quantity    = l.Quantity,
+                    unitPrice   = l.UnitPrice,
+                    discount    = l.Discount,
+                    taxRateId   = l.TaxRateId,
+                    priceRuleId = l.PriceRuleId
+                }).ToList()
+            };
+            var res = await Http.PutAsJsonAsync($"api/operations/{Id}", payload);
+            var msg = await MsgOf(res);
+            if (res.IsSuccessStatusCode) { Snackbar.Add("✅ تم حفظ سطور الإيراد", Severity.Success); await LoadAsync(); }
+            else Snackbar.Add(msg, Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        finally { _savingRev = false; }
+    }
+
+    private async Task SaveContainerBlAsync(OpContainer c)
+    {
+        try
+        {
+            var res = await Http.PutAsJsonAsync($"api/operations/{Id}/containers/{c.OperationContainerId}",
+                new { blNumber = c.EditBl });
+            var msg = await MsgOf(res);
+            if (res.IsSuccessStatusCode) { Snackbar.Add(msg, Severity.Success); await LoadAsync(); }
+            else Snackbar.Add(msg, Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    private async Task AddContainerAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newContNumber)) { Snackbar.Add("أدخل رقم الحاوية", Severity.Warning); return; }
+        if (_newContTypeId <= 0) { Snackbar.Add("اختر نوع الحاوية", Severity.Warning); return; }
+        _addingCont = true;
+        try
+        {
+            var res = await Http.PostAsJsonAsync($"api/operations/{Id}/containers",
+                new { containerNumber = _newContNumber, containerTypeId = _newContTypeId, blNumber = _newContBl });
+            var msg = await MsgOf(res);
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(msg, Severity.Success);
+                _newContNumber = null; _newContBl = null;
+                await LoadAsync();
+            }
+            else Snackbar.Add(msg, Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        finally { _addingCont = false; }
+    }
+
+    private class CreatedRes { public long Id { get; set; } public string? Message { get; set; } }
+
+    private async Task QuickExpenseAsync()
+    {
+        if (_savingExp) return;
+        if (_qe.TypeId <= 0) { Snackbar.Add("اختر نوع المصروف", Severity.Warning); return; }
+        if (_qe.Amount <= 0) { Snackbar.Add("يجب أن يكون المبلغ أكبر من صفر", Severity.Warning); return; }
+        if (QeCurrentType?.IsReceiptRequired == true && _qe.ReceiptTypeId is null)
+        { Snackbar.Add("هذا النوع يستدعي إيصالًا — اختر نوع الإيصال", Severity.Warning); return; }
+        if (_qe.Source == "Custody" && _qe.CustodyId is null)
+        { Snackbar.Add("اختر العهدة التي خرج منها المال", Severity.Warning); return; }
+        _savingExp = true;
+        try
+        {
+            var payload = new
+            {
+                expenseTypeId   = _qe.TypeId,
+                expenseDate     = DateTime.Today.ToString("yyyy-MM-dd"),
+                description     = _qe.Description,
+                amount          = _qe.Amount,
+                operationId     = Id,
+                tripId          = (long?)null,
+                driverId        = (int?)null,
+                vehicleId       = (int?)null,
+                supplierId      = (int?)null,
+                custodyId       = _qe.Source == "Custody" ? _qe.CustodyId : (long?)null,
+                taxRateId       = (int?)null,
+                isTaxDeductible = (bool?)null,
+                referenceNumber = QeCurrentType?.IsReceiptRequired == true ? _qe.ReceiptNumber : (string?)null,
+                receiptTypeId   = _qe.ReceiptTypeId,
+                paymentMethodId = _qeCashMethodId,
+                notes           = (string?)null,
+                asDraft         = false,
+                billableAmount  = _qe.Billable
+            };
+            var res = await Http.PostAsJsonAsync("api/expenses", payload);
+            if (!res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(await MsgOf(res), Severity.Error);
+                return;
+            }
+
+            var created = await res.Content.ReadFromJsonAsync<CreatedRes>();
+            if (_qe.Source == "Treasury" && created is not null && created.Id > 0)
+            {
+                var payRes = await Http.PostAsJsonAsync($"api/expenses/{created.Id}/set-paid", new { to = "Paid" });
+                if (!payRes.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("أُنشئ المصروف، لكن تعليمه مدفوعًا من الخزينة فشل: " + await MsgOf(payRes), Severity.Warning);
+                    _qe = new(); _qeTypeSearch = ""; _qeTypeTouched = false;
+                    await LoadAsync();
+                    return;
+                }
+            }
+
+            Snackbar.Add(created?.Message ?? "تمت إضافة المصروف", Severity.Success);
+            _qe = new(); _qeTypeSearch = ""; _qeTypeTouched = false;
+            await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        finally { _savingExp = false; }
+    }
+
+    private async Task SyncContainersAsync()
+    {
+        _syncing = true;
+        try
+        {
+            var res = await Http.PostAsync($"api/operations/{Id}/sync-containers", null);
+            var msg = await MsgOf(res);
+            if (res.IsSuccessStatusCode) { Snackbar.Add(msg, Severity.Success); await LoadAsync(); }
+            else Snackbar.Add(msg, Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        finally { _syncing = false; }
+    }
+
+    public class Opt { public int Id { get; set; } public string Label { get; set; } = ""; }
+    private List<Opt> _drivers = new(), _vehicles = new(), _trailers = new();
+
+    public class PairOpt { public int Id { get; set; } public string Label { get; set; } = ""; public int? SupplierId { get; set; } public bool IsCompany { get; set; } }
+    private List<PairOpt> _driverPairs = new(), _vehiclePairs = new();
+
+    private static bool SameSource(PairOpt a, PairOpt b) =>
+        (a.IsCompany && b.IsCompany) ||
+        (!a.IsCompany && !b.IsCompany && a.SupplierId is not null && a.SupplierId == b.SupplierId);
+
+    private void OnDriverPicked(int id)
+    {
+        _tf.DriverId = id;
+        var dr = _driverPairs.FirstOrDefault(x => x.Id == id);
+        if (dr is null) return;
+        var cur = _vehiclePairs.FirstOrDefault(x => x.Id == _tf.VehicleId);
+        if (cur is not null && SameSource(cur, dr)) return;
+        var m = _vehiclePairs.Where(v => SameSource(v, dr)).ToList();
+        if (m.Count == 1) _tf.VehicleId = m[0].Id;
+    }
+
+    private void OnVehiclePicked(int id)
+    {
+        _tf.VehicleId = id;
+        var v = _vehiclePairs.FirstOrDefault(x => x.Id == id);
+        if (v is null) return;
+        var cur = _driverPairs.FirstOrDefault(x => x.Id == _tf.DriverId);
+        if (cur is not null && SameSource(cur, v)) return;
+        var m = _driverPairs.Where(d => SameSource(d, v)).ToList();
+        if (m.Count == 1) _tf.DriverId = m[0].Id;
+    }
+
+    private List<Opt> OrderedDriverOpts()
+    {
+        var v = _vehiclePairs.FirstOrDefault(x => x.Id == _tf.VehicleId);
+        if (v is null) return _drivers;
+        return _drivers.OrderByDescending(o =>
+        {
+            var p = _driverPairs.FirstOrDefault(x => x.Id == o.Id);
+            return p is not null && SameSource(p, v) ? 1 : 0;
+        }).ToList();
+    }
+
+    private List<Opt> OrderedVehicleOpts()
+    {
+        var dr = _driverPairs.FirstOrDefault(x => x.Id == _tf.DriverId);
+        if (dr is null) return _vehicles;
+        return _vehicles.OrderByDescending(o =>
+        {
+            var p = _vehiclePairs.FirstOrDefault(x => x.Id == o.Id);
+            return p is not null && SameSource(p, dr) ? 1 : 0;
+        }).ToList();
+    }
+
+    public class Detail
+    {
+        public long OperationId { get; set; } public string OperationNumber { get; set; } = "";
+        public long? BookingId { get; set; } public string? BookingNumber { get; set; }
+        public string? AgentReference { get; set; }
+        public int CustomerId { get; set; } public string CustomerName { get; set; } = "";
+        public int? ServiceId { get; set; } public int? PortId { get; set; }
+        public int? DestinationId { get; set; } public int? TahteeqPortId { get; set; }
+        public int? TripTypeId { get; set; } public decimal EstimatedCost { get; set; }
+        public string? Notes { get; set; }
+        public string Status { get; set; } = ""; public string? PlannedDate { get; set; }
+        public decimal RevenueNet { get; set; } public decimal RevenueTax { get; set; } public decimal ActualCost { get; set; }
+    }
+    public class RevLine
+    {
+        public int ServiceId { get; set; } public string ServiceName { get; set; } = ""; public string? Description { get; set; }
+        public decimal Quantity { get; set; } public decimal UnitPrice { get; set; } public decimal Discount { get; set; }
+        public int? TaxRateId { get; set; } public long? PriceRuleId { get; set; }
+        public decimal LineNet { get; set; }
+    }
+    public class DetailResponse { public Detail Operation { get; set; } = new(); public List<RevLine> RevenueLines { get; set; } = new(); }
+
+    public class OpTrip
+    {
+        public long TripId { get; set; } public string TripNumber { get; set; } = "";
+        public string DriverName { get; set; } = ""; public string VehiclePlate { get; set; } = "";
+        public string Status { get; set; } = ""; public DateTime? PlannedStartAt { get; set; }
+        public decimal? FreightAmount { get; set; } public int SequenceNo { get; set; }
+    }
+    public class OpContainer
+    {
+        public long OperationContainerId { get; set; } public string? ContainerNumber { get; set; }
+        public string? TypeName { get; set; } public string Status { get; set; } = ""; public string? BLNumber { get; set; }
+        public string? EditBl { get; set; }
+    }
+    public class BkLineView
+    {
+        public string? TypeName { get; set; } public int RequestedQty { get; set; }
+        public decimal? WeightKg { get; set; } public decimal? GuaranteePerContainer { get; set; }
+        public string? Notes { get; set; }
+    }
+    public class ExpLine
+    {
+        public long ExpenseId { get; set; } public string ExpenseNumber { get; set; } = "";
+        public string TypeName { get; set; } = ""; public DateTime ExpenseDate { get; set; }
+        public string? ReceiptTypeName { get; set; } public string? ReferenceNumber { get; set; }
+        public decimal Amount { get; set; } public string Status { get; set; } = "";
+    }
+
+    private Detail? _d;
+    private List<RevLine> _lines = new();
+    private List<OpTrip> _trips = new();
+    private List<OpContainer> _containers = new();
+    private List<BkLineView> _bkLines = new();
+    private List<ExpLine> _expenses = new();
+
+    private class TripForm { public int DriverId { get; set; } public int VehicleId { get; set; } public int? TrailerId { get; set; } public string? PlannedStartAt { get; set; } public decimal? Freight { get; set; } }
+    private TripForm _tf = new();
+    private bool _showTripForm, _savingTrip;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Auth.GetUserAsync();
+        _drivers  = await SafeGet("api/options/drivers");
+        _vehicles = await SafeGet("api/options/vehicles");
+        _trailers = await SafeGet("api/options/trailers");
+        _driverPairs  = await SafeGetList<PairOpt>("api/options/drivers-pairing");
+        _vehiclePairs = await SafeGetList<PairOpt>("api/options/vehicles-pairing");
+        _services       = await SafeGet("api/options/services");
+        _containerTypes = await SafeGet("api/options/container-types");
+        _expenseTypes   = await SafeGet("api/options/expense-types");
+        _qeTypes        = await SafeGetList<QExpType>("api/options/expense-types");
+        _qeCustodies    = await SafeGetList<QCustody>("api/options/custodies");
+        _qeReceiptTypes = await SafeGet("api/options/receipt-types");
+        var qmethods    = await SafeGetList<QMethod>("api/options/payment-methods");
+        _qeCashMethodId = qmethods.FirstOrDefault(m => m.IsCashBased)?.Id;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var d = await Http.GetFromJsonAsync<DetailResponse>($"api/operations/{Id}");
+            if (d is not null) { _d = d.Operation; _lines = d.RevenueLines; }
+        }
+        catch { }
+        _trips      = await SafeGetList<OpTrip>($"api/operations/{Id}/trips");
+        _containers = await SafeGetList<OpContainer>($"api/operations/{Id}/containers");
+        foreach (var c in _containers) c.EditBl = c.BLNumber;
+        _bkLines = await SafeGetList<BkLineView>($"api/operations/{Id}/booking-lines");
+        _expenses   = await SafeGetList<ExpLine>($"api/expenses?operationId={Id}");
+    }
+
+    private async Task<List<Opt>> SafeGet(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<Opt>>(url) ?? new(); } catch { return new(); }
+    }
+    private async Task<List<T>> SafeGetList<T>(string url)
+    {
+        try { return await Http.GetFromJsonAsync<List<T>>(url) ?? new(); } catch { return new(); }
+    }
+
+    private async Task AddTripAsync()
+    {
+        if (_tf.DriverId <= 0 || _tf.VehicleId <= 0) { Snackbar.Add("اختر السائق والسيارة", Severity.Warning); return; }
+        var payload = new
+        {
+            driverId      = _tf.DriverId,
+            vehicleId     = _tf.VehicleId,
+            trailerId     = _tf.TrailerId,
+            tripTypeId    = (int?)null,
+            plannedStartAt = _tf.PlannedStartAt,
+            notes         = (string?)null,
+            freightAmount = _tf.Freight,
+            portId        = (int?)null,
+            destinationId = (int?)null,
+            tahteeqPortId = (int?)null,
+            operations    = new[] { new { operationId = Id, sequenceNo = _trips.Count + 1, pickupAt = (string?)null, deliveryAt = (string?)null, notes = (string?)null } }
+        };
+        _savingTrip = true;
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/trips", payload);
+            var msg = await MsgOf(res);
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(msg, Severity.Success);
+                _showTripForm = false; _tf = new();
+                await LoadAsync();
+            }
+            else Snackbar.Add(msg, Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        finally { _savingTrip = false; }
+    }
+
+    private static string Fmt(decimal v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+    private static string FmtN(decimal? v) => v?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+    private static decimal ParseDec(object? v) =>
+        decimal.TryParse(v?.ToString(), System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var d) ? d
+        : (decimal.TryParse(v?.ToString(), out d) ? d : 0);
+    private static decimal? ParseDecN(object? v) =>
+        string.IsNullOrWhiteSpace(v?.ToString()) ? null
+        : (decimal.TryParse(v!.ToString(), System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var d) ? d
+          : (decimal.TryParse(v.ToString(), out d) ? d : (decimal?)null));
+    private static int ParseInt(object? v) => int.TryParse(v?.ToString(), out var i) ? i : 0;
+    private static int? ParseIntN(object? v) => int.TryParse(v?.ToString(), out var i) && i > 0 ? i : null;
+
+    private static string TripStatusAr(string s) => s switch
+    {
+        "Planned" => "مخططة", "InProgress" => "جارية", "Completed" => "مكتملة",
+        "Cancelled" => "ملغاة", "Closed" => "مغلقة", _ => s
+    };
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var b = await res.Content.ReadAsStringAsync();
+            var d = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b);
+            return d.TryGetProperty("message", out var m) ? m.GetString() ?? b : b;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
+    }
+}
+<style>
+
+    /* ================================================================
+       VARIABLES
+    ================================================================ */
+    :root {
+        --fc-blue:      #1e6ef5;
+        --fc-blue-lt:   #eaf1ff;
+        --fc-green:     #16a35b;
+        --fc-green-lt:  #e9f8f0;
+        --fc-red:       #e03048;
+        --fc-red-lt:    #fff0f2;
+        --fc-amber:     #e09a10;
+        --fc-amber-lt:  #fff8e6;
+        --fc-purple:    #7c4dbd;
+        --fc-purple-lt: #f3eeff;
+        --fc-text:      #1c2c44;
+        --fc-muted:     #6b7d95;
+        --fc-border:    #dde5f0;
+        --fc-bg:        #f4f7fb;
+        --fc-card:      #ffffff;
+        --fc-radius:    14px;
+    }
+
+    /* ================================================================
+       HERO ADDITIONS
+    ================================================================ */
+    .bk-hero-badge {
+        display: inline-flex; align-items: center;
+        padding: 3px 10px; border-radius: 20px;
+        font-size: 11px; font-weight: 800;
+    }
+
+    .badge-new      { background: rgba(34,197,94,.2);  color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+    .badge-draft    { background: rgba(255,255,255,.12); color: rgba(255,255,255,.75); border: 1px solid rgba(255,255,255,.2); }
+    .badge-confirmed { background: rgba(59,130,246,.25); color: #93c5fd; border: 1px solid rgba(59,130,246,.3); }
+    .badge-assigned  { background: rgba(168,85,247,.25); color: #d8b4fe; border: 1px solid rgba(168,85,247,.3); }
+    .badge-inprogress { background: rgba(234,179,8,.25); color: #fde68a; border: 1px solid rgba(234,179,8,.3); }
+    .badge-completed  { background: rgba(34,197,94,.25); color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+    .badge-cancelled  { background: rgba(239,68,68,.25); color: #fca5a5; border: 1px solid rgba(239,68,68,.3); }
+
+    /* Hero Buttons */
+    .bk-back-btn {
+        display: inline-flex; align-items: center; gap: 5px;
+        height: 36px; padding: 0 13px;
+        border: 1px solid rgba(255,255,255,.2); border-radius: 9px;
+        background: rgba(255,255,255,.08); color: rgba(255,255,255,.75);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: background .15s ease;
+    }
+    .bk-back-btn:hover { background: rgba(255,255,255,.14); }
+    .bk-back-btn svg { transform: rotate(180deg); }
+
+    /* ── Hero Wrapper ── */
+    .hero-wrapper {
+        padding: 16px clamp(16px, 3vw, 40px) 0;
+        max-width: 1440px;
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 1;
+    }
+
+    .hero-wrapper .fc-hero {
+        border-radius: 20px !important;
+        overflow: hidden;
+        box-shadow:
+            0 12px 32px rgba(13, 38, 84, 0.15),
+            0 4px 12px rgba(13, 38, 84, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .hero-wrapper .fc-hero.fc-hero-slim {
+        padding-top: 18px !important;
+        padding-bottom: 22px !important;
+    }
+
+    .bk-hero-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .bk-hero-left { flex: 1; min-width: 200px; }
+
+    .bk-hero-crumb {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        color: rgba(255, 255, 255, 0.55);
+        margin-bottom: 6px;
+    }
+
+    .bk-hero-sub {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.55);
+    }
+
+    .bk-hero-right {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .bk-hero-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, .1);
+        border: 1px solid rgba(255, 255, 255, .2);
+        font-size: 11.5px;
+        color: #fff;
+    }
+
+    .bk-hero-chip.badge-new { background: rgba(30, 110, 245, .2); border-color: rgba(30, 110, 245, .4); }
+    .bk-hero-chip.badge-progress { background: rgba(251, 191, 36, .2); border-color: rgba(251, 191, 36, .4); }
+    .bk-hero-chip.badge-done { background: rgba(22, 163, 91, .2); border-color: rgba(22, 163, 91, .4); }
+    .bk-hero-chip.badge-cancelled { background: rgba(224, 48, 72, .2); border-color: rgba(224, 48, 72, .4); }
+
+    /* ── Glow FAB ── */
+    .glow-fab-wrap {
+        position: fixed;
+        left: 28px;
+        bottom: 28px;
+        /* 🔴 أعلى من الـscrim (1298) — الزر والقايمة لازم يفضلوا فوقه وشغالين */
+        z-index: 1299;
+    }
+
+    .glow-fab-container {
+        position: relative;
+        z-index: 2;
+        width: 64px;
+        height: 64px;
+    }
+
+    .glow-fab-btn {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #1e6ef5, #0d47a1);
+        border: 2.5px solid #fbbf24;
+        color: #fff;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 16px rgba(30, 110, 245, .4);
+        transition: transform .2s, box-shadow .2s;
+        z-index: 2;
+    }
+
+    .glow-fab-btn:hover {
+        transform: translate(-50%, -50%) scale(1.05);
+        box-shadow: 0 6px 24px rgba(30, 110, 245, .5);
+    }
+
+    .glow-fab-icon { transition: transform .3s; }
+    .glow-fab-wrap.is-open .glow-fab-icon { transform: rotate(130deg); }
+
+    .glow-halo, .glow-ring {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        pointer-events: none;
+    }
+
+    .glow-halo {
+        width: 60px;
+        height: 60px;
+        background: radial-gradient(circle, rgba(30, 110, 245, .3) 0%, transparent 70%);
+        animation: glow-breath 2s ease-in-out infinite;
+    }
+
+    .glow-ring {
+        width: 60px;
+        height: 60px;
+        border: 2px solid rgba(30, 110, 245, .4);
+        animation: glow-expand 2s ease-out infinite;
+    }
+
+    .glow-ring-2 { animation-delay: .3s; }
+    .glow-ring-3 { animation-delay: .6s; }
+
+    @@keyframes glow-breath {
+        0%, 100% { opacity: .5; transform: translate(-50%, -50%) scale(1); }
+        50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+    }
+
+    @@keyframes glow-expand {
+        0% { opacity: .8; transform: translate(-50%, -50%) scale(1); }
+        100% { opacity: 0; transform: translate(-50%, -50%) scale(2.5); }
+    }
+
+    .glow-fab-menu {
+        position: absolute;
+        bottom: 80px;
+        left: 0;
+        z-index: 3;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(10px);
+        transition: opacity .2s, transform .2s;
+    }
+
+    .glow-fab-wrap.is-open .glow-fab-menu {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0);
+    }
+
+    .glow-fab-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        border-radius: 12px;
+        background: #fff;
+        border: 1px solid #dde5f0;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, .1);
+        cursor: pointer;
+        font-size: 13px;
+        color: #1c2c44;
+        transition: background .15s, border-color .15s;
+        white-space: nowrap;
+    }
+
+    .glow-fab-item:hover {
+        background: #f4f7fb;
+        border-color: #1e6ef5;
+    }
+
+    .glow-fab-item-ic {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: #eaf1ff;
+        color: #1e6ef5;
+    }
+
+    /* 🔴 الـscrim بقى شقيق للـ .glow-fab-wrap مش جوّاه.
+       لما كان جوّه: الـ wrap بيعمل stacking context، فالـ 1298 كان بيترسم
+       فوق القايمة (auto) وفوق الزر (2) ⇒ يبلع الكليك ويمنع استخدام الزر العائم. */
+    .glow-fab-scrim {
+        position: fixed;
+        inset: 0;
+        background: rgba(9, 18, 35, .45);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        z-index: 1298;
+        animation: glow-fadein .18s ease both;
+    }
+
+    @@keyframes glow-fadein {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+
+    /* ── Mobile ── */
+    @@media (max-width: 768px) {
+        .hero-wrapper { padding: 12px 12px 0; }
+        .hero-wrapper .fc-hero { border-radius: 16px !important; }
+        .bk-hero-row { flex-direction: column; align-items: flex-start; }
+        .bk-hero-right { width: 100%; justify-content: flex-start; }
+    }
+
+    .bk-save-btn {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 38px; padding: 0 18px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: #fff; font-family: inherit;
+        font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(22,163,74,.35);
+        transition: all .15s ease;
+    }
+    .bk-save-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(22,163,74,.4); }
+    .bk-save-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* Hero Summary Strip */
+    .bk-hero-summary {
+        display: flex; align-items: stretch;
+        background: rgba(0,0,0,.15); border: 1px solid rgba(255,255,255,.10);
+        border-radius: 12px; overflow: hidden; backdrop-filter: blur(8px);
+        margin-top: 4px;
+    }
+
+    .bk-sum-item {
+        flex: 1; display: flex; align-items: center; gap: 10px;
+        padding: 12px 16px;
+    }
+
+    .bk-sum-div { width: 1px; background: rgba(255,255,255,.10); align-self: stretch; }
+
+    .bk-sum-icon {
+        width: 32px; height: 32px; flex: 0 0 32px; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(255,255,255,.10); color: rgba(255,255,255,.7);
+    }
+
+    .bk-sum-label { font-size: 9.5px; color: rgba(255,255,255,.5); font-weight: 600; }
+    .bk-sum-val   { font-size: 13px; font-weight: 800; color: #fff; margin-top: 2px; }
+
+    /* ================================================================
+       BODY
+    ================================================================ */
+    /* 🔴 نفس عرض .hero-wrapper بالحرف (1440px + نفس البادينج الأفقي)
+       ⇒ حدّ كارت الهيرو = حدّ المحتوى اللي تحته على أي مقاس شاشة.
+       الـ 96px تحت مساحة للزر العائم. */
+    .bk-body {
+        background: var(--fc-bg);
+        min-height: calc(100vh - 180px);
+        padding: 18px clamp(16px, 3vw, 40px) 96px;
+        max-width: 1440px; width: 100%;
+        margin: 0 auto;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 2;
+        display: flex; flex-direction: column; gap: 14px;
+    }
+
+    /* ================================================================
+       STATES
+    ================================================================ */
+    .bk-state-box {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 12px; min-height: 280px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius); padding: 40px; text-align: center;
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .bk-state-icon {
+        width: 68px; height: 68px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .bk-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+
+    .bk-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
+    .bk-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
+
+    .bk-state-back {
+        margin-top: 8px; padding: 9px 20px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-text);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: background .15s ease;
+    }
+    .bk-state-back:hover { background: #f0f4fa; }
+
+    /* ================================================================
+       LOADING
+    ================================================================ */
+    .bk-loading-wrap {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 14px; min-height: 260px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    }
+
+    .bk-spinner {
+        width: 36px; height: 36px;
+        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
+        border-radius: 50%; animation: bk-spin .75s linear infinite;
+    }
+    @@keyframes bk-spin { to { transform: rotate(360deg); } }
+
+    .bk-loading-text { font-size: 13px; font-weight: 600; color: var(--fc-muted); }
+
+    /* ================================================================
+       BANNERS
+    ================================================================ */
+    .bk-locked-banner {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px; border-radius: 12px;
+        background: linear-gradient(135deg, #fffbeb, #fff8e0);
+        border: 1px solid #fde68a;
+        box-shadow: 0 2px 10px rgba(234,179,8,.10);
+    }
+
+    .locked-icon { flex: 0 0 auto; color: #d97706; }
+
+    .locked-text { display: flex; flex-direction: column; gap: 2px; }
+    .locked-text strong { font-size: 13px; font-weight: 800; color: #92400e; }
+    .locked-text span   { font-size: 11.5px; color: #b45309; }
+
+    .bk-banner {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 16px; border-radius: 10px;
+        font-size: 13px; font-weight: 600;
+        animation: bk-banner-in .25s ease;
+    }
+    @@keyframes bk-banner-in {
+        from { opacity: 0; transform: translateY(-6px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .banner-success { background: #e9f8f0; color: #0e7a43; border: 1px solid #b5e8d0; }
+    .banner-error   { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8d0; }
+
+    .banner-close {
+        margin-right: auto; background: none; border: none;
+        color: inherit; opacity: .6; cursor: pointer; font-size: 13px;
+        padding: 2px 6px; border-radius: 5px;
+    }
+    .banner-close:hover { opacity: 1; }
+
+    /* ================================================================
+       TABS
+    ================================================================ */
+    .bk-tabs-wrap {
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
+        overflow: hidden; flex: 1;
+    }
+
+    .bk-mud-tabs .mud-tabs-toolbar {
+        background: linear-gradient(180deg, #f9fafd 0%, #f3f6fb 100%);
+        border-bottom: 2px solid #e8edf5;
+        padding: 0 16px; min-height: 54px;
+    }
+
+    .bk-mud-tabs .mud-tab {
+        font-family: "Cairo","Tajawal","Inter",Arial,sans-serif;
+        font-size: 12px; font-weight: 700; color: var(--fc-muted);
+        padding: 0 6px; min-width: unset; transition: color .15s ease;
+    }
+
+    .bk-mud-tabs .mud-tab.mud-tab-active { color: var(--fc-blue) !important; font-weight: 800; }
+
+    .bk-mud-tabs .mud-tab-slider {
+        background: var(--fc-blue) !important;
+        height: 3px; border-radius: 3px 3px 0 0;
+    }
+
+    .bk-mud-tabs .mud-tab:hover:not(.mud-tab-active) {
+        color: var(--fc-text); background: rgba(0,0,0,.03); border-radius: 8px;
+    }
+
+    .bk-tab-panel { padding: 0; }
+
+    /* Tab Labels */
+    .btab-label {
+        display: flex; align-items: center; gap: 7px;
+        padding: 0 4px; white-space: nowrap;
+    }
+
+    .btab-icon {
+        width: 26px; height: 26px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 7px;
+    }
+
+    .btab-blue  { background: var(--fc-blue-lt);  color: var(--fc-blue); }
+    .btab-green { background: var(--fc-green-lt); color: var(--fc-green); }
+    .btab-amber { background: var(--fc-amber-lt); color: var(--fc-amber); }
+
+    .btab-err-dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--fc-red); flex: 0 0 7px;
+        animation: bk-pulse 1.5s ease infinite;
+    }
+    @@keyframes bk-pulse {
+        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.4); }
+        50%      { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
+    }
+
+    .btab-count {
+        min-width: 18px; height: 18px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 5px; padding: 0 4px;
+        background: var(--fc-amber-lt); color: #9a6d08;
+        font-size: 10px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    /* ================================================================
+       TAB SECTION
+    ================================================================ */
+    .tab-section {
+        padding: 24px clamp(16px, 3vw, 40px) 28px;
+        max-width: 1440px;
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .tab-section-head {
+        display: flex; align-items: flex-start; gap: 12px;
+        margin-bottom: 22px; padding-bottom: 18px;
+        border-bottom: 1px solid #edf1f7;
+    }
+
+    .tab-section-icon {
+        width: 42px; height: 42px; flex: 0 0 42px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 12px;
+    }
+    .tab-section-icon.blue  { background: var(--fc-blue-lt);  color: var(--fc-blue);  border: 1px solid #bdd4fc; }
+    .tab-section-icon.green { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .tab-section-icon.amber { background: var(--fc-amber-lt); color: var(--fc-amber); border: 1px solid #f0d070; }
+
+    .tab-section-title { font-size: 15px; font-weight: 800; color: #1c2b43; line-height: 1.2; }
+    .tab-section-sub   { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
+
+    .tab-section-sub-head {
+        display: flex; align-items: center; gap: 7px;
+        font-size: 12px; font-weight: 800; color: #344258;
+        margin: 22px 0 10px;
+        padding-top: 18px; border-top: 1px solid #edf1f7;
+    }
+
+    /* ================================================================
+       FORM
+    ================================================================ */
+    .bk-form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 18px;
+        width: 100%;
+    }
+
+    @@media (max-width: 768px) {
+        .bk-form-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .form-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        position: relative;
+    }
+
+    .field-label {
+        font-size: 12px; font-weight: 800; color: #344258;
+        display: flex; align-items: center; gap: 4px;
+    }
+
+    .field-required { color: var(--fc-red); font-size: 14px; line-height: 1; }
+
+    .field-input {
+        height: 42px; width: 100%;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        background: #fafcff; color: var(--fc-text);
+        font-family: inherit; font-size: 13px; padding: 0 12px;
+        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+        outline: none;
+    }
+    .field-input:focus {
+        border-color: var(--fc-blue);
+        box-shadow: 0 0 0 3px rgba(30,110,245,.10);
+        background: #fff;
+    }
+    .field-input:disabled { opacity: .7; background: #f3f5f8; cursor: not-allowed; }
+    .field-input.field-error {
+        border-color: var(--fc-red);
+        box-shadow: 0 0 0 3px rgba(224,48,72,.08);
+    }
+    .field-input::placeholder { color: #b0bcc8; }
+
+    .field-textarea {
+        height: auto; padding: 10px 12px;
+        resize: vertical; min-height: 80px;
+    }
+
+    /* Select with icon */
+    .field-select-wrap {
+        position: relative; display: flex; align-items: center;
+    }
+
+    .field-select-icon {
+        position: absolute; right: 12px; color: #9aaabb;
+        pointer-events: none; z-index: 1;
+    }
+
+    .field-select {
+        padding-right: 36px; cursor: pointer;
+        -webkit-appearance: none; appearance: none;
+    }
+    .field-select:disabled { cursor: not-allowed; }
+
+    /* Input with prefix */
+    .field-input-group { position: relative; display: flex; align-items: center; }
+
+    .field-prefix {
+        position: absolute; right: 12px;
+        display: flex; align-items: center;
+        color: #9aaabb; pointer-events: none; z-index: 1;
+    }
+
+    .field-input.with-prefix { padding-right: 36px; }
+
+    /* Field Dropdown — للبحث (نفس تصميم field-input) */
+    .field-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        left: 0;
+        margin-top: 4px;
+        background: #fafcff;
+        border: 1px solid #d8e2f0;
+        border-radius: 9px;
+        box-shadow: 0 8px 24px rgba(0,0,0,.12);
+        max-height: 240px;
+        overflow-y: auto;
+        z-index: 100;
+    }
+
+    .field-dropdown-item {
+        padding: 10px 12px;
+        font-family: inherit;
+        font-size: 13px;
+        color: var(--fc-text);
+        cursor: pointer;
+        transition: background .1s;
+    }
+
+    .field-dropdown-item:hover {
+        background: #eaf1ff;
+    }
+
+    .field-hint {
+        display: flex; align-items: center; gap: 5px;
+        font-size: 10.5px; color: var(--fc-muted); font-weight: 500;
+    }
+
+    .field-err-msg { font-size: 10.5px; color: var(--fc-red); font-weight: 700; }
+
+    /* ================================================================
+       ROUTE VISUAL
+    ================================================================ */
+    .bk-route-visual {
+        display: flex; align-items: center; gap: 0;
+        margin-top: 22px; padding: 14px 20px;
+        background: linear-gradient(135deg, #f5f8ff, #eef4ff);
+        border: 1px solid #c8d8fb; border-radius: 12px;
+        animation: bk-banner-in .25s ease;
+    }
+
+    .route-point { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+
+    .route-dot {
+        width: 14px; height: 14px; border-radius: 50%;
+        border: 3px solid;
+    }
+    .dot-from { background: var(--fc-blue-lt);  border-color: var(--fc-blue); }
+    .dot-to   { background: var(--fc-green-lt); border-color: var(--fc-green); }
+
+    .route-label { display: flex; flex-direction: column; gap: 2px; }
+    .route-caption { font-size: 9px; font-weight: 600; color: #8899ae; }
+    .route-label strong { font-size: 13px; font-weight: 800; color: var(--fc-text); }
+
+    .route-line {
+        flex: 1; display: flex; flex-direction: column;
+        align-items: center; gap: 0; position: relative; margin: 0 10px;
+    }
+    .route-truck { font-size: 20px; margin-top: -4px; }
+
+    /* ================================================================
+       CONTAINER CARDS
+    ================================================================ */
+    .bk-containers-empty {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 10px; min-height: 180px;
+        border: 2px dashed #d8e8f8; border-radius: 12px;
+        background: #f8fbff; text-align: center; padding: 30px;
+    }
+
+    .containers-empty-icon {
+        width: 70px; height: 70px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: #edf3fb; color: #b0c4d8;
+    }
+    .containers-empty-title { font-size: 14px; font-weight: 800; color: var(--fc-text); }
+    .containers-empty-sub   { font-size: 12px; color: var(--fc-muted); }
+
+    .bk-add-line-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 36px; padding: 0 14px;
+        border: 1.5px solid var(--fc-amber);
+        border-radius: 9px;
+        background: var(--fc-amber-lt); color: #9a6d08;
+        font-family: inherit; font-size: 12px; font-weight: 800;
+        cursor: pointer; white-space: nowrap; flex-shrink: 0;
+        transition: all .15s ease;
+    }
+    .bk-add-line-btn:hover { background: var(--fc-amber); color: #fff; }
+    .bk-add-line-btn.mt-10 { margin-top: 10px; }
+
+    .bk-container-cards { display: flex; flex-direction: column; gap: 12px; }
+
+    .bk-container-card {
+        border: 1px solid #e4edf8; border-radius: 12px;
+        background: linear-gradient(180deg, #fafcff, #f5f8fb);
+        overflow: hidden;
+        transition: border-color .18s ease, box-shadow .18s ease;
+    }
+    .bk-container-card:hover {
+        border-color: #c8d8f0;
+        box-shadow: 0 4px 14px rgba(15,41,82,.06);
+    }
+
+    .bk-cc-head {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px;
+        background: linear-gradient(180deg, #f0f5fc, #eaf1f9);
+        border-bottom: 1px solid #dce8f5;
+    }
+
+    .bk-cc-num {
+        width: 26px; height: 26px; border-radius: 8px; flex: 0 0 26px;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--fc-blue); color: #fff;
+        font-size: 11px; font-weight: 900;
+        font-family: "Inter", Arial, sans-serif;
+    }
+
+    .bk-cc-type-badge {
+        display: flex; align-items: center; gap: 5px;
+        padding: 3px 10px; border-radius: 7px;
+        background: rgba(30,110,245,.08); border: 1px solid rgba(30,110,245,.15);
+        color: var(--fc-blue); font-size: 11px; font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .bk-cc-total {
+        flex: 1; font-size: 11px; color: #6b7d95; font-weight: 600;
+    }
+    .bk-cc-total strong { color: var(--fc-text); font-weight: 900; }
+    .bk-cc-total span   { color: #9aaabb; }
+
+    .bk-cc-del {
+        width: 30px; height: 30px; border-radius: 7px; flex: 0 0 30px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid transparent; background: transparent;
+        color: var(--fc-red); cursor: pointer;
+        transition: all .15s ease;
+    }
+    .bk-cc-del:hover { background: var(--fc-red-lt); border-color: #ffc8cf; }
+
+    .bk-cc-body {
+        /* السطر كله في شريط واحد متناسق:
+           النوع · العدد · الوزن · الضمان · الملاحظات + زر «إضافة حاوية» */
+        display: grid;
+        grid-template-columns: 1.35fr .85fr .85fr 1.05fr 2.1fr;
+        gap: 14px; padding: 14px 16px;
+        align-items: start;
+    }
+
+    .bk-cc-notes { grid-column: auto; }
+
+    /* زر «إضافة حاوية» بجانب حقل الملاحظات + عرض الباقي */
+    .bk-notes-action-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .bk-notes-action-row .field-input {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .bk-add-detail-inline-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 42px;
+        padding: 0 14px;
+        flex-shrink: 0;
+        border: 1.5px dashed var(--fc-blue);
+        border-radius: 9px;
+        background: var(--fc-blue-lt);
+        color: var(--fc-blue);
+        font-family: inherit;
+        font-size: 11.5px;
+        font-weight: 800;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: all .15s ease;
+    }
+    .bk-add-detail-inline-btn:hover {
+        background: var(--fc-blue);
+        border-style: solid;
+        color: #fff;
+        box-shadow: 0 4px 12px rgba(30,110,245,.28);
+    }
+    .bk-add-detail-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: 9px;
+        background: var(--fc-blue);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 800;
+    }
+    .bk-add-detail-inline-btn:hover .bk-add-detail-count {
+        background: #fff;
+        color: var(--fc-blue);
+    }
+
+    /* إجمالي الضمان — سطر + حجز */
+    .bk-guar-linetotal {
+        margin-top: 6px;
+        font-size: 11.5px;
+        font-weight: 700;
+        color: #b45309;
+    }
+    .bk-guar-linetotal span { color: #8a94a3; font-weight: 600; }
+    .bk-guar-total-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 4px 0 14px;
+        padding: 12px 16px;
+        border: 1.5px solid rgba(217, 119, 6, .35);
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(217, 119, 6, .07), rgba(217, 119, 6, .02));
+        color: #b45309;
+        font-size: 12.5px;
+        font-weight: 700;
+    }
+    .bk-guar-total-bar strong { font-size: 15px; margin-inline-start: auto; }
+    .bk-guar-cur { color: #8a94a3; font-size: 11px; }
+
+    /* صفوف الحاويات الفعلية */
+    .bk-cc-details {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 0 16px 14px;
+    }
+
+    .bk-cc-detail-row {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr)) auto;
+        gap: 12px;
+        align-items: end;
+        padding: 12px;
+        background: #f8fafd;
+        border: 1px dashed #cfdcef;
+        border-radius: 10px;
+    }
+
+    .bk-cc-detail-del {
+        width: 42px;
+        height: 42px;
+        flex: 0 0 42px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #ffd3d9;
+        border-radius: 9px;
+        background: var(--fc-red-lt);
+        color: var(--fc-red);
+        cursor: pointer;
+        transition: all .15s ease;
+    }
+    .bk-cc-detail-del:hover {
+        background: var(--fc-red);
+        border-color: var(--fc-red);
+        color: #fff;
+        box-shadow: 0 4px 12px rgba(224,48,72,.28);
+    }
+
+    /* Qty Control */
+    .bk-qty-control {
+        display: flex; align-items: center; gap: 0;
+        border: 1px solid #d8e2f0; border-radius: 9px;
+        overflow: hidden; background: #fafcff;
+    }
+
+    .qty-btn {
+        width: 36px; height: 42px; flex: 0 0 36px;
+        display: flex; align-items: center; justify-content: center;
+        border: none; background: transparent;
+        cursor: pointer; font-size: 18px; font-weight: 900;
+        transition: background .12s ease;
+    }
+
+    .qty-minus { color: var(--fc-red); border-left: 1px solid #d8e2f0; }
+    .qty-plus  { color: var(--fc-green); border-right: 1px solid #d8e2f0; }
+
+    .qty-minus:hover { background: var(--fc-red-lt); }
+    .qty-plus:hover  { background: var(--fc-green-lt); }
+
+    .qty-input {
+        flex: 1; text-align: center; border: none !important;
+        border-radius: 0 !important; background: transparent !important;
+        box-shadow: none !important;
+        font-weight: 800; font-size: 14px;
+    }
+
+    /* ================================================================
+       BOTTOM ACTIONS
+    ================================================================ */
+    .bk-bottom-actions {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; padding: 14px 20px;
+        background: var(--fc-card); border: 1px solid var(--fc-border);
+        border-radius: var(--fc-radius);
+        box-shadow: 0 2px 8px rgba(15,41,82,.04);
+    }
+
+    .bk-bottom-back {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 16px;
+        border: 1px solid var(--fc-border); border-radius: 9px;
+        background: var(--fc-card); color: var(--fc-muted);
+        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .bk-bottom-back:hover { background: #f0f4fa; color: var(--fc-text); }
+    .bk-bottom-back svg { transform: rotate(180deg); }
+
+    .bk-bottom-right { display: flex; align-items: center; gap: 10px; }
+
+    .bk-next-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 38px; padding: 0 16px;
+        border: 1.5px solid var(--fc-blue); border-radius: 9px;
+        background: var(--fc-blue-lt); color: var(--fc-blue);
+        font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+        transition: all .15s ease;
+    }
+    .bk-next-btn:hover { background: var(--fc-blue); color: #fff; }
+    .bk-next-btn svg { transform: rotate(180deg); }
+
+    .bk-bottom-save {
+        display: inline-flex; align-items: center; gap: 8px;
+        height: 40px; padding: 0 22px;
+        border: 0; border-radius: 10px;
+        background: linear-gradient(135deg, #1e6ef5, #1558d6);
+        color: #fff; font-family: inherit;
+        font-size: 13px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(30,110,245,.30);
+        transition: all .15s ease;
+    }
+    .bk-bottom-save:hover:not(:disabled) {
+        transform: translateY(-1px); box-shadow: 0 6px 18px rgba(30,110,245,.38);
+    }
+    .bk-bottom-save:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* ================================================================
+       SPINNER
+    ================================================================ */
+    .btn-spinner {
+        width: 15px; height: 15px;
+        border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+        border-radius: 50%; animation: bk-spin .7s linear infinite;
+    }
+    .btn-spinner.sm { width: 13px; height: 13px; }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @@media (max-width: 900px) {
+        .bk-form-grid { grid-template-columns: 1fr; }
+        .bk-cc-body   { grid-template-columns: 1fr 1fr; }
+        .bk-cc-notes  { grid-column: 1 / -1; }
+        .bk-cc-detail-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .bk-hero-summary { flex-wrap: wrap; }
+        .bk-sum-item { flex: 0 0 50%; }
+        .bk-sum-div:nth-child(4) { display: none; }
+        .tab-section { padding: 18px 16px 22px; }
+    }
+
+    @@media (max-width: 680px) {
+        .bk-body { padding: 10px 12px 88px; }
+        .glow-fab-wrap { left: 18px; bottom: 18px; }
+        .bk-cc-body { grid-template-columns: 1fr; }
+        .bk-cc-notes { grid-column: 1; }
+        .bk-notes-action-row { flex-wrap: wrap; }
+        .bk-notes-action-row .field-input { flex: 1 1 100%; }
+        .bk-add-detail-inline-btn { width: 100%; justify-content: center; }
+        .bk-cc-details { padding: 0 12px 12px; }
+        .bk-cc-detail-row { grid-template-columns: 1fr; }
+        .bk-bottom-actions { flex-direction: column; }
+        .bk-bottom-back, .bk-bottom-save { width: 100%; justify-content: center; }
+        .bk-bottom-right { width: 100%; flex-direction: column; }
+        .bk-next-btn { width: 100%; justify-content: center; }
+        .bk-sum-item { flex: 0 0 100%; }
+        .bk-sum-div { display: none; }
+        .route-label strong { font-size: 11px; }
+    }
+
+    @@media (max-width: 480px) {
+        .bk-hero-summary { display: none; }
+    }
+
+</style>
+<style>
+        border-radius: 18px;
+        box-shadow: 0 4px 24px rgba(15,41,82,.05);
+        overflow: hidden;
+    }
+
+    .doc-hero-row {
+        display: flex; align-items: center;
+        justify-content: space-between;
+        gap: 16px; flex-wrap: wrap;
+        margin-bottom: 10px;
+    }
+
+    .doc-hero-left  { display: flex; flex-direction: column; gap: 2px; }
+
+    .doc-hero-crumb {
+        display: flex; align-items: center; gap: 5px;
+        font-size: 10.5px; font-weight: 700;
+        color: rgba(255,255,255,.55);
+        margin-bottom: 2px;
+    }
+
+    .fc-hero-sub {
+        font-size: 10.5px;
+        color: rgba(255,255,255,.55);
+        font-weight: 600;
+    }
+
+    .doc-hero-right {
+        display: flex; align-items: center;
+        gap: 8px; flex-shrink: 0;
+    }
+
+    .doc-hero-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 5px 11px; border-radius: 8px;
+        background: rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.14);
+        color: rgba(255,255,255,.7);
+        font-size: 10.5px; font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .doc-kpis-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-top: 10px;
+    }
+
+    .doc-kpi {
+        background: rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.12);
+        backdrop-filter: blur(12px);
+        border-radius: 9px;
+        padding: 6px 10px;
+    }
+
+    .doc-kpi-inner { display: flex; align-items: center; gap: 8px; }
+
+    .doc-kpi-icon {
+        width: 27px; height: 27px; border-radius: 7px;
+        display: flex; align-items: center;
+        justify-content: center; flex-shrink: 0;
+    }
+
+    @@media (max-width: 760px) {
+        .doc-kpis-row { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .doc-kpi-blue .doc-kpi-icon  { background: rgba(125,211,252,.15); color: #7dd3fc; }
+    .doc-kpi-green .doc-kpi-icon { background: rgba(110,231,183,.15); color: #6ee7b7; }
+    .doc-kpi-amber .doc-kpi-icon { background: rgba(251,191,36,.15);  color: #fbbf24; }
+
+    .doc-kpi-data   { flex: 1; min-width: 0; }
+
+    .doc-kpi-num {
+        font-size: 15px; font-weight: 900;
+        color: #fff; line-height: 1;
+    }
+
+    .doc-kpi-label {
+        font-size: 10px; font-weight: 700;
+        color: rgba(255,255,255,.6); margin-top: 2px;
+    }
+
+    .doc-banner {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 14px 18px; font-size: 13px; font-weight: 600;
+        line-height: 1.6; border-bottom: 1px solid transparent;
+    }
+</style>
+<style>
+    /* ملف العملية: جداول وخانات وأزرار بنمط المشروع الأصلي بدل كنترولات جاهزة */
+    .doc-sec-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+    .doc-loading { padding: 28px; text-align: center; color: var(--fc-muted, #6b7d95); font-weight: 700; }
+
+    .doc-hero-btn {
+        display: inline-flex; align-items: center; height: 36px; padding: 0 14px;
+        border-radius: 9px; border: 1px solid rgba(255,255,255,.35);
+        background: rgba(255,255,255,.1); color: #fff;
+        font-size: 12.5px; font-weight: 800; text-decoration: none; transition: background .15s ease;
+    }
+    .doc-hero-btn:hover { background: rgba(255,255,255,.2); color: #fff; }
+    .doc-hero-btn.solid { background: var(--fc-amber, #FF8015); border-color: transparent; }
+    .doc-hero-btn.solid:hover { background: #f0760d; }
+
+    .doc-btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        height: 36px; padding: 0 14px; border-radius: 9px; cursor: pointer;
+        font-family: inherit; font-size: 12.5px; font-weight: 800; text-decoration: none;
+        border: 1.5px solid var(--fc-border, #dde5f0); background: #fff; color: var(--fc-blue, #1e6ef5);
+        transition: all .15s ease; white-space: nowrap;
+    }
+    .doc-btn:hover { border-color: var(--fc-blue, #1e6ef5); }
+    .doc-btn.primary { background: var(--fc-blue, #1e6ef5); border-color: var(--fc-blue, #1e6ef5); color: #fff; }
+    .doc-btn.primary:hover { background: #1559cf; }
+    .doc-btn:disabled { opacity: .55; cursor: default; }
+
+    .doc-icon-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+        border: 1px solid var(--fc-border, #dde5f0); background: #fff; color: var(--fc-blue, #1e6ef5);
+        transition: all .12s ease; text-decoration: none;
+    }
+    .doc-icon-btn:hover { background: var(--fc-blue-lt, #eaf1ff); }
+    .doc-icon-btn.danger { color: var(--fc-red, #e03048); }
+    .doc-icon-btn.danger:hover { background: var(--fc-red-lt, #fff0f2); }
+
+    .doc-table-wrap { overflow-x: auto; border: 1px solid #e3ebf6; border-radius: 12px; }
+    .doc-table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; }
+    .doc-table thead th {
+        background: #f2f7fd; color: #33507c; font-weight: 800; font-size: 12px;
+        text-align: right; padding: 10px 12px; border-bottom: 1.5px solid #dfe9f5; white-space: nowrap;
+    }
+    .doc-table tbody td { padding: 9px 12px; border-bottom: 1px solid #edf2f9; color: var(--fc-text, #1c2c44); vertical-align: middle; }
+    .doc-table tbody tr:last-child td { border-bottom: none; }
+    .doc-table tbody tr:hover td { background: #f8fbff; }
+    .doc-link { color: var(--fc-blue, #1e6ef5); font-weight: 800; text-decoration: none; }
+    .doc-link:hover { text-decoration: underline; }
+
+    .doc-inline-input {
+        height: 34px; padding: 0 9px; border: 1.5px solid var(--fc-border, #dde5f0); border-radius: 8px;
+        font-family: inherit; font-size: 13px; color: var(--fc-text, #1c2c44); background: #fff; outline: none;
+    }
+    .doc-inline-input:focus { border-color: var(--fc-blue, #1e6ef5); box-shadow: 0 0 0 3px rgba(30,110,245,.12); }
+
+    .doc-form-row { display: flex; gap: 12px; align-items: flex-start; margin-top: 14px; }
+    .qe-src-toggle { display: flex; border: 1.5px solid #dde5f0; border-radius: 10px; overflow: hidden; }
+    .qe-src-toggle button { flex: 1; padding: 8px 6px; background: #fff; border: none; font-family: inherit;
+        font-size: 12px; font-weight: 800; color: #5a6c86; cursor: pointer; }
+    .qe-src-toggle button.on { background: var(--fc-blue); color: #fff; }
+    .doc-sub { font-size: 11px; color: #8496b0; font-weight: 700; }
+    .doc-form-row.wrap { flex-wrap: wrap; }
+    .doc-form-row .form-field { min-width: 140px; }
+    .doc-form-action { display: flex; align-items: flex-end; padding-top: 22px; }
+    .doc-empty { color: var(--fc-muted, #6b7d95); font-size: 13px; margin: 4px 0 0; }
+</style>

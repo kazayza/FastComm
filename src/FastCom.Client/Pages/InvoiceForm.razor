@@ -1530,6 +1530,8 @@
 
 @code {
     [Parameter] public long? Id { get; set; }
+    [Parameter, SupplyParameterFromQuery] public long? OperationId { get; set; }
+    [Parameter, SupplyParameterFromQuery] public int? CustomerId { get; set; }
     private long?   _id;
     private string  _number    = "";
     private string  _status    = "Draft";
@@ -1615,6 +1617,20 @@
         {
             _f.InvoiceDate = DateTime.Today.ToString("yyyy-MM-dd");
             _loading = false;
+
+            /* اختيار مسبق قادم من ملف العملية: العميل + استيراد بنود العملية */
+            if (CustomerId is not null && OperationId is not null)
+            {
+                var cust = _customers.FirstOrDefault(c => c.Id == CustomerId.Value);
+                if (cust is not null)
+                {
+                    await PickCustomer(cust);
+                    if (_ops.Any(o => o.OperationId == OperationId.Value))
+                        await ImportOperationAsync(OperationId.Value);
+                    else
+                        Snackbar.Add("هذه العملية غير قابلة للفوترة حاليًا (مسلّمة وغير مفوترة شرط) — اخترها يدويًا إن ظهرت", Severity.Warning);
+                }
+            }
         }
     }
 
@@ -1777,6 +1793,11 @@
     {
         var id = long.TryParse(e.Value?.ToString(), out var v) && v > 0 ? v : 0;
         if (id == 0) return;
+        await ImportOperationAsync(id);
+    }
+
+    private async Task ImportOperationAsync(long id)
+    {
         try
         {
             if (_f.Items.Any(l => l.OperationId == id))

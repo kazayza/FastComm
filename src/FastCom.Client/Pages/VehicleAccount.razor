@@ -138,30 +138,42 @@
 
             <div class="va-filter-wrap">
                 <svg class="va-filter-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <circle cx="11" cy="11" r="8"/>
-                    <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
-                </svg>
-                <input type="text" class="va-filter-select" style="min-width:150px"
-                       @bind="_vehSearch" @bind:event="oninput"
-                       placeholder="ابحث برقم السيارة أو اسم السائق..." />
-            </div>
-
-            <div class="va-filter-wrap">
-                <svg class="va-filter-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <rect x="1" y="3" width="15" height="13" rx="2"/>
                     <path d="M16 8h4l3 3v5h-7V8z"/>
                     <circle cx="5.5" cy="18.5" r="2.5"/>
                     <circle cx="18.5" cy="18.5" r="2.5"/>
                 </svg>
-                <select class="va-filter-select" @bind="_selectedVehicleId" @bind:after="LoadAsync">
-                    <option value="0">— اختر المركبة —</option>
-                    @foreach (var v in FilteredVehicles)
-                    {
-                        <option value="@v.VehicleId">
-                            @v.PlateNumber — @v.VehicleType@(string.IsNullOrWhiteSpace(v.LastDriver) ? "" : $" — سائق: {v.LastDriver}")
-                        </option>
-                    }
-                </select>
+                <input type="text" class="va-filter-select va-filter-input"
+                       value="@_vehSearch"
+                       @oninput="OnVehSearchInput" @onfocus="() => _vehDdOpen = true" @onblur="() => _vehDdOpen = false"
+                       placeholder="اختر المركبة — ابحث برقم السيارة أو السائق أو المورد..." />
+                @if (_selectedVehicleId > 0 || !string.IsNullOrEmpty(_vehSearch))
+                {
+                    <button type="button" class="va-clear-btn" @onmousedown="ClearVehicle" title="مسح اختيار المركبة">✕</button>
+                }
+                @if (ShowVehDropdown)
+                {
+                    <div class="va-dd">
+                        @foreach (var v in VehMatches.Take(12))
+                        {
+                            <div class="va-dd-item" @onmousedown="() => PickVehicle(v)">
+                                <div class="va-dd-main">@v.PlateNumber <span class="va-dd-type">@v.VehicleType</span></div>
+                                @if (!string.IsNullOrWhiteSpace(VehicleSub(v)))
+                                {
+                                    <div class="va-dd-sub">@VehicleSub(v)</div>
+                                }
+                            </div>
+                        }
+                        @if (VehMatches.Count > 12)
+                        {
+                            <div class="va-dd-more">توجد @VehMatches.Count مركبة مطابقة — حدّد البحث أكثر للوصول إلى مركبة بعينها</div>
+                        }
+                    </div>
+                }
+                else if (_vehDdOpen && !string.IsNullOrWhiteSpace(_vehSearch) && VehMatches.Count == 0)
+                {
+                    <div class="va-dd"><div class="va-dd-empty">لا توجد مركبات مطابقة لهذا البحث</div></div>
+                }
             </div>
 
             <div class="va-filter-wrap">
@@ -170,14 +182,35 @@
                     <circle cx="9" cy="7" r="4"/>
                     <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
                 </svg>
-                <select class="va-filter-select" @bind="_selectedSupplierId" @bind:after="LoadAsync"
-                        title="كشف مجمع لكل مركبات المورد المالك">
-                    <option value="0">— كشف مجمع بالمورد —</option>
-                    @foreach (var sp in _suppliers)
-                    {
-                        <option value="@sp.Id">@sp.Label</option>
-                    }
-                </select>
+                <input type="text" class="va-filter-select va-filter-input"
+                       value="@_supSearch"
+                       @oninput="OnSupSearchInput" @onfocus="() => _supDdOpen = true" @onblur="() => _supDdOpen = false"
+                       placeholder="كشف مجمع بالمورد — ابحث باسم المورد..."
+                       title="كشف مجمع لكل مركبات المورد المالك" />
+                @if (_selectedSupplierId > 0 || !string.IsNullOrEmpty(_supSearch))
+                {
+                    <button type="button" class="va-clear-btn" @onmousedown="ClearSupplier" title="مسح اختيار المورد">✕</button>
+                }
+                @if (ShowSupDropdown)
+                {
+                    <div class="va-dd">
+                        @foreach (var sp in SupMatches.Take(12))
+                        {
+                            <div class="va-dd-item" @onmousedown="() => PickSupplier(sp)">
+                                <div class="va-dd-main">@sp.Label</div>
+                                <div class="va-dd-sub">كشف مجمع لكل مركبات هذا المورد</div>
+                            </div>
+                        }
+                        @if (SupMatches.Count > 12)
+                        {
+                            <div class="va-dd-more">يوجد @SupMatches.Count مورد مطابق — حدّد البحث أكثر</div>
+                        }
+                    </div>
+                }
+                else if (_supDdOpen && !string.IsNullOrWhiteSpace(_supSearch) && SupMatches.Count == 0)
+                {
+                    <div class="va-dd"><div class="va-dd-empty">لا يوجد مورد مطابق لهذا البحث</div></div>
+                }
             </div>
 
             <div class="va-filter-wrap">
@@ -717,6 +750,16 @@
         transition: border-color .15s, box-shadow .15s;
     }
     .va-filter-select:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); }
+    .va-filter-input { cursor: text; }
+    .va-clear-btn { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; border: none; border-radius: 50%; background: #eef2f8; color: #7a8aa0; font-size: 11px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 2; padding: 0; }
+    .va-clear-btn:hover { background: #ffe3e3; color: #c62828; }
+    .va-dd { position: absolute; top: calc(100% + 4px); right: 0; left: 0; background: #fff; border: 1px solid #d8e2f0; border-radius: 10px; box-shadow: 0 12px 28px rgba(10,27,59,.16); max-height: 264px; overflow-y: auto; z-index: 120; padding: 4px; }
+    .va-dd-item { padding: 8px 10px; border-radius: 7px; cursor: pointer; }
+    .va-dd-item:hover { background: #eaf1ff; }
+    .va-dd-main { font-size: 13px; font-weight: 800; color: var(--fc-text); }
+    .va-dd-type { font-size: 11px; font-weight: 600; color: #8899ae; }
+    .va-dd-sub { font-size: 11px; color: #66788f; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .va-dd-more, .va-dd-empty { padding: 8px 10px; font-size: 11px; color: #8899ae; }
 
     .va-print-btn {
         display: inline-flex; align-items: center; gap: 6px;
@@ -992,12 +1035,19 @@
         catch { _suppliers = new(); }
 
         _selectedVehicleId = VehicleId > 0 ? VehicleId : (_vehicles.FirstOrDefault()?.VehicleId ?? 0);
+        var sel = _vehicles.FirstOrDefault(v => v.VehicleId == _selectedVehicleId);
+        if (sel is not null) _vehSearch = sel.PlateNumber;
         if (_selectedVehicleId > 0) await LoadAsync();
         else _loading = false;
     }
 
+    private int _loadSeq;
+
     private async Task LoadAsync()
     {
+        /* تسلسل التحميل: الكتابة السريعة في البحث قد تطلق أكثر من تحميل —
+           تُعتمد نتيجة أحدث طلب فقط حتى لا تعود نتيجة قديمة فوقها */
+        var seq = ++_loadSeq;
         _from = DateTime.ParseExact(_month + "-01", "yyyy-MM-dd", null);
         _to = _from.AddMonths(1);
         _monthLabel = _from.ToString("MMMM yyyy");
@@ -1011,6 +1061,7 @@
             {
                 var s = await Http.GetFromJsonAsync<SupplierStmtOut>(
                     $"api/vehicle-accounts/by-supplier/{_selectedSupplierId}/statement?from={_from:yyyy-MM-dd}&to={_to:yyyy-MM-dd}");
+                if (seq != _loadSeq) return;
                 _stmt = s is null ? null : new StatementOut
                 {
                     PlateNumber = $"مجمع — {s.SupplierName} ({s.VehicleCount} مركبة)",
@@ -1021,8 +1072,8 @@
                     Closing     = s.Closing
                 };
             }
-            catch { _stmt = null; }
-            finally { _loading = false; }
+            catch { if (seq == _loadSeq) _stmt = null; }
+            finally { if (seq == _loadSeq) _loading = false; }
             return;
         }
 
@@ -1032,11 +1083,13 @@
 
         try
         {
-            _stmt = await Http.GetFromJsonAsync<StatementOut>(
+            var s = await Http.GetFromJsonAsync<StatementOut>(
                 $"api/vehicle-accounts/{_selectedVehicleId}/statement?from={_from:yyyy-MM-dd}&to={_to:yyyy-MM-dd}");
+            if (seq != _loadSeq) return;
+            _stmt = s;
         }
-        catch { _stmt = null; }
-        finally { _loading = false; }
+        catch { if (seq == _loadSeq) _stmt = null; }
+        finally { if (seq == _loadSeq) _loading = false; }
     }
 
     private void OpenPayment()
@@ -1123,21 +1176,123 @@
         public decimal Closing      { get; set; }
     }
 
-    /* ── بحث السيارات ── */
+    /* ── بحث السيارات: حقل واحد قابل للكتابة — نتيجة واحدة تُختار تلقائيًا،
+       ونتائج متعددة تظهر في قائمة فورية للاختيار منها ── */
     private string _vehSearch = "";
-    private List<VehicleOpt> FilteredVehicles
+    private bool _vehDdOpen;
+
+    private List<VehicleOpt> VehMatches
     {
         get
         {
             if (string.IsNullOrWhiteSpace(_vehSearch)) return _vehicles;
-            var s = _vehSearch.Trim();
+            var s = NormalizeArabic(_vehSearch);
             return _vehicles.Where(v =>
-                   v.PlateNumber.Contains(s, StringComparison.OrdinalIgnoreCase)
-                || v.VehicleType.Contains(s, StringComparison.OrdinalIgnoreCase)
-                || (v.LastDriver?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false)
-                || (v.Drivers?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false))
+                   NormalizeArabic(v.PlateNumber).Contains(s)
+                || NormalizeArabic(v.VehicleType).Contains(s)
+                || NormalizeArabic(v.LastDriver ?? "").Contains(s)
+                || NormalizeArabic(v.Drivers ?? "").Contains(s)
+                || NormalizeArabic(v.DefaultDriverName ?? "").Contains(s)
+                || NormalizeArabic(v.SupplierName ?? "").Contains(s))
                 .ToList();
         }
+    }
+
+    /* تُخفى القائمة عندما تكون النتيجة الوحيدة هي المركبة المختارة حاليًا ونص الحقل هو رقمها */
+    private bool ShowVehDropdown =>
+        _vehDdOpen && VehMatches.Count > 0
+        && !(VehMatches.Count == 1 && VehMatches[0].VehicleId == _selectedVehicleId
+             && _vehSearch == VehMatches[0].PlateNumber);
+
+    private static string VehicleSub(VehicleOpt v)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(v.SupplierName)) parts.Add($"المورد: {v.SupplierName}");
+        var drv = v.DefaultDriverName ?? v.LastDriver;
+        if (!string.IsNullOrWhiteSpace(drv)) parts.Add($"السائق: {drv}");
+        return string.Join(" · ", parts);
+    }
+
+    private async Task OnVehSearchInput(ChangeEventArgs e)
+    {
+        _vehSearch = e.Value?.ToString() ?? "";
+        _vehDdOpen = true;
+        var m = VehMatches;
+        if (!string.IsNullOrWhiteSpace(_vehSearch) && m.Count == 1 && m[0].VehicleId != _selectedVehicleId)
+            await PickVehicle(m[0]);
+    }
+
+    private async Task PickVehicle(VehicleOpt v)
+    {
+        _selectedVehicleId = v.VehicleId;
+        _vehSearch = v.PlateNumber;
+        _vehDdOpen = false;
+        /* اختيار مركبة بعينها يلغي الكشف المجمع بالمورد */
+        if (_selectedSupplierId > 0) { _selectedSupplierId = 0; _supSearch = ""; }
+        await LoadAsync();
+    }
+
+    private async Task ClearVehicle()
+    {
+        _selectedVehicleId = 0;
+        _vehSearch = "";
+        _vehDdOpen = false;
+        await LoadAsync();
+    }
+
+    /* ── بحث الموردين: حقل الكشف المجمع قابل للكتابة والبحث بنفس النمط ── */
+    private string _supSearch = "";
+    private bool _supDdOpen;
+
+    private List<SupOpt> SupMatches
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_supSearch)) return _suppliers;
+            var s = NormalizeArabic(_supSearch);
+            return _suppliers.Where(sp => NormalizeArabic(sp.Label).Contains(s)).ToList();
+        }
+    }
+
+    private bool ShowSupDropdown =>
+        _supDdOpen && SupMatches.Count > 0
+        && !(SupMatches.Count == 1 && SupMatches[0].Id == _selectedSupplierId
+             && _supSearch == SupMatches[0].Label);
+
+    private async Task OnSupSearchInput(ChangeEventArgs e)
+    {
+        _supSearch = e.Value?.ToString() ?? "";
+        _supDdOpen = true;
+        var m = SupMatches;
+        if (!string.IsNullOrWhiteSpace(_supSearch) && m.Count == 1 && m[0].Id != _selectedSupplierId)
+            await PickSupplier(m[0]);
+    }
+
+    private async Task PickSupplier(SupOpt sp)
+    {
+        _selectedSupplierId = sp.Id;
+        _supSearch = sp.Label;
+        _supDdOpen = false;
+        await LoadAsync();
+    }
+
+    private async Task ClearSupplier()
+    {
+        _selectedSupplierId = 0;
+        _supSearch = "";
+        _supDdOpen = false;
+        await LoadAsync();
+    }
+
+    private static string NormalizeArabic(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        string[] diacritics = new[] { "َ", "ُ", "ِ", "ّ", "ً", "ٌ", "ٍ", "ْ", "ـ" };
+        foreach (var d in diacritics) s = s.Replace(d, "");
+        return s
+            .Replace('أ', 'ا').Replace('إ', 'ا').Replace('آ', 'ا').Replace('ٱ', 'ا').Replace('ء', 'ا')
+            .Replace('ة', 'ه').Replace('ى', 'ي').Replace('ؤ', 'و').Replace('ئ', 'ي')
+            .Replace("  ", " ").ToLowerInvariant().Trim();
     }
 
     /* ── دفعة: تاريخ + طريقة دفع ── */
@@ -1202,7 +1357,7 @@
     private static string KindAr(string k) => k switch
     {
         "Freight" => "نولون رحلة",
-        "CustodyFreight" => "سلفة نولون",
+        "CustodyFreight" => "نولون نقلة",
         "CustodyRoad" => "مصاريف طريق",
         "Custody" => "عهدة نقدية",
         "Expense" => "مصروف تشغيلي",
@@ -1245,5 +1400,7 @@
         public string Status { get; set; } = "";
         public string? LastDriver { get; set; }
         public string? Drivers    { get; set; }
+        public string? SupplierName { get; set; }
+        public string? DefaultDriverName { get; set; }
     }
 }

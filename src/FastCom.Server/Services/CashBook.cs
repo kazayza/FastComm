@@ -106,9 +106,11 @@ public sealed class CashBook : ICashBook
         }
 
         /* 🔴 Idempotency — لو الحركة موجودة أصلًا (بنفس المرجع) مش بنعمل حاجة.
-           ده بيحمي من أي إعادة نداء أو retry. */
+           ده بيحمي من أي إعادة نداء أو retry.
+           ⚠️ الصفوف الملغية (Void) لا تُحتسب «موجودة» — المرجع الملغي لازم
+           يقدر يتعاد إنشاؤه، وإلا أي إلغاء-ثم-إعادة بيحرق المرجع للأبد. */
         if (await _db.CashTransactions.AnyAsync(t =>
-                !t.IsDeleted && t.ReferenceNumber == e.ReferenceNumber, ct))
+                !t.IsDeleted && t.Status == "Posted" && t.ReferenceNumber == e.ReferenceNumber, ct))
         {
             _log.LogInformation("CashBook: الحركة {Ref} موجودة أصلًا — اتخطت", e.ReferenceNumber);
             return true;

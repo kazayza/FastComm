@@ -563,6 +563,8 @@ public partial class FastComDbContext
         {
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.IsCustodyAllowed).HasDefaultValue(true);
+            entity.Property(e => e.IsFreightAdvance).HasDefaultValue(false);
+            entity.Property(e => e.IsReceiptRequired).HasDefaultValue(false);
             entity.Property(e => e.IsOperationCost).HasDefaultValue(true);
             entity.Property(e => e.IsTaxDeductible).HasDefaultValue(true);
         });
@@ -1031,6 +1033,7 @@ public partial class FastComDbContext
             entity.Property(e => e.Status).HasDefaultValue("Available");
 
             entity.HasOne(d => d.Supplier).WithMany(p => p.Vehicles).HasConstraintName("FK_Vehicles_Suppliers");
+            entity.HasOne(d => d.DefaultDriver).WithMany().HasConstraintName("FK_Vehicles_DefaultDriver");
         });
 
         modelBuilder.Entity<VehicleMaintenance>(entity =>

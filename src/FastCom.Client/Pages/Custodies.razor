@@ -211,7 +211,7 @@
                     </div>
                     @if (CanCreate && string.IsNullOrWhiteSpace(_search))
                     {
-                        <button class="cu-add-btn" @onclick="OpenIssue">
+                        <button class="cu-add-btn" @onclick='() => Nav.NavigateTo("/custodies/new")'>
                             <svg viewBox="0 0 24 24" width="16" height="16"
                                  fill="none" stroke="currentColor" stroke-width="2.5"
                                  aria-hidden="true">
@@ -293,16 +293,6 @@
                                                         </span>
                                                     }
                                                 </div>
-                                                @* #61 — عهدة موظف فيها توزيعات: الموزع والمتاح *@
-                                                @if (c.OwnerType == "Employee" && c.IsPrimary && c.SubCount > 0)
-                                                {
-                                                    <div class="cu-dist-line"
-                                                         title="إجمالي الموزع من العهدة دي على السواقين">
-                                                        <span>موزّع: @Money(c.Distributed)</span>
-                                                        <span class="cu-dist-sep" aria-hidden="true">·</span>
-                                                        <span>متاح: @Money(Math.Max(0, c.AmountIssued - c.Distributed))</span>
-                                                    </div>
-                                                }
                                             </div>
                                         </div>
                                     </td>
@@ -429,22 +419,6 @@
                                                 </svg>
                                             </button>
 
-                                            @* #28 — توزيع على سائق (عهدة موظف مفتوحة) *@
-                                            @if (c.Status == "Open" && c.OwnerType == "Employee" && c.IsPrimary && CanCreate)
-                                            {
-                                                <button class="cu-act-btn act-tx"
-                                                        @onclick="() => OpenDistribute(c)"
-                                                        title="توزيع على سائق"
-                                                        aria-label="توزيع من @c.CustodyNumber">
-                                                    <svg viewBox="0 0 24 24" width="14" height="14"
-                                                         fill="none" stroke="currentColor" stroke-width="2">
-                                                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
-                                                        <circle cx="9" cy="7" r="4"/>
-                                                        <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke-linecap="round"/>
-                                                    </svg>
-                                                </button>
-                                            }
-
                                             @* #61 — تسوية سلفة النولون مقابل نولون الرحلة *@
                                             @if (c.OwnerType == "Driver" && c.AllocationType == "Freight" &&
                                                  c.TripId != null && CanSettle &&
@@ -452,7 +426,7 @@
                                             {
                                                 <button class="cu-act-btn act-info"
                                                         @onclick="() => FreightSettle(c)"
-                                                        title="تسوية سلفة النولون مقابل نولون الرحلة"
+                                                        title="تسوية نولون النقلة مقابل نولون الرحلة"
                                                         aria-label="تسوية نولون @c.CustodyNumber">
                                                     <svg viewBox="0 0 24 24" width="14" height="14"
                                                          fill="none" stroke="currentColor" stroke-width="2">
@@ -469,7 +443,7 @@
                                                 @* رد / إضافة *@
                                                 <button class="cu-act-btn act-tx"
                                                         @onclick="() => OpenTx(c)"
-                                                        title="رد باقي / إضافة"
+                                                        title="رد باقي / تغذية"
                                                         aria-label="حركة على @c.CustodyNumber">
                                                     <svg viewBox="0 0 24 24" width="14" height="14"
                                                          fill="none" stroke="currentColor" stroke-width="2">
@@ -515,6 +489,21 @@
                                                          fill="none" stroke="currentColor" stroke-width="2">
                                                         <path d="M9 12l2 2 4-4"/>
                                                         <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @* إرجاع التسوية لصاحب العهدة *@
+                                            @if (c.Status == "Submitted" && CanApprove)
+                                            {
+                                                <button class="cu-act-btn act-return"
+                                                        @onclick="() => OpenReturn(c)"
+                                                        title="إرجاع التسوية"
+                                                        aria-label="إرجاع تسوية @c.CustodyNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M9 14L4 9l5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        <path d="M4 9h10a6 6 0 016 6v1" stroke-linecap="round"/>
                                                     </svg>
                                                 </button>
                                             }
@@ -661,7 +650,10 @@
                     <div class="cu-mfield">
                         <label class="cu-mlabel">
                             الرحلة
-                            <span class="cu-mrequired">*</span>
+                            @if (!(_nf.OwnerType == "Employee" && _nf.GeneralOps))
+                            {
+                                <span class="cu-mrequired">*</span>
+                            }
                         </label>
                         <div class="cu-mselect-wrap">
                             <svg class="cu-mselect-icon" viewBox="0 0 24 24"
@@ -675,6 +667,7 @@
                             <select class="cu-minput cu-mselect"
                                     value="@_nf.TripId"
                                     @onchange="OnTripChanged"
+                                    disabled="@(_nf.OwnerType == "Employee" && _nf.GeneralOps)"
                                     aria-required="true">
                                 <option value="">— اختر رحلة —</option>
                                 @foreach (var t in _trips)
@@ -789,6 +782,30 @@
                         </div>
                     </div>
 
+                    @* عهدة تشغيل عامة — للموظف بس *@
+                    @if (_nf.OwnerType == "Employee")
+                    {
+                        <div class="cu-mfield">
+                            <label class="cu-mlabel">نوع عهدة الموظف</label>
+                            <label class="cu-additional-check @(_nf.GeneralOps ? "check-active" : "")">
+                                <input type="checkbox" @bind="_nf.GeneralOps" />
+                                <div class="cu-add-check-box" aria-hidden="true">
+                                    @if (_nf.GeneralOps)
+                                    {
+                                        <svg viewBox="0 0 24 24" width="12" height="12"
+                                             fill="none" stroke="currentColor" stroke-width="2.5">
+                                            <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    }
+                                </div>
+                                <div>
+                                    <strong>عهدة تشغيل عامة (بدون رحلة)</strong>
+                                    <p>بتتصرف من خزينة الموظف نفسه، وبيصرف منها على عمليات ورحلات مختلفة وبيربط الصرف وقت التسوية</p>
+                                </div>
+                            </label>
+                        </div>
+                    }
+
                     @* مبلغ العهدة *@
                     <div class="cu-mfield">
                         <label class="cu-mlabel">
@@ -805,7 +822,16 @@
                         </div>
                     </div>
 
-                    @* #61 — خزينة الصرف *@
+                    @* خزينة الصرف: للموظف خزينته الخاصة إجبارية — الاختيار لغير الموظفين (#61) *@
+                    @if (_nf.OwnerType == "Employee")
+                    {
+                    <div class="cu-mfield">
+                        <label class="cu-mlabel">خزينة الصرف</label>
+                        <div class="cu-mhint">عهدة الموظف بتتصرف من **خزينته الخاصة** إجباريًا — موّلها الأول بتحويل من الخزينة الرئيسية من شاشة الخزينة</div>
+                    </div>
+                    }
+                    else
+                    {
                     <div class="cu-mfield">
                         <label class="cu-mlabel">خزينة الصرف</label>
                         <div class="cu-mselect-wrap">
@@ -841,6 +867,7 @@
                             <div class="cu-mhint">مبلغ العهدة هيخرج من الخزينة دي وقت الصرف</div>
                         }
                     </div>
+                    }
 
                     @* نوع العهدة (التخصيص) *@
                     <div class="cu-mfield">
@@ -860,7 +887,7 @@
                                 <option value="Road">مصاريف طريق</option>
                             </select>
                         </div>
-                        <div class="cu-mhint">سلفة النولون تُخصم من نولون النقله عند التسوية · مصاريف الطريق تكلفة على الرحلة</div>
+                        <div class="cu-mhint">نولون النقلة يُخصم من نولون الرحلة عند التسوية · مصاريف الطريق تكلفة على الرحلة</div>
                     </div>
 
                     @* ملاحظات *@
@@ -906,7 +933,7 @@
 
 
 @* ═══════════════════════════════════════════
-   MODAL — رد باقي / إضافة
+   MODAL — رد باقي / تغذية
 ═══════════════════════════════════════════ *@
 @if (_txOpen && CanSettle && _txTarget is not null)
 {
@@ -985,15 +1012,15 @@
                         رد باقي العهدة
                     </button>
                     <button type="button"
-                            class="cu-tx-type-btn @(_tx.Type == "Additional" ? "tx-active-add" : "")"
-                            @onclick='() => _tx.Type = "Additional"'
-                            aria-pressed="@(_tx.Type == "Additional")">
+                            class="cu-tx-type-btn @(_tx.Type == "TopUp" ? "tx-active-add" : "")"
+                            @onclick='() => _tx.Type = "TopUp"'
+                            aria-pressed="@(_tx.Type == "TopUp")">
                         <svg viewBox="0 0 24 24" width="18" height="18"
                              fill="none" stroke="currentColor" stroke-width="2"
                              aria-hidden="true">
                             <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
                         </svg>
-                        إضافة مبلغ
+                        تغذية العهدة
                     </button>
                 </div>
 
@@ -1012,6 +1039,10 @@
                                    placeholder="0.00"
                                    @onchange="e => _tx.Amount = ParseAmount(e.Value)" />
                         </div>
+                        @if (_tx.Type == "TopUp")
+                        {
+                            <div class="cu-mhint">التغذية صرف فعلي من خزينة الموظف يزيد مبلغ عهدته بنفس القدر — وليست تسجيلًا على الورق.</div>
+                        }
                         @if (_tx.Type == "Refund" && MaxRefund(_txTarget) > 0)
                         {
                             <div class="cu-mhint">
@@ -1075,7 +1106,7 @@
                             <circle cx="12" cy="14" r="2"/>
                         </svg>
                     }
-                    @(_tx.Type == "Refund" ? "تسجيل الرد" : "إضافة المبلغ")
+                    @(_tx.Type == "Refund" ? "تسجيل الرد" : "تسجيل التغذية")
                 </button>
             </div>
 
@@ -1087,6 +1118,46 @@
 @* ═══════════════════════════════════════════
    MODAL — اعتماد التسوية
 ═══════════════════════════════════════════ *@
+@* ══════════════════════════════════════════════════════════════
+   MODAL — إرجاع التسوية
+   ══════════════════════════════════════════════════════════════ *@
+@if (_returnOpen && _returnTarget is not null)
+{
+    <div class="cu-modal-backdrop" @onclick="CloseReturn"
+         role="dialog" aria-modal="true" aria-label="إرجاع التسوية">
+        <div class="cu-modal" @onclick:stopPropagation="true">
+
+            <div class="cu-modal-head">
+                <div>
+                    <div class="cu-modal-title">إرجاع تسوية @_returnTarget.CustodyNumber</div>
+                    <div class="cu-modal-sub">تعود العهدة مفتوحة لصاحبها لاستكمال البنود، ويصله إشعار بسبب الإرجاع</div>
+                </div>
+                <button class="cu-modal-close" @onclick="CloseReturn" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/></svg>
+                </button>
+            </div>
+
+            <div class="cu-modal-body">
+                <div class="cu-mfield cu-mfield-full">
+                    <label class="cu-mlabel">سبب الإرجاع</label>
+                    <input class="cu-minput" value="@_returnReason" maxlength="500"
+                           placeholder="ما الذي يجب استكماله أو تصحيحه؟"
+                           @onchange="e => _returnReason = e.Value?.ToString()" />
+                </div>
+            </div>
+
+            <div class="cu-modal-foot">
+                <button class="cu-modal-cancel" @onclick="CloseReturn">إلغاء</button>
+                <button class="cu-modal-save" @onclick="ConfirmReturn" disabled="@_saving">
+                    @if (_saving) { <span class="btn-spinner sm" aria-hidden="true"></span> }
+                    إرجاع التسوية
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
 @if (_approveOpen && _approveTarget is not null)
 {
     <div class="cu-modal-backdrop" @onclick="CloseApprove"
@@ -1147,6 +1218,13 @@
                     </div>
                 </div>
 
+                @if (_approveTarget.Remaining > 0)
+                {
+                    <div class="cu-autorefund-note">
+                        سيُرد هذا الباقي (<strong>@Money(_approveTarget.Remaining) ج.م</strong>) تلقائيًا إلى خزينة الموظف مع هذا الاعتماد — لا خطوة إضافية مطلوبة.
+                    </div>
+                }
+
                 @if (_needAdditional)
                 {
                     <div class="cu-additional-warn" role="alert">
@@ -1158,8 +1236,8 @@
                             </svg>
                         </div>
                         <div>
-                            <strong>صرف أكتر من العهدة!</strong>
-                            <p>فعّل الاختيار ده عشان الفرق يتسجل كمبلغ إضافي على العهدة</p>
+                            <strong>الموظف صرف من ماله الخاص @Money(DeficitOf(_approveTarget)) ج.م فوق مبلغ العهدة</strong>
+                            <p>هذا العجز مستحق للموظف على الشركة — فعّل الاختيار التالي لصرفه له نقدًا من خزينته مع الاعتماد</p>
                         </div>
                     </div>
 
@@ -1175,8 +1253,8 @@
                             }
                         </div>
                         <div class="cu-add-check-text">
-                            <span>سجّل الفرق كمبلغ إضافي على العهدة</span>
-                            <small>هيتسجل تلقائياً كـ «إضافة مبلغ»</small>
+                            <span>صرف الاستعاضة والاعتماد</span>
+                            <small>يُصرف مبلغ العجز للموظف من خزينته وتُعتمد التسوية في خطوة واحدة</small>
                         </div>
                     </label>
                 }
@@ -1518,6 +1596,18 @@
                         <span class="cu-detail-count">@_detail.Expenses.Count</span>
                     </div>
 
+                    @{
+                        var isGeneralDetail = _detail.Custody.TripId is null && _detail.Custody.OwnerType == "Employee";
+                        var canLink = isGeneralDetail && CanSettle && _detail.Custody.Status is "Open" or "PartiallySettled";
+                        var unlinkedCount = isGeneralDetail ? _detail.Expenses.Count(x => !x.IsLinked) : 0;
+                    }
+                    @if (unlinkedCount > 0 && _detail.Custody.Status is "Open" or "PartiallySettled")
+                    {
+                        <div class="cu-link-strip">
+                            في @unlinkedCount مصروف لسه مش مربوط — اربط كل مصروف بعمليته (ونولون النقلة برحلتها) قبل تقديم التسوية
+                        </div>
+                    }
+
                     @if (!_detail.Expenses.Any())
                     {
                         <div class="cu-detail-empty">مافيش مصروفات مربوطة بالعهدة دي</div>
@@ -1546,6 +1636,49 @@
                                         </span>
                                     </div>
                                 </div>
+
+                                @if (isGeneralDetail && e.IsLinked)
+                                {
+                                    <div class="cu-exp-linked">
+                                        @(e.IsFreightAdvance ? $"نولون نقلة — رحلة {e.TripNumber}" : $"مربوط بعملية {e.OperationNumber}")
+                                        @if (e.BillableAmount is not null)
+                                        {
+                                            <span>· على العميل @Money(e.BillableAmount.Value) ج.م</span>
+                                        }
+                                    </div>
+                                }
+                                else if (canLink && !e.IsLinked)
+                                {
+                                    <div class="cu-exp-linkrow">
+                                        @if (e.IsFreightAdvance)
+                                        {
+                                            <select class="cu-minput cu-mselect"
+                                                    @onchange="ev => SetLinkSel(e.ExpenseId, ev)">
+                                                <option value="0">— اختر رحلة السلفة —</option>
+                                                @foreach (var t in _trips)
+                                                {
+                                                    <option value="@t.TripId">@t.TripNumber — @t.DriverName</option>
+                                                }
+                                            </select>
+                                        }
+                                        else
+                                        {
+                                            <select class="cu-minput cu-mselect"
+                                                    @onchange="ev => SetLinkSel(e.ExpenseId, ev)">
+                                                <option value="0">— اختر العملية —</option>
+                                                @foreach (var o in _linkOps)
+                                                {
+                                                    <option value="@o.OperationId">@o.OperationNumber — @o.CustomerName</option>
+                                                }
+                                            </select>
+                                        }
+                                        <button class="cu-link-btn"
+                                                @onclick="() => LinkExpenseAsync(e)"
+                                                disabled="@(_linkingId == e.ExpenseId)">
+                                            ربط
+                                        </button>
+                                    </div>
+                                }
                             }
                         </div>
                     }
@@ -1600,164 +1733,6 @@
    CSS
 ═══════════════════════════════════════════ *@
 @* ═══════════════ MODAL — توزيع من عهدة موظف على سائق (#28) ═══════════════ *@
-@if (_distParent is not null)
-{
-    <div class="cu-modal-backdrop" @onclick="CloseDistribute"
-         role="dialog" aria-modal="true" aria-label="توزيع على سائق">
-        <div class="cu-modal" @onclick:stopPropagation="true">
-
-            <div class="cu-modal-head">
-                <div class="cu-modal-icon tx-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="22" height="22"
-                         fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
-                        <circle cx="9" cy="7" r="4"/>
-                        <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke-linecap="round"/>
-                    </svg>
-                </div>
-                <div>
-                    <div class="cu-modal-title">توزيع على سائق من @_distParent.CustodyNumber</div>
-                    <div class="cu-modal-sub">عهدة فرعية — بدون حركة خزينة جديدة (الفلوس خرجت مع العهدة الرئيسية)</div>
-                </div>
-                <button class="cu-modal-close" @onclick="CloseDistribute" aria-label="إغلاق">
-                    <svg viewBox="0 0 24 24" width="18" height="18"
-                         fill="none" stroke="currentColor" stroke-width="2.5">
-                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
-                    </svg>
-                </button>
-            </div>
-
-            @if (_distMsg is not null)
-            {
-                <div class="cu-modal-banner @(_distOk ? "banner-success" : "banner-error")" role="alert">
-                    <span>@_distMsg</span>
-                    <button @onclick="() => _distMsg = null">✕</button>
-                </div>
-            }
-
-            <div class="cu-modal-body">
-
-                @* السائق *@
-                <div class="cu-mfield">
-                    <label class="cu-mlabel">
-                        السائق
-                        <span class="cu-mrequired">*</span>
-                    </label>
-                    <div class="cu-mselect-wrap">
-                        <svg class="cu-mselect-icon" viewBox="0 0 24 24"
-                             width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
-                             aria-hidden="true">
-                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-                            <circle cx="12" cy="7" r="4"/>
-                        </svg>
-                        <select class="cu-minput cu-mselect"
-                                value="@_distDriverId"
-                                @onchange="e => _distDriverId = ParseInt(e.Value)">
-                            <option value="0">— اختر السائق —</option>
-                            @foreach (var d in _drivers)
-                            {
-                                <option value="@d.Id">@d.Label</option>
-                            }
-                        </select>
-                    </div>
-                </div>
-
-                @* المبلغ *@
-                <div class="cu-mfield">
-                    <label class="cu-mlabel">
-                        مبلغ التوزيع
-                        <span class="cu-mrequired">*</span>
-                    </label>
-                    <div class="cu-mfield-group">
-                        <span class="cu-mprefix" aria-hidden="true">ج.م</span>
-                        <input type="number" min="0" step="0.01"
-                               class="cu-minput with-prefix"
-                               value="@_distAmount"
-                               placeholder="0.00"
-                               @onchange="e => _distAmount = ParseAmount(e.Value)" />
-                    </div>
-                </div>
-
-                @* نوع التوزيع *@
-                <div class="cu-mfield">
-                    <label class="cu-mlabel">نوع التوزيع</label>
-                    <div class="cu-mselect-wrap">
-                        <svg class="cu-mselect-icon" viewBox="0 0 24 24"
-                             width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
-                             aria-hidden="true">
-                            <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
-                            <circle cx="7" cy="7" r="1.5"/>
-                        </svg>
-                        <select class="cu-minput cu-mselect" @bind="_distType">
-                            <option value="Road">مصاريف طريق</option>
-                            <option value="Freight">سلفة من نولون النقله</option>
-                        </select>
-                    </div>
-                </div>
-
-                @* #61 — رحلة سلفة النولون: إجبارية علشان تتسوى مقابل نولونها *@
-                @if (_distType == "Freight")
-                {
-                    <div class="cu-mfield">
-                        <label class="cu-mlabel">
-                            الرحلة
-                            <span class="cu-mrequired">*</span>
-                        </label>
-                        <div class="cu-mselect-wrap">
-                            <svg class="cu-mselect-icon" viewBox="0 0 24 24"
-                                 width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
-                                 aria-hidden="true">
-                                <rect x="1" y="3" width="15" height="13" rx="1"/>
-                                <path d="M16 8h4l3 3v5h-7z"/>
-                                <circle cx="5.5" cy="18.5" r="2"/>
-                                <circle cx="18.5" cy="18.5" r="2"/>
-                            </svg>
-                            <select class="cu-minput cu-mselect"
-                                    value="@_distTripId"
-                                    @onchange="OnDistTripChanged"
-                                    aria-required="true">
-                                <option value="">— اختر رحلة —</option>
-                                @foreach (var t in _trips)
-                                {
-                                    <option value="@t.TripId">
-                                        @t.TripNumber — @t.DriverName (@TripStatusAr(t.Status))
-                                    </option>
-                                }
-                            </select>
-                        </div>
-                        <div class="cu-mhint">سلفة النولون لازم ترتبط برحلة علشان تتسوى مقابل نولونها</div>
-                    </div>
-                }
-
-                @* ملاحظات *@
-                <div class="cu-mfield">
-                    <label class="cu-mlabel">ملاحظات</label>
-                    <input class="cu-minput"
-                           value="@_distNotes"
-                           maxlength="500"
-                           placeholder="أي ملاحظات..."
-                           @onchange="e => _distNotes = e.Value?.ToString() ?? string.Empty" />
-                </div>
-
-            </div>
-
-            <div class="cu-modal-foot">
-                <button class="cu-modal-cancel" @onclick="CloseDistribute">إلغاء</button>
-                <button class="cu-modal-save dist-save"
-                        @onclick="SaveDistributeAsync"
-                        disabled="@_distSaving">
-                    @if (_distSaving)
-                    {
-                        <span class="btn-spinner sm" aria-hidden="true"></span>
-                    }
-                    توزيع على السائق
-                </button>
-            </div>
-
-        </div>
-    </div>
-}
-
 <style>
 
     :root {
@@ -2383,6 +2358,7 @@
     .act-expense { color: var(--fc-teal); }
     .act-settle  { color: var(--fc-amber); }
     .act-approve { color: var(--fc-green); }
+    .act-return  { color: var(--fc-amber); }
     .act-close   { color: #6b7d95; }
     .act-delete  { color: var(--fc-red); }
 
@@ -2391,6 +2367,7 @@
     .act-expense:hover { background: var(--fc-teal-lt);   border-color: #b0e0dc; }
     .act-settle:hover  { background: var(--fc-amber-lt);  border-color: #f0d898; }
     .act-approve:hover { background: var(--fc-green-lt);  border-color: #b0e0c5; }
+    .act-return:hover  { background: var(--fc-amber-lt);  border-color: #f0d898; }
     .act-close:hover   { background: #f0f3f8; border-color: #dde5f0; }
     .act-delete:hover  { background: var(--fc-red-lt);    border-color: #ffc8cf; }
 
@@ -2695,6 +2672,9 @@
     .cu-app-sum-curr { font-size: 10px; color: #9aaabb; }
 
     /* Additional Warning */
+    .cu-autorefund-note { background: #eef4ff; border: 1px solid #c9dcff; color: #1d4fb8;
+        border-radius: 10px; padding: 10px 12px; font-size: 12.5px; font-weight: 700; margin-top: 12px; }
+
     .cu-additional-warn {
         display: flex; align-items: flex-start; gap: 12px;
         padding: 14px 16px; border-radius: 12px;
@@ -2865,6 +2845,33 @@
     .amt-expense   { color: var(--fc-red); }
     .amt-refund    { color: var(--fc-green); }
     .amt-additional { color: var(--fc-purple); }
+
+    /* Settlement linking — عهدة تشغيل عامة */
+    .cu-link-strip {
+        background: #fff4e8; border: 1px solid #FF8015; color: #8a4a00;
+        border-radius: 10px; padding: 9px 13px;
+        font-size: 12px; font-weight: 700; margin-bottom: 10px;
+    }
+
+    .cu-exp-linked {
+        font-size: 11px; font-weight: 700; color: #0B56DF;
+        background: #eaf1ff; border: 1px solid #c9dbff;
+        border-radius: 8px; padding: 5px 11px; margin-top: -4px;
+    }
+
+    .cu-exp-linkrow {
+        display: flex; align-items: center; gap: 8px; margin-top: -4px;
+    }
+    .cu-exp-linkrow .cu-mselect { flex: 1; }
+
+    .cu-link-btn {
+        background: #0B56DF; color: #fff; border: none; cursor: pointer;
+        border-radius: 9px; padding: 8px 18px;
+        font-size: 12px; font-weight: 800; flex: 0 0 auto;
+        transition: background .12s ease;
+    }
+    .cu-link-btn:hover { background: #083CA8; }
+    .cu-link-btn:disabled { background: #9db9e8; cursor: default; }
 
     /* Expenses List */
     .cu-expenses-list { display: flex; flex-direction: column; gap: 8px; }
@@ -3304,6 +3311,23 @@
         public DateTime ExpenseDate   { get; set; }
         public string?  Description   { get; set; }
         public string   PaymentStatus { get; set; } = "";
+        public long?    OperationId     { get; set; }
+        public string?  OperationNumber { get; set; }
+        public long?    TripId          { get; set; }
+        public string?  TripNumber      { get; set; }
+        public bool     IsFreightAdvance { get; set; }
+        public decimal? BillableAmount  { get; set; }
+        public int?     DriverId        { get; set; }
+
+        public bool IsLinked => IsFreightAdvance ? TripId is not null : OperationId is not null;
+    }
+
+    public class OpOpt
+    {
+        public long    OperationId     { get; set; }
+        public string  OperationNumber { get; set; } = "";
+        public string  CustomerName    { get; set; } = "";
+        public string  Status          { get; set; } = "";
     }
 
     public class Envelope
@@ -3325,6 +3349,8 @@
         public long?   ParentCustodyId { get; set; }
         public string? AllocationType { get; set; }
         public int     CashBoxId    { get; set; }
+        /* عهدة تشغيل عامة للموظف: بدون رحلة، من خزينة الموظف */
+        public bool    GeneralOps   { get; set; } = true;
     }
 
     public class TxForm
@@ -3428,9 +3454,11 @@
         "Issue"      => "صرف العهدة",
         "Expense"    => "مصروف",
         "Refund"     => "رد باقي",
-        "Additional" => "إضافة مبلغ",
+        "Additional" => "إضافة مبلغ (قديمة)",
+        "TopUp"      => "تغذية عهدة",
+        "Reimburse"  => "استعاضة عجز",
         "FreightSettle" => "تسوية نولون",
-        "Distribute" => "توزيع لسائق",
+        "Distribute" => "توزيع لسائق (قديم)",
         _            => t
     };
 
@@ -3492,12 +3520,22 @@
         int.TryParse(v?.ToString(), out var n) ? n : 0;
 
     /* ── Init ── */
+    [Parameter, SupplyParameterFromQuery] public long? OpenId { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
         if (!CanView) return;
         await LoadAsync();
         if (CanCreate) await LoadLookupsAsync();
+
+        /* فتح مباشر من إشعار: افتح دفتر العهدة المطلوبة */
+        if (OpenId is not null)
+        {
+            var target = _items.FirstOrDefault(x => x.CustodyId == OpenId.Value)
+                         ?? new Item { CustodyId = OpenId.Value };
+            await Open(target);
+        }
     }
 
     private async Task LoadLookupsAsync()
@@ -3533,7 +3571,7 @@
     /* ── نوع العهدة (التخصيص) ── */
     private static string AllocAr(string? t) => t switch
     {
-        "Freight" => "سلفة نولون",
+        "Freight" => "نولون نقلة",
         "Road"    => "مصاريف طريق",
         _         => "عامة"
     };
@@ -3560,8 +3598,8 @@
     {
         _fabOpen = false;
         StateHasChanged();
-        await Task.Delay(180);   // القائمة تقفل بنعومة قبل ما المودال يفتح
-        OpenIssue();
+        await Task.Delay(180);   // القائمة تقفل بنعومة قبل الانتقال
+        Nav.NavigateTo("/custodies/new");   // صرف العهدة بقى شاشة كاملة
     }
 
     private void OpenIssue()
@@ -3596,9 +3634,11 @@
         _saving = true; _msg = null;
         try
         {
+            /* عهدة تشغيل عامة: من غير رحلة ومن غير تخصيص — الصرف من خزينة الموظف */
+            var general = _nf.OwnerType == "Employee" && _nf.GeneralOps;
             var res = await Http.PostAsJsonAsync("api/custodies", new
             {
-                tripId          = _nf.TripId,
+                tripId          = general ? (long?)null : _nf.TripId,
                 ownerType       = _nf.OwnerType,
                 ownerId         = _nf.OwnerId,
                 amountIssued    = _nf.AmountIssued,
@@ -3606,7 +3646,7 @@
                 notes           = _nf.Notes,
                 isPrimary       = _nf.IsPrimary,
                 parentCustodyId = _nf.ParentCustodyId,
-                allocationType  = _nf.AllocationType,
+                allocationType  = general ? null : _nf.AllocationType,
                 cashBoxId       = _nf.CashBoxId == 0 ? (int?)null : _nf.CashBoxId
             });
             _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
@@ -3621,61 +3661,6 @@
     private List<BoxOpt> _boxes = new();
 
     /* ── #28 — توزيع من عهدة موظف على سائق ── */
-    private Item?   _distParent;
-    private int     _distDriverId;
-    private long?   _distTripId;
-    private decimal _distAmount;
-    private string  _distType = "Road";
-    private string  _distNotes = "";
-    private bool    _distSaving, _distTried, _distOk = true;
-    private string? _distMsg;
-
-    private void OpenDistribute(Item c)
-    {
-        _distParent = c; _distDriverId = 0; _distAmount = 0; _distTripId = null;
-        _distType = "Road"; _distNotes = ""; _distMsg = null; _distTried = false; _distOk = true;
-    }
-
-    private void OnDistTripChanged(ChangeEventArgs e)
-    {
-        _distTripId = long.TryParse(e.Value?.ToString(), out var v) && v > 0 ? v : null;
-    }
-
-    private void CloseDistribute() => _distParent = null;
-
-    private async Task SaveDistributeAsync()
-    {
-        _distTried = true; _distMsg = null;
-        if (_distDriverId <= 0) { _distOk = false; _distMsg = "اختار السائق"; return; }
-        if (_distAmount <= 0)   { _distOk = false; _distMsg = "ادخل مبلغ التوزيع"; return; }
-        if (_distType == "Freight" && _distTripId is null)
-        { _distOk = false; _distMsg = "اختار رحلة سلفة النولون"; return; }
-
-        _distSaving = true;
-        try
-        {
-            var res = await Http.PostAsJsonAsync("api/custodies", new
-            {
-                /* #61 — سلفة النولون ترتبط برحلتها علشان تتسوى مقابل نولونها */
-                tripId          = _distType == "Freight" ? _distTripId : null,
-                ownerType       = "Driver",
-                ownerId         = _distDriverId,
-                amountIssued    = _distAmount,
-                custodyDate     = DateTime.Now.ToString("yyyy-MM-ddTHH:mm"),
-                notes           = string.IsNullOrWhiteSpace(_distNotes) ? null : _distNotes.Trim(),
-                isPrimary       = false,
-                parentCustodyId = _distParent!.CustodyId,
-                allocationType  = _distType
-            });
-            _distMsg = await MsgOf(res);
-            _distOk  = res.IsSuccessStatusCode;
-            if (res.IsSuccessStatusCode)
-            { Snackbar.Add(_distMsg, Severity.Success); CloseDistribute(); await LoadAsync(); }
-        }
-        catch (Exception ex) { _distOk = false; _distMsg = "فشل: " + ex.Message; }
-        finally { _distSaving = false; }
-    }
-
     /* ── حركة ── */
     private void OpenTx(Item c)
     {
@@ -3718,8 +3703,55 @@
             _detail = await Http.GetFromJsonAsync<Envelope>($"api/custodies/{c.CustodyId}");
             if (_detail is null) return;
             _msg = null; _detailOpen = true;
+
+            /* عهدة تشغيل عامة: حمّل عمليات الربط عند التسوية */
+            if (_detail.Custody.TripId is null && _detail.Custody.OwnerType == "Employee" && _linkOps.Count == 0)
+            {
+                try { _linkOps = await Http.GetFromJsonAsync<List<OpOpt>>("api/custodies/operations") ?? new(); }
+                catch { _linkOps = new(); }
+            }
         }
         catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+    }
+
+    /* ── ربط مصروف عند تسوية عهدة تشغيل عامة ── */
+    private List<OpOpt> _linkOps = new();
+    private readonly Dictionary<long, long> _linkSel = new();
+    private long _linkingId;
+
+    private void SetLinkSel(long expenseId, ChangeEventArgs ev)
+        => _linkSel[expenseId] = long.TryParse(ev.Value?.ToString(), out var v) ? v : 0;
+
+    private async Task LinkExpenseAsync(CustodyExpense e)
+    {
+        if (_detail is null) return;
+        var sel = _linkSel.TryGetValue(e.ExpenseId, out var v) ? v : 0;
+        if (sel <= 0)
+        {
+            Snackbar.Add(e.IsFreightAdvance ? "اختار رحلة السلفة الأول" : "اختار العملية الأول", Severity.Warning);
+            return;
+        }
+
+        _linkingId = e.ExpenseId;
+        try
+        {
+            var res = await Http.PostAsJsonAsync(
+                $"api/custodies/{_detail.Custody.CustodyId}/expenses/{e.ExpenseId}/link",
+                new
+                {
+                    operationId = e.IsFreightAdvance ? (long?)null : sel,
+                    tripId      = e.IsFreightAdvance ? sel : (long?)null
+                });
+            var msg = await MsgOf(res);
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(msg, Severity.Success);
+                await Open(_detail.Custody.ToItem());
+            }
+            else Snackbar.Add(msg, Severity.Error);
+        }
+        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
+        finally { _linkingId = 0; }
     }
 
     private void CloseDetail() { _detailOpen = false; }
@@ -3749,13 +3781,50 @@
     /* #61 — تسوية سلفة النولون مقابل نولون الرحلة */
     private Task FreightSettle(Item c) => Post($"api/custodies/{c.CustodyId}/freight-settle", null);
 
+    private static decimal DeficitOf(Item c) =>
+        Math.Max(0, c.AmountSpent + c.AmountReturned - c.AmountIssued);
+
     private void OpenApprove(Item c)
     {
-        _approveTarget = c; _addAdditional = false; _needAdditional = false;
+        _approveTarget = c; _addAdditional = false;
+        _needAdditional = DeficitOf(c) > 0;
         _msg = null; _approveOpen = true;
     }
 
     private void CloseApprove() { _approveOpen = false; _approveTarget = null; _msg = null; }
+
+    /* ── إرجاع التسوية ── */
+    private bool    _returnOpen;
+    private Item?   _returnTarget;
+    private string? _returnReason;
+
+    private void OpenReturn(Item c)
+    {
+        _returnTarget = c; _returnReason = null; _msg = null; _returnOpen = true;
+    }
+
+    private void CloseReturn() { _returnOpen = false; _returnTarget = null; }
+
+    private async Task ConfirmReturn()
+    {
+        if (_returnTarget is null) return;
+        _saving = true;
+        try
+        {
+            var res = await Http.PostAsJsonAsync(
+                $"api/custodies/{_returnTarget.CustodyId}/return",
+                new { reason = _returnReason });
+            var msg = await MsgOf(res);
+            Snackbar.Add(msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode)
+            {
+                _returnOpen = false; _returnTarget = null;
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex) { Snackbar.Add("فشل الإرجاع: " + ex.Message, Severity.Error); }
+        finally { _saving = false; }
+    }
 
     private async Task ConfirmApprove()
     {
@@ -3773,10 +3842,6 @@
                 Snackbar.Add(_msg, Severity.Success);
                 _approveOpen = false; _approveTarget = null; _detailOpen = false;
                 await LoadAsync();
-            }
-            else if (_msg.Contains("كمبلغ إضافي"))
-            {
-                _needAdditional = true;
             }
         }
         catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
