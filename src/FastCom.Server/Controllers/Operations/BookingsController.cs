@@ -44,14 +44,14 @@ public class BookingsController : ControllerBase
 
     public record BookingLineDto(int ContainerTypeId, int RequestedQty, decimal? WeightKg, string? Notes, decimal? GuaranteePerContainer);
 
-    public record ContainerDetailDto(long? ContainerId, string? ContainerNumber, string? SealNumber,
+    public record ContainerDetailDto(long? BookingContainerDetailId, long? ContainerId, string? ContainerNumber, string? SealNumber,
         string? ShippingLine, string? BLNumber, string? BookingReference, decimal? WeightKg, string? Notes,
         /* فهرس السطر الأم في مصفوفة Lines بتاعة الطلب — من غيره التفاصيل ما تتربطش بسطرها */
         int? LineIndex = null);
 
     public record BookingUpsert(
         int CustomerId, string? RequestedDate, int? ServiceId, int? PortId, int? DestinationId,
-        int? TahteeqPortId, int? EndCustomerId, int? TripTypeId, string? CustomerReference, int? ContactId, string? Notes,
+        int? TahteeqPortId, int? EndCustomerId, string? EndCustomerName, int? TripTypeId, string? CustomerReference, int? ContactId, string? Notes,
         List<BookingLineDto>? Lines, List<ContainerDetailDto>? ContainerDetails,
         int? GuaranteeSupplierId = null, int? ShippingAgentId = null,
         string? BookingReference = null, string? BLNumber = null);
@@ -178,11 +178,12 @@ public class BookingsController : ControllerBase
                 .Where(s => s.SupplierId == b.GuaranteeSupplierId)
                 .Select(s => s.NameAr).FirstOrDefaultAsync(ct);
 
+        var endCustomerDisplay = B(b.EndCustomerName) ?? names.EndCustomer;
         var detail = new Detail(
             b.BookingId, b.BookingNumber, b.CustomerId, customerName,
             b.RequestedDate?.ToString("yyyy-MM-dd"), b.ServiceId, names.Service,
             b.PortId, names.Port, b.DestinationId, names.Destination,
-            b.TahteeqPortId, names.TahteeqPort, b.EndCustomerId, names.EndCustomer, b.TripTypeId, names.TripType, b.CustomerReference, b.ContactId,
+            b.TahteeqPortId, names.TahteeqPort, b.EndCustomerId, endCustomerDisplay, b.TripTypeId, names.TripType, b.CustomerReference, b.ContactId,
             b.Notes, b.Status, b.CreatedAt,
             b.ShippingAgentId, agentName, b.GuaranteeSupplierId, guarSupName,
             b.BookingReference, b.BLNumber);
@@ -238,6 +239,7 @@ public class BookingsController : ControllerBase
             DestinationId   = req.DestinationId,
             TahteeqPortId   = req.TahteeqPortId,
             EndCustomerId   = req.EndCustomerId,
+            EndCustomerName = req.EndCustomerId is null ? B(req.EndCustomerName) : null,
             TripTypeId      = req.TripTypeId,
             CustomerReference = B(req.CustomerReference),
             BookingReference  = B(req.BookingReference),
@@ -287,10 +289,10 @@ public class BookingsController : ControllerBase
         var b = await _db.Bookings.FirstOrDefaultAsync(x => x.BookingId == id && !x.IsDeleted, ct);
         if (b is null) return NotFound(new { message = "الحجز غير موجود" });
 
-        if (b.Status is not ("Draft" or "Confirmed"))
+        if (b.Status is not ("Draft" or "Confirmed" or "Assigned"))
             {
             await _audit.LogAsync(FastCom.Server.Services.AuditActions.Update, "Booking", null, description: "تعديل حجز", ct: ct);
-            return BadRequest(new { message = $"حالة الحجز «{b.Status}» لا تسمح بالتعديل — التعديل للحجوزات المسودة أو المؤكدة بس" });
+            return BadRequest(new { message = $"حالة الحجز «{b.Status}» لا تسمح بالتعديل — التعديل للحجوزات المسودة أو المؤكدة أو المُعيّنة فقط" });
             }
 
         b.CustomerId      = req.CustomerId;
@@ -300,6 +302,7 @@ public class BookingsController : ControllerBase
         b.DestinationId   = req.DestinationId;
         b.TahteeqPortId   = req.TahteeqPortId;
         b.EndCustomerId   = req.EndCustomerId;
+        b.EndCustomerName = req.EndCustomerId is null ? B(req.EndCustomerName) : null;
         b.TripTypeId      = req.TripTypeId;
         b.CustomerReference = B(req.CustomerReference);
         b.BookingReference  = B(req.BookingReference);
@@ -313,9 +316,10 @@ public class BookingsController : ControllerBase
 
         // الفحص (قراءة فقط) قبل المعاملة — عشان مفيش معاملة تفتح لتحقق يرفضها
         var lockedLines = false;
-        if (req.Lines is not null)
+        List<BookingContainerLine> checkLines = new();
+        if (req.Lines is not null || req.ContainerDetails is not null)
         {
-            var checkLines = await _db.BookingContainerLines
+            checkLines = await _db.BookingContainerLines
                 .Where(l => l.BookingId == id).ToListAsync(ct);
             if (checkLines.Count > 0)
             {
@@ -325,15 +329,15 @@ public class BookingsController : ControllerBase
             }
         }
 
-        if (lockedLines)
-            return BadRequest(new { message = "فيه حاويات فعلية متسجلة على الحجز — السطور مقفولة" });
+        // لو السطور مقفولة (فيه حاويات فعلية) ممنوع استبدال السطور — بس نسمح بتحديث تفاصيل الحاويات
+        if (lockedLines && req.Lines is not null)
+            return BadRequest(new { message = "فيه حاويات فعلية متسجلة على الحجز — السطور مقفولة، لكن تقدر تعدّل أرقام/تفاصيل الحاويات وتحفظ." });
 
-        // 🔴 Atomicity: استبدال السطور بالكامل — معاملة واحدة
+        // 🔴 Atomicity
         await _db.Database.BeginTransactionAsync(ct);
         try
         {
-            // السطور بتتبدّل بالكامل — بس لو مافيش حاويات فعلية متسجلة عليها
-            if (req.Lines is not null)
+            if (!lockedLines && req.Lines is not null)
             {
                 var oldLines = await _db.BookingContainerLines
                     .Where(l => l.BookingId == id).ToListAsync(ct);
@@ -342,6 +346,10 @@ public class BookingsController : ControllerBase
                 var createdLines = AddLines(id, req.Lines, CurrentUserId());
                 await _db.SaveChangesAsync(ct);
                 AddContainerDetails(createdLines, req.ContainerDetails, CurrentUserId());
+            }
+            else if (lockedLines && req.ContainerDetails is not null)
+            {
+                UpsertContainerDetails(id, checkLines.OrderBy(l => l.LineNo).ToList(), req.ContainerDetails, CurrentUserId());
             }
 
             await _db.SaveChangesAsync(ct);
@@ -414,6 +422,67 @@ public class BookingsController : ControllerBase
                 Notes                  = B(d.Notes),
                 CreatedBy              = userId
             });
+        }
+    }
+
+    private void UpsertContainerDetails(long bookingId, List<BookingContainerLine> lines,
+                                        List<ContainerDetailDto> details, int userId)
+    {
+        if (details.Count == 0 || lines.Count == 0) return;
+        var lineIds = lines.Select(l => l.BookingContainerLineId).ToList();
+        var existing = _db.BookingContainerDetails
+            .Where(d => lineIds.Contains(d.BookingContainerLineId))
+            .ToList();
+        var seen = new HashSet<long>();
+
+        foreach (var d in details)
+        {
+            if (string.IsNullOrWhiteSpace(d.ContainerNumber) && d.ContainerId is null && d.BookingContainerDetailId is null) continue;
+            var parent = (d.LineIndex is int ix && ix >= 0 && ix < lines.Count)
+                ? lines[ix]
+                : lines[0];
+
+            BookingContainerDetail? row = null;
+            if (d.BookingContainerDetailId is long did)
+                row = existing.FirstOrDefault(x => x.BookingContainerDetailId == did);
+            if (row is not null)
+            {
+                row.ContainerId         = d.ContainerId;
+                row.ContainerNumberText = B(d.ContainerNumber);
+                row.SealNumber          = B(d.SealNumber);
+                row.ShippingLine        = B(d.ShippingLine);
+                row.Blnumber            = B(d.BLNumber);
+                row.BookingReference    = B(d.BookingReference);
+                row.WeightKg            = d.WeightKg is > 0 ? d.WeightKg : null;
+                row.Notes               = B(d.Notes);
+                row.UpdatedAt           = DateTime.UtcNow;
+                row.UpdatedBy           = userId;
+                seen.Add(row.BookingContainerDetailId);
+            }
+            else
+            {
+                _db.BookingContainerDetails.Add(new BookingContainerDetail
+                {
+                    BookingContainerLineId = parent.BookingContainerLineId,
+                    ContainerId            = d.ContainerId,
+                    ContainerNumberText    = B(d.ContainerNumber),
+                    SealNumber             = B(d.SealNumber),
+                    ShippingLine           = B(d.ShippingLine),
+                    Blnumber               = B(d.BLNumber),
+                    BookingReference       = B(d.BookingReference),
+                    WeightKg               = d.WeightKg is > 0 ? d.WeightKg : null,
+                    Status                 = "Pending",
+                    Notes                  = B(d.Notes),
+                    CreatedBy              = userId
+                });
+            }
+        }
+
+        // حذف التفاصيل التي أزالها المستخدم (لها Id ولم تُرسل)
+        if (details.Count > 0)
+        {
+            var remove = existing.Where(e => !seen.Contains(e.BookingContainerDetailId)).ToList();
+            if (remove.Count > 0) _db.BookingContainerDetails.RemoveRange(remove);
         }
     }
 

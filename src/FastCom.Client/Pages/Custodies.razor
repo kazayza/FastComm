@@ -133,7 +133,7 @@
                            aria-label="بحث" />
                     @if (!string.IsNullOrWhiteSpace(_search))
                     {
-                        <button class="cu-search-clear" @onclick="() => _search = string.Empty" aria-label="مسح">
+                        <button class="cu-search-clear" @onclick="() => _search = string.Empty" aria-label="مسح البحث">
                             <svg viewBox="0 0 24 24" width="14" height="14"
                                  fill="none" stroke="currentColor" stroke-width="2.5">
                                 <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
@@ -141,6 +141,26 @@
                         </button>
                     }
                 </div>
+
+                <div class="cu-date-filters" aria-label="فلتر تاريخ صرف العهدة">
+                    <div class="cu-date-field">
+                        <label class="cu-date-label" for="cu-from">من تاريخ الصرف</label>
+                        <input id="cu-from" type="date" class="cu-date-input"
+                               value="@FromDateValue"
+                               @onchange="OnFromDateChanged" />
+                    </div>
+                    <div class="cu-date-field">
+                        <label class="cu-date-label" for="cu-to">إلى تاريخ الصرف</label>
+                        <input id="cu-to" type="date" class="cu-date-input"
+                               value="@ToDateValue"
+                               @onchange="OnToDateChanged" />
+                    </div>
+                    @if (_fromDate is not null || _toDate is not null)
+                    {
+                        <button type="button" class="cu-date-clear" @onclick="ClearDateFilter" title="مسح فلتر التاريخ">مسح التاريخ</button>
+                    }
+                </div>
+
 
                 <div class="cu-results-badge">
                     عرض <strong>@Filtered.Count()</strong> من <strong>@_items.Count</strong>
@@ -2023,6 +2043,13 @@
         background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
         border-bottom: 1px solid #edf1f7; flex-wrap: wrap;
     }
+    .cu-date-filters { display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap; margin-inline-start:auto; }
+    .cu-date-field { display:flex; flex-direction:column; gap:3px; }
+    .cu-date-label { font-size:10px; font-weight:700; color:#6b7d95; white-space:nowrap; }
+    .cu-date-input { height:34px; border:1px solid #dde5f0; border-radius:9px; padding:0 8px; font-family:inherit; font-size:12px; color:#1c2c44; background:#f8fafc; }
+    .cu-date-input:focus { outline:none; border-color:#1e6ef5; background:#fff; box-shadow:0 0 0 3px rgba(30,110,245,.08); }
+    .cu-date-clear { height:34px; padding:0 10px; border:1px solid #f0d0d5; background:#fff5f6; color:#c02040; border-radius:9px; font-family:inherit; font-size:11px; font-weight:700; cursor:pointer; }
+    .cu-date-clear:hover { background:#ffe9ec; }
 
     .cu-search-wrap {
         position: relative; display: flex; align-items: center;
@@ -3201,6 +3228,8 @@
 
     private bool   _loading;
     private string _search = "";
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
     private string _tab    = "all";
     private long?  _confirmId;
     private bool   _saving;
@@ -3372,12 +3401,30 @@
     private static decimal MaxRefund(Item c) =>
         c.AmountIssued + c.AdditionalDue - c.AmountSpent - c.AmountReturned;
 
+    private string? FromDateValue => _fromDate?.ToString("yyyy-MM-dd");
+    private string? ToDateValue   => _toDate?.ToString("yyyy-MM-dd");
+
+    private void OnFromDateChanged(ChangeEventArgs e)
+    {
+        _fromDate = DateTime.TryParse(e.Value?.ToString(), out var d) ? d.Date : null;
+    }
+
+    private void OnToDateChanged(ChangeEventArgs e)
+    {
+        _toDate = DateTime.TryParse(e.Value?.ToString(), out var d) ? d.Date : null;
+    }
+
+    private void ClearDateFilter() { _fromDate = null; _toDate = null; }
+
     private IEnumerable<Item> Filtered => _items.Where(c =>
-        (_tab == "all" || c.Status == _tab) &&
+        (_tab == "all" ? true : _tab == "open" ? c.Status != "Closed" : c.Status == _tab) &&
+        (!_fromDate.HasValue || c.CustodyDate.Date >= _fromDate.Value.Date) &&
+        (!_toDate.HasValue   || c.CustodyDate.Date <= _toDate.Value.Date) &&
         (string.IsNullOrWhiteSpace(_search) ||
          c.CustodyNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
          (c.TripNumber != null && c.TripNumber.Contains(_search, StringComparison.OrdinalIgnoreCase)) ||
          c.OwnerName.Contains(_search, StringComparison.OrdinalIgnoreCase)));
+
 
     /* ── Helpers ── */
     private static string StatusAr(string s) => s switch
@@ -3529,12 +3576,11 @@
         await LoadAsync();
         if (CanCreate) await LoadLookupsAsync();
 
-        /* فتح مباشر من إشعار: افتح دفتر العهدة المطلوبة */
+        /* فتح مباشر من إشعار: افتح دفتر العهدة المطلوب */
         if (OpenId is not null)
         {
-            var target = _items.FirstOrDefault(x => x.CustodyId == OpenId.Value)
-                         ?? new Item { CustodyId = OpenId.Value };
-            await Open(target);
+            Nav.NavigateTo($"/custodies/{OpenId.Value}/ledger");
+            return;
         }
     }
 
@@ -3695,24 +3741,8 @@
         finally { _saving = false; }
     }
 
-    /* ── دفتر ── */
-    private async Task Open(Item c)
-    {
-        try
-        {
-            _detail = await Http.GetFromJsonAsync<Envelope>($"api/custodies/{c.CustodyId}");
-            if (_detail is null) return;
-            _msg = null; _detailOpen = true;
-
-            /* عهدة تشغيل عامة: حمّل عمليات الربط عند التسوية */
-            if (_detail.Custody.TripId is null && _detail.Custody.OwnerType == "Employee" && _linkOps.Count == 0)
-            {
-                try { _linkOps = await Http.GetFromJsonAsync<List<OpOpt>>("api/custodies/operations") ?? new(); }
-                catch { _linkOps = new(); }
-            }
-        }
-        catch (Exception ex) { Snackbar.Add("فشل: " + ex.Message, Severity.Error); }
-    }
+    /* ── دفتر العهدة: فتح صفحة مستقلة ── */
+    private void Open(Item c) => Nav.NavigateTo($"/custodies/{c.CustodyId}/ledger");
 
     /* ── ربط مصروف عند تسوية عهدة تشغيل عامة ── */
     private List<OpOpt> _linkOps = new();
@@ -3746,7 +3776,7 @@
             if (res.IsSuccessStatusCode)
             {
                 Snackbar.Add(msg, Severity.Success);
-                await Open(_detail.Custody.ToItem());
+                if (_detail is not null) Nav.NavigateTo($"/custodies/{_detail.Custody.CustodyId}/ledger");
             }
             else Snackbar.Add(msg, Severity.Error);
         }

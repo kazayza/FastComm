@@ -67,6 +67,7 @@ dotnet user-secrets list --project src/FastCom.Server
 - توكن بوابة العميل: SHA-256 مُخزّن فقط + 6 فحوص + سجل وصول.
 - Portal `EmptyLayout` مستقل لأي Link بال Token.
 
-## 9) مرجع السرfacts
-- بصفتي مهندس: التقييم الكامل في مناقشة 2026-09-08 (نقاط قوة / Blockers B1-B6 / Roadmap) — ملخصه في `docs/REMEDIATION-PLAN.md`.
-- المهارات المقترحة + كيفية توظيفها في المشروع: `docs/TOOLKIT-SKILLS.md`.
+## 9) ملاحظات حديثة (2026-11-09)
+- العميل النهائي: `Bookings.EndCustomerName` (يدوي حر) + `EndCustomerId` (مرتبط) — عند اختيار عميل مرتبط يُمسح الاسم الحر؛ عند نص يدوي يُفرَّغ الـ FK. Migration: `sql/add-booking-endcustomer-name.sql`.
+- الفاتورة تعرض `EndCustomerName ?? EndCustomer.NameAr ?? Customer.NameAr` للعرض فقط (`InvoicesController.Detail.DisplayCustomerName`، مطبوع/نموذج العميل)؛ **الحساب المحاسبي يبقى على `Invoice.CustomerId`**.
+- بعد تشغيل الـ migration لازم إعادة تشغيل السيرفر لتحميل الـ DTOs/العمود الجديد (server build قد يفشل نسخ binaries لو السيرفر شغال).

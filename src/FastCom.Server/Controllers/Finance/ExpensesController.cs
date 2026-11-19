@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using FastCom.Domain.Entities;
 using FastCom.Infrastructure.Persistence;
 using FastCom.Server.Auth;
@@ -60,7 +60,9 @@ public class ExpensesController : ControllerBase
         string? OperationNumber, string? TripNumber, string? VehiclePlate, string? SupplierName, string? DriverName, string? CustodyNumber,
         string PaymentStatus, string Status, bool IsApproved,
         string? CreatedByName, string? PayBoxKind, string? PayBoxName,
-        string? ReceiptTypeName, string? ReferenceNumber);
+        string? ReceiptTypeName, string? ReferenceNumber,
+        string? TripDriverName = null, string? TripVehiclePlate = null,
+        string? EndCustomerName = null, string? CustodyStatus = null);
 
     public record Detail(long ExpenseId, string ExpenseNumber, int ExpenseTypeId,
         string? ExpenseDate, string? Description, decimal Amount, int? TaxRateId,
@@ -122,7 +124,15 @@ public class ExpensesController : ControllerBase
                         .Select(u => u.FullName != "" ? u.FullName : u.UserName).FirstOrDefault(),
                 null, null,
                 e.ReceiptType != null ? e.ReceiptType.NameAr : null,
-                e.ReferenceNumber))
+                e.ReferenceNumber,
+                e.Trip != null && e.Trip.Driver != null ? e.Trip.Driver.FullName : null,
+                e.Trip != null && e.Trip.Vehicle != null ? e.Trip.Vehicle.PlateNumber : null,
+                e.Operation != null && e.Operation.Booking != null
+                    ? (e.Operation.Booking.EndCustomer != null
+                        ? e.Operation.Booking.EndCustomer.NameAr
+                        : e.Operation.Booking.EndCustomerName)
+                    : null,
+                e.Custody != null ? e.Custody.Status : null))
             .ToListAsync(ct);
 
         /* خزنة الصرف: للمصروف المباشر قيد الخزينة EXP:{رقم المصروف}،
@@ -190,7 +200,10 @@ public class ExpensesController : ControllerBase
     public async Task<IActionResult> Create([FromBody] ExpenseUpsert req, CancellationToken ct)
     {
         var err = await ValidateAsync(req, ct);
-        if (err is not null) return BadRequest(new { message = err });
+                if (err is not null) return BadRequest(new { message = err });
+        var postsToCashbox = req.CustodyId is null && req.BillableAmount is null; // صرف مباشر (غير محمّل على عميل) قد يترحل للخزينة حسب طريقة/حالة الدفع
+        if (postsToCashbox && !User.IsInRole("ADMIN") && !User.HasClaim("perm","TREASURY.POST") && !User.HasClaim("perm","TREASURY.VIEW"))
+            return StatusCode(403, new { message = "غير مصرح بالترحيل للخزينة الرئيسية — استخدم عهدة أو اطلب صلاحية." });
 
         var branchId = await ResolveBranchIdAsync(ct);
         if (branchId is null) return BadRequest(new { message = "لايوجد فرع معرّف في النظام" });
@@ -276,7 +289,10 @@ public class ExpensesController : ControllerBase
         if (e.Status == "Cancelled") return BadRequest(new { message = "المصروف ملغي — غير قابل للتعديل" });
 
         var err = await ValidateAsync(req, ct, e.CustodyId);
-        if (err is not null) return BadRequest(new { message = err });
+                if (err is not null) return BadRequest(new { message = err });
+        var postsToCashbox = req.CustodyId is null && req.BillableAmount is null; // صرف مباشر (غير محمّل على عميل) قد يترحل للخزينة حسب طريقة/حالة الدفع
+        if (postsToCashbox && !User.IsInRole("ADMIN") && !User.HasClaim("perm","TREASURY.POST") && !User.HasClaim("perm","TREASURY.VIEW"))
+            return StatusCode(403, new { message = "غير مصرح بالترحيل للخزينة الرئيسية — استخدم عهدة أو اطلب صلاحية." });
 
         // 🔴 العهدة مقدّمة/معتمدة + نفس الربط → تغيير المبلغ هيعبث بأرقام التسوية
         if (e.CustodyId is not null && e.CustodyId == req.CustodyId && e.Amount != req.Amount)

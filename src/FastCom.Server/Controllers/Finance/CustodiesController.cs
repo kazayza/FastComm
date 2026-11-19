@@ -144,13 +144,17 @@ public class CustodiesController : ControllerBase
         DateTime? ClosedAt, bool IsPrimary, long? ParentCustodyId, string? ParentCustodyNumber);
 
     public record TxLine(long CustodyTransactionId, string TransactionType, DateTime TransactionDate,
-        decimal Amount, long? ExpenseId, string? ExpenseNumber, string? Notes);
+        decimal Amount, long? ExpenseId, string? ExpenseNumber, string? Notes,
+        string? ExpenseTypeName = null, string? ExpenseDescription = null,
+        string? OperationNumber = null, string? TripNumber = null,
+        string? DriverName = null, string? VehiclePlate = null);
 
     public record CustodyExpense(long ExpenseId, string ExpenseNumber, string TypeName,
         decimal Amount, DateTime ExpenseDate, string? Description, string PaymentStatus,
         long? OperationId = null, string? OperationNumber = null,
         long? TripId = null, string? TripNumber = null,
-        bool IsFreightAdvance = false, decimal? BillableAmount = null, int? DriverId = null);
+        bool IsFreightAdvance = false, decimal? BillableAmount = null, int? DriverId = null,
+        string? DriverName = null, string? VehiclePlate = null);
 
     public record TripOpt(long TripId, string TripNumber, string Status, int DriverId, string DriverName);
 
@@ -297,7 +301,13 @@ public class CustodiesController : ControllerBase
             .Where(t => t.CustodyId == id)
             .OrderBy(t => t.TransactionDate).ThenBy(t => t.CustodyTransactionId)
             .Select(t => new TxLine(t.CustodyTransactionId, t.TransactionType, t.TransactionDate,
-                t.Amount, t.ExpenseId, t.Expense != null ? t.Expense.ExpenseNumber : null, t.Notes))
+                t.Amount, t.ExpenseId, t.Expense != null ? t.Expense.ExpenseNumber : null, t.Notes,
+                t.Expense != null ? t.Expense.ExpenseType.NameAr : null,
+                t.Expense != null ? t.Expense.Description : null,
+                t.Expense != null && t.Expense.Operation != null ? t.Expense.Operation.OperationNumber : null,
+                t.Expense != null && t.Expense.Trip != null ? t.Expense.Trip.TripNumber : null,
+                t.Expense != null && t.Expense.Driver != null ? t.Expense.Driver.FullName : (t.Expense != null && t.Expense.Trip != null ? t.Expense.Trip.Driver.FullName : null),
+                t.Expense != null && t.Expense.Vehicle != null ? t.Expense.Vehicle.PlateNumber : (t.Expense != null && t.Expense.Trip != null && t.Expense.Trip.Vehicle != null ? t.Expense.Trip.Vehicle.PlateNumber : null)))
             .ToListAsync(ct);
 
         var expenses = await _db.Expenses.AsNoTracking()
@@ -307,7 +317,9 @@ public class CustodiesController : ControllerBase
                 e.Amount, e.ExpenseDate, e.Description, e.PaymentStatus,
                 e.OperationId, e.Operation != null ? e.Operation.OperationNumber : null,
                 e.TripId, e.Trip != null ? e.Trip.TripNumber : null,
-                e.ExpenseType.IsFreightAdvance, e.BillableAmount, e.DriverId))
+                e.ExpenseType.IsFreightAdvance, e.BillableAmount, e.DriverId,
+                e.Driver != null ? e.Driver.FullName : (e.Trip != null ? e.Trip.Driver.FullName : null),
+                e.Vehicle != null ? e.Vehicle.PlateNumber : (e.Trip != null && e.Trip.Vehicle != null ? e.Trip.Vehicle.PlateNumber : null)))
             .ToListAsync(ct);
 
         string? parentNumber = null;

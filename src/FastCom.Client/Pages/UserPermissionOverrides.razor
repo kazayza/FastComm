@@ -1,0 +1,370 @@
+﻿@page "/users/{Id:int}/permissions"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@inject HttpClient Http
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>استثناءات الصلاحيات — فاست كوم</PageTitle>
+
+@if (_userAuth is not null && !CanManage)
+{
+    <div class="ovp-page" dir="rtl">
+        <div class="ovp-denied">ليس لديك صلاحية إدارة استثناءات الصلاحيات.</div>
+    </div>
+}
+else
+{
+    <div class="ovp-page" dir="rtl">
+        <div class="ovp-header">
+            <div class="ovp-head-left">
+                <button type="button" class="ovp-back" @onclick="GoBack" title="العودة للمستخدمين" aria-label="عودة">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <div class="ovp-head-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <div class="ovp-head-text">
+                    <div class="ovp-title">استثناءات الصلاحيات</div>
+                    <div class="ovp-sub">
+                        @if (_target is not null)
+                        {
+                            <span><b>@_target.FullName</b> <span dir="ltr" style="color:#8a9bb0">(@_target.UserName)</span> — تخصيص صلاحيات خارج الدور</span>
+                        }
+                        else if (_loading)
+                        {
+                            <span>جاري تحميل بيانات المستخدم...</span>
+                        }
+                        else
+                        {
+                            <span>تخصيص صلاحيات خارج الدور</span>
+                        }
+                        @if (OvOverrideCount > 0)
+                        {
+                            <span class="ov-count-badge">@OvOverrideCount استثناء</span>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="ovp-head-actions">
+                <button type="button" class="ovp-btn secondary" @onclick="GoBack">إلغاء</button>
+                <button type="button" class="ovp-btn primary" @onclick="SaveAsync" disabled="@(_saving || _loading)">
+                    @if (_saving) { <span class="btn-spinner sm" aria-hidden="true"></span><span>جاري الحفظ...</span> }
+                    else { <span>حفظ الاستثناءات</span> }
+                </button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_loadError))
+        {
+            <div class="ovp-error">@_loadError</div>
+        }
+
+        <div class="ovp-card">
+            @if (_loading)
+            {
+                <div class="ovp-loading"><div class="usr-spinner" aria-label="جاري التحميل"></div><span>جاري تحميل الصلاحيات...</span></div>
+            }
+            else
+            {
+                <div class="usr-ov-info" role="status">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01" stroke-linecap="round"/></svg>
+                    <span><b>افتراضي</b> = حسب أدوار المستخدم · <b>منح</b> = سماح استثنائي · <b>منع</b> = رفض صريح (يغلب الدور). التفعيل خلال دقيقة من الحفظ.</span>
+                </div>
+
+                <div class="usr-ov-toolbar">
+                    <div class="usr-ov-search-wrap">
+                        <svg class="usr-search-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" stroke-linecap="round"/></svg>
+                        <input class="usr-search-input usr-ov-search-input" placeholder="ابحث باسم الصلاحية أو الكود أو الوحدة..." @bind="_ovSearch" @bind:event="oninput" aria-label="بحث في الصلاحيات" />
+                        @if (!string.IsNullOrWhiteSpace(_ovSearch))
+                        {
+                            <button type="button" class="usr-search-clear" @onclick='() => _ovSearch = ""' title="مسح البحث" aria-label="مسح">✕</button>
+                        }
+                    </div>
+                    <div class="usr-ov-filters" role="group" aria-label="فلترة الاستثناءات">
+                        <button type="button" class="usr-filter-btn @(_ovFilter=="all"?"filter-active":"")" @onclick='() => _ovFilter="all"'>الكل</button>
+                        <button type="button" class="usr-filter-btn @(_ovFilter=="overridden"?"filter-active":"")" @onclick='() => _ovFilter="overridden"'>الاستثناءات فقط</button>
+                        <button type="button" class="usr-filter-btn @(_ovFilter=="grant"?"filter-active":"")" @onclick='() => _ovFilter="grant"'>✅ منح</button>
+                        <button type="button" class="usr-filter-btn @(_ovFilter=="deny"?"filter-active":"")" @onclick='() => _ovFilter="deny"'>🚫 منع</button>
+                    </div>
+                    <div class="usr-ov-tools">
+                        <button type="button" class="usr-ov-tool-btn" @onclick="ExpandAllOv" disabled="@IsOvSearching">توسيع الكل</button>
+                        <button type="button" class="usr-ov-tool-btn" @onclick="CollapseAllOv" disabled="@IsOvSearching">طي الكل</button>
+                        @if (_confirmResetOv)
+                        {
+                            <button type="button" class="usr-ov-tool-btn danger solid" @onclick="ResetAllOv">تأكيد إرجاع الكل للافتراضي</button>
+                            <button type="button" class="usr-ov-tool-btn" @onclick="() => _confirmResetOv=false">تراجع</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="usr-ov-tool-btn danger" @onclick="() => _confirmResetOv=true" disabled="@(OvOverrideCount==0)">إرجاع الكل للافتراضي</button>
+                        }
+                    </div>
+                </div>
+
+                <div class="usr-ov-meta">
+                    عرض <strong>@OvFiltered.Sum(m => m.Items.Count)</strong> صلاحية في <strong>@OvFiltered.Count</strong> وحدة
+                    @if (OvOverrideCount > 0){ <span>— <strong>@OvOverrideCount</strong> استثناء مفعّل</span> }
+                </div>
+
+                @if (OvFiltered.Count == 0)
+                {
+                    <div class="usr-empty" style="min-height:160px">
+                        <div class="usr-empty-title">لا توجد نتائج</div>
+                        <div class="usr-empty-sub">جرّب بحثًا مختلفًا أو غيّر الفلتر</div>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var mod in OvFiltered)
+                    {
+                        var modKey = mod.ModuleCode;
+                        var modOverrides = mod.Items.Count(i => _ovState.ContainsKey(i.PermissionId));
+                        var isOpen = IsOvSearching || _ovOpen.Contains(modKey);
+                        <details class="usr-ov-module" open="@isOpen">
+                            <summary class="usr-ov-mod-head" aria-label="@ModuleLabel(modKey)" @onclick="() => ToggleOvModule(modKey)" @onclick:preventDefault="true">
+                                <div class="usr-ov-mod-title-wrap">
+                                    <div class="usr-ov-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                                    <span class="usr-ov-mod-name">@ModuleLabel(modKey)</span>
+                                    <span class="usr-ov-mod-code" dir="ltr">@modKey</span>
+                                    <span class="usr-ov-mod-count">@mod.Items.Count صلاحية</span>
+                                    @if (modOverrides > 0) { <span class="usr-ov-mod-active-count">@modOverrides استثناء</span> }
+                                </div>
+                            </summary>
+                            <div class="usr-ov-perms-list">
+                                @foreach (var p in mod.Items)
+                                {
+                                    var state  = OvState(p.PermissionId);
+                                    var rowCls = state != "default" ? "ov-active" : string.Empty;
+                                    var pid    = p.PermissionId;
+                                    var isDef  = state == "default"; var isGrant = state == "grant"; var isDeny = state == "deny";
+                                    <div class="usr-ov-perm-row @rowCls">
+                                        <div class="usr-ov-perm-info">
+                                            <div class="usr-ov-perm-name">@p.NameAr</div>
+                                            <div class="usr-ov-perm-code" dir="ltr">@p.PermissionCode</div>
+                                        </div>
+                                        <div class="usr-ov-perm-select" role="group" aria-label="@p.NameAr">
+                                            <button type="button" class="usr-ov-opt @(isDef ? "ov-opt-default-active" : "")" title="حسب أدوار المستخدم" @onclick='() => SetOv(pid, "default")' aria-pressed="@isDef">افتراضي</button>
+                                            <button type="button" class="usr-ov-opt @(isGrant ? "ov-opt-grant-active" : "")" title="سماح استثنائي (إضافة)" @onclick='() => SetOv(pid, "grant")' aria-pressed="@isGrant">✅ منح</button>
+                                            <button type="button" class="usr-ov-opt @(isDeny ? "ov-opt-deny-active" : "")" title="رفض صريح يغلب الدور" @onclick='() => SetOv(pid, "deny")' aria-pressed="@isDeny">🚫 منع</button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </details>
+                    }
+                }
+
+                <div class="ovp-footer">
+                    <div class="ov-footer-count">@OvOverrideCount استثناء مفعّل — يُحفظ ما يختلف عن الافتراضي فقط</div>
+                    <button type="button" class="ovp-btn secondary" @onclick="GoBack">إلغاء</button>
+                    <button type="button" class="ovp-btn primary" @onclick="SaveAsync" disabled="@(_saving || _loading)">حفظ الاستثناءات</button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<style>
+    .ovp-page { --fc-blue:#1E6EF5; --fc-green:#16A35B; --fc-red:#E03048; --fc-amber:#F5A623; --fc-purple:#7C3AED; --fc-purple-lt:#F3EEFF; --fc-text:#0F1C2E; --fc-muted:#6B7D96; width:100%; max-width:100%; margin:0; padding:18px 22px 36px; font-family:"Tajawal","IBM Plex Sans Arabic",Arial,sans-serif; box-sizing:border-box; }
+    .ovp-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+    .ovp-head-left { display:flex; align-items:flex-start; gap:12px; min-width:0; }
+    .ovp-back { width:38px; height:38px; border:1px solid #d8e2f0; border-radius:10px; background:#fff; color:#5a6e88; cursor:pointer; display:flex; align-items:center; justify-content:center; flex:0 0 38px; }
+    .ovp-back:hover { background:#f0f4fa; color:var(--fc-text); }
+    .ovp-head-icon { width:42px; height:42px; border-radius:12px; background:var(--fc-purple-lt); color:var(--fc-purple); border:1px solid #d0bfef; display:flex; align-items:center; justify-content:center; flex:0 0 42px; }
+    .ovp-title { font-size:20px; font-weight:900; color:var(--fc-text); }
+    .ovp-sub { font-size:12.5px; color:var(--fc-muted); font-weight:600; margin-top:2px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+    .ovp-head-actions { display:flex; gap:8px; align-items:center; }
+    .ovp-btn { height:38px; padding:0 14px; border-radius:10px; font-family:inherit; font-size:12.5px; font-weight:800; cursor:pointer; border:1px solid #d8e2f0; background:#fff; color:#5a6e88; }
+    .ovp-btn.primary { background:var(--fc-purple); color:#fff; border-color:var(--fc-purple); }
+    .ovp-btn.primary:disabled { opacity:.5; cursor:not-allowed; }
+    .ovp-btn.secondary:hover { background:#f0f4fa; color:var(--fc-text); }
+    .ovp-card { background:#fff; border:1px solid #e4edf8; border-radius:16px; padding:16px 16px 18px; box-shadow:0 2px 10px rgba(15,28,46,.04); display:flex; flex-direction:column; gap:10px; }
+    .ovp-loading { display:flex; align-items:center; justify-content:center; gap:10px; min-height:180px; color:#6b7d95; font-weight:700; }
+    .ovp-error { margin-bottom:12px; padding:10px 14px; border-radius:10px; background:#FDECEA; color:#E03048; border:1px solid #ffc8cf; font-weight:700; }
+    .ovp-denied { margin:40px auto; max-width:520px; padding:16px 18px; border-radius:12px; background:#fff4f5; color:#b42334; border:1px solid #ffc8cf; font-weight:800; text-align:center; }
+    .ovp-footer { display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-top:1px solid #edf1f7; padding-top:12px; margin-top:4px; }
+    .ov-count-badge { display:inline-flex; padding:2px 9px; border-radius:7px; background:var(--fc-purple-lt); color:var(--fc-purple); font-size:9.5px; font-weight:800; border:1px solid #d0bfef; }
+    .usr-ov-info { display:flex; align-items:flex-start; gap:10px; padding:10px 14px; border-radius:9px; background:#FFFAF0; border:1px solid #f0d898; color:#7a5606; font-size:11.5px; font-weight:600; line-height:1.6; }
+    .usr-ov-toolbar { position:sticky; top:0; z-index:5; display:flex; flex-direction:column; gap:10px; padding:10px 0 12px; margin:-2px 0 2px; background:linear-gradient(180deg,#fff 70%,rgba(255,255,255,.96)); border-bottom:1px solid #edf1f7; }
+    .usr-ov-search-wrap { position:relative; display:flex; align-items:center; width:100%; }
+    .usr-search-icon { position:absolute; right:12px; color:#9aaabb; }
+    .usr-search-input { flex:1; height:40px; border:2px solid #d8e2f0; border-radius:9px; padding:0 36px 0 36px; background:#fafcff; color:#0F1C2E; font-family:inherit; font-size:12.5px; font-weight:600; outline:none; box-sizing:border-box; width:100%; }
+    .usr-search-input:focus { border-color:var(--fc-blue); background:#fff; }
+    .usr-search-clear { position:absolute; left:8px; width:26px; height:26px; border:none; border-radius:6px; background:#eef3fb; color:#6b7d95; cursor:pointer; }
+    .usr-ov-filters,.usr-ov-tools { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+    .usr-filter-btn,.usr-ov-tool-btn { height:30px; padding:0 10px; border:1px solid #d8e2f0; border-radius:7px; background:#fff; color:#5a6e88; font-family:inherit; font-size:11px; font-weight:700; cursor:pointer; }
+    .usr-filter-btn.filter-active { background:#EBF2FF; color:#1E6EF5; border-color:#bdd4fc; }
+    .usr-ov-tool-btn:hover:not(:disabled), .usr-filter-btn:hover { background:#f0f4fa; color:var(--fc-text); }
+    .usr-ov-tool-btn:disabled { opacity:.45; cursor:not-allowed; }
+    .usr-ov-tool-btn.danger { color:var(--fc-red); border-color:#ffc8cf; }
+    .usr-ov-tool-btn.danger.solid { background:var(--fc-red); color:#fff; border-color:var(--fc-red); }
+    .usr-ov-meta { font-size:11.5px; color:#6b7d95; font-weight:600; padding:0 2px; }
+    .usr-ov-meta strong { color:#344258; }
+    .usr-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; color:#8a9bb0; }
+    .usr-empty-title { font-size:14px; font-weight:800; color:#5a6e88; }
+    .usr-empty-sub { font-size:12px; }
+    .usr-ov-module { border:1px solid #e4edf8; border-radius:12px; background:linear-gradient(180deg,#fafcff,#f5f8fb); overflow:hidden; }
+    .usr-ov-mod-head { display:flex; align-items:center; padding:12px 14px; background:linear-gradient(180deg,#f0f5fc,#eaf1f9); border-bottom:1px solid #dce8f5; cursor:pointer; list-style:none; }
+    .usr-ov-mod-head::-webkit-details-marker, .usr-ov-mod-head::marker { display:none; }
+    .usr-ov-mod-title-wrap { display:flex; align-items:center; gap:8px; width:100%; flex-wrap:wrap; }
+    .usr-ov-chevron { color:#9aaabb; display:flex; align-items:center; transition:transform .2s ease; }
+    details[open] .usr-ov-chevron { transform:rotate(180deg); }
+    .usr-ov-mod-name { font-size:13px; font-weight:800; color:var(--fc-text); }
+    .usr-ov-mod-code { font-size:9.5px; color:#9aaabb; font-weight:700; font-family:"Inter",Arial,sans-serif; background:#f0f4fa; border:1px solid #e0e8f4; padding:1px 6px; border-radius:5px; }
+    .usr-ov-mod-count { font-size:9.5px; color:#8899ae; font-weight:600; }
+    .usr-ov-mod-active-count { display:inline-flex; padding:1px 7px; border-radius:5px; background:var(--fc-purple-lt); color:var(--fc-purple); font-size:9px; font-weight:800; border:1px solid #d0bfef; margin-right:auto; }
+    .usr-ov-perms-list { display:flex; flex-direction:column; }
+    .usr-ov-perm-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 14px; border-bottom:1px solid #f0f5fb; }
+    .usr-ov-perm-row:last-child { border-bottom:none; }
+    .usr-ov-perm-row:hover { background:#f8faff; }
+    .usr-ov-perm-row.ov-active { background:#f7f2ff; border-right:3px solid var(--fc-purple); }
+    .usr-ov-perm-info { flex:1; min-width:0; }
+    .usr-ov-perm-name { font-size:12.5px; font-weight:700; color:#1c2b43; }
+    .usr-ov-perm-code { font-size:10px; color:#8a9bb0; font-family:"Inter",Arial,sans-serif; margin-top:2px; }
+    .usr-ov-perm-select { display:flex; gap:4px; flex-shrink:0; }
+    .usr-ov-opt { height:30px; padding:0 11px; border:1px solid #e4eaf3; border-radius:7px; background:#fafcff; color:#6b7d95; font-family:inherit; font-size:10.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
+    .usr-ov-opt:hover { border-color:#b0c4e0; color:var(--fc-text); }
+    .ov-opt-default-active { background:#f0f3f8; border-color:#c0ccd8; color:#5a6e88; font-weight:800; }
+    .ov-opt-grant-active { background:#E6F7EE; border-color:#b0e0c5; color:var(--fc-green); font-weight:800; }
+    .ov-opt-deny-active { background:#FDECEA; border-color:#ffc8cf; color:var(--fc-red); font-weight:800; }
+    .ov-footer-count { margin-right:auto; font-size:11px; color:var(--fc-muted); font-weight:600; }
+    .usr-spinner { width:22px; height:22px; border:3px solid #e4edf8; border-top-color:var(--fc-purple); border-radius:50%; animation:ovp-spin .7s linear infinite; }
+    .btn-spinner { width:15px; height:15px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:ovp-spin .7s linear infinite; display:inline-block; }
+    .btn-spinner.sm { width:13px; height:13px; }
+    @@keyframes ovp-spin { to { transform:rotate(360deg); } }
+    @@media (max-width: 700px) { .ovp-header{flex-direction:column;align-items:stretch;} .ovp-head-actions{justify-content:flex-end;} .usr-ov-perm-row{flex-direction:column;align-items:flex-start;gap:8px;} }
+</style>
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private AuthUser? _userAuth;
+    private bool CanManage => _userAuth?.Can("USER.MANAGE") ?? false;
+    private bool _loading = true;
+    private bool _saving;
+    private string? _loadError;
+    private UserDetail? _target;
+    private List<PermModule> _ovCatalog = new();
+    private Dictionary<int, string> _ovState = new();
+    private string _ovSearch = "";
+    private string _ovFilter = "all";
+    private HashSet<string> _ovOpen = new(StringComparer.OrdinalIgnoreCase);
+    private bool _confirmResetOv;
+
+    public class UserDetail { public int Id { get; set; } public string UserName { get; set; } = ""; public string FullName { get; set; } = ""; }
+    public class PermItem { public int PermissionId { get; set; } public string PermissionCode { get; set; } = ""; public string NameAr { get; set; } = ""; }
+    public class PermModule { public string ModuleCode { get; set; } = ""; public List<PermItem> Items { get; set; } = new(); }
+    public class OvDto { public int PermissionId { get; set; } public int IsGranted { get; set; } public string? Notes { get; set; } }
+
+    private static readonly Dictionary<string, string> _moduleAr = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["DASHBOARD"] = "لوحة التحكم", ["CUSTOMER"] = "العملاء", ["SUPPLIER"] = "الموردون",
+        ["SUPPLIER_INVOICE"] = "فواتير الموردين", ["SUPPLIERINVOICE"] = "فواتير الموردين",
+        ["SUPPLIER_PAYMENT"] = "دفعات الموردين", ["SUPPLIERPAYMENT"] = "دفعات الموردين",
+        ["DRIVER"] = "السائقون", ["EMPLOYEE"] = "الموظفون", ["FLEET"] = "الأسطول",
+        ["VEHICLE"] = "المركبات", ["VEHICLE_ACCOUNT"] = "كشف حساب المركبات", ["MAINTENANCE"] = "الصيانة",
+        ["PRICING"] = "التسعير", ["PRICELIST"] = "قوائم الأسعار", ["BOOKING"] = "الحجوزات",
+        ["OPERATION"] = "العمليات", ["TRIP"] = "الرحلات", ["TRIPTYPE"] = "أنواع الرحلات",
+        ["CUSTODY"] = "العُهد", ["EXPENSE"] = "المصروفات", ["INVOICE"] = "الفواتير",
+        ["PAYMENT"] = "التحصيلات", ["TREASURY"] = "الخزينة", ["CASHBOX"] = "الخزينة",
+        ["REPORT"] = "التقارير", ["USER"] = "المستخدمون", ["ROLE"] = "الأدوار والصلاحيات",
+        ["PERMISSION"] = "الصلاحيات", ["SETTING"] = "الإعدادات", ["SETTINGS"] = "الإعدادات",
+        ["DOCUMENT"] = "المستندات", ["NOTIFICATION"] = "الإشعارات", ["CONTAINER"] = "الحاويات",
+        ["CONTAINERTYPE"] = "أنواع الحاويات", ["SHIPPINGAGENT"] = "الوكلاء الملاحيون",
+        ["PORT"] = "الموانئ", ["DESTINATION"] = "الوجهات", ["SERVICE"] = "الخدمات",
+        ["RECEIPTTYPE"] = "أنواع الإيصالات", ["PAYMENTMETHOD"] = "طرق الدفع", ["PAYMENTTERM"] = "شروط الدفع",
+        ["NUMBERING"] = "الترقيم", ["FREIGHTRULE"] = "قواعد النولون", ["MASTER"] = "البيانات الأساسية",
+        ["AUDIT"] = "سجل المراجعة", ["PORTAL"] = "بوابة العملاء"
+    };
+
+    private string ModuleLabel(string code) => _moduleAr.TryGetValue(code, out var ar) ? ar : code;
+    private bool IsOvSearching => !string.IsNullOrWhiteSpace(_ovSearch) || _ovFilter != "all";
+    private int OvOverrideCount => _ovState.Count(kv => kv.Value != "default");
+    private List<PermModule> OvFiltered => FilteredOvModules().ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _userAuth = await Auth.GetUserAsync();
+        if (!(_userAuth?.Can("USER.VIEW") ?? false) || !CanManage) { _loading = false; return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _loadError = null;
+        try
+        {
+            _target = await Http.GetFromJsonAsync<UserDetail>($"api/users/{Id}");
+            _ovCatalog = await Http.GetFromJsonAsync<List<PermModule>>("api/permissions") ?? new();
+            var current = await Http.GetFromJsonAsync<List<OvDto>>($"api/users/{Id}/permissions") ?? new();
+            _ovState = new();
+            foreach (var o in current) _ovState[o.PermissionId] = o.IsGranted != 0 ? "grant" : "deny";
+            _ovOpen = new(StringComparer.OrdinalIgnoreCase);
+            foreach (var m in _ovCatalog.Where(m => m.Items.Any(i => _ovState.ContainsKey(i.PermissionId))))
+                _ovOpen.Add(m.ModuleCode);
+            if (_ovOpen.Count == 0 && _ovCatalog.Count > 0) _ovOpen.Add(_ovCatalog[0].ModuleCode);
+        }
+        catch (Exception ex) { _loadError = "فشل تحميل البيانات: " + ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private IEnumerable<PermModule> FilteredOvModules()
+    {
+        var q = (_ovSearch ?? "").Trim();
+        foreach (var mod in _ovCatalog)
+        {
+            var items = mod.Items.Where(p =>
+            {
+                var st = OvState(p.PermissionId);
+                if (_ovFilter == "overridden" && st == "default") return false;
+                if (_ovFilter == "grant" && st != "grant") return false;
+                if (_ovFilter == "deny" && st != "deny") return false;
+                if (q.Length == 0) return true;
+                return (p.NameAr?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+                    || (p.PermissionCode?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+                    || (mod.ModuleCode?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+                    || ModuleLabel(mod.ModuleCode).Contains(q, StringComparison.OrdinalIgnoreCase);
+            }).ToList();
+            if (items.Count > 0) yield return new PermModule { ModuleCode = mod.ModuleCode, Items = items };
+        }
+    }
+
+    private void ToggleOvModule(string code) { if (!_ovOpen.Remove(code)) _ovOpen.Add(code); }
+    private void ExpandAllOv() => _ovOpen = new HashSet<string>(OvFiltered.Select(m => m.ModuleCode), StringComparer.OrdinalIgnoreCase);
+    private void CollapseAllOv() => _ovOpen.Clear();
+    private void ResetAllOv() { _ovState.Clear(); _confirmResetOv = false; }
+    private string OvState(int pid) => _ovState.TryGetValue(pid, out var s) ? s : "default";
+    private void SetOv(int pid, string? v) { v ??= "default"; if (v == "default") _ovState.Remove(pid); else _ovState[pid] = v; }
+    private void GoBack() => Nav.NavigateTo("/users");
+
+    private async Task SaveAsync()
+    {
+        if (_saving || _loading) return;
+        _saving = true;
+        try
+        {
+            var payload = _ovState.Select(kv => new { permissionId = kv.Key, isGranted = kv.Value == "grant" ? 1 : 0, notes = (string?)null }).ToList();
+            var res = await Http.PutAsJsonAsync($"api/users/{Id}/permissions", payload);
+            var msg = await MsgOf(res);
+            Snackbar.Add(msg, res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+            if (res.IsSuccessStatusCode) Nav.NavigateTo("/users");
+        }
+        catch (Exception ex) { Snackbar.Add("فشل الحفظ: " + ex.Message, Severity.Error); }
+        finally { _saving = false; }
+    }
+
+    private static async Task<string> MsgOf(HttpResponseMessage res)
+    {
+        try
+        {
+            var body = await res.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(body)) return res.IsSuccessStatusCode ? "تم" : "خطأ غير معروف";
+            var doc = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(body);
+            if (doc.TryGetProperty("message", out var m)) return m.GetString() ?? body;
+            return body;
+        }
+        catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ HTTP {(int)res.StatusCode}"; }
+    }
+}

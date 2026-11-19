@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using FastCom.Domain.Entities;
 using FastCom.Infrastructure.Persistence;
 using FastCom.Server.Auth;
@@ -130,8 +130,9 @@ public class OperationsController : ControllerBase
         string? TahteeqPortName, DateTime? PlannedDate, string Status,
         int ContainersQty, int TripsCount,
         decimal RevenueNet, decimal RevenueTax, decimal ActualCost, DateTime CreatedAt,
-        long? StartTripId, string? StartTripNumber,
-        long? CompleteTripId, string? CompleteTripNumber, bool CanCloseOp);
+        long? StartTripId, string? StartTripNumber, string? StartTripDriverName, string? StartTripVehiclePlate,
+        long? CompleteTripId, string? CompleteTripNumber, string? CompleteTripDriverName, string? CompleteTripVehiclePlate,
+        bool CanCloseOp);
 
     [HttpGet("requests")]
     [Authorize(Policy = "PERM:OPERATION.VIEW")]
@@ -156,8 +157,8 @@ public class OperationsController : ControllerBase
                 o.TahteeqPort != null ? o.TahteeqPort.NameAr : null,
                 o.PlannedDate, o.Status,
                 o.Booking != null ? o.Booking.BookingContainerLines.Sum(l => l.RequestedQty) : 0,
-                _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "Cancelled"),
-                o.RevenueNet, o.RevenueTax, o.ActualCost, o.CreatedAt,
+_db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "Cancelled"),
+                (User.IsInRole("ADMIN") || User.HasClaim("perm","OPERATION.VIEW_FINANCIALS") ? o.RevenueNet : 0m), (User.IsInRole("ADMIN") || User.HasClaim("perm","OPERATION.VIEW_FINANCIALS") ? o.RevenueTax : 0m), (User.IsInRole("ADMIN") || User.HasClaim("perm","OPERATION.VIEW_FINANCIALS") ? o.ActualCost : 0m), o.CreatedAt,
                 _db.TripOperations
                     .Where(to => to.OperationId == o.OperationId && to.Status != "Cancelled"
                                  && (to.Trip.Status == "Planned" || to.Trip.Status == "Assigned"))
@@ -170,6 +171,16 @@ public class OperationsController : ControllerBase
                     .Select(to => to.Trip.TripNumber).FirstOrDefault(),
                 _db.TripOperations
                     .Where(to => to.OperationId == o.OperationId && to.Status != "Cancelled"
+                                 && (to.Trip.Status == "Planned" || to.Trip.Status == "Assigned"))
+                    .OrderBy(to => to.Trip.PlannedStartAt ?? DateTime.MaxValue).ThenBy(to => to.TripId)
+                    .Select(to => to.Trip.Driver != null ? to.Trip.Driver.FullName : null).FirstOrDefault(),
+                _db.TripOperations
+                    .Where(to => to.OperationId == o.OperationId && to.Status != "Cancelled"
+                                 && (to.Trip.Status == "Planned" || to.Trip.Status == "Assigned"))
+                    .OrderBy(to => to.Trip.PlannedStartAt ?? DateTime.MaxValue).ThenBy(to => to.TripId)
+                    .Select(to => to.Trip.Vehicle != null ? to.Trip.Vehicle.PlateNumber : null).FirstOrDefault(),
+                _db.TripOperations
+                    .Where(to => to.OperationId == o.OperationId && to.Status != "Cancelled"
                                  && to.Trip.Status == "Started")
                     .OrderBy(to => to.Trip.ActualStartAt ?? DateTime.MaxValue).ThenBy(to => to.TripId)
                     .Select(to => (long?)to.TripId).FirstOrDefault(),
@@ -178,6 +189,16 @@ public class OperationsController : ControllerBase
                                  && to.Trip.Status == "Started")
                     .OrderBy(to => to.Trip.ActualStartAt ?? DateTime.MaxValue).ThenBy(to => to.TripId)
                     .Select(to => to.Trip.TripNumber).FirstOrDefault(),
+                _db.TripOperations
+                    .Where(to => to.OperationId == o.OperationId && to.Status != "Cancelled"
+                                 && to.Trip.Status == "Started")
+                    .OrderBy(to => to.Trip.ActualStartAt ?? DateTime.MaxValue).ThenBy(to => to.TripId)
+                    .Select(to => to.Trip.Driver != null ? to.Trip.Driver.FullName : null).FirstOrDefault(),
+                _db.TripOperations
+                    .Where(to => to.OperationId == o.OperationId && to.Status != "Cancelled"
+                                 && to.Trip.Status == "Started")
+                    .OrderBy(to => to.Trip.ActualStartAt ?? DateTime.MaxValue).ThenBy(to => to.TripId)
+                    .Select(to => to.Trip.Vehicle != null ? to.Trip.Vehicle.PlateNumber : null).FirstOrDefault(),
                 (o.Status == "Delivered" || o.Status == "ExpensesPending" ||
                  o.Status == "CustodyPending" || o.Status == "ReadyToClose")
                 && _db.TripOperations.Any(to => to.OperationId == o.OperationId && to.Status != "Cancelled")
@@ -233,7 +254,7 @@ public class OperationsController : ControllerBase
             o.CustomerId, customerName, o.ServiceId, o.PortId, o.DestinationId,
             o.TahteeqPortId, tahteeqPortName, o.TripTypeId,
             o.PlannedDate?.ToString("yyyy-MM-ddTHH:mm"), o.EstimatedCost, o.Notes, o.Status,
-            o.RevenueNet, o.RevenueTax, o.ActualCost, o.CreatedAt, agentReference);
+            ((User.IsInRole("ADMIN") || User.HasClaim("perm","OPERATION.VIEW_FINANCIALS")) ? o.RevenueNet : 0m), ((User.IsInRole("ADMIN") || User.HasClaim("perm","OPERATION.VIEW_FINANCIALS")) ? o.RevenueTax : 0m), ((User.IsInRole("ADMIN") || User.HasClaim("perm","OPERATION.VIEW_FINANCIALS")) ? o.ActualCost : 0m), o.CreatedAt, agentReference);
 
         return Ok(new DetailResponse(detail, lines));
     }
@@ -494,7 +515,7 @@ public class OperationsController : ControllerBase
         int CustomerId, int? ServiceId, int? PortId, int? DestinationId, int? TahteeqPortId,
         int? TripTypeId, string? Date, int? GuaranteeSupplierId, string? Notes,
         decimal? UnitPrice, List<QuickLineDto>? Lines,
-        int? EndCustomerId = null, int? ContactId = null, string? CustomerReference = null,
+        int? EndCustomerId = null, string? EndCustomerName = null, int? ContactId = null, string? CustomerReference = null,
         List<QuickTripDto>? Trips = null,
         List<QuickDetailDto>? ContainerDetails = null);
 
@@ -564,6 +585,7 @@ public class OperationsController : ControllerBase
             BookingReference    = B(req.BookingReference),
             BLNumber            = B(req.BLNumber),
             EndCustomerId       = req.EndCustomerId,
+            EndCustomerName     = req.EndCustomerId is null ? B(req.EndCustomerName) : null,
             ContactId           = req.ContactId,
             CustomerReference   = B(req.CustomerReference),
             ShippingAgentId     = req.ShippingAgentId,
@@ -831,7 +853,9 @@ public class OperationsController : ControllerBase
                 oc.OperationContainerId,
                 oc.BookingContainerDetail != null ? oc.BookingContainerDetail.ContainerNumberText
                     : oc.Container != null ? oc.Container.ContainerNumber : null,
-                oc.BookingContainerDetail != null ? oc.BookingContainerDetail.BookingContainerLine.ContainerType.NameAr : null,
+                oc.BookingContainerDetail != null && oc.BookingContainerDetail.BookingContainerLine != null
+                    ? oc.BookingContainerDetail.BookingContainerLine.ContainerType.NameAr
+                    : oc.Container != null && oc.Container.ContainerType != null ? oc.Container.ContainerType.NameAr : null,
                 oc.Status, oc.Blnumber))
             .ToListAsync(ct);
         return Ok(rows);
@@ -870,6 +894,12 @@ public class OperationsController : ControllerBase
             _db.Containers.Add(container);
             await _db.SaveChangesAsync(ct);
         }
+        else if (container.ContainerTypeId != req.ContainerTypeId)
+        {
+            container.ContainerTypeId = req.ContainerTypeId;
+            _db.Containers.Update(container);
+            await _db.SaveChangesAsync(ct);
+        }
 
         var seq = await _db.OperationContainers.CountAsync(oc => oc.OperationId == id, ct);
         _db.OperationContainers.Add(new OperationContainer
@@ -878,7 +908,7 @@ public class OperationsController : ControllerBase
             ContainerId      = container.ContainerId,
             MovementSequence = seq + 1,
             Blnumber         = B(req.BLNumber),
-            Status           = "Planned",
+            Status           = "Assigned",
             CreatedBy        = CurrentUserId()
         });
         await _db.SaveChangesAsync(ct);
@@ -931,7 +961,7 @@ public class OperationsController : ControllerBase
                 BookingContainerDetailId = d.BookingContainerDetailId,
                 MovementSequence         = ++seq,
                 Blnumber                 = d.Blnumber,
-                Status                   = "Planned",
+                Status                   = "Assigned",
                 CreatedBy                = CurrentUserId()
             });
         }
@@ -1031,7 +1061,7 @@ public class OperationsController : ControllerBase
                 BookingContainerDetailId = d.BookingContainerDetailId,
                 MovementSequence         = ++seq,
                 Blnumber                 = d.Blnumber,
-                Status                   = "Planned",
+                Status                   = "Assigned",
                 CreatedBy                = CurrentUserId()
             });
         }

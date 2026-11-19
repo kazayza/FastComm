@@ -924,3 +924,20 @@ Multi-tenancy · Load balancing/Redis · دفتر الأستاذ في MVP · ا�
 
 **⚠️ الدرس:** الشاشة اتكتبت على أجزاء بعلامة `@*__APPEND__*@` — والجزء المتبقي من أول chunk (التواريخ + الملاحظات + إغلاق `.fc-form-grid`) **اتسرّب**، والبناء اكتشفه بـ`RZ9980: Unclosed tag 'div'`. **بعد أي تقسيم/إضافة جزئية: فعّل فحص الموازنة `<div`/`</div>` + بناء كامل فورًا.**
 
+
+---
+## 21) ✅ 2026-11-09 — اسم العميل النهائي (يدوي/مرتبط) + ظهوره بالفاتورة
+
+**القرار/التنفيذ:**
+- Bookings.EndCustomerName (nullable nvarchar 200) أُضيفت إضافيًا مع الإبقاء على EndCustomerId/FK — اختيار عميل مرتبط أو اسم حر.
+- عند EndCustomerId مختار → EndCustomerName=null. نص يدوي → EndCustomerId=null + تخزين النص.
+- الفاتورة **للعرض فقط**: Booking.EndCustomerName ?? Booking.EndCustomer.NameAr ?? Customer.NameAr (من أول عملية/حجز مرتبط) مع الإبقاء على Invoice.CustomerId المحاسبي.
+
+**الملفات:** sql/add-booking-endcustomer-name.sql; Server: Generated/Booking.cs, BookingsController.cs, OperationsController.cs (QuickCreateRequest+quick-create), InvoicesController.cs (Detail.DisplayCustomerName). Client: RequestForm.razor, BookingForm.razor, InvoiceForm.razor, InvoicePrint.razor.
+
+**تحقق:** Client build ✅ 0 أخطاء (تحذيرات قديمة). Server build فشل نسخ binaries لأن السيرفر شغال (PID 12816) — **شغّل migration SQL + أعد تشغيل السيرفر**.
+
+## 22) ✅ 2026-11-09 — إعادة تصميم شاشة طلب النقل (RequestForm)
+- RequestForm.razor (/transport-requests/new[/{id}]): 3 خطوات/تبويبات (بيانات العميل، النقل والتسعير، الحاويات والرحلات) بدل 4 — دمج الحاويات+الرحلات؛ شريط f-steps + ملخص ثابت f-summary يعرض العميل (الحساب) و**العميل النهائي (يظهر بالفاتورة)** وحجز الوكيل/BL والحاويات·السعر.
+- تحقق الحفظ يوجّه للتبويبات الجديدة (0/1/2). منطق الحفظ/التحميل/الرحلات/تفاصيل الحاويات لم يتغير. CSS محلي f-* + تنسيق MudTabs.
+- تحقق: Client build ✅ 0 أخطاء. تفعيل كامل يحتاج migration sql/add-booking-endcustomer-name.sql + إعادة تشغيل السيرفر.

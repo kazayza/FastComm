@@ -1,0 +1,394 @@
+@page "/custodies/print/{Id:long}"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using FastCom.Client.Auth
+@using FastCom.Client.Models
+@inject HttpClient Http
+@inject AuthService Auth
+@inject CompanyService Company
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<PageTitle>طباعة دفتر عهدة — فاست كوم</PageTitle>
+
+<div class="print-toolbar no-print">
+    <button class="tb-back-btn" @onclick="Back">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        رجوع للدفتر
+    </button>
+    <div class="tb-info">
+        @if (_data is not null)
+        {
+            <span class="tb-inv-num">@_data.Custody.CustodyNumber</span>
+            <span class="tb-sep">·</span>
+            <span class="tb-cust">@_data.Custody.OwnerName</span>
+        }
+        else
+        {
+            <span class="tb-cust">دفتر عهدة</span>
+        }
+    </div>
+    <button class="tb-print-btn" @onclick="Print">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 6 2 18 2 18 9"/>
+            <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+            <rect x="6" y="14" width="12" height="8"/>
+        </svg>
+        طباعة / حفظ PDF
+    </button>
+</div>
+
+@if (_loading)
+{
+    <div class="print-loading no-print"><div class="print-spinner"></div><span>جاري تحميل دفتر العهدة...</span></div>
+}
+else if (_data is null)
+{
+    <div class="print-error no-print"><p>تعذّر تحميل دفتر العهدة</p></div>
+}
+else
+{
+    var c = _data.Custody;
+    var total = c.AmountIssued + c.AdditionalDue;
+    <div class="sheet" dir="rtl">
+        <div class="inv-header">
+            <div class="inv-company-block">
+                <div class="inv-company-name">@_co.DisplayName</div>
+                <div class="inv-company-details">
+                    @if (!string.IsNullOrWhiteSpace(_co.TaxNumber) && _co.TaxNumber != "000000000")
+                    { <div class="inv-co-row"><span class="inv-co-label">الرقم الضريبي</span><span class="inv-co-val" dir="ltr">@_co.TaxNumber</span></div> }
+                    @if (!string.IsNullOrWhiteSpace(_co.AddressAr))
+                    { <div class="inv-co-row"><span class="inv-co-label">العنوان</span><span class="inv-co-val">@_co.AddressAr</span></div> }
+                    @if (!string.IsNullOrWhiteSpace(_co.Phone))
+                    { <div class="inv-co-row"><span class="inv-co-label">التليفون</span><span class="inv-co-val" dir="ltr">@_co.Phone</span></div> }
+                    @if (!string.IsNullOrWhiteSpace(_co.Email))
+                    { <div class="inv-co-row"><span class="inv-co-label">البريد</span><span class="inv-co-val" dir="ltr">@_co.Email</span></div> }
+                </div>
+            </div>
+            <div class="inv-title-block">
+                <div class="inv-doc-title">دفتر عهدة</div>
+                <div class="inv-doc-number">@c.CustodyNumber</div>
+                <div class="status-badge">@StatusAr(c.Status)</div>
+            </div>
+            <div class="inv-logo-block">
+                @if (!string.IsNullOrWhiteSpace(_co.LogoPath))
+                { <img src="@_co.LogoPath" alt="@_co.DisplayName" class="inv-logo-img" /> }
+                else
+                { <div class="inv-logo-placeholder">FC</div> }
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="meta-grid">
+            <div class="meta-card">
+                <div class="meta-label">المستلم</div>
+                <div class="meta-value">@c.OwnerName (@(c.OwnerType=="Driver"?"سائق":"موظف"))</div>
+            </div>
+            <div class="meta-card">
+                <div class="meta-label">تاريخ صرف العهدة</div>
+                <div class="meta-value" dir="ltr">@c.CustodyDate.ToString("yyyy-MM-dd HH:mm")</div>
+            </div>
+            <div class="meta-card">
+                <div class="meta-label">الرحلة / المرجع</div>
+                <div class="meta-value">@TripContext(c)</div>
+            </div>
+            <div class="meta-card">
+                <div class="meta-label">تاريخ الطباعة</div>
+                <div class="meta-value" dir="ltr">@DateTime.Now.ToString("yyyy-MM-dd HH:mm")</div>
+            </div>
+        </div>
+
+        <div class="summary">
+            <div class="sum-box"><span>إجمالي المصروف</span><b>@Money(total) ج.م</b></div>
+            <div class="sum-box"><span>المنصرف فعليًا</span><b>@Money(c.AmountSpent) ج.م</b></div>
+            <div class="sum-box"><span>المُردّ</span><b>@Money(c.AmountReturned) ج.م</b></div>
+            <div class="sum-box"><span>مستحق إضافي</span><b>@Money(c.AdditionalDue) ج.م</b></div>
+            <div class="sum-box remain"><span>المتبقي</span><b>@Money(c.Remaining) ج.م</b></div>
+        </div>
+
+        <section class="sec">
+            <h3 class="sec-title">سجل الحركات</h3>
+            @if (!_data.Transactions.Any())
+            {
+                <div class="empty">لا توجد حركات مسجلة</div>
+            }
+            else
+            {
+                <table class="tbl">
+                    <thead>
+                        <tr>
+                            <th style="width:14%">التاريخ</th>
+                            <th style="width:16%">نوع الحركة</th>
+                            <th style="width:12%">المبلغ</th>
+                            <th>تفاصيل المصروف/البيان والسياق</th>
+                            <th style="width:18%">ملاحظات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in _data.Transactions.OrderBy(x=>x.TransactionDate).ThenBy(x=>x.CustodyTransactionId))
+                        {
+                            var exp = ExpenseForTx(t);
+                            <tr>
+                                <td dir="ltr">@t.TransactionDate.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@TxLabel(t.TransactionType)</td>
+                                <td class="@AmtClass(t.TransactionType)"><b dir="ltr">@TxSign(t.TransactionType)@Money(t.Amount)</b></td>
+                                <td>
+                                    @if (exp is not null)
+                                    {
+                                        <div class="cell-main"><b>@ExpensePrimaryLabel(exp)</b></div>
+                                        @if (!string.IsNullOrWhiteSpace(exp.Description)) { <div class="cell-sub"><b>البيان:</b> @exp.Description</div> }
+                                        <div class="cell-sub">@ExpenseContextLabel(exp)</div>
+                                    }
+                                    else
+                                    {
+                                        @if (!string.IsNullOrWhiteSpace(t.ExpenseNumber) || !string.IsNullOrWhiteSpace(t.ExpenseTypeName))
+                                        { <div class="cell-main"><b>@(string.IsNullOrWhiteSpace(t.ExpenseTypeName)?"مصروف":t.ExpenseTypeName) @(t.ExpenseNumber)</b></div> }
+                                        @if (!string.IsNullOrWhiteSpace(t.ExpenseDescription)) { <div class="cell-sub"><b>البيان:</b> @t.ExpenseDescription</div> }
+                                        var ctx = TxContextLabel(t);
+                                        @if (!string.IsNullOrWhiteSpace(ctx)) { <div class="cell-sub">@ctx</div> }
+                                        else if (string.IsNullOrWhiteSpace(t.ExpenseNumber)) { <span>—</span> }
+                                    }
+                                </td>
+                                <td>@(string.IsNullOrWhiteSpace(t.Notes) ? "—" : t.Notes)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+
+        <section class="sec">
+            <h3 class="sec-title">المصروفات المرتبطة بالعهدة</h3>
+            @if (!_data.Expenses.Any())
+            {
+                <div class="empty">لا توجد مصروفات مرتبطة</div>
+            }
+            else
+            {
+                <table class="tbl">
+                    <thead>
+                        <tr>
+                            <th style="width:12%">التاريخ</th>
+                            <th style="width:20%">المصروف</th>
+                            <th>البيان والسياق (عملية/رحلة/سائق-مركبة)</th>
+                            <th style="width:11%">المبلغ</th>
+                            <th style="width:10%">الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in _data.Expenses.OrderBy(x=>x.ExpenseDate).ThenBy(x=>x.ExpenseId))
+                        {
+                            <tr>
+                                <td dir="ltr">@e.ExpenseDate.ToString("yyyy-MM-dd")</td>
+                                <td><b>@ExpensePrimaryLabel(e)</b></td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(e.Description)) { <div class="cell-sub"><b>البيان:</b> @e.Description</div> }
+                                    <div class="cell-sub">@ExpenseContextLabel(e)</div>
+                                </td>
+                                <td><b dir="ltr">@Money(e.Amount)</b></td>
+                                <td>@e.PaymentStatus</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+
+        @if (!string.IsNullOrWhiteSpace(c.Notes))
+        {
+            <section class="sec notes-sec"><h3 class="sec-title">ملاحظات</h3><div class="notes-box">@c.Notes</div></section>
+        }
+
+        <div class="signs">
+            <div class="sign"><span>المستلم</span><i></i></div>
+            <div class="sign"><span>المحاسب / المراجع</span><i></i></div>
+            <div class="sign"><span>الاعتماد</span><i></i></div>
+        </div>
+
+        <div class="footer">
+            <div>@_co.DisplayName @(!string.IsNullOrWhiteSpace(_co.AddressAr)? "— " + _co.AddressAr : "")</div>
+            <div>تمت الطباعة: @DateTime.Now.ToString("yyyy-MM-dd HH:mm")</div>
+        </div>
+    </div>
+}
+
+<style>
+.print-toolbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:12px;padding:10px 16px;background:#fff;border-bottom:1px solid #e5edf7;box-shadow:0 2px 10px rgba(16,35,63,.06)}
+.tb-back-btn,.tb-print-btn{display:inline-flex;align-items:center;gap:6px;border-radius:10px;padding:8px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.tb-back-btn{background:#f5f8fc;border:1px solid #dfe8f5;color:#334}
+.tb-print-btn{background:linear-gradient(135deg,#1e6ef5,#1557c7);border:none;color:#fff}
+.tb-info{flex:1;display:flex;align-items:center;gap:8px}
+.tb-inv-num{font-weight:900;color:#10233f}.tb-sep{color:#9ab}.tb-cust{color:#5b6f8f}
+.print-loading,.print-error{display:flex;align-items:center;justify-content:center;gap:10px;padding:40px;color:#6b7d95}
+.print-spinner{width:22px;height:22px;border:3px solid #dfe8f5;border-top-color:#1e6ef5;border-radius:50%;animation:sp 1s linear infinite}
+@@keyframes sp{to{transform:rotate(360deg)}}
+
+.sheet{width:210mm;min-height:297mm;margin:14px auto;background:#fff;color:#10233f;padding:12mm 12mm 10mm;box-shadow:0 8px 30px rgba(16,35,63,.12);font-family:Tahoma,Arial,"Segoe UI",sans-serif}
+.inv-header{display:grid;grid-template-columns:1.2fr 1fr .8fr;gap:10px;align-items:start}
+.inv-company-name{font-size:20px;font-weight:900;color:#0f2244;margin-bottom:4px}
+.inv-company-details{display:flex;flex-direction:column;gap:2px;font-size:11.5px;color:#334}
+.inv-co-row{display:flex;gap:6px}.inv-co-label{color:#6b7d95;min-width:70px}.inv-co-val{font-weight:600}
+.inv-title-block{text-align:center}
+.inv-doc-title{font-size:22px;font-weight:900;color:#0f2244}
+.inv-doc-number{font-size:14px;font-weight:800;color:#1e5fd6;margin-top:2px}
+.status-badge{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:999px;background:#eef5ff;color:#1e5fd6;border:1px solid #d7e7ff;font-size:11px;font-weight:800}
+.inv-logo-block{display:flex;justify-content:flex-start}
+.inv-logo-img{max-width:120px;max-height:70px;object-fit:contain}
+.inv-logo-placeholder{width:70px;height:70px;border:1px dashed #c9d8ec;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#7a8aa0;font-weight:800}
+.divider{height:2px;background:linear-gradient(90deg,#1e6ef5,#8fb8ff);margin:10px 0 12px;border-radius:2px}
+.meta-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.meta-card{border:1px solid #e3ebf7;border-radius:10px;padding:8px 10px;background:#fbfdff}
+.meta-label{font-size:10.5px;color:#6b7d95;font-weight:700;margin-bottom:2px}
+.meta-value{font-size:12.5px;font-weight:700;color:#10233f}
+.summary{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:8px 0 12px}
+.sum-box{border:1px solid #e3ebf7;border-radius:10px;padding:8px 10px;background:#f9fbff;display:flex;flex-direction:column;gap:2px}
+.sum-box span{font-size:10.5px;color:#6b7d95;font-weight:700}
+.sum-box b{font-size:14px;color:#10233f}
+.sum-box.remain{background:#eef6ff;border-color:#cfe2ff}
+.sum-box.remain b{color:#0b4fb3}
+.sec{margin-top:10px}
+.sec-title{margin:0 0 6px;font-size:14px;font-weight:900;color:#0f2244;border-right:4px solid #1e6ef5;padding-right:8px}
+.tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.tbl th,.tbl td{border:1px solid #dfe8f3;padding:6px 7px;vertical-align:top}
+.tbl th{background:#f3f8ff;color:#17365d;font-weight:800}
+.tbl tbody tr:nth-child(even){background:#fbfdff}
+.cell-main{margin-bottom:2px}.cell-sub{font-size:10.8px;color:#445;line-height:1.5;margin-top:1px}
+.amt-pos b{color:#14804a}.amt-neg b{color:#b42318}
+.empty{border:1px dashed #d6e1f0;border-radius:10px;padding:10px;color:#6b7d95;font-size:12px}
+.notes-box{border:1px solid #e3ebf7;border-radius:10px;padding:8px 10px;background:#fbfdff;font-size:12px;line-height:1.7}
+.signs{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:22px}
+.sign{display:flex;flex-direction:column;align-items:center;gap:18px;font-size:12px;font-weight:700;color:#334}
+.sign i{width:100%;border-bottom:1px dashed #8aa0bd;height:1px}
+.footer{margin-top:14px;padding-top:8px;border-top:1px solid #e3ebf7;display:flex;justify-content:space-between;gap:10px;font-size:10.5px;color:#6b7d95}
+
+@@media print{
+  .no-print{display:none !important}
+  body{background:#fff !important;margin:0}
+  .sheet{width:100%;min-height:auto;margin:0;box-shadow:none;padding:8mm 8mm 6mm}
+  .sec,.summary,.signs{page-break-inside:avoid}
+  .tbl{page-break-inside:auto}
+  .tbl tr{page-break-inside:avoid}
+  @@page{size:A4;margin:8mm}
+}
+@@media screen and (max-width:220mm){
+  .sheet{width:100%;margin:8px auto;padding:12px}
+  .inv-header{grid-template-columns:1fr 1fr}
+  .inv-logo-block{display:none}
+  .meta-grid,.summary{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+
+@code {
+    [Parameter] public long Id { get; set; }
+
+    private bool _loading = true;
+    private Envelope? _data;
+    private CompanyInfo _co = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _co = await Company.GetAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _data = await Http.GetFromJsonAsync<Envelope>($"api/custodies/{Id}"); }
+        catch (Exception ex) { Snackbar.Add("فشل تحميل دفتر العهدة: " + ex.Message, Severity.Error); }
+        finally { _loading = false; }
+    }
+
+    private void Back() => Nav.NavigateTo($"/custodies/{Id}/ledger");
+    private async Task Print() { try { await JS.InvokeVoidAsync("fastcom.printPage"); } catch { await JS.InvokeVoidAsync("print"); } }
+
+    private static string StatusAr(string s) => s switch
+    {
+        "Open" => "مفتوحة", "PartiallySettled" => "تسوية جزئية", "Submitted" => "مقدّمة للتسوية",
+        "Approved" => "معتمدة", "Closed" => "مقفولة", _ => s
+    };
+    private static string TxLabel(string t) => t switch
+    {
+        "Issue" => "صرف العهدة", "Expense" or "Spend" => "مصروف من العهدة",
+        "Refund" or "Return" => "ردّ مبلغ", "Additional" or "Add" => "تغذية/إضافة للعهدة",
+        "FreightSettle" => "تسوية نولون النقلة", "Close" => "إغلاق", _ => t
+    };
+    private static string TxSign(string t) => t switch { "Issue" or "Additional" or "Add" or "Refund" or "Return" => "+", "Expense" or "Spend" or "FreightSettle" => "−", _ => "" };
+    private static string AmtClass(string t) => t switch { "Expense" or "Spend" or "FreightSettle" => "amt-neg", "Issue" or "Additional" or "Add" or "Refund" or "Return" => "amt-pos", _ => "" };
+    private static string Money(decimal v) => v.ToString("N2");
+
+    private static string TripContext(Detail c)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(c.TripNumber)) parts.Add($"رحلة {c.TripNumber}");
+        if (!string.IsNullOrWhiteSpace(c.DriverName)) parts.Add(c.DriverName);
+        if (!string.IsNullOrWhiteSpace(c.ParentCustodyNumber)) parts.Add($"عهدة أصل {c.ParentCustodyNumber}");
+        return parts.Count == 0 ? "—" : string.Join(" — ", parts);
+    }
+
+    private CustodyExpense? ExpenseForTx(TxLine t)
+        => t.ExpenseId is null || _data is null ? null : _data.Expenses.FirstOrDefault(e => e.ExpenseId == t.ExpenseId.Value);
+
+    private static string ExpensePrimaryLabel(CustodyExpense e)
+        => $"{(string.IsNullOrWhiteSpace(e.TypeName) ? "مصروف" : e.TypeName)} — {e.ExpenseNumber}";
+
+    private static string ExpenseContextLabel(CustodyExpense e)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(e.OperationNumber)) parts.Add($"عملية: {e.OperationNumber}");
+        if (!string.IsNullOrWhiteSpace(e.TripNumber)) parts.Add($"رحلة: {e.TripNumber}");
+        var dv = DriverVehicle(e.DriverName, e.VehiclePlate);
+        if (!string.IsNullOrWhiteSpace(dv)) parts.Add(dv);
+        return parts.Count == 0 ? "بدون ربط تشغيلي" : string.Join(" · ", parts);
+    }
+
+    private static string TxContextLabel(TxLine t)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(t.OperationNumber)) parts.Add($"عملية: {t.OperationNumber}");
+        if (!string.IsNullOrWhiteSpace(t.TripNumber)) parts.Add($"رحلة: {t.TripNumber}");
+        var dv = DriverVehicle(t.DriverName, t.VehiclePlate);
+        if (!string.IsNullOrWhiteSpace(dv)) parts.Add(dv);
+        return string.Join(" · ", parts);
+    }
+
+    private static string DriverVehicle(string? driver, string? vehicle)
+    {
+        if (!string.IsNullOrWhiteSpace(driver) && !string.IsNullOrWhiteSpace(vehicle)) return $"السائق/المركبة: {driver} — {vehicle}";
+        if (!string.IsNullOrWhiteSpace(driver)) return $"السائق: {driver}";
+        if (!string.IsNullOrWhiteSpace(vehicle)) return $"المركبة: {vehicle}";
+        return "";
+    }
+
+    public class Envelope { public Detail Custody { get; set; } = new(); public List<TxLine> Transactions { get; set; } = new(); public List<CustodyExpense> Expenses { get; set; } = new(); }
+    public class Detail {
+        public long CustodyId { get; set; } public string CustodyNumber { get; set; } = "";
+        public DateTime CustodyDate { get; set; } public string OwnerType { get; set; } = "";
+        public int OwnerId { get; set; } public string OwnerName { get; set; } = "";
+        public long? TripId { get; set; } public string? TripNumber { get; set; } public string? DriverName { get; set; }
+        public decimal AmountIssued { get; set; } public decimal AmountSpent { get; set; } public decimal AmountReturned { get; set; }
+        public decimal AdditionalDue { get; set; } public decimal Remaining { get; set; } public string Status { get; set; } = "";
+        public string? Notes { get; set; } public DateTime? ClosedAt { get; set; }
+        public bool IsPrimary { get; set; } public long? ParentCustodyId { get; set; } public string? ParentCustodyNumber { get; set; }
+    }
+    public class TxLine {
+        public long CustodyTransactionId { get; set; } public string TransactionType { get; set; } = "";
+        public DateTime TransactionDate { get; set; } public decimal Amount { get; set; }
+        public long? ExpenseId { get; set; } public string? ExpenseNumber { get; set; } public string? Notes { get; set; }
+        public string? ExpenseTypeName { get; set; } public string? ExpenseDescription { get; set; }
+        public string? OperationNumber { get; set; } public string? TripNumber { get; set; }
+        public string? DriverName { get; set; } public string? VehiclePlate { get; set; }
+    }
+    public class CustodyExpense {
+        public long ExpenseId { get; set; } public string ExpenseNumber { get; set; } = ""; public string TypeName { get; set; } = "";
+        public decimal Amount { get; set; } public DateTime ExpenseDate { get; set; } public string? Description { get; set; }
+        public string PaymentStatus { get; set; } = ""; public long? OperationId { get; set; } public string? OperationNumber { get; set; }
+        public long? TripId { get; set; } public string? TripNumber { get; set; } public bool IsFreightAdvance { get; set; }
+        public decimal? BillableAmount { get; set; } public int? DriverId { get; set; }
+        public string? DriverName { get; set; } public string? VehiclePlate { get; set; }
+    }
+}

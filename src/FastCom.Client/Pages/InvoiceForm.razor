@@ -523,39 +523,41 @@
                                             else if (_bxList.Count > 0)
                                             {
                                                 <div class="inv-bx-table-wrap">
-                                                    <table class="inv-bx-table">
-                                                        <thead>
+                                                <table class="inv-bx-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th style="width:34px"></th>
+                                                            <th>المصروف / الإيصال</th>
+                                                            <th>النوع</th>
+                                                            <th>الفعلي (ج.م)</th>
+                                                            <th>المحمّل (ج.م)</th>
+                                                            <th>ضريبة %</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach (var x in _bxList)
+                                                        {
+                                                            var receipt = BxReceiptLabel(x);
                                                             <tr>
-                                                                <th style="width:34px"></th>
-                                                                <th>المصروف</th>
-                                                                <th>النوع</th>
-                                                                <th>الفعلي (ج.م)</th>
-                                                                <th>المحمّل (ج.م)</th>
-                                                                <th>ضريبة %</th>
+                                                                <td>
+                                                                    <input type="checkbox"
+                                                                           checked="@_bxSel.Contains(x.ExpenseId)"
+                                                                           @onchange="e => ToggleBx(x.ExpenseId, e)"
+                                                                           aria-label="اختيار @x.ExpenseNumber" />
+                                                                </td>
+                                                                <td>
+                                                                    @if (!string.IsNullOrWhiteSpace(receipt))
+                                                                    { <div class="bx-num"><strong>@receipt</strong></div> }
+                                                                    <div class="bx-desc">@(string.IsNullOrWhiteSpace(x.Description) ? x.ExpenseTypeName : x.Description)</div>
+                                                                </td>
+                                                                <td>@x.ExpenseTypeName</td>
+                                                                <td>@Money(x.ActualAmount)</td>
+                                                                <td><strong>@Money(x.BillableAmount)</strong></td>
+                                                                <td>@x.BillableTaxRate.ToString("0.##")</td>
                                                             </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            @foreach (var x in _bxList)
-                                                            {
-                                                                <tr>
-                                                                    <td>
-                                                                        <input type="checkbox"
-                                                                               checked="@_bxSel.Contains(x.ExpenseId)"
-                                                                               @onchange="e => ToggleBx(x.ExpenseId, e)"
-                                                                               aria-label="اختيار @x.ExpenseNumber" />
-                                                                    </td>
-                                                                    <td>
-                                                                        <div class="bx-num">@x.ExpenseNumber</div>
-                                                                        <div class="bx-desc">@(string.IsNullOrWhiteSpace(x.Description) ? x.ExpenseTypeName : x.Description)</div>
-                                                                    </td>
-                                                                    <td>@x.ExpenseTypeName</td>
-                                                                    <td>@Money(x.ActualAmount)</td>
-                                                                    <td><strong>@Money(x.BillableAmount)</strong></td>
-                                                                    <td>@x.BillableTaxRate.ToString("0.##")</td>
-                                                                </tr>
-                                                            }
-                                                        </tbody>
-                                                    </table>
+                                                        }
+                                                    </tbody>
+                                                </table>
                                                 </div>
                                                 <div class="inv-bx-foot">
                                                     <label class="inv-bx-all">
@@ -714,7 +716,7 @@
                                                 <tr>
                                                     <td class="inv-td-num">@idx</td>
                                                     <td>
-                                                        <div class="invf-desc">@l.Description</div>
+                                                        <div class="invf-desc">@StripExpenseCode(l.Description)</div>
                                                         @if (l.OperationNumber is not null)
                                                         {
                                                             <span class="invf-op-tag">
@@ -2035,6 +2037,38 @@
         public decimal  ActualAmount    { get; set; }
         public decimal  BillableAmount  { get; set; }
         public decimal  BillableTaxRate { get; set; }
+        public string?  ReceiptTypeName { get; set; }
+        public string?  ReferenceNumber { get; set; }
+    }
+
+    private static string BxReceiptLabel(BxExpense x)
+    {
+        var has = !string.IsNullOrWhiteSpace(x.ReceiptTypeName) || !string.IsNullOrWhiteSpace(x.ReferenceNumber);
+        if (!has) return "";
+        var r = "إيصالات - " + (string.IsNullOrWhiteSpace(x.ReceiptTypeName) ? "إيصال" : x.ReceiptTypeName.Trim());
+        if (!string.IsNullOrWhiteSpace(x.ReferenceNumber)) r += " " + x.ReferenceNumber.Trim();
+        return r;
+    }
+
+    private static string StripExpenseCode(string? desc)
+    {
+        if (string.IsNullOrWhiteSpace(desc)) return desc ?? "";
+        var s = System.Text.RegularExpressions.Regex.Replace(desc, @"\s*\(?EXP-\d{4}-\d+\)?\s*", " ");
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\s*—\s*—\s*", " — ");
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\s*-\s*-\s*", " - ");
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"^\s*[—\-]\s*", "");
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\s*[—\-]\s*$", "");
+        return s.Trim();
+    }
+
+    private static string BxLineDescription(BxExpense x)
+    {
+        var parts = new List<string>();
+        var receipt = BxReceiptLabel(x);
+        if (!string.IsNullOrWhiteSpace(receipt)) parts.Add(receipt);
+        if (!string.IsNullOrWhiteSpace(x.ExpenseTypeName)) parts.Add(x.ExpenseTypeName.Trim());
+        if (!string.IsNullOrWhiteSpace(x.Description)) parts.Add(x.Description.Trim());
+        return string.Join(" — ", parts);
     }
 
     private async Task OnPickOpBx(ChangeEventArgs e)
@@ -2078,9 +2112,7 @@
             _f.Items.Add(new LineForm
             {
                 OperationId = _pickOpBx,
-                Description = string.IsNullOrWhiteSpace(x.Description)
-                    ? x.ExpenseTypeName
-                    : x.ExpenseTypeName + " — " + x.Description,
+                Description = BxLineDescription(x),
                 Quantity  = 1,
                 UnitPrice = x.BillableAmount,
                 TaxRate   = x.BillableTaxRate,
@@ -2099,7 +2131,8 @@
         public long    InvoiceId     { get; set; }
         public string  InvoiceNumber { get; set; } = "";
         public int     CustomerId    { get; set; }
-        public string  CustomerName  { get; set; } = "";
+        public string  CustomerName        { get; set; } = "";
+        public string? DisplayCustomerName { get; set; }
         public string? InvoiceDate   { get; set; }
         public string? DueDate       { get; set; }
         public string  Status        { get; set; } = "";

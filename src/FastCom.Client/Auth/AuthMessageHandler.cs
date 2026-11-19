@@ -36,9 +36,8 @@ public class AuthMessageHandler : DelegatingHandler
 
         var response = await base.SendAsync(request, cancellationToken);
 
-        // 🔴 التوكن مرفوض أو منتهي → نمسحه عشان المستخدم ما يفضلش
-        //    شايف واجهة وهو أصلاً خارج
-        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
+        // 🔴 التوكن منتهي/غير صالح → نمسحه. (403 = ممنوع بصلاحية لكن الجلسة صحيحة — لا نمسح التوكن)
+        if (response.StatusCode == HttpStatusCode.Unauthorized
             && !string.IsNullOrEmpty(token))
         {
             // ⚠️ login نفسه بيرجع 401 لما الباسورد غلط —

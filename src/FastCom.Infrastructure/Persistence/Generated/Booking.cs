@@ -34,6 +34,9 @@ public partial class Booking
 
     public int? EndCustomerId { get; set; }
 
+    [StringLength(200)]
+    public string? EndCustomerName { get; set; }
+
     public int? TripTypeId { get; set; }
 
     [StringLength(100)]

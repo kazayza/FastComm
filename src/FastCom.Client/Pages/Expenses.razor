@@ -321,12 +321,15 @@
                                                     </svg>
                                                     @(e.BookingRef is not null ? $"حجز وكيل {e.BookingRef}" : $"عملية {e.OperationNumber}")
                                                 </span>
-                                                @if (e.CustomerName is not null)
-                                                {
-                                                    <div class="exl-link-customer">@e.CustomerName</div>
-                                                }
                                             }
-                                            @if (e.TripNumber is not null)
+                                            @{
+                                                var customerLabel = string.IsNullOrWhiteSpace(e.EndCustomerName) ? e.CustomerName : e.EndCustomerName;
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(customerLabel))
+                                            {
+                                                <div class="exl-link-customer">@customerLabel @(string.IsNullOrWhiteSpace(e.EndCustomerName) || string.IsNullOrWhiteSpace(e.CustomerName) || e.EndCustomerName == e.CustomerName ? "" : $"({e.CustomerName})")</div>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(e.TripNumber) || !string.IsNullOrWhiteSpace(e.TripDriverName) || !string.IsNullOrWhiteSpace(e.TripVehiclePlate))
                                             {
                                                 <span class="exl-link-tag tag-trip">
                                                     <svg viewBox="0 0 16 16" width="10" height="10"
@@ -337,7 +340,7 @@
                                                         <circle cx="3.5" cy="12" r="1.5"/>
                                                         <circle cx="12.5" cy="12" r="1.5"/>
                                                     </svg>
-                                                    رحلة @e.TripNumber
+                                                    @TripBindLabel(e)
                                                 </span>
                                             }
                                             @if (e.SupplierName is not null)
@@ -364,7 +367,7 @@
                                                     عهدة @(e.CustodyOwnerName ?? e.CustodyNumber)
                                                 </span>
                                             }
-                                            @if (e.OperationNumber is null && e.TripNumber is null &&
+                                            @if (e.OperationNumber is null && string.IsNullOrWhiteSpace(e.TripNumber) && string.IsNullOrWhiteSpace(e.TripDriverName) && string.IsNullOrWhiteSpace(e.TripVehiclePlate) &&
                                                  e.SupplierName is null && e.CustodyNumber is null)
                                             {
                                                 <span class="td-muted">إداري</span>
@@ -451,7 +454,7 @@
                                         <div class="exl-actions">
 
                                             @* تعديل *@
-                                            @if (e.Status != "Cancelled" && CanEdit)
+                                            @if (CanModify(e) && e.Status != "Cancelled")
                                             {
                                                 <button class="exl-act-btn act-edit"
                                                         @onclick="() => GoEdit(e)"
@@ -466,7 +469,7 @@
                                             }
 
                                             @* تأكيد *@
-                                            @if (e.Status == "Draft" && CanEdit)
+                                            @if (CanModify(e) && e.Status == "Draft")
                                             {
                                                 <button class="exl-act-btn act-confirm"
                                                         @onclick='() => SetStatus(e, "Posted")'
@@ -496,7 +499,7 @@
                                             }
 
                                             @* علّم مدفوع *@
-                                            @if (e.Status == "Posted" && e.PaymentStatus == "Unpaid" && CanEdit && e.CustodyNumber is null)
+                                            @if (CanModify(e) && e.Status == "Posted" && e.PaymentStatus == "Unpaid" && e.CustodyNumber is null)
                                             {
                                                 <button class="exl-act-btn act-pay"
                                                         @onclick="() => SetPaid(e)"
@@ -512,7 +515,7 @@
                                             }
 
                                             @* إلغاء *@
-                                            @if (e.Status != "Cancelled" && CanEdit)
+                                            @if (CanCancelExpense(e))
                                             {
                                                 <button class="exl-act-btn act-cancel"
                                                         @onclick='() => SetStatus(e, "Cancelled")'
@@ -1666,6 +1669,11 @@
     private bool CanDelete      => _user?.Can("EXPENSE.DELETE")     ?? false;
     private bool CanApprove     => _user?.Can("EXPENSE.APPROVE")    ?? false;
     private bool CanManageTypes => _user?.Can("MASTERDATA.MANAGE")  ?? false;
+    private bool IsOperationsStaff => !(_user?.IsAdmin ?? false) && !CanApprove && !(_user?.Can("CUSTODY.SETTLE") ?? false) && !(_user?.Can("TREASURY.VIEW") ?? false) && (_user?.Can("OPERATION.VIEW") ?? false);
+    private bool CanModify(Item e) => CanEdit && !IsOperationsStaff;
+    private bool CanCancelExpense(Item e)
+        => CanModify(e) && e.Status != "Cancelled"
+           && !(e.CustodyNumber is not null && e.CustodyStatus is "Settled" or "Closed" or "Approved" or "Submitted");
 
     private static readonly (string Key, string Value)[] _statusTabs =
     {
@@ -1715,6 +1723,10 @@
         public string   PaymentStatus   { get; set; } = "";
         public string   Status          { get; set; } = "";
         public bool     IsApproved      { get; set; }
+        public string?  TripDriverName  { get; set; }
+        public string?  TripVehiclePlate { get; set; }
+        public string?  EndCustomerName { get; set; }
+        public string?  CustodyStatus   { get; set; }
     }
 
     /* ── Computed ── */
@@ -1744,6 +1756,14 @@
         (string.IsNullOrEmpty(_boxKindFilter) || e.PayBoxKind == _boxKindFilter));
 
     /* ── Helpers ── */
+    private static string TripBindLabel(Item e)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(e.TripDriverName)) parts.Add(e.TripDriverName);
+        if (!string.IsNullOrWhiteSpace(e.TripVehiclePlate)) parts.Add(e.TripVehiclePlate);
+        return parts.Count > 0 ? string.Join(" — ", parts) : (string.IsNullOrWhiteSpace(e.TripNumber) ? "رحلة" : $"رحلة {e.TripNumber}");
+    }
+
     private static string StatusAr(string s) => s switch
     {
         "Draft"     => "مسودة", "Posted" => "مؤكد",

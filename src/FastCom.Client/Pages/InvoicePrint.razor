@@ -26,7 +26,7 @@
         {
             <span class="tb-inv-num">@_e.Invoice.InvoiceNumber</span>
             <span class="tb-sep">·</span>
-            <span class="tb-cust">@_e.Invoice.CustomerName</span>
+            <span class="tb-cust">@(_e.Invoice.DisplayCustomerName ?? _e.Invoice.CustomerName)</span>
         }
     </div>
     <button class="tb-print-btn" @onclick="Print">
@@ -147,7 +147,7 @@ else
             @* بيانات العميل *@
             <div class="inv-meta-block customer-block">
                 <div class="inv-meta-title">فاتورة إلى</div>
-                <div class="inv-meta-customer">@_e.Invoice.CustomerName</div>
+                <div class="inv-meta-customer">@(_e.Invoice.DisplayCustomerName ?? _e.Invoice.CustomerName)</div>
                 @if (_e.Invoice.CustomerTaxNumber is not null)
                 {
                     <div class="inv-meta-detail">
@@ -225,7 +225,7 @@ else
                     <tr class="@(rowIdx % 2 == 0 ? "row-alt" : "")">
                         <td class="col-num">@rowIdx</td>
                         <td class="col-desc">
-                            <div class="item-desc">@l.Description</div>
+                            <div class="item-desc">@StripExpenseCode(l.Description)</div>
                             @if (l.OperationNumber is not null)
                             {
                                 <div class="item-op">@l.OperationNumber</div>
@@ -835,6 +835,7 @@ else
         public string  InvoiceType           { get; set; } = "";
         public int     CustomerId            { get; set; }
         public string  CustomerName          { get; set; } = "";
+        public string? DisplayCustomerName   { get; set; }
         public string? CustomerTaxNumber     { get; set; }
         public string? InvoiceDate           { get; set; }
         public string? DueDate               { get; set; }
@@ -850,6 +851,17 @@ else
         public string? OriginalInvoiceNumber { get; set; }
         public DateTime? IssuedAt            { get; set; }
         public string  CurrencyCode          { get; set; } = "EGP";
+    }
+
+    private static string StripExpenseCode(string? desc)
+    {
+        if (string.IsNullOrWhiteSpace(desc)) return desc ?? "";
+        var s = System.Text.RegularExpressions.Regex.Replace(desc, @"\s*\(?EXP-\d{4}-\d+\)?\s*", " ");
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\s*—\s*—\s*", " — ");
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\s*-\s*-\s*", " - ");
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"^\s*[—\-]\s*", "");
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\s*[—\-]\s*$", "");
+        return s.Trim();
     }
 
     public class Envelope

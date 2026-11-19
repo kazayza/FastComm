@@ -1,4 +1,4 @@
-@page "/operations/{Id:long}/file"
+﻿@page "/operations/{Id:long}/file"
 @attribute [Authorize]
 @using System.Net.Http.Json
 @using FastCom.Client.Auth
@@ -9,728 +9,685 @@
 
 <PageTitle>ملف العملية — فاست كوم</PageTitle>
 
-<div class="hero-wrapper">
-    <div class="fc-hero fc-hero-slim">
-        <div class="fc-hero-inner">
-            <div class="doc-hero-row">
-                <div class="doc-hero-left">
-                    <div class="doc-hero-crumb"><span>التشغيل · ملف العملية</span></div>
-                    <h1 class="fc-hero-title">ملف العملية @(_d?.OperationNumber ?? "")</h1>
-                    @if (_d is not null)
-                    {
-                        <p class="fc-hero-sub">
-                            حجز الوكيل: <b>@(_d.AgentReference ?? "—")</b> · العميل: @_d.CustomerName · الحالة: @_d.Status
-                        </p>
-                    }
+<div class="opf-page">
+
+    @if (_d is null)
+    {
+        <div class="opf-loading">
+            <div class="opf-spinner"></div>
+            <div>جارٍ تحميل ملف العملية...</div>
+        </div>
+    }
+    else
+    {
+        <!-- ═══════════ 1) رأس الملف (هيرو غامق) ═══════════ -->
+        <header class="opf-head">
+            <div class="opf-head-info">
+                <div class="opf-crumb">التشغيل · ملف العملية</div>
+                <div class="opf-title-row">
+                    <h1 class="opf-title">ملف العملية @_d.OperationNumber</h1>
+                    <span class="opf-status @StatusClass(_d.Status)">@StatusLabel(_d.Status)</span>
                 </div>
-                <div class="doc-hero-right">
-                    @if (CanInvoiceCreate && _d is not null && _d.Status != "Cancelled" && _lines.Count > 0)
+                <div class="opf-meta">
+                    @if (!string.IsNullOrWhiteSpace(_d.BookingNumber))
                     {
-                        <a class="doc-hero-btn solid" href="@($"/invoices/new?operationId={Id}&customerId={_d.CustomerId}")">إنشاء فاتورة العميل</a>
+                        <span class="opf-chip">حجز رقم <b>@_d.BookingNumber</b></span>
                     }
-                    <a class="doc-hero-btn solid" href="@($"/transport-requests/new/{Id}")">تعديل الطلب</a>
-                    <a class="doc-hero-btn" href="@($"/operations/new/{Id}")">تعديل العملية</a>
+                    @if (!string.IsNullOrWhiteSpace(_d.AgentReference))
+                    {
+                        <span class="opf-chip">مرجع الوكيل <b>@_d.AgentReference</b></span>
+                    }
+                    <span class="opf-chip">العميل <b>@_d.CustomerName</b></span>
                 </div>
             </div>
+            <div class="opf-actions">
+                @if (CanInvoiceCreate && _d.Status != "Cancelled" && _lines.Count > 0)
+                {
+                    <a class="opf-act primary" href="@($"/invoices/new?operationId={Id}&customerId={_d.CustomerId}")">إنشاء فاتورة العميل</a>
+                }
+                <a class="opf-act" href="@($"/transport-requests/new/{Id}")">تعديل الطلب</a>
+                <a class="opf-act" href="@($"/operations/new/{Id}")">تعديل العملية</a>
+            </div>
+        </header>
 
-            @if (_d is not null)
+        <!-- ═══════════ 2) شريط الأرقام ═══════════ -->
+        <div class="opf-strip">
+            @if (CanViewFinancials)
             {
-                <div class="doc-kpis-row">
-                    <div class="doc-kpi doc-kpi-blue">
-                        <div class="doc-kpi-inner">
-                            <div class="doc-kpi-icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke-linecap="round"/></svg></div>
-                            <div class="doc-kpi-data">
-                                <div class="doc-kpi-num">@_d.RevenueNet.ToString("N2")</div>
-                                <div class="doc-kpi-label">إيراد (صافي)</div>
-                            </div>
-                        </div>
+                <div class="opf-stat">
+                    <div class="opf-stat-ic c-blue">
+                        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke-linecap="round"/></svg>
                     </div>
-                    <div class="doc-kpi doc-kpi-amber">
-                        <div class="doc-kpi-inner">
-                            <div class="doc-kpi-icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><path d="M8 7h8M8 11h8M8 15h5" stroke-linecap="round"/></svg></div>
-                            <div class="doc-kpi-data">
-                                <div class="doc-kpi-num">@_d.ActualCost.ToString("N2")</div>
-                                <div class="doc-kpi-label">تكلفة فعلية</div>
-                            </div>
-                        </div>
+                    <div>
+                        <div class="opf-stat-num">@_d.RevenueNet.ToString("N2")</div>
+                        <div class="opf-stat-lbl">إيراد (صافي)</div>
                     </div>
-                    <div class="doc-kpi doc-kpi-green">
-                        <div class="doc-kpi-inner">
-                            <div class="doc-kpi-icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 6l-9.5 9.5-5-5L1 18" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 6h6v6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-                            <div class="doc-kpi-data">
-                                <div class="doc-kpi-num">@((_d.RevenueNet - _d.ActualCost).ToString("N2"))</div>
-                                <div class="doc-kpi-label">الربح التقديري</div>
-                            </div>
-                        </div>
+                </div>
+                <div class="opf-stat">
+                    <div class="opf-stat-ic c-amber">
+                        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><path d="M8 7h8M8 11h8M8 15h5" stroke-linecap="round"/></svg>
                     </div>
-                    <div class="doc-kpi doc-kpi-blue">
-                        <div class="doc-kpi-inner">
-                            <div class="doc-kpi-icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
-                            <div class="doc-kpi-data">
-                                <div class="doc-kpi-num">@_trips.Count / @_containers.Count</div>
-                                <div class="doc-kpi-label">رحلات / حاويات</div>
-                            </div>
+                    <div>
+                        <div class="opf-stat-num">@_d.ActualCost.ToString("N2")</div>
+                        <div class="opf-stat-lbl">تكلفة فعلية</div>
+                    </div>
+                </div>
+                <div class="opf-stat">
+                    <div class="opf-stat-ic @(Profit >= 0 ? "c-green" : "c-red")">
+                        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 6l-9.5 9.5-5-5L1 18" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 6h6v6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <div>
+                        <div class="opf-stat-num @(Profit >= 0 ? "pos" : "neg")">@Profit.ToString("N2")</div>
+                        <div class="opf-stat-lbl">
+                            الربح التقديري
+                            @if (MarginText is not null)
+                            {
+                                <span class="@MarginCls">@MarginText</span>
+                            }
                         </div>
                     </div>
                 </div>
             }
-        </div>
-    </div>
-</div>
-
-@if (_d is null)
-{
-    <div class="doc-loading">جارٍ تحميل ملف العملية...</div>
-}
-else
-{
-    <div class="bk-body">
-        <div class="tab-section">
-            <div class="doc-sec-head">
-                <div class="tab-section-head" style="margin-bottom:0">
-                    <div class="tab-section-icon blue" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke-linecap="round"/></svg>
-                    </div>
-                    <div>
-                        <div class="tab-section-title">سطور الإيراد</div>
-                        <div class="tab-section-sub">ما يدفعه العميل عن هذه العملية — تُعدَّل الكمية والسعر والخصم من هنا</div>
-                    </div>
+            <div class="opf-stat">
+                <div class="opf-stat-ic c-slate">
+                    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
                 </div>
+                <div>
+                    <div class="opf-stat-num">@_trips.Count <span class="opf-stat-sep">/</span> @_containers.Count</div>
+                    <div class="opf-stat-lbl">رحلات / حاويات</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════ 3) التابات ═══════════ -->
+        <nav class="opf-tabsbar">
+            <button type="button" class="@TabCls("revenue")" @onclick='() => _activeTab = "revenue"'>
+                <span class="opf-tab-ic"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke-linecap="round"/></svg></span>
+                سطور الإيراد <span class="n">@_lines.Count</span>
+            </button>
+            <button type="button" class="@TabCls("containers")" @onclick='() => _activeTab = "containers"'>
+                <span class="opf-tab-ic"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg></span>
+                الحاويات <span class="n">@_containers.Count</span>
+            </button>
+            <button type="button" class="@TabCls("trips")" @onclick='() => _activeTab = "trips"'>
+                <span class="opf-tab-ic"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>
+                الرحلات <span class="n">@_trips.Count</span>
+            </button>
+            <button type="button" class="@TabCls("expenses")" @onclick='() => _activeTab = "expenses"'>
+                <span class="opf-tab-ic"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><path d="M8 7h8M8 11h8M8 15h5" stroke-linecap="round"/></svg></span>
+                المصروفات <span class="n">@_expenses.Count</span>
+            </button>
+        </nav>
+
+        <!-- ═══════════ تاب: سطور الإيراد ═══════════ -->
+        @if (_activeTab == "revenue")
+        {
+            <section class="opf-panel">
+                <div class="opf-sec-head">
+                    <div class="opf-sec-id">
+                        <div class="opf-sec-ic blue">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke-linecap="round"/></svg>
+                        </div>
+                        <div>
+                            <div class="opf-sec-title">سطور الإيراد</div>
+                            <div class="opf-sec-sub">ما يدفعه العميل عن هذه العملية — تُعدَّل الكمية والسعر والخصم من هنا</div>
+                        </div>
+                    </div>
+                    @if (CanEditLines)
+                    {
+                        <button type="button" class="doc-btn primary" @onclick="SaveRevenueAsync" disabled="@_savingRev">حفظ السطور</button>
+                    }
+                </div>
+
+                @if (_lines.Count == 0)
+                {
+                    <div class="opf-empty">
+                        <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <b>لا توجد سطور إيراد بعد</b>
+                        <span>أضف سطرًا من النموذج بالأسفل ثم اضغط «حفظ السطور».</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="doc-table-wrap">
+                        <table class="doc-table">
+                            <thead>
+                                <tr>
+                                    <th>الخدمة</th><th>البيان</th><th>الكمية</th><th>السعر</th><th>الخصم</th><th>الصافي</th>
+                                    @if (CanEditLines) { <th></th> }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var l in _lines)
+                                {
+                                    <tr>
+                                        <td><b>@l.ServiceName</b></td>
+                                        <td>@(string.IsNullOrWhiteSpace(l.Description) ? "—" : l.Description)</td>
+                                        @if (CanEditLines)
+                                        {
+                                            <td><input type="number" class="doc-inline-input num" style="width:78px" min="0" step="any" value="@Fmt(l.Quantity)" @onchange="e => l.Quantity = ParseDec(e.Value)" /></td>
+                                            <td><input type="number" class="doc-inline-input num" style="width:104px" min="0" step="any" value="@Fmt(l.UnitPrice)" @onchange="e => l.UnitPrice = ParseDec(e.Value)" /></td>
+                                            <td><input type="number" class="doc-inline-input num" style="width:88px" min="0" step="any" value="@Fmt(l.Discount)" @onchange="e => l.Discount = ParseDec(e.Value)" /></td>
+                                        }
+                                        else
+                                        {
+                                            <td class="num">@l.Quantity</td>
+                                            <td class="num">@l.UnitPrice.ToString("N2")</td>
+                                            <td class="num">@l.Discount.ToString("N2")</td>
+                                        }
+                                        <td class="num"><b class="net">@l.LineNet.ToString("N2")</b></td>
+                                        @if (CanEditLines)
+                                        {
+                                            <td>
+                                                <button type="button" class="doc-icon-btn danger" title="حذف السطر" @onclick="() => _lines.Remove(l)">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                                </button>
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
                 @if (CanEditLines)
                 {
-                    <button type="button" class="doc-btn primary" @onclick="SaveRevenueAsync" disabled="@_savingRev">حفظ السطور</button>
-                }
-            </div>
-            <div class="doc-table-wrap">
-                <table class="doc-table">
-                    <thead>
-                        <tr><th>الخدمة</th><th>البيان</th><th>الكمية</th><th>السعر</th><th>الخصم</th><th>الصافي</th>@if (CanEditLines) { <th></th> }</tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var l in _lines)
-                        {
-                            <tr>
-                                <td>@l.ServiceName</td>
-                                <td>@l.Description</td>
-                                @if (CanEditLines)
-                                {
-                                    <td><input type="number" class="doc-inline-input" style="width:78px" min="0" step="any" value="@Fmt(l.Quantity)" @onchange="e => l.Quantity = ParseDec(e.Value)" /></td>
-                                    <td><input type="number" class="doc-inline-input" style="width:104px" min="0" step="any" value="@Fmt(l.UnitPrice)" @onchange="e => l.UnitPrice = ParseDec(e.Value)" /></td>
-                                    <td><input type="number" class="doc-inline-input" style="width:88px" min="0" step="any" value="@Fmt(l.Discount)" @onchange="e => l.Discount = ParseDec(e.Value)" /></td>
-                                }
-                                else
-                                {
-                                    <td>@l.Quantity</td>
-                                    <td>@l.UnitPrice.ToString("N2")</td>
-                                    <td>@l.Discount.ToString("N2")</td>
-                                }
-                                <td><b>@l.LineNet.ToString("N2")</b></td>
-                                @if (CanEditLines)
-                                {
-                                    <td>
-                                        <button type="button" class="doc-icon-btn danger" title="حذف السطر" @onclick="() => _lines.Remove(l)">
-                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                                        </button>
-                                    </td>
-                                }
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-            @if (CanEditLines)
-            {
-                <div class="doc-form-row">
-                    <div class="form-field" style="flex:2">
-                        <label class="field-label">خدمة جديدة</label>
-                        <div class="field-select-wrap">
-                            <select class="field-input field-select" @bind="_newRevServiceId">
-                                <option value="0">— اختر الخدمة —</option>
-                                @foreach (var sv in _services) { <option value="@sv.Id">@sv.Label</option> }
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-field" style="flex:1">
-                        <label class="field-label">السعر</label>
-                        <div class="field-input-group">
-                            <input type="number" class="field-input" min="0" step="any" value="@Fmt(_newRevPrice)" @onchange="e => _newRevPrice = ParseDec(e.Value)" />
-                        </div>
-                    </div>
-                    <div class="form-field doc-form-action">
-                        <button type="button" class="doc-btn outline" @onclick="AddRevenueLine">إضافة سطر</button>
-                    </div>
-                </div>
-            }
-        </div>
-
-        <div class="tab-section">
-            <div class="doc-sec-head">
-                <div class="tab-section-head" style="margin-bottom:0">
-                    <div class="tab-section-icon green" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
-                    </div>
-                    <div>
-                        <div class="tab-section-title">الحاويات (@_containers.Count)</div>
-                        <div class="tab-section-sub">الحاويات الفعلية المربوطة بالعملية</div>
-                    </div>
-                </div>
-                @if (CanOpEdit) { <button type="button" class="doc-btn outline" @onclick="SyncContainersAsync" disabled="@_syncing">مزامنة من الحجز</button> }
-            </div>
-            @if (_bkLines.Count > 0)
-            {
-                <div class="doc-table-wrap" style="margin-bottom:14px">
-                    <table class="doc-table">
-                        <thead>
-                            <tr><th>سطور الحاويات المسجلة في الطلب — النوع</th><th>العدد</th><th>الوزن (كجم)</th><th>ضمان الحاوية</th><th>ملاحظات</th></tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var l in _bkLines)
-                            {
-                                <tr>
-                                    <td>@(l.TypeName ?? "—")</td>
-                                    <td>@l.RequestedQty</td>
-                                    <td>@(l.WeightKg?.ToString("N0") ?? "—")</td>
-                                    <td>@(l.GuaranteePerContainer?.ToString("N0") ?? "—")</td>
-                                    <td>@(l.Notes ?? "—")</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
-            @if (_containers.Count == 0)
-            {
-                <p class="doc-empty">لا توجد حاويات فعلية مرتبطة بعد — تُنسخ تلقائيًا من تفاصيل حجز الوكيل عند إنشاء العملية، أو أضفها من النموذج التالي.</p>
-            }
-            else
-            {
-                <div class="doc-table-wrap">
-                    <table class="doc-table">
-                        <thead>
-                            <tr><th>رقم الحاوية</th><th>النوع</th><th>البوليصة</th><th>الحالة</th>@if (CanOpEdit && !IsClosed) { <th></th> }</tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var c in _containers)
-                            {
-                                <tr>
-                                    <td>@(c.ContainerNumber ?? "—")</td>
-                                    <td>@(c.TypeName ?? "—")</td>
-                                    @if (CanOpEdit && !IsClosed)
-                                    {
-                                        <td><input type="text" class="doc-inline-input" style="width:170px" placeholder="رقم البوليصة" @bind="c.EditBl" /></td>
-                                    }
-                                    else
-                                    {
-                                        <td>@(c.BLNumber ?? "—")</td>
-                                    }
-                                    <td>@c.Status</td>
-                                    @if (CanOpEdit && !IsClosed)
-                                    {
-                                        <td>
-                                            <button type="button" class="doc-icon-btn" title="حفظ البوليصة" @onclick="() => SaveContainerBlAsync(c)">
-                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                                            </button>
-                                        </td>
-                                    }
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
-            @if (CanOpEdit && !IsClosed)
-            {
-                <div class="doc-form-row">
-                    <div class="form-field" style="flex:2">
-                        <label class="field-label">رقم حاوية جديد</label>
-                        <div class="field-input-group">
-                            <input type="text" class="field-input" @bind="_newContNumber" />
-                        </div>
-                    </div>
-                    <div class="form-field" style="flex:1">
-                        <label class="field-label">النوع</label>
-                        <div class="field-select-wrap">
-                            <select class="field-input field-select" @bind="_newContTypeId">
-                                <option value="0">— اختر النوع —</option>
-                                @foreach (var t in _containerTypes) { <option value="@t.Id">@t.Label</option> }
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-field" style="flex:1">
-                        <label class="field-label">البوليصة</label>
-                        <div class="field-input-group">
-                            <input type="text" class="field-input" @bind="_newContBl" />
-                        </div>
-                    </div>
-                    <div class="form-field doc-form-action">
-                        <button type="button" class="doc-btn outline" @onclick="AddContainerAsync" disabled="@_addingCont">إضافة حاوية</button>
-                    </div>
-                </div>
-            }
-        </div>
-
-        <div class="tab-section">
-            <div class="doc-sec-head">
-                <div class="tab-section-head" style="margin-bottom:0">
-                    <div class="tab-section-icon blue" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                    </div>
-                    <div>
-                        <div class="tab-section-title">الرحلات (@_trips.Count)</div>
-                        <div class="tab-section-sub">رحلة لكل حاوية — يُربط السائق والسيارة من المورد نفسه تلقائيًا</div>
-                    </div>
-                </div>
-                @if (CanTripCreate) { <button type="button" class="doc-btn primary" @onclick="() => _showTripForm = !_showTripForm">إضافة رحلة</button> }
-            </div>
-
-            @if (_showTripForm)
-            {
-                <div class="doc-form-row wrap">
-                    <div class="form-field" style="flex:2">
-                        <label class="field-label">نوع المصروف <span class="field-required">*</span></label>
-                        <div class="form-field-with-dropdown">
-                            <div class="field-select-wrap">
-                                <input class="field-input field-select"
-                                       value="@QeTypeText"
-                                       placeholder="ابحث عن النوع..."
-                                       @oninput="OnQeTypeSearch"
-                                       @onfocus="() => { _showQeTypeDd = true; _qeFilteredTypes = QeFilterTypes(); }"
-                                       @onfocusout="() => _showQeTypeDd = false" />
+                    <div class="opf-quickform">
+                        <div class="doc-form-row wrap">
+                            <div class="form-field" style="flex:2">
+                                <label class="field-label">خدمة جديدة <span class="field-required">*</span></label>
+                                <div class="field-select-wrap">
+                                    <select class="field-input field-select" @bind="_newRevServiceId">
+                                        <option value="0">— اختر الخدمة —</option>
+                                        @foreach (var sv in _services) { <option value="@sv.Id">@sv.Label</option> }
+                                    </select>
+                                </div>
                             </div>
-                            @if (_showQeTypeDd && _qeFilteredTypes.Count > 0)
-                            {
-                                <div class="field-dropdown" @onmousedown:preventDefault="true">
-                                    @foreach (var t in _qeFilteredTypes)
+                            <div class="form-field" style="flex:2">
+                                <label class="field-label">البيان</label>
+                                <div class="field-input-group">
+                                    <input type="text" class="field-input" @bind="_newRevDesc" />
+                                </div>
+                            </div>
+                            <div class="form-field" style="flex:1">
+                                <label class="field-label">الكمية <span class="field-required">*</span></label>
+                                <div class="field-input-group">
+                                    <input type="number" class="field-input" min="0" step="any" value="@Fmt(_newRevQty)" @onchange="e => _newRevQty = ParseDec(e.Value)" />
+                                </div>
+                            </div>
+                            <div class="form-field" style="flex:1">
+                                <label class="field-label">السعر</label>
+                                <div class="field-input-group">
+                                    <input type="number" class="field-input" min="0" step="any" value="@Fmt(_newRevPrice)" @onchange="e => _newRevPrice = ParseDec(e.Value)" />
+                                </div>
+                            </div>
+                            <div class="form-field" style="flex:1">
+                                <label class="field-label">الخصم</label>
+                                <div class="field-input-group">
+                                    <input type="number" class="field-input" min="0" step="any" value="@Fmt(_newRevDisc)" @onchange="e => _newRevDisc = ParseDec(e.Value)" />
+                                </div>
+                            </div>
+                            <div class="form-field doc-form-action">
+                                <button type="button" class="doc-btn" @onclick="AddRevenueLine">+ إضافة سطر</button>
+                                <button type="button" class="doc-btn" @onclick="AddRevenueLineFromLast" disabled="@_lines.Count == 0">نسخ من آخر سطر</button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </section>
+        }
+
+        <!-- ═══════════ تاب: الحاويات ═══════════ -->
+        @if (_activeTab == "containers")
+        {
+            <section class="opf-panel">
+                <div class="opf-sec-head">
+                    <div class="opf-sec-id">
+                        <div class="opf-sec-ic green">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+                        </div>
+                        <div>
+                            <div class="opf-sec-title">الحاويات (@_containers.Count)</div>
+                            <div class="opf-sec-sub">الحاويات الفعلية المربوطة بالعملية</div>
+                        </div>
+                    </div>
+                    @if (CanOpEdit)
+                    {
+                        <button type="button" class="doc-btn" @onclick="SyncContainersAsync" disabled="@_syncing">مزامنة من الحجز</button>
+                    }
+                </div>
+
+                @if (_bkLines.Count > 0)
+                {
+                    <div class="opf-note-title">كما وردت في طلب الحجز</div>
+                    <div class="doc-table-wrap" style="margin-bottom:16px">
+                        <table class="doc-table">
+                            <thead>
+                                <tr><th>النوع</th><th>العدد</th><th>الوزن (كجم)</th><th>ضمان الحاوية</th><th>ملاحظات</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var l in _bkLines)
+                                {
+                                    <tr>
+                                        <td>@(l.TypeName ?? "—")</td>
+                                        <td class="num">@l.RequestedQty</td>
+                                        <td class="num">@(l.WeightKg?.ToString("N0") ?? "—")</td>
+                                        <td class="num">@(l.GuaranteePerContainer?.ToString("N0") ?? "—")</td>
+                                        <td>@(l.Notes ?? "—")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                @if (_containers.Count == 0)
+                {
+                    <div class="opf-empty">
+                        <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.3 7l8.7 5 8.7-5M12 22V12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <b>لا توجد حاويات فعلية بعد</b>
+                        <span>تُنسخ تلقائيًا من تفاصيل حجز الوكيل عند إنشاء العملية، أو أضفها من النموذج بالأسفل.</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="doc-table-wrap">
+                        <table class="doc-table">
+                            <thead>
+                                <tr><th>رقم الحاوية</th><th>النوع</th><th>البوليصة</th><th>الحالة</th>@if (CanOpEdit && !IsClosed) { <th></th> }</tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in _containers)
+                                {
+                                    <tr>
+                                        <td><b>@(c.ContainerNumber ?? "—")</b></td>
+                                        <td>@(c.TypeName ?? "—")</td>
+                                        @if (CanOpEdit && !IsClosed)
+                                        {
+                                            <td><input type="text" class="doc-inline-input" style="width:170px" placeholder="رقم البوليصة" @bind="c.EditBl" /></td>
+                                        }
+                                        else
+                                        {
+                                            <td>@(c.BLNumber ?? "—")</td>
+                                        }
+                                        <td><span class="opf-status sm @StatusClass(c.Status)">@StatusLabel(c.Status)</span></td>
+                                        @if (CanOpEdit && !IsClosed)
+                                        {
+                                            <td>
+                                                <button type="button" class="doc-icon-btn" title="حفظ البوليصة" @onclick="() => SaveContainerBlAsync(c)">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                                </button>
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                @if (CanOpEdit && !IsClosed)
+                {
+                    <div class="opf-quickform">
+                        <div class="doc-form-row wrap">
+                            <div class="form-field" style="flex:2">
+                                <label class="field-label">رقم حاوية جديد</label>
+                                <div class="field-input-group">
+                                    <input type="text" class="field-input" @bind="_newContNumber" />
+                                </div>
+                            </div>
+                            <div class="form-field" style="flex:1">
+                                <label class="field-label">النوع</label>
+                                <div class="field-select-wrap">
+                                    <select class="field-input field-select" @bind="_newContTypeId">
+                                        <option value="0">— اختر النوع —</option>
+                                        @foreach (var t in _containerTypes) { <option value="@t.Id">@t.Label</option> }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-field" style="flex:1">
+                                <label class="field-label">البوليصة</label>
+                                <div class="field-input-group">
+                                    <input type="text" class="field-input" @bind="_newContBl" />
+                                </div>
+                            </div>
+                            <div class="form-field doc-form-action">
+                                <button type="button" class="doc-btn" @onclick="AddContainerAsync" disabled="@_addingCont">+ إضافة حاوية</button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </section>
+        }
+
+        <!-- ═══════════ تاب: الرحلات ═══════════ -->
+        @if (_activeTab == "trips")
+        {
+            <section class="opf-panel">
+                <div class="opf-sec-head">
+                    <div class="opf-sec-id">
+                        <div class="opf-sec-ic blue">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                        </div>
+                        <div>
+                            <div class="opf-sec-title">الرحلات (@_trips.Count)</div>
+                            <div class="opf-sec-sub">رحلة لكل حاوية — يُربط السائق والسيارة من المورد نفسه تلقائيًا</div>
+                        </div>
+                    </div>
+                    @if (CanTripCreate)
+                    {
+                        <button type="button" class="doc-btn primary" @onclick="() => _showTripForm = !_showTripForm">@(_showTripForm ? "إغلاق النموذج" : "+ إضافة رحلة")</button>
+                    }
+                </div>
+
+                @if (_showTripForm)
+                {
+                    <div class="opf-quickform">
+                        <div class="doc-form-row wrap">
+                            <div class="form-field" style="flex:2">
+                                <label class="field-label">السائق <span class="field-required">*</span></label>
+                                <div class="field-select-wrap">
+                                    <select class="field-input field-select" value="@_tf.DriverId" @onchange="e => OnDriverPicked(ParseInt(e.Value))">
+                                        <option value="0">— اختر السائق —</option>
+                                        @foreach (var d in OrderedDriverOpts()) { <option value="@d.Id">@d.Label</option> }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-field" style="flex:2">
+                                <label class="field-label">العربية <span class="field-required">*</span></label>
+                                <div class="field-select-wrap">
+                                    <select class="field-input field-select" value="@_tf.VehicleId" @onchange="e => OnVehiclePicked(ParseInt(e.Value))">
+                                        <option value="0">— اختر العربية —</option>
+                                        @foreach (var v in OrderedVehicleOpts()) { <option value="@v.Id">@v.Label</option> }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-field" style="flex:1">
+                                <label class="field-label">المقطورة</label>
+                                <div class="field-select-wrap">
+                                    <select class="field-input field-select" value="@(_tf.TrailerId?.ToString() ?? "")" @onchange="e => _tf.TrailerId = ParseIntN(e.Value)">
+                                        <option value="">— بدون —</option>
+                                        @foreach (var v in _trailers) { <option value="@v.Id">@v.Label</option> }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-field" style="flex:1.2">
+                                <label class="field-label">ميعاد التحرك</label>
+                                <div class="field-input-group">
+                                    <input type="datetime-local" class="field-input" value="@_tf.PlannedStartAt" @onchange="e => _tf.PlannedStartAt = e.Value?.ToString()" />
+                                </div>
+                            </div>
+                            <div class="form-field" style="flex:1">
+                                <label class="field-label">النولون</label>
+                                <div class="field-input-group">
+                                    <input type="number" class="field-input" min="0" step="any" value="@FmtN(_tf.Freight)" @onchange="e => _tf.Freight = ParseDecN(e.Value)" />
+                                </div>
+                            </div>
+                            <div class="form-field doc-form-action">
+                                <button type="button" class="doc-btn primary" @onclick="AddTripAsync" disabled="@_savingTrip">حفظ الرحلة</button>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                @if (_trips.Count == 0)
+                {
+                    <div class="opf-empty">
+                        <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                        <b>لا توجد رحلات بعد</b>
+                        <span>أضف رحلة جديدة واربطها بسائق وعربية من النموذج بالأعلى.</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="doc-table-wrap">
+                        <table class="doc-table">
+                            <thead>
+                                <tr><th>الرحلة</th><th>السائق</th><th>العربية</th><th>ميعاد التحرك</th><th>النولون</th><th>الحالة</th><th></th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var t in _trips)
+                                {
+                                    <tr>
+                                        <td><a class="doc-link" href="@($"/trips/new/{t.TripId}")">@t.TripNumber</a></td>
+                                        <td>@t.DriverName</td>
+                                        <td>@t.VehiclePlate</td>
+                                        <td class="num">@(t.PlannedStartAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                                        <td class="num">@(t.FreightAmount?.ToString("N2") ?? "—")</td>
+                                        <td><span class="opf-status sm @TripStatusClass(t.Status)">@TripStatusAr(t.Status)</span></td>
+                                        <td>
+                                            <a class="doc-icon-btn" title="تعديل الرحلة" href="@($"/trips/new/{t.TripId}")">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9" stroke-linecap="round"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke-linejoin="round"/></svg>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        }
+
+        <!-- ═══════════ تاب: المصروفات ═══════════ -->
+        @if (_activeTab == "expenses")
+        {
+            <section class="opf-panel">
+                <div class="opf-sec-head">
+                    <div class="opf-sec-id">
+                        <div class="opf-sec-ic amber">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><path d="M8 7h8M8 11h8M8 15h5" stroke-linecap="round"/></svg>
+                        </div>
+                        <div>
+                            <div class="opf-sec-title">المصروفات (@_expenses.Count)</div>
+                            <div class="opf-sec-sub">مصروفات التشغيل المربوطة بالعملية</div>
+                        </div>
+                    </div>
+                    <a class="doc-btn" href="/expenses/new">مصروف جديد (شاشة كاملة)</a>
+                </div>
+
+                @if (CanExpenseCreate && !IsClosed)
+                {
+                    <div class="opf-quickform">
+                        <div class="doc-form-row wrap">
+                            <div class="form-field" style="flex:2">
+                                <label class="field-label">نوع المصروف <span class="field-required">*</span></label>
+                                <div class="form-field-with-dropdown">
+                                    <div class="field-select-wrap">
+                                        <input class="field-input"
+                                               value="@QeTypeText"
+                                               placeholder="اكتب للبحث عن النوع..."
+                                               @oninput="OnQeTypeSearch"
+                                               @onfocus="() => { _showQeTypeDd = true; _qeFilteredTypes = QeFilterTypes(); }"
+                                               @onfocusout="() => _showQeTypeDd = false" />
+                                    </div>
+                                    @if (_showQeTypeDd && _qeFilteredTypes.Count > 0)
                                     {
-                                        <div class="field-dropdown-item" @onmousedown="() => PickQeType(t)">@t.Label</div>
+                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                            @foreach (var t in _qeFilteredTypes)
+                                            {
+                                                <div class="field-dropdown-item" @onmousedown="() => PickQeType(t)">@t.Label</div>
+                                            }
+                                        </div>
                                     }
                                 </div>
+                            </div>
+                            @if (QeCurrentType?.IsReceiptRequired == true)
+                            {
+                                <div class="form-field" style="flex:1.4">
+                                    <label class="field-label">نوع الإيصال <span class="field-required">*</span></label>
+                                    <div class="field-select-wrap">
+                                        <select class="field-input field-select" @bind="_qe.ReceiptTypeId">
+                                            <option value="">— اختر —</option>
+                                            @foreach (var r in _qeReceiptTypes) { <option value="@r.Id">@r.Label</option> }
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-field" style="flex:1">
+                                    <label class="field-label">رقم الإيصال</label>
+                                    <div class="field-input-group">
+                                        <input type="text" class="field-input" @bind="_qe.ReceiptNumber" />
+                                    </div>
+                                </div>
                             }
-                        </div>
-                    </div>
-                    @if (QeCurrentType?.IsReceiptRequired == true)
-                    {
-                        <div class="form-field" style="flex:1.4">
-                            <label class="field-label">نوع الإيصال <span class="field-required">*</span></label>
-                            <div class="field-select-wrap">
-                                <select class="field-input field-select" @bind="_qe.ReceiptTypeId">
-                                    <option value="">— اختر —</option>
-                                    @foreach (var r in _qeReceiptTypes) { <option value="@r.Id">@r.Label</option> }
-                                </select>
+                            <div class="form-field" style="flex:1">
+                                <label class="field-label">المبلغ المدفوع <span class="field-required">*</span></label>
+                                <div class="field-input-group">
+                                    <input type="number" class="field-input" min="0" step="any" value="@Fmt(_qe.Amount)" @onchange="e => _qe.Amount = ParseDec(e.Value)" />
+                                </div>
+                            </div>
+                            <div class="form-field" style="flex:1">
+                                <label class="field-label">يتحمّله العميل</label>
+                                <div class="field-input-group">
+                                    <input type="number" class="field-input" min="0" step="any" value="@FmtN(_qe.Billable)" @onchange="e => _qe.Billable = ParseDecN(e.Value)" />
+                                </div>
+                            </div>
+                            <div class="form-field" style="flex:1.3">
+                                <label class="field-label">مصدر المال</label>
+                                <div class="qe-src-toggle">
+                                    <button type="button" class="@(_qe.Source == "Custody" ? "on" : "")" @onclick='() => _qe.Source = "Custody"'>من عهدة</button>
+                                    <button type="button" class="@(_qe.Source == "Treasury" ? "on" : "")" @onclick='() => _qe.Source = "Treasury"'>من الخزينة</button>
+                                </div>
+                            </div>
+                            @if (_qe.Source == "Custody")
+                            {
+                                <div class="form-field" style="flex:1.8">
+                                    <label class="field-label">العهدة <span class="field-required">*</span></label>
+                                    <div class="field-select-wrap">
+                                        <select class="field-input field-select"
+                                                value="@_qe.CustodyId"
+                                                @onchange="e => _qe.CustodyId = long.TryParse(e.Value?.ToString(), out var cv) && cv > 0 ? cv : (long?)null">
+                                            <option value="">— اختر العهدة —</option>
+                                            @foreach (var c in _qeCustodies) { <option value="@c.Id">@c.Label — @c.AmountIssued.ToString("N2") ج.م</option> }
+                                        </select>
+                                    </div>
+                                </div>
+                            }
+                            <div class="form-field" style="flex:1.6">
+                                <label class="field-label">البيان</label>
+                                <div class="field-input-group">
+                                    <input type="text" class="field-input" @bind="_qe.Description" />
+                                </div>
+                            </div>
+                            <div class="form-field doc-form-action">
+                                <button type="button" class="doc-btn primary" @onclick="QuickExpenseAsync" disabled="@_savingExp">إضافة سريعة</button>
                             </div>
                         </div>
-                        <div class="form-field" style="flex:1">
-                            <label class="field-label">رقم الإيصال</label>
-                            <div class="field-input-group">
-                                <input type="text" class="field-input" @bind="_qe.ReceiptNumber" />
-                            </div>
-                        </div>
-                    }
-                    <div class="form-field" style="flex:1">
-                        <label class="field-label">المبلغ المدفوع <span class="field-required">*</span></label>
-                        <div class="field-input-group">
-                            <input type="number" class="field-input" min="0" step="any" value="@Fmt(_qe.Amount)" @onchange="e => _qe.Amount = ParseDec(e.Value)" />
-                        </div>
                     </div>
-                    <div class="form-field" style="flex:1">
-                        <label class="field-label">يتحمّله العميل</label>
-                        <div class="field-input-group">
-                            <input type="number" class="field-input" min="0" step="any" value="@FmtN(_qe.Billable)" @onchange="e => _qe.Billable = ParseDecN(e.Value)" />
-                        </div>
-                    </div>
-                    <div class="form-field" style="flex:1.3">
-                        <label class="field-label">مصدر المال</label>
-                        <div class="qe-src-toggle">
-                            <button type="button" class="@(_qe.Source == "Custody" ? "on" : "")" @onclick='() => _qe.Source = "Custody"'>من عهدة</button>
-                            <button type="button" class="@(_qe.Source == "Treasury" ? "on" : "")" @onclick='() => _qe.Source = "Treasury"'>من الخزينة</button>
-                        </div>
-                    </div>
-                    @if (_qe.Source == "Custody")
-                    {
-                        <div class="form-field" style="flex:1.8">
-                            <label class="field-label">العهدة <span class="field-required">*</span></label>
-                            <div class="field-select-wrap">
-                                <select class="field-input field-select"
-                                        value="@_qe.CustodyId"
-                                        @onchange="e => _qe.CustodyId = long.TryParse(e.Value?.ToString(), out var cv) && cv > 0 ? cv : (long?)null">
-                                    <option value="">— اختر العهدة —</option>
-                                    @foreach (var c in _qeCustodies) { <option value="@c.Id">@c.Label — @c.AmountIssued.ToString("N2") ج.م</option> }
-                                </select>
-                            </div>
-                        </div>
-                    }
-                    <div class="form-field" style="flex:1.6">
-                        <label class="field-label">البيان</label>
-                        <div class="field-input-group">
-                            <input type="text" class="field-input" @bind="_qe.Description" />
-                        </div>
-                    </div>
-                    <div class="form-field doc-form-action">
-                        <button type="button" class="doc-btn primary" @onclick="QuickExpenseAsync" disabled="@_savingExp">إضافة سريعة</button>
-                    </div>
-                </div>
-            }
-            <div class="doc-table-wrap">
-                <table class="doc-table">
-                    <thead>
-                        <tr><th>الخدمة</th><th>البيان</th><th>الكمية</th><th>السعر</th><th>الخصم</th><th>الصافي</th>@if (CanEditLines) { <th></th> }</tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var l in _lines)
-                        {
-                            <tr>
-                                <td>@l.ServiceName</td>
-                                <td>@l.Description</td>
-                                @if (CanEditLines)
-                                {
-                                    <td><input type="number" class="doc-inline-input" style="width:78px" min="0" step="any" value="@Fmt(l.Quantity)" @onchange="e => l.Quantity = ParseDec(e.Value)" /></td>
-                                    <td><input type="number" class="doc-inline-input" style="width:104px" min="0" step="any" value="@Fmt(l.UnitPrice)" @onchange="e => l.UnitPrice = ParseDec(e.Value)" /></td>
-                                    <td><input type="number" class="doc-inline-input" style="width:88px" min="0" step="any" value="@Fmt(l.Discount)" @onchange="e => l.Discount = ParseDec(e.Value)" /></td>
-                                }
-                                else
-                                {
-                                    <td>@l.Quantity</td>
-                                    <td>@l.UnitPrice.ToString("N2")</td>
-                                    <td>@l.Discount.ToString("N2")</td>
-                                }
-                                <td><b>@l.LineNet.ToString("N2")</b></td>
-                                @if (CanEditLines)
-                                {
-                                    <td>
-                                        <button type="button" class="doc-icon-btn danger" title="حذف السطر" @onclick="() => _lines.Remove(l)">
-                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                                        </button>
-                                    </td>
-                                }
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-            @if (CanEditLines)
-            {
-                <div class="doc-form-row">
-                    <div class="form-field" style="flex:2">
-                        <label class="field-label">خدمة جديدة</label>
-                        <div class="field-select-wrap">
-                            <select class="field-input field-select" @bind="_newRevServiceId">
-                                <option value="0">— اختر الخدمة —</option>
-                                @foreach (var sv in _services) { <option value="@sv.Id">@sv.Label</option> }
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-field" style="flex:1">
-                        <label class="field-label">السعر</label>
-                        <div class="field-input-group">
-                            <input type="number" class="field-input" min="0" step="any" value="@Fmt(_newRevPrice)" @onchange="e => _newRevPrice = ParseDec(e.Value)" />
-                        </div>
-                    </div>
-                    <div class="form-field doc-form-action">
-                        <button type="button" class="doc-btn outline" @onclick="AddRevenueLine">إضافة سطر</button>
-                    </div>
-                </div>
-            }
-        </div>
+                }
 
-        <div class="tab-section">
-            <div class="doc-sec-head">
-                <div class="tab-section-head" style="margin-bottom:0">
-                    <div class="tab-section-icon green" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+                @if (_expenses.Count == 0)
+                {
+                    <div class="opf-empty">
+                        <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><path d="M8 7h8M8 11h8M8 15h5" stroke-linecap="round"/></svg>
+                        <b>لا توجد مصروفات مربوطة بالعملية</b>
+                        <span>أضف مصروفًا سريعًا من النموذج بالأعلى أو من شاشة المصروفات الكاملة.</span>
                     </div>
-                    <div>
-                        <div class="tab-section-title">الحاويات (@_containers.Count)</div>
-                        <div class="tab-section-sub">الحاويات الفعلية المربوطة بالعملية</div>
-                    </div>
-                </div>
-                @if (CanOpEdit) { <button type="button" class="doc-btn outline" @onclick="SyncContainersAsync" disabled="@_syncing">مزامنة من الحجز</button> }
-            </div>
-            @if (_bkLines.Count > 0)
-            {
-                <div class="doc-table-wrap" style="margin-bottom:14px">
-                    <table class="doc-table">
-                        <thead>
-                            <tr><th>سطور الحاويات المسجلة في الطلب — النوع</th><th>العدد</th><th>الوزن (كجم)</th><th>ضمان الحاوية</th><th>ملاحظات</th></tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var l in _bkLines)
-                            {
-                                <tr>
-                                    <td>@(l.TypeName ?? "—")</td>
-                                    <td>@l.RequestedQty</td>
-                                    <td>@(l.WeightKg?.ToString("N0") ?? "—")</td>
-                                    <td>@(l.GuaranteePerContainer?.ToString("N0") ?? "—")</td>
-                                    <td>@(l.Notes ?? "—")</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
-            @if (_containers.Count == 0)
-            {
-                <p class="doc-empty">لا توجد حاويات فعلية مرتبطة بعد — تُنسخ تلقائيًا من تفاصيل حجز الوكيل عند إنشاء العملية، أو أضفها من النموذج التالي.</p>
-            }
-            else
-            {
-                <div class="doc-table-wrap">
-                    <table class="doc-table">
-                        <thead>
-                            <tr><th>رقم الحاوية</th><th>النوع</th><th>البوليصة</th><th>الحالة</th>@if (CanOpEdit && !IsClosed) { <th></th> }</tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var c in _containers)
-                            {
-                                <tr>
-                                    <td>@(c.ContainerNumber ?? "—")</td>
-                                    <td>@(c.TypeName ?? "—")</td>
-                                    @if (CanOpEdit && !IsClosed)
-                                    {
-                                        <td><input type="text" class="doc-inline-input" style="width:170px" placeholder="رقم البوليصة" @bind="c.EditBl" /></td>
-                                    }
-                                    else
-                                    {
-                                        <td>@(c.BLNumber ?? "—")</td>
-                                    }
-                                    <td>@c.Status</td>
-                                    @if (CanOpEdit && !IsClosed)
-                                    {
+                }
+                else
+                {
+                    <div class="doc-table-wrap">
+                        <table class="doc-table">
+                            <thead>
+                                <tr><th>الرقم</th><th>النوع</th><th>الإيصال</th><th>التاريخ</th><th>المبلغ</th><th>الحالة</th><th></th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var x in _expenses)
+                                {
+                                    <tr>
+                                        <td class="num">@x.ExpenseNumber</td>
+                                        <td><b>@x.TypeName</b></td>
                                         <td>
-                                            <button type="button" class="doc-icon-btn" title="حفظ البوليصة" @onclick="() => SaveContainerBlAsync(c)">
-                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                                            </button>
+                                            @if (!string.IsNullOrWhiteSpace(x.ReceiptTypeName))
+                                            {
+                                                <span>@x.ReceiptTypeName</span>
+                                                @if (!string.IsNullOrWhiteSpace(x.ReferenceNumber))
+                                                {
+                                                    <div class="doc-sub">@x.ReferenceNumber</div>
+                                                }
+                                            }
+                                            else { <span class="doc-sub">—</span> }
                                         </td>
-                                    }
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
-            @if (CanOpEdit && !IsClosed)
-            {
-                <div class="doc-form-row">
-                    <div class="form-field" style="flex:2">
-                        <label class="field-label">رقم حاوية جديد</label>
-                        <div class="field-input-group">
-                            <input type="text" class="field-input" @bind="_newContNumber" />
-                        </div>
+                                        <td class="num">@x.ExpenseDate.ToString("yyyy-MM-dd")</td>
+                                        <td class="num"><b>@x.Amount.ToString("N2")</b></td>
+                                        <td><span class="opf-status sm @StatusClass(x.Status)">@StatusLabel(x.Status)</span></td>
+                                        <td>
+                                            <a class="doc-icon-btn" title="تعديل المصروف" href="@($"/expenses/new/{x.ExpenseId}")">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9" stroke-linecap="round"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke-linejoin="round"/></svg>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
                     </div>
-                    <div class="form-field" style="flex:1">
-                        <label class="field-label">النوع</label>
-                        <div class="field-select-wrap">
-                            <select class="field-input field-select" @bind="_newContTypeId">
-                                <option value="0">— اختر النوع —</option>
-                                @foreach (var t in _containerTypes) { <option value="@t.Id">@t.Label</option> }
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-field" style="flex:1">
-                        <label class="field-label">البوليصة</label>
-                        <div class="field-input-group">
-                            <input type="text" class="field-input" @bind="_newContBl" />
-                        </div>
-                    </div>
-                    <div class="form-field doc-form-action">
-                        <button type="button" class="doc-btn outline" @onclick="AddContainerAsync" disabled="@_addingCont">إضافة حاوية</button>
-                    </div>
-                </div>
-            }
-        </div>
-
-        <div class="tab-section">
-            <div class="doc-sec-head">
-                <div class="tab-section-head" style="margin-bottom:0">
-                    <div class="tab-section-icon blue" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                    </div>
-                    <div>
-                        <div class="tab-section-title">الرحلات (@_trips.Count)</div>
-                        <div class="tab-section-sub">رحلة لكل حاوية — يُربط السائق والسيارة من المورد نفسه تلقائيًا</div>
-                    </div>
-                </div>
-                @if (CanTripCreate) { <button type="button" class="doc-btn primary" @onclick="() => _showTripForm = !_showTripForm">إضافة رحلة</button> }
-            </div>
-
-            @if (_showTripForm)
-            {
-                <div class="doc-form-row wrap">
-                    <div class="form-field" style="flex:2">
-                        <label class="field-label">السائق <span class="field-required">*</span></label>
-                        <div class="field-select-wrap">
-                            <select class="field-input field-select" value="@_tf.DriverId" @onchange="e => OnDriverPicked(ParseInt(e.Value))">
-                                <option value="0">— اختر السائق —</option>
-                                @foreach (var d in OrderedDriverOpts()) { <option value="@d.Id">@d.Label</option> }
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-field" style="flex:2">
-                        <label class="field-label">العربية <span class="field-required">*</span></label>
-                        <div class="field-select-wrap">
-                            <select class="field-input field-select" value="@_tf.VehicleId" @onchange="e => OnVehiclePicked(ParseInt(e.Value))">
-                                <option value="0">— اختر العربية —</option>
-                                @foreach (var v in OrderedVehicleOpts()) { <option value="@v.Id">@v.Label</option> }
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-field" style="flex:1">
-                        <label class="field-label">المقطورة</label>
-                        <div class="field-select-wrap">
-                            <select class="field-input field-select" value="@(_tf.TrailerId?.ToString() ?? "")" @onchange="e => _tf.TrailerId = ParseIntN(e.Value)">
-                                <option value="">— بدون —</option>
-                                @foreach (var v in _trailers) { <option value="@v.Id">@v.Label</option> }
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-field" style="flex:1">
-                        <label class="field-label">ميعاد التحرك</label>
-                        <div class="field-input-group">
-                            <input type="datetime-local" class="field-input" value="@_tf.PlannedStartAt" @onchange="e => _tf.PlannedStartAt = e.Value?.ToString()" />
-                        </div>
-                    </div>
-                    <div class="form-field" style="flex:1">
-                        <label class="field-label">النولون</label>
-                        <div class="field-input-group">
-                            <input type="number" class="field-input" min="0" step="any" value="@FmtN(_tf.Freight)" @onchange="e => _tf.Freight = ParseDecN(e.Value)" />
-                        </div>
-                    </div>
-                    <div class="form-field doc-form-action">
-                        <button type="button" class="doc-btn primary" @onclick="AddTripAsync" disabled="@_savingTrip">حفظ الرحلة</button>
-                    </div>
-                </div>
-            }
-
-            <div class="doc-table-wrap">
-                <table class="doc-table">
-                    <thead>
-                        <tr><th>الرحلة</th><th>السائق</th><th>العربية</th><th>المخطط</th><th>النولون</th><th>الحالة</th><th></th></tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var t in _trips)
-                        {
-                            <tr>
-                                <td><a class="doc-link" href="@($"/trips/new/{t.TripId}")">@t.TripNumber</a></td>
-                                <td>@t.DriverName</td>
-                                <td>@t.VehiclePlate</td>
-                                <td>@(t.PlannedStartAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
-                                <td>@(t.FreightAmount?.ToString("N2") ?? "—")</td>
-                                <td>@TripStatusAr(t.Status)</td>
-                                <td>
-                                    <a class="doc-icon-btn" title="تعديل الرحلة" href="@($"/trips/new/{t.TripId}")">
-                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9" stroke-linecap="round"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke-linejoin="round"/></svg>
-                                    </a>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="tab-section">
-            <div class="doc-sec-head">
-                <div class="tab-section-head" style="margin-bottom:0">
-                    <div class="tab-section-icon amber" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><path d="M8 7h8M8 11h8M8 15h5" stroke-linecap="round"/></svg>
-                    </div>
-                    <div>
-                        <div class="tab-section-title">المصروفات (@_expenses.Count)</div>
-                        <div class="tab-section-sub">مصروفات التشغيل المربوطة بالعملية دي</div>
-                    </div>
-                </div>
-                <a class="doc-btn outline" href="/expenses/new">مصروف جديد (شاشة كاملة)</a>
-            </div>
-            @if (CanExpenseCreate && !IsClosed)
-            {
-                <div class="doc-form-row wrap">
-                    <div class="form-field" style="flex:2">
-                        <label class="field-label">نوع المصروف <span class="field-required">*</span></label>
-                        <div class="field-select-wrap">
-                            <select class="field-input field-select" @bind="_qe.TypeId">
-                                <option value="0">— اختر النوع —</option>
-                                @foreach (var t in _expenseTypes) { <option value="@t.Id">@t.Label</option> }
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-field" style="flex:1">
-                        <label class="field-label">المبلغ المدفوع <span class="field-required">*</span></label>
-                        <div class="field-input-group">
-                            <input type="number" class="field-input" min="0" step="any" value="@Fmt(_qe.Amount)" @onchange="e => _qe.Amount = ParseDec(e.Value)" />
-                        </div>
-                    </div>
-                    <div class="form-field" style="flex:1">
-                        <label class="field-label">يتحمّله العميل</label>
-                        <div class="field-input-group">
-                            <input type="number" class="field-input" min="0" step="any" value="@FmtN(_qe.Billable)" @onchange="e => _qe.Billable = ParseDecN(e.Value)" />
-                        </div>
-                    </div>
-                    <div class="form-field" style="flex:2">
-                        <label class="field-label">البيان</label>
-                        <div class="field-input-group">
-                            <input type="text" class="field-input" @bind="_qe.Description" />
-                        </div>
-                    </div>
-                    <div class="form-field doc-form-action">
-                        <button type="button" class="doc-btn primary" @onclick="QuickExpenseAsync" disabled="@_savingExp">إضافة سريعة</button>
-                    </div>
-                </div>
-            }
-            <div class="doc-table-wrap">
-                <table class="doc-table">
-                    <thead>
-                        <tr><th>الرقم</th><th>النوع</th><th>الإيصال</th><th>التاريخ</th><th>المبلغ</th><th>الحالة</th><th></th></tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var x in _expenses)
-                        {
-                            <tr>
-                                <td>@x.ExpenseNumber</td>
-                                <td>@x.TypeName</td>
-                                <td>
-                                    @if (!string.IsNullOrWhiteSpace(x.ReceiptTypeName))
-                                    {
-                                        <span>@x.ReceiptTypeName</span>
-                                        @if (!string.IsNullOrWhiteSpace(x.ReferenceNumber))
-                                        {
-                                            <div class="doc-sub">@x.ReferenceNumber</div>
-                                        }
-                                    }
-                                    else { <span class="doc-sub">—</span> }
-                                </td>
-                                <td>@x.ExpenseDate.ToString("yyyy-MM-dd")</td>
-                                <td>@x.Amount.ToString("N2")</td>
-                                <td>@x.Status</td>
-                                <td>
-                                    <a class="doc-icon-btn" title="تعديل المصروف" href="@($"/expenses/new/{x.ExpenseId}")">
-                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9" stroke-linecap="round"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke-linejoin="round"/></svg>
-                                    </a>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-}
+                }
+            </section>
+        }
+    }
+</div>
 
 @code {
     [Parameter] public long Id { get; set; }
+
+    /* ── التاب النشط ── */
+    private string _activeTab = "revenue";
+    private string TabCls(string t) => _activeTab == t ? "opf-tab on" : "opf-tab";
+
+    /* ── عرض الحالة والأرباح ── */
+    private decimal Profit => _d is null ? 0m : _d.RevenueNet - _d.ActualCost;
+    private string MarginCls => Profit >= 0 ? "opf-margin" : "opf-margin neg";
+    private string? MarginText
+    {
+        get
+        {
+            if (_d is null || _d.RevenueNet <= 0) return null;
+            return $"{(Profit >= 0 ? "+" : "−")}{Math.Abs(Profit / _d.RevenueNet * 100):N0}%";
+        }
+    }
+
+    private static string StatusLabel(string s) => s switch
+    {
+        "New" => "جديدة", "Draft" => "مسودة", "Confirmed" => "مؤكدة",
+        "Assigned" => "معرّفة", "InProgress" => "قيد التنفيذ", "Completed" => "مكتملة",
+        "Closed" => "مغلقة", "Cancelled" => "ملغاة",
+        "Paid" => "مدفوع", "Approved" => "معتمد", "Pending" => "معلّق", "Rejected" => "مرفوض",
+        _ => s
+    };
+    private static string StatusClass(string s) => s switch
+    {
+        "New" or "Confirmed" => "st-blue",
+        "Completed" or "Paid" => "st-green",
+        "Cancelled" or "Rejected" => "st-red",
+        "InProgress" or "Draft" or "Pending" => "st-amber",
+        "Assigned" or "Approved" => "st-purple",
+        _ => "st-gray"
+    };
+    private static string TripStatusClass(string s) => s switch
+    {
+        "Planned" => "st-blue", "InProgress" => "st-amber", "Completed" => "st-green",
+        "Cancelled" => "st-red", "Closed" => "st-gray", _ => "st-gray"
+    };
 
     private AuthUser? _user;
     private bool CanTripCreate => _user?.Can("TRIP.CREATE") ?? false;
     private bool CanOpEdit => _user?.Can("OPERATION.EDIT") ?? false;
     private bool CanExpenseCreate => _user?.Can("EXPENSE.CREATE") ?? false;
     private bool CanInvoiceCreate => _user?.Can("INVOICE.CREATE") ?? false;
+    private bool CanViewFinancials => (_user?.IsAdmin ?? false) || (_user?.Can("OPERATION.VIEW_FINANCIALS") ?? false);
     private bool IsClosed => _d?.Status is "Closed" or "Cancelled";
-    private bool CanEditLines => CanOpEdit && !IsClosed;
+    private bool CanEditLines => CanViewFinancials && CanOpEdit && !IsClosed;
     private bool _syncing;
 
     /* ── تحرير مباشر من الملف: إيراد/حاويات/مصروف سريع ── */
-    private List<Opt> _services = new(), _containerTypes = new(), _expenseTypes = new();
+    private List<Opt> _services = new(), _containerTypes = new();
     private bool _savingRev;
     private int _newRevServiceId;
     private decimal _newRevPrice;
+    private decimal _newRevQty;
+    private string? _newRevDesc;
+    private decimal _newRevDisc;
     private string? _newContNumber, _newContBl;
     private int _newContTypeId;
     private bool _addingCont;
@@ -776,17 +733,42 @@ else
     private void PickQeType(QExpType t)
     { _showQeTypeDd = false; _qeTypeTouched = true; _qeTypeSearch = t.Label; _qe.TypeId = t.Id; }
 
-    private void AddRevenueLine()
+private void AddRevenueLine()
+        {
+            if (_newRevServiceId <= 0) { Snackbar.Add("اختر الخدمة أولًا", Severity.Warning); return; }
+            _lines.Add(new RevLine
+            {
+                ServiceId   = _newRevServiceId,
+                ServiceName = _services.FirstOrDefault(s => s.Id == _newRevServiceId)?.Label ?? "",
+                Quantity    = _newRevQty,
+                UnitPrice   = _newRevPrice,
+                Discount    = _newRevDisc,
+                Description = _newRevDesc ?? ""
+            });
+            _newRevPrice = 0;
+            _newRevQty = 0;
+            _newRevDesc = "";
+            _newRevDisc = 0;
+        }
+
+    private void AddRevenueLineFromLast()
     {
-        if (_newRevServiceId <= 0) { Snackbar.Add("اختر الخدمة أولًا", Severity.Warning); return; }
+        if (_lines.Count == 0) return;
+        var last = _lines.Last();
         _lines.Add(new RevLine
         {
-            ServiceId   = _newRevServiceId,
-            ServiceName = _services.FirstOrDefault(s => s.Id == _newRevServiceId)?.Label ?? "",
-            Quantity    = 1,
-            UnitPrice   = _newRevPrice
+            ServiceId   = last.ServiceId,
+            ServiceName = last.ServiceName,
+            Quantity    = last.Quantity,
+            UnitPrice   = last.UnitPrice,
+            Discount    = last.Discount,
+            Description = last.Description
         });
-        _newRevPrice = 0;
+        _newRevServiceId = last.ServiceId;
+        _newRevPrice = last.UnitPrice;
+        _newRevQty = last.Quantity;
+        _newRevDesc = last.Description;
+        _newRevDisc = last.Discount;
     }
 
     private async Task SaveRevenueAsync()
@@ -1056,19 +1038,34 @@ else
     protected override async Task OnInitializedAsync()
     {
         _user = await Auth.GetUserAsync();
-        _drivers  = await SafeGet("api/options/drivers");
-        _vehicles = await SafeGet("api/options/vehicles");
-        _trailers = await SafeGet("api/options/trailers");
-        _driverPairs  = await SafeGetList<PairOpt>("api/options/drivers-pairing");
-        _vehiclePairs = await SafeGetList<PairOpt>("api/options/vehicles-pairing");
-        _services       = await SafeGet("api/options/services");
-        _containerTypes = await SafeGet("api/options/container-types");
-        _expenseTypes   = await SafeGet("api/options/expense-types");
-        _qeTypes        = await SafeGetList<QExpType>("api/options/expense-types");
-        _qeCustodies    = await SafeGetList<QCustody>("api/options/custodies");
-        _qeReceiptTypes = await SafeGet("api/options/receipt-types");
-        var qmethods    = await SafeGetList<QMethod>("api/options/payment-methods");
-        _qeCashMethodId = qmethods.FirstOrDefault(m => m.IsCashBased)?.Id;
+
+        /* نفس طلبات الـ Options زي الأصل بالظبط — بس متوازية بدل واحدة ورا التانية */
+        var tDrivers  = SafeGet("api/options/drivers");
+        var tVehicles = SafeGet("api/options/vehicles");
+        var tTrailers = SafeGet("api/options/trailers");
+        var tDrvPairs = SafeGetList<PairOpt>("api/options/drivers-pairing");
+        var tVehPairs = SafeGetList<PairOpt>("api/options/vehicles-pairing");
+        var tServices = SafeGet("api/options/services");
+        var tContTps  = SafeGet("api/options/container-types");
+        var tQeTypes  = SafeGetList<QExpType>("api/options/expense-types");
+        var tCustod   = SafeGetList<QCustody>("api/options/custodies");
+        var tRecTps   = SafeGet("api/options/receipt-types");
+        var tMethods  = SafeGetList<QMethod>("api/options/payment-methods");
+
+        await Task.WhenAll(tDrivers, tVehicles, tTrailers, tDrvPairs, tVehPairs, tServices, tContTps, tQeTypes, tCustod, tRecTps, tMethods);
+
+        _drivers      = tDrivers.Result;
+        _vehicles     = tVehicles.Result;
+        _trailers     = tTrailers.Result;
+        _driverPairs  = tDrvPairs.Result;
+        _vehiclePairs = tVehPairs.Result;
+        _services       = tServices.Result;
+        _containerTypes = tContTps.Result;
+        _qeTypes        = tQeTypes.Result;
+        _qeCustodies    = tCustod.Result;
+        _qeReceiptTypes = tRecTps.Result;
+        _qeCashMethodId = tMethods.Result.FirstOrDefault(m => m.IsCashBased)?.Id;
+
         await LoadAsync();
     }
 
@@ -1083,8 +1080,8 @@ else
         _trips      = await SafeGetList<OpTrip>($"api/operations/{Id}/trips");
         _containers = await SafeGetList<OpContainer>($"api/operations/{Id}/containers");
         foreach (var c in _containers) c.EditBl = c.BLNumber;
-        _bkLines = await SafeGetList<BkLineView>($"api/operations/{Id}/booking-lines");
-        _expenses   = await SafeGetList<ExpLine>($"api/expenses?operationId={Id}");
+        _bkLines  = await SafeGetList<BkLineView>($"api/operations/{Id}/booking-lines");
+        _expenses = await SafeGetList<ExpLine>($"api/expenses?operationId={Id}");
     }
 
     private async Task<List<Opt>> SafeGet(string url)
@@ -1161,13 +1158,14 @@ else
         catch { return res.IsSuccessStatusCode ? "تم" : $"خطأ {(int)res.StatusCode}"; }
     }
 }
-<style>
 
+<style>
     /* ================================================================
-       VARIABLES
+       1) TOKENS — نفس هوية فاست كوم
     ================================================================ */
     :root {
         --fc-blue:      #1e6ef5;
+        --fc-blue-dk:   #1559cf;
         --fc-blue-lt:   #eaf1ff;
         --fc-green:     #16a35b;
         --fc-green-lt:  #e9f8f0;
@@ -1176,552 +1174,285 @@ else
         --fc-amber:     #e09a10;
         --fc-amber-lt:  #fff8e6;
         --fc-purple:    #7c4dbd;
-        --fc-purple-lt: #f3eeff;
         --fc-text:      #1c2c44;
         --fc-muted:     #6b7d95;
         --fc-border:    #dde5f0;
-        --fc-bg:        #f4f7fb;
         --fc-card:      #ffffff;
-        --fc-radius:    14px;
     }
 
     /* ================================================================
-       HERO ADDITIONS
+       2) PAGE SHELL
     ================================================================ */
-    .bk-hero-badge {
-        display: inline-flex; align-items: center;
-        padding: 3px 10px; border-radius: 20px;
-        font-size: 11px; font-weight: 800;
-    }
-
-    .badge-new      { background: rgba(34,197,94,.2);  color: #86efac; border: 1px solid rgba(34,197,94,.3); }
-    .badge-draft    { background: rgba(255,255,255,.12); color: rgba(255,255,255,.75); border: 1px solid rgba(255,255,255,.2); }
-    .badge-confirmed { background: rgba(59,130,246,.25); color: #93c5fd; border: 1px solid rgba(59,130,246,.3); }
-    .badge-assigned  { background: rgba(168,85,247,.25); color: #d8b4fe; border: 1px solid rgba(168,85,247,.3); }
-    .badge-inprogress { background: rgba(234,179,8,.25); color: #fde68a; border: 1px solid rgba(234,179,8,.3); }
-    .badge-completed  { background: rgba(34,197,94,.25); color: #86efac; border: 1px solid rgba(34,197,94,.3); }
-    .badge-cancelled  { background: rgba(239,68,68,.25); color: #fca5a5; border: 1px solid rgba(239,68,68,.3); }
-
-    /* Hero Buttons */
-    .bk-back-btn {
-        display: inline-flex; align-items: center; gap: 5px;
-        height: 36px; padding: 0 13px;
-        border: 1px solid rgba(255,255,255,.2); border-radius: 9px;
-        background: rgba(255,255,255,.08); color: rgba(255,255,255,.75);
-        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
-        transition: background .15s ease;
-    }
-    .bk-back-btn:hover { background: rgba(255,255,255,.14); }
-    .bk-back-btn svg { transform: rotate(180deg); }
-
-    /* ── Hero Wrapper ── */
-    .hero-wrapper {
-        padding: 16px clamp(16px, 3vw, 40px) 0;
-        max-width: 1440px;
-        margin: 0 auto;
-        width: 100%;
-        box-sizing: border-box;
-        position: relative;
-        z-index: 1;
-    }
-
-    .hero-wrapper .fc-hero {
-        border-radius: 20px !important;
-        overflow: hidden;
-        box-shadow:
-            0 12px 32px rgba(13, 38, 84, 0.15),
-            0 4px 12px rgba(13, 38, 84, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .hero-wrapper .fc-hero.fc-hero-slim {
-        padding-top: 18px !important;
-        padding-bottom: 22px !important;
-    }
-
-    .bk-hero-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        flex-wrap: wrap;
-    }
-
-    .bk-hero-left { flex: 1; min-width: 200px; }
-
-    .bk-hero-crumb {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11.5px;
-        color: rgba(255, 255, 255, 0.55);
-        margin-bottom: 6px;
-    }
-
-    .bk-hero-sub {
-        font-size: 13px;
-        color: rgba(255, 255, 255, 0.55);
-    }
-
-    .bk-hero-right {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-
-    .bk-hero-chip {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 12px;
-        border-radius: 20px;
-        background: rgba(255, 255, 255, .1);
-        border: 1px solid rgba(255, 255, 255, .2);
-        font-size: 11.5px;
-        color: #fff;
-    }
-
-    .bk-hero-chip.badge-new { background: rgba(30, 110, 245, .2); border-color: rgba(30, 110, 245, .4); }
-    .bk-hero-chip.badge-progress { background: rgba(251, 191, 36, .2); border-color: rgba(251, 191, 36, .4); }
-    .bk-hero-chip.badge-done { background: rgba(22, 163, 91, .2); border-color: rgba(22, 163, 91, .4); }
-    .bk-hero-chip.badge-cancelled { background: rgba(224, 48, 72, .2); border-color: rgba(224, 48, 72, .4); }
-
-    /* ── Glow FAB ── */
-    .glow-fab-wrap {
-        position: fixed;
-        left: 28px;
-        bottom: 28px;
-        /* 🔴 أعلى من الـscrim (1298) — الزر والقايمة لازم يفضلوا فوقه وشغالين */
-        z-index: 1299;
-    }
-
-    .glow-fab-container {
-        position: relative;
-        z-index: 2;
-        width: 64px;
-        height: 64px;
-    }
-
-    .glow-fab-btn {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, #1e6ef5, #0d47a1);
-        border: 2.5px solid #fbbf24;
-        color: #fff;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 4px 16px rgba(30, 110, 245, .4);
-        transition: transform .2s, box-shadow .2s;
-        z-index: 2;
-    }
-
-    .glow-fab-btn:hover {
-        transform: translate(-50%, -50%) scale(1.05);
-        box-shadow: 0 6px 24px rgba(30, 110, 245, .5);
-    }
-
-    .glow-fab-icon { transition: transform .3s; }
-    .glow-fab-wrap.is-open .glow-fab-icon { transform: rotate(130deg); }
-
-    .glow-halo, .glow-ring {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        border-radius: 50%;
-        pointer-events: none;
-    }
-
-    .glow-halo {
-        width: 60px;
-        height: 60px;
-        background: radial-gradient(circle, rgba(30, 110, 245, .3) 0%, transparent 70%);
-        animation: glow-breath 2s ease-in-out infinite;
-    }
-
-    .glow-ring {
-        width: 60px;
-        height: 60px;
-        border: 2px solid rgba(30, 110, 245, .4);
-        animation: glow-expand 2s ease-out infinite;
-    }
-
-    .glow-ring-2 { animation-delay: .3s; }
-    .glow-ring-3 { animation-delay: .6s; }
-
-    @@keyframes glow-breath {
-        0%, 100% { opacity: .5; transform: translate(-50%, -50%) scale(1); }
-        50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
-    }
-
-    @@keyframes glow-expand {
-        0% { opacity: .8; transform: translate(-50%, -50%) scale(1); }
-        100% { opacity: 0; transform: translate(-50%, -50%) scale(2.5); }
-    }
-
-    .glow-fab-menu {
-        position: absolute;
-        bottom: 80px;
-        left: 0;
-        z-index: 3;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        opacity: 0;
-        pointer-events: none;
-        transform: translateY(10px);
-        transition: opacity .2s, transform .2s;
-    }
-
-    .glow-fab-wrap.is-open .glow-fab-menu {
-        opacity: 1;
-        pointer-events: auto;
-        transform: translateY(0);
-    }
-
-    .glow-fab-item {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 10px 16px;
-        border-radius: 12px;
-        background: #fff;
-        border: 1px solid #dde5f0;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, .1);
-        cursor: pointer;
-        font-size: 13px;
-        color: #1c2c44;
-        transition: background .15s, border-color .15s;
-        white-space: nowrap;
-    }
-
-    .glow-fab-item:hover {
-        background: #f4f7fb;
-        border-color: #1e6ef5;
-    }
-
-    .glow-fab-item-ic {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 28px;
-        height: 28px;
-        border-radius: 8px;
-        background: #eaf1ff;
-        color: #1e6ef5;
-    }
-
-    /* 🔴 الـscrim بقى شقيق للـ .glow-fab-wrap مش جوّاه.
-       لما كان جوّه: الـ wrap بيعمل stacking context، فالـ 1298 كان بيترسم
-       فوق القايمة (auto) وفوق الزر (2) ⇒ يبلع الكليك ويمنع استخدام الزر العائم. */
-    .glow-fab-scrim {
-        position: fixed;
-        inset: 0;
-        background: rgba(9, 18, 35, .45);
-        backdrop-filter: blur(4px);
-        -webkit-backdrop-filter: blur(4px);
-        z-index: 1298;
-        animation: glow-fadein .18s ease both;
-    }
-
-    @@keyframes glow-fadein {
-        from { opacity: 0; }
-        to   { opacity: 1; }
-    }
-
-    /* ── Mobile ── */
-    @@media (max-width: 768px) {
-        .hero-wrapper { padding: 12px 12px 0; }
-        .hero-wrapper .fc-hero { border-radius: 16px !important; }
-        .bk-hero-row { flex-direction: column; align-items: flex-start; }
-        .bk-hero-right { width: 100%; justify-content: flex-start; }
-    }
-
-    .bk-save-btn {
-        display: inline-flex; align-items: center; gap: 7px;
-        height: 38px; padding: 0 18px;
-        border: 0; border-radius: 10px;
-        background: linear-gradient(135deg, #22c55e, #16a34a);
-        color: #fff; font-family: inherit;
-        font-size: 13px; font-weight: 800; cursor: pointer;
-        box-shadow: 0 4px 14px rgba(22,163,74,.35);
-        transition: all .15s ease;
-    }
-    .bk-save-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(22,163,74,.4); }
-    .bk-save-btn:disabled { opacity: .6; cursor: not-allowed; }
-
-    /* Hero Summary Strip */
-    .bk-hero-summary {
-        display: flex; align-items: stretch;
-        background: rgba(0,0,0,.15); border: 1px solid rgba(255,255,255,.10);
-        border-radius: 12px; overflow: hidden; backdrop-filter: blur(8px);
-        margin-top: 4px;
-    }
-
-    .bk-sum-item {
-        flex: 1; display: flex; align-items: center; gap: 10px;
-        padding: 12px 16px;
-    }
-
-    .bk-sum-div { width: 1px; background: rgba(255,255,255,.10); align-self: stretch; }
-
-    .bk-sum-icon {
-        width: 32px; height: 32px; flex: 0 0 32px; border-radius: 8px;
-        display: flex; align-items: center; justify-content: center;
-        background: rgba(255,255,255,.10); color: rgba(255,255,255,.7);
-    }
-
-    .bk-sum-label { font-size: 9.5px; color: rgba(255,255,255,.5); font-weight: 600; }
-    .bk-sum-val   { font-size: 13px; font-weight: 800; color: #fff; margin-top: 2px; }
-
-    /* ================================================================
-       BODY
-    ================================================================ */
-    /* 🔴 نفس عرض .hero-wrapper بالحرف (1440px + نفس البادينج الأفقي)
-       ⇒ حدّ كارت الهيرو = حدّ المحتوى اللي تحته على أي مقاس شاشة.
-       الـ 96px تحت مساحة للزر العائم. */
-    .bk-body {
-        background: var(--fc-bg);
-        min-height: calc(100vh - 180px);
-        padding: 18px clamp(16px, 3vw, 40px) 96px;
-        max-width: 1440px; width: 100%;
-        margin: 0 auto;
-        box-sizing: border-box;
-        position: relative;
-        z-index: 2;
+    .opf-page {
+        max-width: 1440px; margin: 0 auto; width: 100%; box-sizing: border-box;
+        padding: 18px clamp(14px, 3vw, 40px) 80px;
         display: flex; flex-direction: column; gap: 14px;
     }
+    .opf-page * { font-family: "Cairo","Tajawal","Inter",Arial,sans-serif; box-sizing: border-box; }
 
-    /* ================================================================
-       STATES
-    ================================================================ */
-    .bk-state-box {
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        gap: 12px; min-height: 280px;
-        background: var(--fc-card); border: 1px solid var(--fc-border);
-        border-radius: var(--fc-radius); padding: 40px; text-align: center;
-        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    @@keyframes opf-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    @@keyframes opf-spin { to { transform: rotate(360deg); } }
+
+    .opf-loading {
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+        background: var(--fc-card); border: 1px solid var(--fc-border); border-radius: 16px;
+        padding: 70px 20px; color: var(--fc-muted); font-weight: 700; font-size: 13px;
+        box-shadow: 0 2px 10px rgba(15,41,82,.05);
+    }
+    .opf-spinner {
+        width: 34px; height: 34px; border-radius: 50%;
+        border: 3px solid #dbe4f2; border-top-color: var(--fc-blue);
+        animation: opf-spin .75s linear infinite;
     }
 
-    .bk-state-icon {
-        width: 68px; height: 68px; border-radius: 50%;
+    /* ================================================================
+       3) رأس الملف — هيرو غامق (نفس ارتفاع النسخة الفاتحة بالظبط)
+       🔧 لو عايز لون الهيرو القديم بالحرف: بدّل سطر background ده بس
+    ================================================================ */
+    .opf-head {
+        display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+        border-radius: 16px;
+        padding: 18px 22px 16px; position: relative; overflow: hidden;
+        background: linear-gradient(135deg, #0a1e4a 0%, #10357a 55%, #1e5fd0 140%);
+        border: 1px solid rgba(255,255,255,.10);
+        color: #fff;
+        box-shadow: 0 10px 28px rgba(10,30,74,.30);
+        animation: opf-in .3s ease both;
+    }
+    .opf-head::before {
+        content: ""; position: absolute; top: 0; right: 0; left: 0; height: 3px;
+        background: linear-gradient(90deg, var(--fc-blue), rgba(255,255,255,.35) 55%, transparent);
+    }
+    /* توهج خفيف جوه الهيرو */
+    .opf-head::after {
+        content: ""; position: absolute; left: -60px; bottom: -80px;
+        width: 260px; height: 260px; border-radius: 50%; pointer-events: none;
+        background: radial-gradient(circle, rgba(110,168,255,.18), transparent 70%);
+    }
+
+    .opf-crumb { font-size: 10.5px; font-weight: 800; letter-spacing: .4px; color: rgba(255,255,255,.6); margin-bottom: 5px; }
+
+    .opf-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .opf-title { margin: 0; font-size: 21px; font-weight: 900; color: #fff; line-height: 1.25; }
+
+    /* ── Badge الحالة (افتراضي فاتح — جوه الهيرو بيتحول للتلات الشفاف تحت) ── */
+    .opf-status {
+        display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: 20px;
+        font-size: 11px; font-weight: 800; white-space: nowrap;
+    }
+    .opf-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .opf-status.sm { padding: 2.5px 9px; font-size: 10.5px; }
+    .st-blue   { background: var(--fc-blue-lt);  color: var(--fc-blue-dk); border: 1px solid #c4d8fb; }
+    .st-green  { background: var(--fc-green-lt); color: #0e7a43;            border: 1px solid #b5e8d0; }
+    .st-red    { background: var(--fc-red-lt);   color: var(--fc-red);      border: 1px solid #ffc8d0; }
+    .st-amber  { background: var(--fc-amber-lt); color: #9a6d08;            border: 1px solid #f0d98a; }
+    .st-purple { background: #f3eeff;            color: var(--fc-purple);   border: 1px solid #ddccf7; }
+    .st-gray   { background: #eef2f7;            color: #5b6b82;            border: 1px solid #d8e0eb; }
+
+    /* نسخ الهيرو الغامق من نفس الألوان */
+    .opf-head .st-blue   { background: rgba(59,130,246,.28);  color: #93c5fd; border-color: rgba(59,130,246,.42); }
+    .opf-head .st-green  { background: rgba(34,197,94,.22);   color: #86efac; border-color: rgba(34,197,94,.38); }
+    .opf-head .st-red    { background: rgba(239,68,68,.22);   color: #fca5a5; border-color: rgba(239,68,68,.38); }
+    .opf-head .st-amber  { background: rgba(234,179,8,.22);   color: #fde68a; border-color: rgba(234,179,8,.38); }
+    .opf-head .st-purple { background: rgba(168,85,247,.22);  color: #d8b4fe; border-color: rgba(168,85,247,.38); }
+    .opf-head .st-gray   { background: rgba(255,255,255,.12); color: rgba(255,255,255,.78); border-color: rgba(255,255,255,.22); }
+
+    .opf-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 9px; }
+    .opf-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 5px 11px; border-radius: 8px; background: #f6f9fd; border: 1px solid #e4ecf6;
+        font-size: 11.5px; color: var(--fc-muted); font-weight: 700;
+    }
+    .opf-chip b { color: var(--fc-text); font-weight: 800; }
+    .opf-head .opf-chip { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.16); color: rgba(255,255,255,.72); }
+    .opf-head .opf-chip b { color: #fff; }
+
+    .opf-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; position: relative; z-index: 1; }
+    .opf-act {
+        display: inline-flex; align-items: center; height: 38px; padding: 0 16px;
+        border-radius: 10px; border: 1.5px solid var(--fc-border); background: #fff; color: var(--fc-text);
+        font-size: 12.5px; font-weight: 800; text-decoration: none; cursor: pointer; white-space: nowrap;
+        transition: all .15s ease;
+    }
+    .opf-act:hover { border-color: var(--fc-blue); color: var(--fc-blue); background: var(--fc-blue-lt); }
+    /* أزرار الهيرو الغامق: شفافة بيضاء + العنبر الصلب زي الهيرو القديم */
+    .opf-head .opf-act {
+        background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.28); color: #fff;
+    }
+    .opf-head .opf-act:hover { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.45); color: #fff; }
+    .opf-head .opf-act.primary {
+        background: linear-gradient(135deg, #f2ab1d, var(--fc-amber));
+        border-color: transparent; color: #fff;
+        box-shadow: 0 4px 14px rgba(224,154,16,.42);
+    }
+    .opf-head .opf-act.primary:hover {
+        background: linear-gradient(135deg, var(--fc-amber), #c17f05);
+        color: #fff; transform: translateY(-1px);
+    }
+
+    /* ================================================================
+       4) شريط الأرقام
+    ================================================================ */
+    .opf-strip {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        background: var(--fc-card); border: 1px solid var(--fc-border); border-radius: 16px;
+        overflow: hidden; box-shadow: 0 2px 12px rgba(15,41,82,.06);
+        animation: opf-in .35s ease both;
+    }
+    .opf-stat { display: flex; align-items: center; gap: 12px; padding: 16px 20px; }
+    .opf-stat + .opf-stat { border-inline-start: 1px solid #edf1f7; }
+
+    .opf-stat-ic {
+        width: 42px; height: 42px; flex: 0 0 42px; border-radius: 12px;
         display: flex; align-items: center; justify-content: center;
     }
-    .bk-state-icon.perm { background: #fff0f2; color: var(--fc-red); }
+    .c-blue  { background: var(--fc-blue-lt);  color: var(--fc-blue); }
+    .c-green { background: var(--fc-green-lt); color: var(--fc-green); }
+    .c-amber { background: var(--fc-amber-lt); color: var(--fc-amber); }
+    .c-red   { background: var(--fc-red-lt);   color: var(--fc-red); }
+    .c-slate { background: #eef2f7;            color: #5b6b82; }
 
-    .bk-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
-    .bk-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
-
-    .bk-state-back {
-        margin-top: 8px; padding: 9px 20px;
-        border: 1px solid var(--fc-border); border-radius: 9px;
-        background: var(--fc-card); color: var(--fc-text);
-        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
-        transition: background .15s ease;
+    .opf-stat-num {
+        font-size: 19px; font-weight: 900; color: var(--fc-text); line-height: 1.15;
+        font-variant-numeric: tabular-nums;
     }
-    .bk-state-back:hover { background: #f0f4fa; }
+    .opf-stat-num.pos { color: var(--fc-green); }
+    .opf-stat-num.neg { color: var(--fc-red); }
+    .opf-stat-sep { color: #b6c2d4; font-weight: 700; }
+    .opf-stat-lbl { font-size: 11px; font-weight: 700; color: var(--fc-muted); margin-top: 3px; display: flex; align-items: center; gap: 6px; }
+    .opf-margin { font-size: 10px; font-weight: 900; padding: 1.5px 7px; border-radius: 6px; background: rgba(22,163,91,.12); color: var(--fc-green); }
+    .opf-margin.neg { background: rgba(224,48,72,.1); color: var(--fc-red); }
 
     /* ================================================================
-       LOADING
+       5) شريط التابات (Sticky)
     ================================================================ */
-    .bk-loading-wrap {
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        gap: 14px; min-height: 260px;
-        background: var(--fc-card); border: 1px solid var(--fc-border);
-        border-radius: var(--fc-radius);
-        box-shadow: 0 4px 20px rgba(15,41,82,.06);
+    .opf-tabsbar {
+        position: sticky; top: 10px; z-index: 60;
+        display: flex; gap: 5px; padding: 6px;
+        background: rgba(255,255,255,.94);
+        backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+        border: 1px solid var(--fc-border); border-radius: 13px;
+        box-shadow: 0 8px 22px rgba(15,41,82,.10);
+        animation: opf-in .4s ease both;
     }
-
-    .bk-spinner {
-        width: 36px; height: 36px;
-        border: 3px solid #dde5f0; border-top-color: var(--fc-blue);
-        border-radius: 50%; animation: bk-spin .75s linear infinite;
+    .opf-tab {
+        flex: 1; min-width: 0; height: 42px; padding: 0 10px;
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+        border: none; border-radius: 9px; background: transparent; cursor: pointer;
+        font-family: inherit; font-size: 12.5px; font-weight: 800; color: var(--fc-muted);
+        transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+        white-space: nowrap;
     }
-    @@keyframes bk-spin { to { transform: rotate(360deg); } }
-
-    .bk-loading-text { font-size: 13px; font-weight: 600; color: var(--fc-muted); }
+    .opf-tab:hover { background: #f2f6fc; color: var(--fc-text); }
+    .opf-tab.on {
+        background: linear-gradient(135deg, var(--fc-blue), var(--fc-blue-dk));
+        color: #fff; box-shadow: 0 4px 14px rgba(30,110,245,.32);
+    }
+    .opf-tab-ic { display: flex; }
+    .opf-tab .n {
+        min-width: 21px; height: 21px; padding: 0 6px; border-radius: 6px;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--fc-blue-lt); color: var(--fc-blue); font-size: 10.5px; font-weight: 900;
+    }
+    .opf-tab.on .n { background: rgba(255,255,255,.22); color: #fff; }
 
     /* ================================================================
-       BANNERS
+       6) بانل القسم + رأس القسم
     ================================================================ */
-    .bk-locked-banner {
-        display: flex; align-items: center; gap: 12px;
-        padding: 14px 18px; border-radius: 12px;
-        background: linear-gradient(135deg, #fffbeb, #fff8e0);
-        border: 1px solid #fde68a;
-        box-shadow: 0 2px 10px rgba(234,179,8,.10);
+    .opf-panel {
+        background: var(--fc-card); border: 1px solid var(--fc-border); border-radius: 16px;
+        padding: 20px clamp(14px, 2.5vw, 26px) 26px;
+        box-shadow: 0 2px 12px rgba(15,41,82,.05);
+        animation: opf-in .3s ease both;
     }
-
-    .locked-icon { flex: 0 0 auto; color: #d97706; }
-
-    .locked-text { display: flex; flex-direction: column; gap: 2px; }
-    .locked-text strong { font-size: 13px; font-weight: 800; color: #92400e; }
-    .locked-text span   { font-size: 11.5px; color: #b45309; }
-
-    .bk-banner {
-        display: flex; align-items: center; gap: 10px;
-        padding: 12px 16px; border-radius: 10px;
-        font-size: 13px; font-weight: 600;
-        animation: bk-banner-in .25s ease;
+    .opf-sec-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+    .opf-sec-id { display: flex; align-items: center; gap: 12px; }
+    .opf-sec-ic {
+        width: 40px; height: 40px; flex: 0 0 40px; border-radius: 11px;
+        display: flex; align-items: center; justify-content: center;
     }
-    @@keyframes bk-banner-in {
-        from { opacity: 0; transform: translateY(-6px); }
-        to   { opacity: 1; transform: translateY(0); }
-    }
+    .opf-sec-ic.blue  { background: var(--fc-blue-lt);  color: var(--fc-blue);  border: 1px solid #c8dafc; }
+    .opf-sec-ic.green { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
+    .opf-sec-ic.amber { background: var(--fc-amber-lt); color: var(--fc-amber); border: 1px solid #f0d070; }
+    .opf-sec-title { font-size: 15.5px; font-weight: 900; color: var(--fc-text); line-height: 1.3; }
+    .opf-sec-sub   { font-size: 11.5px; font-weight: 600; color: var(--fc-muted); margin-top: 2px; }
 
-    .banner-success { background: #e9f8f0; color: #0e7a43; border: 1px solid #b5e8d0; }
-    .banner-error   { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8d0; }
-
-    .banner-close {
-        margin-right: auto; background: none; border: none;
-        color: inherit; opacity: .6; cursor: pointer; font-size: 13px;
-        padding: 2px 6px; border-radius: 5px;
-    }
-    .banner-close:hover { opacity: 1; }
-
-    /* ================================================================
-       TABS
-    ================================================================ */
-    .bk-tabs-wrap {
-        background: var(--fc-card); border: 1px solid var(--fc-border);
-        border-radius: var(--fc-radius);
-        box-shadow: 0 2px 6px rgba(15,41,82,.04), 0 10px 30px rgba(15,41,82,.06);
-        overflow: hidden; flex: 1;
-    }
-
-    .bk-mud-tabs .mud-tabs-toolbar {
-        background: linear-gradient(180deg, #f9fafd 0%, #f3f6fb 100%);
-        border-bottom: 2px solid #e8edf5;
-        padding: 0 16px; min-height: 54px;
-    }
-
-    .bk-mud-tabs .mud-tab {
-        font-family: "Cairo","Tajawal","Inter",Arial,sans-serif;
-        font-size: 12px; font-weight: 700; color: var(--fc-muted);
-        padding: 0 6px; min-width: unset; transition: color .15s ease;
-    }
-
-    .bk-mud-tabs .mud-tab.mud-tab-active { color: var(--fc-blue) !important; font-weight: 800; }
-
-    .bk-mud-tabs .mud-tab-slider {
-        background: var(--fc-blue) !important;
-        height: 3px; border-radius: 3px 3px 0 0;
-    }
-
-    .bk-mud-tabs .mud-tab:hover:not(.mud-tab-active) {
-        color: var(--fc-text); background: rgba(0,0,0,.03); border-radius: 8px;
-    }
-
-    .bk-tab-panel { padding: 0; }
-
-    /* Tab Labels */
-    .btab-label {
+    .opf-note-title {
         display: flex; align-items: center; gap: 7px;
-        padding: 0 4px; white-space: nowrap;
+        font-size: 12px; font-weight: 900; color: #344258; margin: 2px 0 10px;
     }
+    .opf-note-title::before { content: ""; width: 14px; height: 3px; border-radius: 2px; background: var(--fc-blue); opacity: .5; }
 
-    .btab-icon {
-        width: 26px; height: 26px;
-        display: flex; align-items: center; justify-content: center;
-        border-radius: 7px;
+    .opf-empty {
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+        border: 1.5px dashed #cfdcf0; background: #f8fbff; border-radius: 12px;
+        padding: 34px 20px; text-align: center; color: var(--fc-muted);
     }
+    .opf-empty svg { color: #9db2cf; margin-bottom: 4px; }
+    .opf-empty b { font-size: 13.5px; color: var(--fc-text); font-weight: 800; }
+    .opf-empty span { font-size: 12px; }
 
-    .btab-blue  { background: var(--fc-blue-lt);  color: var(--fc-blue); }
-    .btab-green { background: var(--fc-green-lt); color: var(--fc-green); }
-    .btab-amber { background: var(--fc-amber-lt); color: var(--fc-amber); }
-
-    .btab-err-dot {
-        width: 7px; height: 7px; border-radius: 50%;
-        background: var(--fc-red); flex: 0 0 7px;
-        animation: bk-pulse 1.5s ease infinite;
-    }
-    @@keyframes bk-pulse {
-        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.4); }
-        50%      { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
-    }
-
-    .btab-count {
-        min-width: 18px; height: 18px;
-        display: flex; align-items: center; justify-content: center;
-        border-radius: 5px; padding: 0 4px;
-        background: var(--fc-amber-lt); color: #9a6d08;
-        font-size: 10px; font-weight: 900;
-        font-family: "Inter", Arial, sans-serif;
+    .opf-quickform {
+        margin-top: 4px; margin-bottom: 16px; padding: 16px;
+        background: #f8fbff; border: 1.5px dashed #c9dbf5; border-radius: 12px;
     }
 
     /* ================================================================
-       TAB SECTION
+       7) الجداول
     ================================================================ */
-    .tab-section {
-        padding: 24px clamp(16px, 3vw, 40px) 28px;
-        max-width: 1440px;
-        margin: 0 auto;
-        width: 100%;
-        box-sizing: border-box;
+    .doc-table-wrap { overflow-x: auto; border: 1px solid #e3ebf6; border-radius: 12px; background: #fff; }
+    .doc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .doc-table thead th {
+        background: #f2f7fd; color: #33507c; font-weight: 800; font-size: 12px;
+        text-align: right; padding: 11px 12px; border-bottom: 1.5px solid #dfe9f5; white-space: nowrap;
     }
-
-    .tab-section-head {
-        display: flex; align-items: flex-start; gap: 12px;
-        margin-bottom: 22px; padding-bottom: 18px;
-        border-bottom: 1px solid #edf1f7;
-    }
-
-    .tab-section-icon {
-        width: 42px; height: 42px; flex: 0 0 42px;
-        display: flex; align-items: center; justify-content: center;
-        border-radius: 12px;
-    }
-    .tab-section-icon.blue  { background: var(--fc-blue-lt);  color: var(--fc-blue);  border: 1px solid #bdd4fc; }
-    .tab-section-icon.green { background: var(--fc-green-lt); color: var(--fc-green); border: 1px solid #b0e0c5; }
-    .tab-section-icon.amber { background: var(--fc-amber-lt); color: var(--fc-amber); border: 1px solid #f0d070; }
-
-    .tab-section-title { font-size: 15px; font-weight: 800; color: #1c2b43; line-height: 1.2; }
-    .tab-section-sub   { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
-
-    .tab-section-sub-head {
-        display: flex; align-items: center; gap: 7px;
-        font-size: 12px; font-weight: 800; color: #344258;
-        margin: 22px 0 10px;
-        padding-top: 18px; border-top: 1px solid #edf1f7;
-    }
+    .doc-table tbody td { padding: 10px 12px; border-bottom: 1px solid #edf2f9; color: var(--fc-text); vertical-align: middle; }
+    .doc-table tbody tr:last-child td { border-bottom: none; }
+    .doc-table tbody tr:hover td { background: #f8fbff; }
+    .doc-table .num { font-variant-numeric: tabular-nums; }
+    .doc-table .net { color: var(--fc-blue-dk); font-weight: 900; }
+    .doc-link { color: var(--fc-blue); font-weight: 800; text-decoration: none; }
+    .doc-link:hover { text-decoration: underline; }
+    .doc-sub { font-size: 11px; color: #8496b0; font-weight: 700; }
 
     /* ================================================================
-       FORM
+       8) الأزرار
     ================================================================ */
-    .bk-form-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 18px;
-        width: 100%;
+    .doc-btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        height: 37px; padding: 0 16px; border-radius: 10px; cursor: pointer; white-space: nowrap;
+        font-family: inherit; font-size: 12.5px; font-weight: 800; text-decoration: none;
+        border: 1.5px solid var(--fc-border); background: #fff; color: var(--fc-blue);
+        transition: all .15s ease;
     }
-
-    @@media (max-width: 768px) {
-        .bk-form-grid {
-            grid-template-columns: 1fr;
-        }
+    .doc-btn:hover { border-color: var(--fc-blue); background: var(--fc-blue-lt); }
+    .doc-btn.primary {
+        border-color: transparent; color: #fff;
+        background: linear-gradient(135deg, var(--fc-blue), var(--fc-blue-dk));
+        box-shadow: 0 4px 12px rgba(30,110,245,.26);
     }
+    .doc-btn.primary:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(30,110,245,.34); }
+    .doc-btn:disabled { opacity: .55; cursor: default; transform: none; box-shadow: none; }
 
-    .form-field {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        position: relative;
+    .doc-icon-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 30px; height: 30px; border-radius: 8px; cursor: pointer; text-decoration: none;
+        border: 1px solid var(--fc-border); background: #fff; color: var(--fc-blue);
+        transition: all .12s ease;
     }
+    .doc-icon-btn:hover { background: var(--fc-blue-lt); border-color: var(--fc-blue); }
+    .doc-icon-btn.danger { color: var(--fc-red); }
+    .doc-icon-btn.danger:hover { background: var(--fc-red-lt); border-color: var(--fc-red); }
 
-    .field-label {
-        font-size: 12px; font-weight: 800; color: #344258;
-        display: flex; align-items: center; gap: 4px;
-    }
+    /* ================================================================
+       9) الحقول والنماذج
+    ================================================================ */
+    .doc-form-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+    .doc-form-row .form-field { min-width: 150px; }
+    .doc-form-action { display: flex; align-items: flex-end; padding-top: 23px; }
 
+    .form-field { display: flex; flex-direction: column; gap: 6px; position: relative; }
+    .field-label { font-size: 12px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 4px; }
     .field-required { color: var(--fc-red); font-size: 14px; line-height: 1; }
 
     .field-input {
@@ -1732,608 +1463,78 @@ else
         transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
         outline: none;
     }
-    .field-input:focus {
-        border-color: var(--fc-blue);
-        box-shadow: 0 0 0 3px rgba(30,110,245,.10);
-        background: #fff;
-    }
+    .field-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.10); background: #fff; }
     .field-input:disabled { opacity: .7; background: #f3f5f8; cursor: not-allowed; }
-    .field-input.field-error {
-        border-color: var(--fc-red);
-        box-shadow: 0 0 0 3px rgba(224,48,72,.08);
-    }
     .field-input::placeholder { color: #b0bcc8; }
 
-    .field-textarea {
-        height: auto; padding: 10px 12px;
-        resize: vertical; min-height: 80px;
-    }
-
-    /* Select with icon */
-    .field-select-wrap {
-        position: relative; display: flex; align-items: center;
-    }
-
-    .field-select-icon {
-        position: absolute; right: 12px; color: #9aaabb;
-        pointer-events: none; z-index: 1;
-    }
-
+    .field-select-wrap { position: relative; display: flex; align-items: center; }
+    /* سهم القائمة المنسدلة */
     .field-select {
-        padding-right: 36px; cursor: pointer;
-        -webkit-appearance: none; appearance: none;
+        cursor: pointer; -webkit-appearance: none; appearance: none; padding-left: 30px;
+        background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237d8fa8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: left 11px center;
     }
     .field-select:disabled { cursor: not-allowed; }
 
-    /* Input with prefix */
     .field-input-group { position: relative; display: flex; align-items: center; }
+    .form-field-with-dropdown { position: relative; flex: 1; }
 
-    .field-prefix {
-        position: absolute; right: 12px;
-        display: flex; align-items: center;
-        color: #9aaabb; pointer-events: none; z-index: 1;
-    }
-
-    .field-input.with-prefix { padding-right: 36px; }
-
-    /* Field Dropdown — للبحث (نفس تصميم field-input) */
     .field-dropdown {
-        position: absolute;
-        top: 100%;
-        right: 0;
-        left: 0;
-        margin-top: 4px;
-        background: #fafcff;
-        border: 1px solid #d8e2f0;
-        border-radius: 9px;
-        box-shadow: 0 8px 24px rgba(0,0,0,.12);
-        max-height: 240px;
-        overflow-y: auto;
-        z-index: 100;
+        position: absolute; top: 100%; right: 0; left: 0; margin-top: 5px;
+        background: #fff; border: 1px solid #d8e2f0; border-radius: 10px;
+        box-shadow: 0 10px 28px rgba(15,41,82,.16);
+        max-height: 240px; overflow-y: auto; z-index: 120;
     }
+    .field-dropdown-item { padding: 10px 13px; font-size: 13px; color: var(--fc-text); cursor: pointer; transition: background .1s; }
+    .field-dropdown-item:hover { background: var(--fc-blue-lt); }
 
-    .field-dropdown-item {
-        padding: 10px 12px;
-        font-family: inherit;
-        font-size: 13px;
-        color: var(--fc-text);
-        cursor: pointer;
-        transition: background .1s;
+    .qe-src-toggle { display: flex; border: 1.5px solid #d8e2f0; border-radius: 10px; overflow: hidden; background: #fff; height: 42px; }
+    .qe-src-toggle button {
+        flex: 1; border: none; background: #fff; cursor: pointer;
+        font-family: inherit; font-size: 12px; font-weight: 800; color: #5a6c86;
+        transition: all .15s ease;
     }
+    .qe-src-toggle button.on { background: var(--fc-blue); color: #fff; }
 
-    .field-dropdown-item:hover {
-        background: #eaf1ff;
+    .doc-inline-input {
+        height: 34px; padding: 0 9px; border: 1.5px solid var(--fc-border); border-radius: 8px;
+        font-family: inherit; font-size: 13px; color: var(--fc-text); background: #fff; outline: none;
+        transition: border-color .12s ease, box-shadow .12s ease;
     }
-
-    .field-hint {
-        display: flex; align-items: center; gap: 5px;
-        font-size: 10.5px; color: var(--fc-muted); font-weight: 500;
-    }
-
-    .field-err-msg { font-size: 10.5px; color: var(--fc-red); font-weight: 700; }
+    .doc-inline-input:focus { border-color: var(--fc-blue); box-shadow: 0 0 0 3px rgba(30,110,245,.12); }
 
     /* ================================================================
-       ROUTE VISUAL
+       10) RESPONSIVE
     ================================================================ */
-    .bk-route-visual {
-        display: flex; align-items: center; gap: 0;
-        margin-top: 22px; padding: 14px 20px;
-        background: linear-gradient(135deg, #f5f8ff, #eef4ff);
-        border: 1px solid #c8d8fb; border-radius: 12px;
-        animation: bk-banner-in .25s ease;
-    }
-
-    .route-point { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
-
-    .route-dot {
-        width: 14px; height: 14px; border-radius: 50%;
-        border: 3px solid;
-    }
-    .dot-from { background: var(--fc-blue-lt);  border-color: var(--fc-blue); }
-    .dot-to   { background: var(--fc-green-lt); border-color: var(--fc-green); }
-
-    .route-label { display: flex; flex-direction: column; gap: 2px; }
-    .route-caption { font-size: 9px; font-weight: 600; color: #8899ae; }
-    .route-label strong { font-size: 13px; font-weight: 800; color: var(--fc-text); }
-
-    .route-line {
-        flex: 1; display: flex; flex-direction: column;
-        align-items: center; gap: 0; position: relative; margin: 0 10px;
-    }
-    .route-truck { font-size: 20px; margin-top: -4px; }
-
-    /* ================================================================
-       CONTAINER CARDS
-    ================================================================ */
-    .bk-containers-empty {
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        gap: 10px; min-height: 180px;
-        border: 2px dashed #d8e8f8; border-radius: 12px;
-        background: #f8fbff; text-align: center; padding: 30px;
-    }
-
-    .containers-empty-icon {
-        width: 70px; height: 70px; border-radius: 50%;
-        display: flex; align-items: center; justify-content: center;
-        background: #edf3fb; color: #b0c4d8;
-    }
-    .containers-empty-title { font-size: 14px; font-weight: 800; color: var(--fc-text); }
-    .containers-empty-sub   { font-size: 12px; color: var(--fc-muted); }
-
-    .bk-add-line-btn {
-        display: inline-flex; align-items: center; gap: 6px;
-        height: 36px; padding: 0 14px;
-        border: 1.5px solid var(--fc-amber);
-        border-radius: 9px;
-        background: var(--fc-amber-lt); color: #9a6d08;
-        font-family: inherit; font-size: 12px; font-weight: 800;
-        cursor: pointer; white-space: nowrap; flex-shrink: 0;
-        transition: all .15s ease;
-    }
-    .bk-add-line-btn:hover { background: var(--fc-amber); color: #fff; }
-    .bk-add-line-btn.mt-10 { margin-top: 10px; }
-
-    .bk-container-cards { display: flex; flex-direction: column; gap: 12px; }
-
-    .bk-container-card {
-        border: 1px solid #e4edf8; border-radius: 12px;
-        background: linear-gradient(180deg, #fafcff, #f5f8fb);
-        overflow: hidden;
-        transition: border-color .18s ease, box-shadow .18s ease;
-    }
-    .bk-container-card:hover {
-        border-color: #c8d8f0;
-        box-shadow: 0 4px 14px rgba(15,41,82,.06);
-    }
-
-    .bk-cc-head {
-        display: flex; align-items: center; gap: 10px;
-        padding: 10px 14px;
-        background: linear-gradient(180deg, #f0f5fc, #eaf1f9);
-        border-bottom: 1px solid #dce8f5;
-    }
-
-    .bk-cc-num {
-        width: 26px; height: 26px; border-radius: 8px; flex: 0 0 26px;
-        display: flex; align-items: center; justify-content: center;
-        background: var(--fc-blue); color: #fff;
-        font-size: 11px; font-weight: 900;
-        font-family: "Inter", Arial, sans-serif;
-    }
-
-    .bk-cc-type-badge {
-        display: flex; align-items: center; gap: 5px;
-        padding: 3px 10px; border-radius: 7px;
-        background: rgba(30,110,245,.08); border: 1px solid rgba(30,110,245,.15);
-        color: var(--fc-blue); font-size: 11px; font-weight: 800;
-        white-space: nowrap;
-    }
-
-    .bk-cc-total {
-        flex: 1; font-size: 11px; color: #6b7d95; font-weight: 600;
-    }
-    .bk-cc-total strong { color: var(--fc-text); font-weight: 900; }
-    .bk-cc-total span   { color: #9aaabb; }
-
-    .bk-cc-del {
-        width: 30px; height: 30px; border-radius: 7px; flex: 0 0 30px;
-        display: flex; align-items: center; justify-content: center;
-        border: 1px solid transparent; background: transparent;
-        color: var(--fc-red); cursor: pointer;
-        transition: all .15s ease;
-    }
-    .bk-cc-del:hover { background: var(--fc-red-lt); border-color: #ffc8cf; }
-
-    .bk-cc-body {
-        /* السطر كله في شريط واحد متناسق:
-           النوع · العدد · الوزن · الضمان · الملاحظات + زر «إضافة حاوية» */
-        display: grid;
-        grid-template-columns: 1.35fr .85fr .85fr 1.05fr 2.1fr;
-        gap: 14px; padding: 14px 16px;
-        align-items: start;
-    }
-
-    .bk-cc-notes { grid-column: auto; }
-
-    /* زر «إضافة حاوية» بجانب حقل الملاحظات + عرض الباقي */
-    .bk-notes-action-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .bk-notes-action-row .field-input {
-        flex: 1;
-        min-width: 0;
-    }
-
-    .bk-add-detail-inline-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        height: 42px;
-        padding: 0 14px;
-        flex-shrink: 0;
-        border: 1.5px dashed var(--fc-blue);
-        border-radius: 9px;
-        background: var(--fc-blue-lt);
-        color: var(--fc-blue);
-        font-family: inherit;
-        font-size: 11.5px;
-        font-weight: 800;
-        white-space: nowrap;
-        cursor: pointer;
-        transition: all .15s ease;
-    }
-    .bk-add-detail-inline-btn:hover {
-        background: var(--fc-blue);
-        border-style: solid;
-        color: #fff;
-        box-shadow: 0 4px 12px rgba(30,110,245,.28);
-    }
-    .bk-add-detail-count {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 18px;
-        height: 18px;
-        padding: 0 5px;
-        border-radius: 9px;
-        background: var(--fc-blue);
-        color: #fff;
-        font-size: 10px;
-        font-weight: 800;
-    }
-    .bk-add-detail-inline-btn:hover .bk-add-detail-count {
-        background: #fff;
-        color: var(--fc-blue);
-    }
-
-    /* إجمالي الضمان — سطر + حجز */
-    .bk-guar-linetotal {
-        margin-top: 6px;
-        font-size: 11.5px;
-        font-weight: 700;
-        color: #b45309;
-    }
-    .bk-guar-linetotal span { color: #8a94a3; font-weight: 600; }
-    .bk-guar-total-bar {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin: 4px 0 14px;
-        padding: 12px 16px;
-        border: 1.5px solid rgba(217, 119, 6, .35);
-        border-radius: 12px;
-        background: linear-gradient(135deg, rgba(217, 119, 6, .07), rgba(217, 119, 6, .02));
-        color: #b45309;
-        font-size: 12.5px;
-        font-weight: 700;
-    }
-    .bk-guar-total-bar strong { font-size: 15px; margin-inline-start: auto; }
-    .bk-guar-cur { color: #8a94a3; font-size: 11px; }
-
-    /* صفوف الحاويات الفعلية */
-    .bk-cc-details {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        padding: 0 16px 14px;
-    }
-
-    .bk-cc-detail-row {
-        display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr)) auto;
-        gap: 12px;
-        align-items: end;
-        padding: 12px;
-        background: #f8fafd;
-        border: 1px dashed #cfdcef;
-        border-radius: 10px;
-    }
-
-    .bk-cc-detail-del {
-        width: 42px;
-        height: 42px;
-        flex: 0 0 42px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border: 1px solid #ffd3d9;
-        border-radius: 9px;
-        background: var(--fc-red-lt);
-        color: var(--fc-red);
-        cursor: pointer;
-        transition: all .15s ease;
-    }
-    .bk-cc-detail-del:hover {
-        background: var(--fc-red);
-        border-color: var(--fc-red);
-        color: #fff;
-        box-shadow: 0 4px 12px rgba(224,48,72,.28);
-    }
-
-    /* Qty Control */
-    .bk-qty-control {
-        display: flex; align-items: center; gap: 0;
-        border: 1px solid #d8e2f0; border-radius: 9px;
-        overflow: hidden; background: #fafcff;
-    }
-
-    .qty-btn {
-        width: 36px; height: 42px; flex: 0 0 36px;
-        display: flex; align-items: center; justify-content: center;
-        border: none; background: transparent;
-        cursor: pointer; font-size: 18px; font-weight: 900;
-        transition: background .12s ease;
-    }
-
-    .qty-minus { color: var(--fc-red); border-left: 1px solid #d8e2f0; }
-    .qty-plus  { color: var(--fc-green); border-right: 1px solid #d8e2f0; }
-
-    .qty-minus:hover { background: var(--fc-red-lt); }
-    .qty-plus:hover  { background: var(--fc-green-lt); }
-
-    .qty-input {
-        flex: 1; text-align: center; border: none !important;
-        border-radius: 0 !important; background: transparent !important;
-        box-shadow: none !important;
-        font-weight: 800; font-size: 14px;
-    }
-
-    /* ================================================================
-       BOTTOM ACTIONS
-    ================================================================ */
-    .bk-bottom-actions {
-        display: flex; align-items: center; justify-content: space-between;
-        gap: 12px; padding: 14px 20px;
-        background: var(--fc-card); border: 1px solid var(--fc-border);
-        border-radius: var(--fc-radius);
-        box-shadow: 0 2px 8px rgba(15,41,82,.04);
-    }
-
-    .bk-bottom-back {
-        display: inline-flex; align-items: center; gap: 6px;
-        height: 38px; padding: 0 16px;
-        border: 1px solid var(--fc-border); border-radius: 9px;
-        background: var(--fc-card); color: var(--fc-muted);
-        font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
-        transition: all .15s ease;
-    }
-    .bk-bottom-back:hover { background: #f0f4fa; color: var(--fc-text); }
-    .bk-bottom-back svg { transform: rotate(180deg); }
-
-    .bk-bottom-right { display: flex; align-items: center; gap: 10px; }
-
-    .bk-next-btn {
-        display: inline-flex; align-items: center; gap: 6px;
-        height: 38px; padding: 0 16px;
-        border: 1.5px solid var(--fc-blue); border-radius: 9px;
-        background: var(--fc-blue-lt); color: var(--fc-blue);
-        font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
-        transition: all .15s ease;
-    }
-    .bk-next-btn:hover { background: var(--fc-blue); color: #fff; }
-    .bk-next-btn svg { transform: rotate(180deg); }
-
-    .bk-bottom-save {
-        display: inline-flex; align-items: center; gap: 8px;
-        height: 40px; padding: 0 22px;
-        border: 0; border-radius: 10px;
-        background: linear-gradient(135deg, #1e6ef5, #1558d6);
-        color: #fff; font-family: inherit;
-        font-size: 13px; font-weight: 800; cursor: pointer;
-        box-shadow: 0 4px 14px rgba(30,110,245,.30);
-        transition: all .15s ease;
-    }
-    .bk-bottom-save:hover:not(:disabled) {
-        transform: translateY(-1px); box-shadow: 0 6px 18px rgba(30,110,245,.38);
-    }
-    .bk-bottom-save:disabled { opacity: .6; cursor: not-allowed; }
-
-    /* ================================================================
-       SPINNER
-    ================================================================ */
-    .btn-spinner {
-        width: 15px; height: 15px;
-        border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
-        border-radius: 50%; animation: bk-spin .7s linear infinite;
-    }
-    .btn-spinner.sm { width: 13px; height: 13px; }
-
-    /* ================================================================
-       RESPONSIVE
-    ================================================================ */
-    @@media (max-width: 900px) {
-        .bk-form-grid { grid-template-columns: 1fr; }
-        .bk-cc-body   { grid-template-columns: 1fr 1fr; }
-        .bk-cc-notes  { grid-column: 1 / -1; }
-        .bk-cc-detail-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        .bk-hero-summary { flex-wrap: wrap; }
-        .bk-sum-item { flex: 0 0 50%; }
-        .bk-sum-div:nth-child(4) { display: none; }
-        .tab-section { padding: 18px 16px 22px; }
-    }
-
-    @@media (max-width: 680px) {
-        .bk-body { padding: 10px 12px 88px; }
-        .glow-fab-wrap { left: 18px; bottom: 18px; }
-        .bk-cc-body { grid-template-columns: 1fr; }
-        .bk-cc-notes { grid-column: 1; }
-        .bk-notes-action-row { flex-wrap: wrap; }
-        .bk-notes-action-row .field-input { flex: 1 1 100%; }
-        .bk-add-detail-inline-btn { width: 100%; justify-content: center; }
-        .bk-cc-details { padding: 0 12px 12px; }
-        .bk-cc-detail-row { grid-template-columns: 1fr; }
-        .bk-bottom-actions { flex-direction: column; }
-        .bk-bottom-back, .bk-bottom-save { width: 100%; justify-content: center; }
-        .bk-bottom-right { width: 100%; flex-direction: column; }
-        .bk-next-btn { width: 100%; justify-content: center; }
-        .bk-sum-item { flex: 0 0 100%; }
-        .bk-sum-div { display: none; }
-        .route-label strong { font-size: 11px; }
-    }
-
-    @@media (max-width: 480px) {
-        .bk-hero-summary { display: none; }
-    }
-
-</style>
-<style>
-        border-radius: 18px;
-        box-shadow: 0 4px 24px rgba(15,41,82,.05);
-        overflow: hidden;
-    }
-
-    .doc-hero-row {
-        display: flex; align-items: center;
-        justify-content: space-between;
-        gap: 16px; flex-wrap: wrap;
-        margin-bottom: 10px;
-    }
-
-    .doc-hero-left  { display: flex; flex-direction: column; gap: 2px; }
-
-    .doc-hero-crumb {
-        display: flex; align-items: center; gap: 5px;
-        font-size: 10.5px; font-weight: 700;
-        color: rgba(255,255,255,.55);
-        margin-bottom: 2px;
-    }
-
-    .fc-hero-sub {
-        font-size: 10.5px;
-        color: rgba(255,255,255,.55);
-        font-weight: 600;
-    }
-
-    .doc-hero-right {
-        display: flex; align-items: center;
-        gap: 8px; flex-shrink: 0;
-    }
-
-    .doc-hero-chip {
-        display: inline-flex; align-items: center; gap: 5px;
-        padding: 5px 11px; border-radius: 8px;
-        background: rgba(255,255,255,.08);
-        border: 1px solid rgba(255,255,255,.14);
-        color: rgba(255,255,255,.7);
-        font-size: 10.5px; font-weight: 700;
-        white-space: nowrap;
-    }
-
-    .doc-kpis-row {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 8px;
-        margin-top: 10px;
-    }
-
-    .doc-kpi {
-        background: rgba(255,255,255,.08);
-        border: 1px solid rgba(255,255,255,.12);
-        backdrop-filter: blur(12px);
-        border-radius: 9px;
-        padding: 6px 10px;
-    }
-
-    .doc-kpi-inner { display: flex; align-items: center; gap: 8px; }
-
-    .doc-kpi-icon {
-        width: 27px; height: 27px; border-radius: 7px;
-        display: flex; align-items: center;
-        justify-content: center; flex-shrink: 0;
+    @@media (max-width: 940px) {
+        .opf-strip { grid-template-columns: 1fr 1fr; }
+        .opf-stat + .opf-stat { border-inline-start: none; }
+        .opf-stat:nth-child(even) { border-inline-start: 1px solid #edf1f7; }
+        .opf-stat:nth-child(n+3)  { border-top: 1px solid #edf1f7; }
     }
 
     @@media (max-width: 760px) {
-        .doc-kpis-row { grid-template-columns: repeat(2, 1fr); }
+        .opf-page { padding: 12px 12px 70px; gap: 12px; }
+        .opf-head { padding: 14px 16px; }
+        .opf-title { font-size: 18px; }
+        .opf-actions { width: 100%; }
+        .opf-act { flex: 1; justify-content: center; }
+        .opf-tabsbar { top: 6px; gap: 4px; padding: 5px; }
+        .opf-tab { font-size: 11.5px; padding: 0 6px; gap: 6px; }
+        .opf-tab-ic { display: none; }
+        .opf-panel { padding: 16px 14px 20px; }
     }
 
-    .doc-kpi-blue .doc-kpi-icon  { background: rgba(125,211,252,.15); color: #7dd3fc; }
-    .doc-kpi-green .doc-kpi-icon { background: rgba(110,231,183,.15); color: #6ee7b7; }
-    .doc-kpi-amber .doc-kpi-icon { background: rgba(251,191,36,.15);  color: #fbbf24; }
-
-    .doc-kpi-data   { flex: 1; min-width: 0; }
-
-    .doc-kpi-num {
-        font-size: 15px; font-weight: 900;
-        color: #fff; line-height: 1;
+    @@media (max-width: 560px) {
+        .opf-stat { padding: 12px 14px; gap: 10px; }
+        .opf-stat-ic { width: 36px; height: 36px; flex-basis: 36px; }
+        .opf-stat-num { font-size: 16px; }
+        .doc-form-row .form-field { min-width: 100%; }
+        .doc-form-action { width: 100%; padding-top: 0; }
+        .doc-form-action .doc-btn { width: 100%; }
     }
 
-    .doc-kpi-label {
-        font-size: 10px; font-weight: 700;
-        color: rgba(255,255,255,.6); margin-top: 2px;
+    @@media (prefers-reduced-motion: reduce) {
+        .opf-head, .opf-strip, .opf-tabsbar, .opf-panel { animation: none; }
     }
-
-    .doc-banner {
-        display: flex; align-items: flex-start; gap: 12px;
-        padding: 14px 18px; font-size: 13px; font-weight: 600;
-        line-height: 1.6; border-bottom: 1px solid transparent;
-    }
-</style>
-<style>
-    /* ملف العملية: جداول وخانات وأزرار بنمط المشروع الأصلي بدل كنترولات جاهزة */
-    .doc-sec-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
-    .doc-loading { padding: 28px; text-align: center; color: var(--fc-muted, #6b7d95); font-weight: 700; }
-
-    .doc-hero-btn {
-        display: inline-flex; align-items: center; height: 36px; padding: 0 14px;
-        border-radius: 9px; border: 1px solid rgba(255,255,255,.35);
-        background: rgba(255,255,255,.1); color: #fff;
-        font-size: 12.5px; font-weight: 800; text-decoration: none; transition: background .15s ease;
-    }
-    .doc-hero-btn:hover { background: rgba(255,255,255,.2); color: #fff; }
-    .doc-hero-btn.solid { background: var(--fc-amber, #FF8015); border-color: transparent; }
-    .doc-hero-btn.solid:hover { background: #f0760d; }
-
-    .doc-btn {
-        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-        height: 36px; padding: 0 14px; border-radius: 9px; cursor: pointer;
-        font-family: inherit; font-size: 12.5px; font-weight: 800; text-decoration: none;
-        border: 1.5px solid var(--fc-border, #dde5f0); background: #fff; color: var(--fc-blue, #1e6ef5);
-        transition: all .15s ease; white-space: nowrap;
-    }
-    .doc-btn:hover { border-color: var(--fc-blue, #1e6ef5); }
-    .doc-btn.primary { background: var(--fc-blue, #1e6ef5); border-color: var(--fc-blue, #1e6ef5); color: #fff; }
-    .doc-btn.primary:hover { background: #1559cf; }
-    .doc-btn:disabled { opacity: .55; cursor: default; }
-
-    .doc-icon-btn {
-        display: inline-flex; align-items: center; justify-content: center;
-        width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
-        border: 1px solid var(--fc-border, #dde5f0); background: #fff; color: var(--fc-blue, #1e6ef5);
-        transition: all .12s ease; text-decoration: none;
-    }
-    .doc-icon-btn:hover { background: var(--fc-blue-lt, #eaf1ff); }
-    .doc-icon-btn.danger { color: var(--fc-red, #e03048); }
-    .doc-icon-btn.danger:hover { background: var(--fc-red-lt, #fff0f2); }
-
-    .doc-table-wrap { overflow-x: auto; border: 1px solid #e3ebf6; border-radius: 12px; }
-    .doc-table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; }
-    .doc-table thead th {
-        background: #f2f7fd; color: #33507c; font-weight: 800; font-size: 12px;
-        text-align: right; padding: 10px 12px; border-bottom: 1.5px solid #dfe9f5; white-space: nowrap;
-    }
-    .doc-table tbody td { padding: 9px 12px; border-bottom: 1px solid #edf2f9; color: var(--fc-text, #1c2c44); vertical-align: middle; }
-    .doc-table tbody tr:last-child td { border-bottom: none; }
-    .doc-table tbody tr:hover td { background: #f8fbff; }
-    .doc-link { color: var(--fc-blue, #1e6ef5); font-weight: 800; text-decoration: none; }
-    .doc-link:hover { text-decoration: underline; }
-
-    .doc-inline-input {
-        height: 34px; padding: 0 9px; border: 1.5px solid var(--fc-border, #dde5f0); border-radius: 8px;
-        font-family: inherit; font-size: 13px; color: var(--fc-text, #1c2c44); background: #fff; outline: none;
-    }
-    .doc-inline-input:focus { border-color: var(--fc-blue, #1e6ef5); box-shadow: 0 0 0 3px rgba(30,110,245,.12); }
-
-    .doc-form-row { display: flex; gap: 12px; align-items: flex-start; margin-top: 14px; }
-    .qe-src-toggle { display: flex; border: 1.5px solid #dde5f0; border-radius: 10px; overflow: hidden; }
-    .qe-src-toggle button { flex: 1; padding: 8px 6px; background: #fff; border: none; font-family: inherit;
-        font-size: 12px; font-weight: 800; color: #5a6c86; cursor: pointer; }
-    .qe-src-toggle button.on { background: var(--fc-blue); color: #fff; }
-    .doc-sub { font-size: 11px; color: #8496b0; font-weight: 700; }
-    .doc-form-row.wrap { flex-wrap: wrap; }
-    .doc-form-row .form-field { min-width: 140px; }
-    .doc-form-action { display: flex; align-items: flex-end; padding-top: 22px; }
-    .doc-empty { color: var(--fc-muted, #6b7d95); font-size: 13px; margin: 4px 0 0; }
 </style>

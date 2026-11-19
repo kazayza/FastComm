@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using FastCom.Infrastructure.Persistence;
 using FastCom.Server.Auth;
 using Microsoft.AspNetCore.Authorization;
@@ -234,19 +234,23 @@ public class OptionsController : ControllerBase
             .ToListAsync(ct));
 
     /// <summary>العهود المفتوحة على رحلة — بتظهر في فورم المصروف.</summary>
+        /// <summary>العهود المفتوحة — mine=true يقيّد بعُهد المستخدم (صاحبها موظف بنفس UserId)؛ الافتراضي كل العُهد المفتوحة للمخول.</summary>
     [HttpGet("custodies")]
     [Authorize(Policy = "PERM:EXPENSE.VIEW")]
-    public async Task<IActionResult> Custodies(long? tripId, CancellationToken ct) =>
-        Ok(await _db.DriverCustodies.AsNoTracking()
+    public async Task<IActionResult> Custodies(long? tripId, bool mine = false, CancellationToken ct = default)
+    {
+        var q = _db.DriverCustodies.AsNoTracking()
             .Where(c => !c.IsDeleted && (tripId == null || c.TripId == tripId || c.TripId == null) &&
-                        c.Status != "Closed" && c.Status != "Approved")
-            .OrderBy(c => c.CustodyNumber)
-            .Select(c => new CustodyOpt(c.CustodyId, c.CustodyNumber, c.OwnerType, c.OwnerId,
-                                        c.TripId, c.AmountIssued))
+                        c.Status != "Closed" && c.Status != "Approved");
+        if (mine && int.TryParse(User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier), out var uid) && uid > 0)
+            q = q.Where(c => c.OwnerType == "Employee" && c.OwnerId == uid);
+        return Ok(await q.OrderBy(c => c.CustodyNumber)
+            .Select(c => new CustodyOpt(c.CustodyId, c.CustodyNumber, c.OwnerType, c.OwnerId, c.TripId,
+                c.AmountIssued, c.AmountSpent, c.AmountReturned, c.AdditionalDue,
+                c.AmountIssued + c.AdditionalDue - c.AmountSpent - c.AmountReturned, c.Status))
             .ToListAsync(ct));
-
-    /// <summary>عمليات رحلة — للربط التلقائي في فورم المصروف (#29).</summary>
-    [HttpGet("trip-operations")]
+    }
+[HttpGet("trip-operations")]
     [Authorize(Policy = "PERM:EXPENSE.VIEW")]
     public async Task<IActionResult> TripOperations(long? tripId, CancellationToken ct) =>
         Ok(tripId is null
@@ -261,7 +265,8 @@ public class OptionsController : ControllerBase
     public record TripOpOpt(long OperationId, string OperationNumber, string CustomerName);
 
     public record CustodyOpt(long Id, string Label, string OwnerType, int OwnerId,
-                             long? TripId, decimal AmountIssued);
+                             long? TripId, decimal AmountIssued, decimal AmountSpent, decimal AmountReturned,
+                             decimal AdditionalDue, decimal Remaining, string Status);
 
     [HttpGet("tax-rates")]
     [Authorize(Policy = "PERM:OPERATION.VIEW")]

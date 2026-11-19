@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using FastCom.Domain.Entities;
 using FastCom.Infrastructure.Persistence;
 using FastCom.Server.Auth;
@@ -82,7 +82,7 @@ public class InvoicesController : ControllerBase
 
     public record Detail(long InvoiceId, string InvoiceNumber, string DocumentTypeCode,
         string InvoiceType, int CustomerId, string CustomerName, string? CustomerTaxNumber,
-        string? InvoiceDate, string? DueDate, decimal SubTotal, decimal DiscountTotal,
+        string? DisplayCustomerName, string? InvoiceDate, string? DueDate, decimal SubTotal, decimal DiscountTotal,
         decimal TaxTotal, decimal GrandTotal, decimal PaidAmount, decimal Due,
         string Status, string PaymentStatus, string? Notes, string? OriginalInvoiceNumber,
         DateTime? IssuedAt, string CurrencyCode);
@@ -170,8 +170,26 @@ public class InvoicesController : ControllerBase
                 .Where(o => o.InvoiceId == i.OriginalInvoiceId)
                 .Select(o => o.InvoiceNumber).FirstOrDefaultAsync(ct);
 
+        // End-customer name for display (free-text or linked customer on first operation's booking); accounting stays on CustomerId.
+        string? displayCustomerName = null;
+        var invOpIds = ops.Select(o => o.OperationId).ToList();
+        if (invOpIds.Count > 0)
+        {
+            displayCustomerName = await (
+                from o in _db.Operations.AsNoTracking()
+                join b in _db.Bookings.AsNoTracking() on o.BookingId equals b.BookingId
+                where invOpIds.Contains(o.OperationId)
+                orderby o.OperationId
+                select b.EndCustomerName ?? (b.EndCustomerId != null
+                    ? _db.Customers.Where(c => c.CustomerId == b.EndCustomerId).Select(c => c.NameAr).FirstOrDefault()
+                    : null)
+            ).FirstOrDefaultAsync(x => x != null, ct);
+        }
+        displayCustomerName ??= cust?.NameAr ?? "—";
+
         var detail = new Detail(i.InvoiceId, i.InvoiceNumber, i.DocumentTypeCode, i.InvoiceType,
             i.CustomerId, cust?.NameAr ?? "—", cust?.TaxNumber,
+            displayCustomerName,
             Iso(i.InvoiceDate), IsoN(i.DueDate), i.SubTotal, i.DiscountTotal, i.TaxTotal,
             i.GrandTotal, i.PaidAmount, i.GrandTotal - i.PaidAmount,
             i.Status, i.PaymentStatus, i.Notes, originalNo, i.IssuedAt, i.CurrencyCode);
@@ -427,7 +445,8 @@ public class InvoicesController : ControllerBase
 
     public record BillableExpense(long ExpenseId, string ExpenseNumber, DateTime ExpenseDate,
         string ExpenseTypeName, string? Description, decimal ActualAmount,
-        decimal BillableAmount, decimal BillableTaxRate);
+        decimal BillableAmount, decimal BillableTaxRate,
+        string? ReceiptTypeName = null, string? ReferenceNumber = null);
 
     public record AddExpensesRequest(List<long> ExpenseIds);
 
@@ -450,8 +469,26 @@ public class InvoicesController : ControllerBase
             .OrderBy(e => e.ExpenseDate)
             .Select(e => new BillableExpense(e.ExpenseId, e.ExpenseNumber, e.ExpenseDate,
                 e.ExpenseType.NameAr, e.Description, e.Amount,
-                e.BillableAmount!.Value, e.BillableTaxRate))
+                e.BillableAmount!.Value, e.BillableTaxRate,
+                e.ReceiptType != null ? e.ReceiptType.NameAr : null,
+                e.ReferenceNumber))
             .ToListAsync(ct));
+    }
+
+    private static string BuildBillableExpenseLineDescription(string expenseNumber, string expenseTypeName,
+        string? receiptTypeName, string? referenceNumber, string? description)
+    {
+        var hasReceipt = !string.IsNullOrWhiteSpace(receiptTypeName) || !string.IsNullOrWhiteSpace(referenceNumber);
+        var parts = new List<string>();
+        if (hasReceipt)
+        {
+            var receipt = "إيصالات - " + (string.IsNullOrWhiteSpace(receiptTypeName) ? "إيصال" : receiptTypeName.Trim());
+            if (!string.IsNullOrWhiteSpace(referenceNumber)) receipt += " " + referenceNumber.Trim();
+            parts.Add(receipt);
+        }
+        if (!string.IsNullOrWhiteSpace(expenseTypeName)) parts.Add(expenseTypeName.Trim());
+        if (!string.IsNullOrWhiteSpace(description)) parts.Add(description.Trim());
+        return string.Join(" — ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
     }
 
     /// <summary>يضيف المصروفات المختارة كبنود على الفاتورة بالقيمة القابلة للتحميل (مش القيمة الفعلية).</summary>
@@ -471,12 +508,16 @@ public class InvoicesController : ControllerBase
 
         var ids = req.ExpenseIds.Distinct().ToList();
         var expenses = await _db.Expenses.AsNoTracking()
+            .Include(e => e.ExpenseType)
+            .Include(e => e.ReceiptType)
             .Where(e => ids.Contains(e.ExpenseId) && !e.IsDeleted && e.Status != "Cancelled" &&
                         e.BillableAmount != null)
             .Select(e => new
             {
-                e.ExpenseId, e.OperationId, e.Description, e.BillableAmount, e.BillableTaxRate,
-                TypeName = e.ExpenseType.NameAr
+                e.ExpenseId, e.OperationId, e.ExpenseNumber, e.Description, e.ReferenceNumber,
+                e.BillableAmount, e.BillableTaxRate,
+                TypeName = e.ExpenseType != null ? e.ExpenseType.NameAr : "",
+                ReceiptTypeName = e.ReceiptType != null ? e.ReceiptType.NameAr : null
             })
             .ToListAsync(ct);
         if (expenses.Count == 0)
@@ -529,7 +570,7 @@ public class InvoicesController : ControllerBase
                 {
                     ExpenseId   = e.ExpenseId,
                     OperationId = e.OperationId,
-                    Description = B(e.Description) ?? e.TypeName,
+                    Description = BuildBillableExpenseLineDescription(e.ExpenseNumber, e.TypeName, e.ReceiptTypeName, e.ReferenceNumber, e.Description),
                     Quantity    = 1,
                     UnitPrice   = e.BillableAmount!.Value,
                     Discount    = 0,
