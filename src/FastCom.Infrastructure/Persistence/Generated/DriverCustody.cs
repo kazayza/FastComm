@@ -97,6 +97,10 @@ public partial class DriverCustody
     [InverseProperty("Custody")]
     public virtual ICollection<Expense> Expenses { get; set; } = new List<Expense>();
 
+    /* 🔴 #88 — طلبات تمويل العهدة (الموظف بيطلب مبلغ زيادة) */
+    [InverseProperty("Custody")]
+    public virtual ICollection<CustodyFundRequest> FundRequests { get; set; } = new List<CustodyFundRequest>();
+
     [ForeignKey("TripId")]
     [InverseProperty("DriverCustodies")]
     public virtual Trip? Trip { get; set; }

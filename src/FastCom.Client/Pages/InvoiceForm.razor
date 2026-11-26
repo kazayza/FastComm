@@ -187,6 +187,20 @@
             </div>
         }
 
+        @* #107 — تلميح التحويل: لحد ما يختار العميل *@
+        @if (_convPending)
+        {
+            <div class="bk-banner banner-info" role="status">
+                <div aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <span>تحويل من فاتورة مورد — <strong>اختر العميل</strong> وبنود الفاتورة هتتحط تلقائي، وتعدّل أسعارها قبل الحفظ</span>
+            </div>
+        }
+
         @* Error/Success Banner *@
         @if (_msg is not null)
         {
@@ -1116,6 +1130,8 @@
     }
     .banner-success { background: #e9f8f0; color: #0e7a43; border: 1px solid #b5e8d0; }
     .banner-error   { background: #fff0f2; color: var(--fc-red); border: 1px solid #ffc8d0; }
+    /* #107 — تلميح التحويل من فاتورة مورد */
+    .banner-info    { background: #eaf1ff; color: #1e4d8c; border: 1px solid #c0d4fb; }
     .banner-close {
         margin-right: auto; background: none; border: none;
         color: inherit; opacity: .6; cursor: pointer; font-size: 13px;
@@ -1534,6 +1550,8 @@
     [Parameter] public long? Id { get; set; }
     [Parameter, SupplyParameterFromQuery] public long? OperationId { get; set; }
     [Parameter, SupplyParameterFromQuery] public int? CustomerId { get; set; }
+    /* #107 — تحويل من فاتورة مورد: البنود بتتحط أول ما يختار العميل */
+    [Parameter, SupplyParameterFromQuery] public long? FromSupplierInvoice { get; set; }
     private long?   _id;
     private string  _number    = "";
     private string  _status    = "Draft";
@@ -1549,6 +1567,8 @@
 
     private bool    _loading = true;
     private bool    _saving;
+    /* ── #107 تحويل من فاتورة مورد ── */
+    private bool    _convPending;   /* لسه ما اختارش العميل ⇒ البنود مستنية */
     private bool    _triedSave;
     private string? _msg;
     private bool    _ok = true;
@@ -1619,6 +1639,8 @@
         {
             _f.InvoiceDate = DateTime.Today.ToString("yyyy-MM-dd");
             _loading = false;
+            /* #107 — جايين من زرار «تحويل لفاتورة عميل» في شاشة فواتير الموردين */
+            _convPending = FromSupplierInvoice is not null;
 
             /* اختيار مسبق قادم من ملف العملية: العميل + استيراد بنود العملية */
             if (CustomerId is not null && OperationId is not null)
@@ -1751,6 +1773,55 @@
         _f.Items = new();
         _ops = await SafeGetT<OpRef>($"api/invoices/billable-operations?customerId={_f.CustomerId}");
         StateHasChanged();
+
+        /* 🔴 #107 — لازم **بعد** `_f.Items = new()` اللي فوق: ‏`PickCustomer` بيفضّي
+           الجدول، فلو استوردنا قبلها البنود هتتمسح. ولو غيّر العميل البنود بتتحط
+           من جديد — البنود بتاعة التحويل مش بتاعة العميل. */
+        if (FromSupplierInvoice is not null)
+            await ImportSupplierInvoiceAsync(FromSupplierInvoice.Value);
+    }
+
+    /* ── #107 استيراد بنود فاتورة مورد ── */
+    private async Task ImportSupplierInvoiceAsync(long id)
+    {
+        try
+        {
+            var res = await Http.GetAsync($"api/supplier-invoices/{id}/to-customer-lines");
+            if (!res.IsSuccessStatusCode)
+            {
+                var raw = await res.Content.ReadAsStringAsync();
+                var msg = raw;
+                try
+                {
+                    using var d = System.Text.Json.JsonDocument.Parse(raw);
+                    if (d.RootElement.TryGetProperty("message", out var m))
+                        msg = m.GetString() ?? raw;
+                }
+                catch { /* مش JSON — نعرض الخام */ }
+                Snackbar.Add(msg, Severity.Error);
+                _convPending = false;
+                return;
+            }
+
+            var lines = await res.Content.ReadFromJsonAsync<List<LineForm>>();
+            if (lines is null || lines.Count == 0)
+            {
+                Snackbar.Add("فاتورة المورد مافيهاش بنود تتحول", Severity.Warning);
+                _convPending = false;
+                return;
+            }
+
+            _f.Items.AddRange(lines);
+            _convPending = false;
+            _activeTab   = 1;   /* نوديه على تاب البنود على طول */
+            Snackbar.Add($"اتحوّلت {lines.Count} بنود من فاتورة المورد — راجع الأسعار قبل الحفظ",
+                         Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("فشل استيراد بنود فاتورة المورد: " + ex.Message, Severity.Error);
+            _convPending = false;
+        }
     }
 
     private void ClearCustomerSelection()
@@ -1761,6 +1832,8 @@
         _filteredCustomers = _customers.Take(20).ToList();
         _f.Items = new();
         _ops = new();
+        /* #107 — مسح العميل ⇒ التحويل يرجع مستني اختيار من جديد */
+        _convPending = FromSupplierInvoice is not null;
     }
 
     /* ── التطبيع الفائق للغة العربية ── */

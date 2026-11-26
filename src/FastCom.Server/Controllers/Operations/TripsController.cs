@@ -46,9 +46,13 @@ public class TripsController : ControllerBase
 
     public record TripOpDto(long OperationId, int SequenceNo, string? PickupAt, string? DeliveryAt, string? Notes);
 
+    /* #82 — النولون الكلي = FreightAmount + OvernightAmount + TransferAmount
+       العميل بيحسب المجموع ويبعته في FreightAmount؛ الاثنين هنا للتفصيل بس */
     public record TripUpsert(int DriverId, int VehicleId, int? TrailerId, int? TripTypeId,
         string? PlannedStartAt, string? Notes, decimal? FreightAmount,
-        int? PortId, int? DestinationId, int? TahteeqPortId, List<TripOpDto>? Operations);
+        decimal? OvernightAmount = null, decimal? TransferAmount = null,
+        int? PortId = null, int? DestinationId = null, int? TahteeqPortId = null,
+        List<TripOpDto>? Operations = null);
 
     public record ListItem(long TripId, string TripNumber, string DriverName, string VehiclePlate,
         string? TrailerPlate, int OperationsCount, decimal DirectCost, decimal AllocatedCost,
@@ -66,7 +70,7 @@ public class TripsController : ControllerBase
         int? TripTypeId, int? PortId, int? DestinationId, int? TahteeqPortId,
         string? PlannedStartAt, string? ActualStartAt, string? ActualEndAt,
         decimal? StartOdometer, decimal? EndOdometer, decimal? TotalDistanceKm,
-        decimal? FreightAmount,
+        decimal? FreightAmount, decimal? OvernightAmount, decimal? TransferAmount,
         string? Notes, string Status, decimal DirectCost,
         /* 🔴 `DirectCost` = **كل** مصروفات الرحلة. `DistributableCost` = اللي بيتوزّع بس
            (المصروفات العامة اللي `OperationId` بتاعها فاضي).
@@ -182,7 +186,7 @@ public class TripsController : ControllerBase
             t.ActualStartAt?.ToString("yyyy-MM-ddTHH:mm"),
             t.ActualEndAt?.ToString("yyyy-MM-ddTHH:mm"),
             t.StartOdometer, t.EndOdometer, t.TotalDistanceKm,
-            t.FreightAmount,
+            t.FreightAmount, t.OvernightAmount, t.TransferAmount,
             t.Notes, t.Status, directCost, distributableCost);
 
         return Ok(new DetailResponse(detail, ops, allocs));
@@ -245,6 +249,8 @@ public class TripsController : ControllerBase
             TahteeqPortId = req.TahteeqPortId,
             PlannedStartAt = Dt(req.PlannedStartAt),
             FreightAmount  = req.FreightAmount is > 0 ? req.FreightAmount : null,
+            OvernightAmount = req.OvernightAmount is > 0 ? req.OvernightAmount : null,
+            TransferAmount  = req.TransferAmount is > 0 ? req.TransferAmount : null,
             Notes         = B(req.Notes),
             Status        = "Planned",
             CreatedBy     = CurrentUserId()
@@ -306,6 +312,8 @@ public class TripsController : ControllerBase
         t.TahteeqPortId = req.TahteeqPortId;
         t.PlannedStartAt = Dt(req.PlannedStartAt);
         t.FreightAmount  = req.FreightAmount is > 0 ? req.FreightAmount : null;
+        t.OvernightAmount = req.OvernightAmount is > 0 ? req.OvernightAmount : null;
+        t.TransferAmount  = req.TransferAmount is > 0 ? req.TransferAmount : null;
         t.Notes         = B(req.Notes);
         t.UpdatedAt     = DateTime.UtcNow;
         t.UpdatedBy     = CurrentUserId();
@@ -354,7 +362,10 @@ public class TripsController : ControllerBase
             .Where(t => !t.IsDeleted && t.Status != "Cancelled" && t.Status != "Completed" &&
                         (exceptTripId == null || t.TripId != exceptTripId) &&
                         (t.VehicleId == vehicleId || t.DriverId == driverId))
-            .Select(t => new { t.TripId, t.TripNumber, t.VehicleId, t.DriverId, t.PlannedStartAt, t.ActualStartAt, t.ActualEndAt })
+            /* #82 — اللوحة جوه نفس الاستعلام عشان تظهر في رسالة التحذير */
+            .Select(t => new { t.TripId, t.TripNumber, t.VehicleId, t.DriverId,
+                               Plate = t.Vehicle.PlateNumber,
+                               t.PlannedStartAt, t.ActualStartAt, t.ActualEndAt })
             .ToListAsync(ct);
 
         foreach (var t in active)
@@ -365,12 +376,27 @@ public class TripsController : ControllerBase
             if (!onRoad && !sameDay) continue;
 
             if (t.VehicleId == vehicleId)
-                return $"العربية دي محجوزة على الرحلة {t.TripNumber}" +
-                       (onRoad ? " — بدأت ولسه ما رجعتش" : $" في نفس اليوم ({plannedStart:yyyy-MM-dd})");
-            return $"السائق ده على الرحلة {t.TripNumber}" +
-                   (onRoad ? " — بدأت ولسه ما رجعتش" : $" في نفس اليوم ({plannedStart:yyyy-MM-dd})");
+                return $"العربية [{t.Plate}] محجوزة على الرحلة {t.TripNumber}" +
+                       (onRoad ? " — بدأت ولسه ما رجعتش" : $" في نفس اليوم ({plannedStart:yyyy-MM-dd})") +
+                       " — غيّر بداية الرحلة أو اختار عربية تانية.";
+            return $"السائق ده على الرحلة {t.TripNumber} بالعربية [{t.Plate}]" +
+                   (onRoad ? " — بدأت ولسه ما رجعتش" : $" في نفس اليوم ({plannedStart:yyyy-MM-dd})") +
+                   " — غيّر بداية الرحلة أو اختار سائق تاني.";
         }
         return null;
+    }
+
+    /* #82 — فحص التعارض من غير حفظ: العميل بيناده لما يختار عربية/سائق/تاريخ
+       ويعرض **تحذير** فيه رقم اللوحة — مش بيمنع الحفظ، بس بيقول لازم تغيّر البداية */
+    [HttpGet("availability-check")]
+    [Authorize(Policy = "PERM:TRIP.VIEW")]
+    public async Task<IActionResult> AvailabilityCheck(
+        [FromQuery] int? vehicleId, [FromQuery] int? driverId,
+        [FromQuery] string? date, [FromQuery] long? exceptTripId, CancellationToken ct = default)
+    {
+        var msg = await ResourceConflictAsync(
+            driverId ?? 0, vehicleId ?? 0, Dt(date), exceptTripId, ct);
+        return Ok(new { Conflicted = msg is not null, Message = msg });
     }
 
     private async Task AttachOperationsAsync(long tripId, List<TripOpDto> ops, CancellationToken ct)
@@ -745,6 +771,8 @@ public class TripsController : ControllerBase
     [Authorize(Policy = "PERM:TRIP.VIEW")]
     public async Task<IActionResult> FreightSuggest(
         [FromQuery] int? portId, [FromQuery] int? destinationId, [FromQuery] int? tripTypeId,
+        /* #82 — التعتيق + نوع الحاوية بقوا جزء من مطابقة القاعدة */
+        [FromQuery] int? tahteeqPortId, [FromQuery] int? containerTypeId,
         [FromQuery] string? date, CancellationToken ct = default)
     {
         var on = DateOnly.TryParse(date, out var d) ? d : DateOnly.FromDateTime(DateTime.UtcNow);
@@ -759,9 +787,13 @@ public class TripsController : ControllerBase
             .Where(r => portId == null || r.PortId == null || r.PortId == portId)
             .Where(r => destinationId == null || r.DestinationId == null || r.DestinationId == destinationId)
             .Where(r => tripTypeId == null || r.TripTypeId == null || r.TripTypeId == tripTypeId)
+            .Where(r => tahteeqPortId == null || r.TahteeqPortId == null || r.TahteeqPortId == tahteeqPortId)
+            .Where(r => containerTypeId == null || r.ContainerTypeId == null || r.ContainerTypeId == containerTypeId)
             // الأخص يكسب، وبعدين الأولوية (الأصغر أعلى)، وبعدين الأحدث
             .OrderByDescending(r => (r.PortId is not null ? 1 : 0) + (r.DestinationId is not null ? 1 : 0)
-                                  + (r.TripTypeId is not null ? 1 : 0))
+                                  + (r.TripTypeId is not null ? 1 : 0)
+                                  + (r.TahteeqPortId is not null ? 1 : 0)
+                                  + (r.ContainerTypeId is not null ? 1 : 0))
             .ThenBy(r => r.Priority)
             .ThenByDescending(r => r.ValidFrom)
             .FirstOrDefault();

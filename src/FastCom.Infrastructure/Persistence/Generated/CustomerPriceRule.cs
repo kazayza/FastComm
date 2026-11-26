@@ -11,7 +11,8 @@ public partial class CustomerPriceRule
     [Key]
     public long CustomerPriceRuleId { get; set; }
 
-    public int CustomerId { get; set; }
+    /* #83 — NULL = تعريفة عامة (مش مرتبطة بعميل) — المصدر الاحتياطي للسعر */
+    public int? CustomerId { get; set; }
 
     public int? PriceListId { get; set; }
 
@@ -64,7 +65,7 @@ public partial class CustomerPriceRule
 
     [ForeignKey("CustomerId")]
     [InverseProperty("CustomerPriceRules")]
-    public virtual Customer Customer { get; set; } = null!;
+    public virtual Customer? Customer { get; set; }
 
     [ForeignKey("DestinationId")]
     [InverseProperty("CustomerPriceRules")]

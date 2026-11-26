@@ -623,49 +623,76 @@ public class CustodiesController : ControllerBase
             Notes           = B(req.Notes),
             CreatedBy       = CurrentUserId()
         };
-        _db.CustodyTransactions.Add(tx);
-        await _db.SaveChangesAsync(ct);          // ← عشان ناخد `tx.CustodyTransactionId`
 
         /* 🔴 الخزينة — **رد الباقي** = فلوس رجعت من صاحب العهدة للخزينة → إيصال،
            و**تغذية العهدة** = صرف فعلي من خزينة الموظف يزود مبلغ عهدته
            (تحل محل «إضافة مبلغ» الوهمية التي لم تكن تتحرك بها أي فلوس). */
         var toTreasury = false;
-        if (req.Type == "Refund")
+
+        if (req.Type == "TopUp" && empBox is not null)
         {
-            toTreasury = await _cash.ReceiptAsync(new CashEntry(
-                ReferenceNumber : $"CUST-REFUND:{c.CustodyNumber}:{tx.CustodyTransactionId}",
-                Amount          : tx.Amount,
-                PaymentMethodId : await CashMethodIdAsync(ct) ?? 0,
-                CustodyId       : c.CustodyId,
-                Description     : $"رد باقي عهدة {c.CustodyNumber}",
-                Date            : DateOnly.FromDateTime(tx.TransactionDate),
-                CashBoxId       : empBox?.CashBoxId ?? 0), ct);
-            if (!toTreasury)
+            /* 🔴 الترتيب مهم — `trg_CustodyTransactions_Sync` بيحسب `AdditionalDue`
+               من `AmountIssued` **لحظة تسجيل الحركة**، والتريجر على `CustodyTransactions`
+               فما بيشتغلش تاني عند تحديث صف العهدة. لو سجلنا الحركة الأول كان
+               `AdditionalDue` بيتحسب على المبلغ القديم ويفضل غلط للأبد ⇒
+               «الباقي» يطلع أكبر من حقه ويترد للموظف زيادة عند الإقفال.
+               عشان كده: نزوّد `AmountIssued` الأول، وبعدين نسجل الحركة.
+               والاتنين + حركة الخزينة جوه معاملة واحدة — أي فشل يلغي الكل. */
+            await _db.Database.BeginTransactionAsync(ct);
+            try
             {
-                _db.CustodyTransactions.Remove(tx);
+                c.AmountIssued += tx.Amount;
                 await _db.SaveChangesAsync(ct);
-                return BadRequest(new { message = "تعذّر تسجيل رد الباقي في الخزينة — اتلغت الحركة بالكامل" });
+
+                _db.CustodyTransactions.Add(tx);
+                await _db.SaveChangesAsync(ct);      // ← عشان ناخد `tx.CustodyTransactionId` + التريجر يحسب على المبلغ الجديد
+
+                toTreasury = await _cash.PaymentAsync(new CashEntry(
+                    ReferenceNumber : $"CUST-TOPUP:{c.CustodyNumber}:{tx.CustodyTransactionId}",
+                    Amount          : tx.Amount,
+                    PaymentMethodId : await CashMethodIdAsync(ct) ?? 0,
+                    CustodyId       : c.CustodyId,
+                    Description     : $"تغذية عهدة {c.CustodyNumber}",
+                    Date            : DateOnly.FromDateTime(tx.TransactionDate),
+                    CashBoxId       : empBox.CashBoxId), ct);
+                if (!toTreasury)
+                {
+                    try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+                    return BadRequest(new { message = "تعذّر صرف التغذية من خزينة الموظف — اتلغت الحركة بالكامل" });
+                }
+
+                await _db.SaveChangesAsync(ct);      // ← حركة الخزينة (تريجر الرصيد بيحدّث `CurrentBalance`)
+                await _db.Database.CommitTransactionAsync(ct);
             }
-            await _db.SaveChangesAsync(ct);
+            catch (Exception)
+            {
+                try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+                throw;
+            }
         }
-        else if (req.Type == "TopUp" && empBox is not null)
+        else
         {
-            toTreasury = await _cash.PaymentAsync(new CashEntry(
-                ReferenceNumber : $"CUST-TOPUP:{c.CustodyNumber}:{tx.CustodyTransactionId}",
-                Amount          : tx.Amount,
-                PaymentMethodId : await CashMethodIdAsync(ct) ?? 0,
-                CustodyId       : c.CustodyId,
-                Description     : $"تغذية عهدة {c.CustodyNumber}",
-                Date            : DateOnly.FromDateTime(tx.TransactionDate),
-                CashBoxId       : empBox.CashBoxId), ct);
-            if (!toTreasury)
+            _db.CustodyTransactions.Add(tx);
+            await _db.SaveChangesAsync(ct);          // ← عشان ناخد `tx.CustodyTransactionId`
+
+            if (req.Type == "Refund")
             {
-                _db.CustodyTransactions.Remove(tx);
+                toTreasury = await _cash.ReceiptAsync(new CashEntry(
+                    ReferenceNumber : $"CUST-REFUND:{c.CustodyNumber}:{tx.CustodyTransactionId}",
+                    Amount          : tx.Amount,
+                    PaymentMethodId : await CashMethodIdAsync(ct) ?? 0,
+                    CustodyId       : c.CustodyId,
+                    Description     : $"رد باقي عهدة {c.CustodyNumber}",
+                    Date            : DateOnly.FromDateTime(tx.TransactionDate),
+                    CashBoxId       : empBox?.CashBoxId ?? 0), ct);
+                if (!toTreasury)
+                {
+                    _db.CustodyTransactions.Remove(tx);
+                    await _db.SaveChangesAsync(ct);
+                    return BadRequest(new { message = "تعذّر تسجيل رد الباقي في الخزينة — اتلغت الحركة بالكامل" });
+                }
                 await _db.SaveChangesAsync(ct);
-                return BadRequest(new { message = "تعذّر صرف التغذية من خزينة الموظف — اتلغت الحركة بالكامل" });
             }
-            c.AmountIssued += tx.Amount;
-            await _db.SaveChangesAsync(ct);
         }
 
         var now = await _db.DriverCustodies.AsNoTracking()
@@ -817,9 +844,14 @@ public class CustodiesController : ControllerBase
         }
 
         /* فصل المهام (قرار المالك): الاعتماد من الإدارة، ومن قدّم التسوية
-           لا يعتمدها بنفسه أبدًا */
-        if (c.SettledBy is not null && c.SettledBy == CurrentUserId())
-            return BadRequest(new { message = "لا يمكن اعتماد تسوية قمت بتقديمها بنفسك — الاعتماد يتم من مستخدم آخر يملك صلاحية الاعتماد" });
+           لا يعتمدها بنفسه.
+           🔴 استثناء واحد — **مدير النظام** (`ADMIN`): هو اللي بيمضي في آخر
+           المطاف، فله يقدّم التسوية ويعتمدها هو نفسه، حتى لو كان هو مقدّمها.
+           أي حد تاني — حتى لو كان يملك صلاحية الاعتماد — مرفوض لو كان هو
+           اللي قدّمها. نفس الباس المستخدم في `ExpensesController:205` و
+           `PermissionAuthorization:55` (ADMIN بيتجاوز كل الصلاحيات أصلًا). */
+        if (!User.IsInRole("ADMIN") && c.SettledBy is not null && c.SettledBy == CurrentUserId())
+            return BadRequest(new { message = "لا يمكن اعتماد تسوية قمت بتقديمها بنفسك — الاعتماد يتم من مدير النظام أو من مستخدم آخر يملك صلاحية الاعتماد" });
 
         /* العجز الحقيقي = ما صُرف ورُد فوق ما استلمه الموظف فعلًا.
            ده مال دفعه الموظف من جيبه لصالح الشغل — واعتماده عند المالك
@@ -851,6 +883,17 @@ public class CustodiesController : ControllerBase
                     Date            : DateOnly.FromDateTime(DateTime.Today),
                     CashBoxId       : empBox.CashBoxId), ct);
                 if (!paidBack) throw new GeneralCustodyBoxException();
+                await _db.SaveChangesAsync(ct);
+
+                /* 🔴 #88 — الاستعاضة فلوس **من الشركة للموظف** ⇒ تُعامل زي التغذية:
+                   نزوّد `AmountIssued` بيها **قبل** تسجيل الحركة، عشان
+                   `trg_CustodyTransactions_Sync` يحسب `AdditionalDue` على المبلغ الجديد
+                   ويطلع **صفر** بعد السداد. من غير كده العمود كان بيفضل يقول
+                   «مستحق للموظف» للأبد مع إننا دفعناه — ومفيش حاجة بتمنع الدفع مرتين.
+                   ⚠️ ما تدخلش في مجموع `Refund`: ده كان بيضاعف `deficit`
+                   (المنصرف + المرتجع − المستلم) بدل ما يصفّره. */
+                c.AmountIssued += deficit;
+                await _db.SaveChangesAsync(ct);
 
                 _db.CustodyTransactions.Add(new CustodyTransaction
                 {
@@ -1153,5 +1196,353 @@ public class CustodiesController : ControllerBase
         await _db.SaveChangesAsync(ct);
 
         return Ok(new { message = "اتحذفت العهدة" });
+    }
+
+    // ═══════════════ #88 — طلبات تمويل العهدة ═══════════════
+    /* الموظف بيطلب مبلغ زيادة على عهدته ⇒ إشعار لمدير النظام ⇒ يوافق أو يرفض.
+       الطلب **صف في جدول** مش إشعار: عشان يبقى فيه طابور منتظر، ومبلغ مطلوب ومعتمد،
+       ومين طلب ومين قرر، و**قفل ضد الموافقة مرتين** (`TopUpTransactionId` unique).
+       الإشعار هو الجرس بس. */
+
+    public record FundRequestBody(decimal Amount, string? Reason);
+    public record FundDecisionBody(decimal? ApprovedAmount, string? Notes);
+
+    public record FundRequestItem(
+        long FundRequestId, long CustodyId, string CustodyNumber, string OwnerName,
+        decimal CustodyIssued, decimal CustodyRemaining, string CustodyStatus,
+        decimal RequestedAmount, string? Reason, string Status, decimal? ApprovedAmount,
+        int RequestedBy, string RequestedByName, DateTime RequestedAt,
+        int? DecidedBy, string? DecidedByName, DateTime? DecidedAt, string? DecisionNotes,
+        long? TopUpTransactionId);
+
+    /// <summary>الخزينة الرئيسية (الافتراضية من الإعداد) — مصدر تمويل طلب الموظف.</summary>
+    private async Task<CashBox?> MainBoxAsync(CancellationToken ct)
+    {
+        var code = await _settings.GetStringAsync(SettingKeys.TreasuryDefaultBox,
+                                                  SettingDefaults.TreasuryDefaultBox, ct);
+        if (string.IsNullOrWhiteSpace(code)) code = SettingDefaults.TreasuryDefaultBox;
+        return await _db.CashBoxes.AsNoTracking()
+            .Where(b => !b.IsDeleted && b.IsActive && b.Status == "Open" && b.Code == code)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    private static string FundStatusAr(string? s) => s switch
+    {
+        "Pending"   => "منتظر",
+        "Approved"  => "معتمد",
+        "Rejected"  => "مرفوض",
+        "Cancelled" => "ملغي",
+        _           => s ?? "غير معروفة"
+    };
+
+    /* 🔴 قاموس أسماء المستخدمين — نفس أسلوب AuditController/Dashboard:
+       الـ join المباشر على AspNetUsers طلّع «النظام» لكل الصفوف على الداتابيز الحقيقية. */
+    private async Task<Dictionary<int, string>> UserNamesAsync(IEnumerable<int> ids, CancellationToken ct)
+    {
+        var list = ids.Where(i => i > 0).Distinct().ToList();
+        var map  = new Dictionary<int, string>();
+        if (list.Count == 0) return map;
+
+        var us = await _db.Users.AsNoTracking()
+            .Where(u => list.Contains(u.Id))
+            .Select(u => new { u.Id, u.FullName, u.UserName })
+            .ToListAsync(ct);
+        foreach (var u in us)
+            map[u.Id] = string.IsNullOrWhiteSpace(u.FullName) ? (u.UserName ?? "") : u.FullName;
+        return map;
+    }
+
+    private async Task<List<FundRequestItem>> ProjectFundAsync(IQueryable<CustodyFundRequest> q, CancellationToken ct)
+    {
+        var rows = await q
+            .OrderByDescending(x => x.FundRequestId)
+            .Select(x => new
+            {
+                x.FundRequestId, x.CustodyId, x.RequestedAmount, x.Reason, x.Status,
+                x.ApprovedAmount, x.RequestedBy, x.RequestedAt, x.DecidedBy, x.DecidedAt,
+                x.DecisionNotes, x.TopUpTransactionId,
+                CustodyNumber   = x.Custody.CustodyNumber,
+                CustodyStatus   = x.Custody.Status,
+                CustodyIssued   = x.Custody.AmountIssued,
+                CustodySpent    = x.Custody.AmountSpent,
+                CustodyReturned = x.Custody.AmountReturned,
+                CustodyDue      = x.Custody.AdditionalDue,
+                OwnerId         = x.Custody.OwnerId
+            })
+            .ToListAsync(ct);
+
+        var ownerIds = rows.Select(r => r.OwnerId).Distinct().ToList();
+        var ownerName = (await _db.Employees.AsNoTracking()
+            .Where(e => ownerIds.Contains(e.EmployeeId))
+            .Select(e => new { e.EmployeeId, e.FullNameAr })
+            .ToListAsync(ct)).ToDictionary(e => e.EmployeeId, e => e.FullNameAr);
+
+        var names = await UserNamesAsync(
+            rows.Select(r => r.RequestedBy)
+                .Concat(rows.Where(r => r.DecidedBy is not null).Select(r => r.DecidedBy!.Value)), ct);
+
+        return rows.Select(r => new FundRequestItem(
+            r.FundRequestId, r.CustodyId, r.CustodyNumber,
+            ownerName.TryGetValue(r.OwnerId, out var on) ? on : "",
+            r.CustodyIssued,
+            r.CustodyIssued + r.CustodyDue - r.CustodySpent - r.CustodyReturned,
+            r.CustodyStatus,
+            r.RequestedAmount, r.Reason, r.Status, r.ApprovedAmount,
+            r.RequestedBy,
+            names.TryGetValue(r.RequestedBy, out var rn) ? rn : "",
+            r.RequestedAt, r.DecidedBy,
+            r.DecidedBy is not null && names.TryGetValue(r.DecidedBy.Value, out var dn) ? dn : null,
+            r.DecidedAt, r.DecisionNotes, r.TopUpTransactionId)).ToList();
+    }
+
+    /// <summary>طابور الطلبات المنتظرة — لمدير النظام.</summary>
+    [HttpGet("fund-requests/pending")]
+    [Authorize(Policy = "PERM:CUSTODY.APPROVE")]
+    public async Task<IActionResult> PendingFundRequests(CancellationToken ct) =>
+        Ok(await ProjectFundAsync(
+            _db.CustodyFundRequests.AsNoTracking().Where(x => !x.IsDeleted && x.Status == "Pending"), ct));
+
+    /// <summary>سجل طلبات عهدة معيّنة.</summary>
+    [HttpGet("{id:long}/fund-requests")]
+    [Authorize(Policy = "PERM:CUSTODY.VIEW")]
+    public async Task<IActionResult> CustodyFundRequests(long id, CancellationToken ct) =>
+        Ok(await ProjectFundAsync(
+            _db.CustodyFundRequests.AsNoTracking().Where(x => !x.IsDeleted && x.CustodyId == id), ct));
+
+    // ─────────────── الموظف بيطلب ───────────────
+
+    [HttpPost("{id:long}/fund-requests")]
+    [Authorize(Policy = "PERM:CUSTODY.SETTLE")]
+    public async Task<IActionResult> CreateFundRequest(long id, [FromBody] FundRequestBody? req, CancellationToken ct)
+    {
+        if (req is null) return BadRequest(new { message = "البيانات مش كاملة" });
+        if (req.Amount <= 0) return BadRequest(new { message = "المبلغ المطلوب لازم يكون أكبر من صفر" });
+
+        var custodyMax = await _settings.GetDecimalAsync(SettingKeys.CustodyMaxAmount,
+                                                         SettingDefaults.CustodyMaxAmount, ct);
+        if (custodyMax > 0 && req.Amount > custodyMax)
+            return BadRequest(new { message = $"أقصى مبلغ مسموح {custodyMax:N2} — المطلوب {req.Amount:N2}" });
+
+        var c = await _db.DriverCustodies.FirstOrDefaultAsync(x => x.CustodyId == id && !x.IsDeleted, ct);
+        if (c is null) return NotFound(new { message = "العهدة مش موجودة" });
+        if (c.Status is not ("Open" or "PartiallySettled"))
+            return BadRequest(new { message = $"حالة العهدة {StatusAr(c.Status)} — الطلب بيتقدم على عهدة مفتوحة بس" });
+
+        /* طلب منتظر واحد بس لكل عهدة — منع الإغراق وتكرار التمويل */
+        if (await _db.CustodyFundRequests.AnyAsync(
+                x => !x.IsDeleted && x.CustodyId == id && x.Status == "Pending", ct))
+            return BadRequest(new { message = "في طلب تمويل لسه منتظر على العهدة دي — استنى القرار الأول" });
+
+        var fr = new CustodyFundRequest
+        {
+            CustodyId       = c.CustodyId,
+            RequestedAmount = req.Amount,
+            Reason          = B(req.Reason),
+            Status          = "Pending",
+            RequestedBy     = CurrentUserId(),
+            RequestedAt     = DateTime.UtcNow,
+            CreatedAt       = DateTime.UtcNow
+        };
+        _db.CustodyFundRequests.Add(fr);
+        await _db.SaveChangesAsync(ct);
+
+        await _audit.LogAsync(FastCom.Server.Services.AuditActions.Create, "CustodyFundRequest",
+            fr.FundRequestId.ToString(), description: $"طلب تمويل {req.Amount:N2} على العهدة {c.CustodyNumber}", ct: ct);
+
+        await NotifyPermissionHoldersAsync("CUSTODY.APPROVE",
+            $"طلب تمويل عهدة — {c.CustodyNumber}",
+            $"طلب تمويل بمبلغ {req.Amount:N2} ج.م على عهدة {c.CustodyNumber}"
+            + (string.IsNullOrWhiteSpace(req.Reason) ? "" : $" — السبب: {B(req.Reason)}"),
+            c, "High", ct);
+
+        return Ok(new { message = $"اتسجل الطلب بمبلغ {req.Amount:N2} — مستني موافقة مدير النظام" });
+    }
+
+    /// <summary>الموظف يلغي طلبه (ما دام لسه منتظر).</summary>
+    [HttpPost("fund-requests/{rid:long}/cancel")]
+    [Authorize(Policy = "PERM:CUSTODY.SETTLE")]
+    public async Task<IActionResult> CancelFundRequest(long rid, CancellationToken ct)
+    {
+        var fr = await _db.CustodyFundRequests.FirstOrDefaultAsync(x => x.FundRequestId == rid && !x.IsDeleted, ct);
+        if (fr is null) return NotFound(new { message = "الطلب مش موجود" });
+        if (fr.Status != "Pending")
+            return BadRequest(new { message = $"الطلب حالته {FundStatusAr(fr.Status)} — الإلغاء على طلب منتظر بس" });
+
+        fr.Status    = "Cancelled";
+        fr.DecidedBy = CurrentUserId();
+        fr.DecidedAt = DateTime.UtcNow;
+        fr.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        await _audit.LogAsync(FastCom.Server.Services.AuditActions.Update, "CustodyFundRequest",
+            fr.FundRequestId.ToString(), description: "إلغاء طلب تمويل من صاحبه", ct: ct);
+
+        return Ok(new { message = "اتلغى الطلب" });
+    }
+
+    // ─────────────── مدير النظام بيقرر ───────────────
+
+    /* الموافقة = **تحويل من الرئيسية لصندوق الموظف + تغذية العهدة** في معاملة واحدة.
+       🔴 التحويل لوحده من غير تغذية كان هيخلي `AmountIssued` أقل من المنصرف ⇒
+       عند الاعتماد `deficit` يطلع موجب والنظام **يصرف له نفس المبلغ تاني** استعاضة.
+       🔴 والترتيب مهم زي `AddTransaction`: نزوّد `AmountIssued` الأول وبعدين نسجل
+       الحركة، عشان `trg_CustodyTransactions_Sync` يحسب `AdditionalDue` على المبلغ الجديد. */
+    [HttpPost("fund-requests/{rid:long}/approve")]
+    [Authorize(Policy = "PERM:CUSTODY.APPROVE")]
+    public async Task<IActionResult> ApproveFundRequest(long rid, [FromBody] FundDecisionBody? req, CancellationToken ct)
+    {
+        var fr = await _db.CustodyFundRequests.FirstOrDefaultAsync(x => x.FundRequestId == rid && !x.IsDeleted, ct);
+        if (fr is null) return NotFound(new { message = "الطلب مش موجود" });
+        if (fr.Status != "Pending")
+            return BadRequest(new { message = $"الطلب حالته {FundStatusAr(fr.Status)} — الموافقة على طلب منتظر بس" });
+        if (fr.TopUpTransactionId is not null)
+            return BadRequest(new { message = "الطلب ده اتوافق عليه واتموّل قبل كده" });
+
+        var c = await _db.DriverCustodies.FirstOrDefaultAsync(x => x.CustodyId == fr.CustodyId && !x.IsDeleted, ct);
+        if (c is null) return NotFound(new { message = "العهدة مش موجودة" });
+        if (c.Status is not ("Open" or "PartiallySettled"))
+            return BadRequest(new { message = $"حالة العهدة {StatusAr(c.Status)} — مافيش تمويل إلا على عهدة مفتوحة" });
+
+        var amount = req?.ApprovedAmount is > 0 ? req.ApprovedAmount.Value : fr.RequestedAmount;
+        if (amount <= 0) return BadRequest(new { message = "المبلغ المعتمد لازم يكون أكبر من صفر" });
+
+        var custodyMax = await _settings.GetDecimalAsync(SettingKeys.CustodyMaxAmount,
+                                                         SettingDefaults.CustodyMaxAmount, ct);
+        if (custodyMax > 0 && amount > custodyMax)
+            return BadRequest(new { message = $"أقصى مبلغ مسموح {custodyMax:N2} — المعتمد {amount:N2}" });
+
+        var empBox = await EmployeeBoxAsync(c.OwnerId, ct);
+        if (empBox is null)
+            return BadRequest(new { message = "مفيش خزينة تشغيل مفتوحة باسم الموظف صاحب العهدة — افتحها الأول" });
+
+        var mainBox = await MainBoxAsync(ct);
+        if (mainBox is null)
+            return BadRequest(new { message = "الخزينة الرئيسية مش موجودة أو مقفولة" });
+        if (mainBox.CurrentBalance < amount)
+            return BadRequest(new { message = $"رصيد الخزينة الرئيسية {mainBox.CurrentBalance:N2} مش كفاية لتحويل {amount:N2}" });
+
+        decimal funded;
+        await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            /* 1) تحويل الرئيسية → صندوق الموظف (حركتين مربوطين بمعرّف واحد) */
+            var group = Guid.NewGuid();
+            var when  = DateTime.Now;
+            var desc  = $"تمويل عهدة {c.CustodyNumber} — طلب رقم {fr.FundRequestId}";
+            var uid   = CurrentUserId();
+            _db.CashTransactions.AddRange(
+                new CashTransaction
+                {
+                    BranchId = c.BranchId, CashBoxId = mainBox.CashBoxId, TransactionDate = when,
+                    TransactionType = "TransferOut", Amount = amount,
+                    TransferGroupId = group, CounterpartCashBoxId = empBox.CashBoxId,
+                    Description = desc, Status = "Posted", CreatedBy = uid
+                },
+                new CashTransaction
+                {
+                    BranchId = c.BranchId, CashBoxId = empBox.CashBoxId, TransactionDate = when,
+                    TransactionType = "TransferIn", Amount = amount,
+                    TransferGroupId = group, CounterpartCashBoxId = mainBox.CashBoxId,
+                    Description = desc, Status = "Posted", CreatedBy = uid
+                });
+            await _db.SaveChangesAsync(ct);
+
+            /* 2) مبلغ العهدة يزيد **الأول** — عشان التريجر يحسب على الرقم الجديد */
+            c.AmountIssued += amount;
+            await _db.SaveChangesAsync(ct);
+
+            /* 3) حركة «تغذية» في دفتر العهدة */
+            var tx = new CustodyTransaction
+            {
+                CustodyId       = c.CustodyId,
+                TransactionType = "TopUp",
+                Amount          = amount,
+                TransactionDate = when,
+                Notes           = $"تمويل معتمد — طلب رقم {fr.FundRequestId}",
+                CreatedBy       = uid
+            };
+            _db.CustodyTransactions.Add(tx);
+            await _db.SaveChangesAsync(ct);
+
+            /* 4) الفلوس تخرج من صندوق الموظف لحساب العهدة (نفس منطق التغذية اليدوية) */
+            var ok = await _cash.PaymentAsync(new CashEntry(
+                ReferenceNumber : $"CUST-TOPUP:{c.CustodyNumber}:{tx.CustodyTransactionId}",
+                Amount          : amount,
+                PaymentMethodId : await CashMethodIdAsync(ct) ?? 0,
+                CustodyId       : c.CustodyId,
+                Description     : $"تغذية عهدة {c.CustodyNumber} — تمويل معتمد",
+                Date            : DateOnly.FromDateTime(when),
+                CashBoxId       : empBox.CashBoxId), ct);
+            if (!ok) throw new GeneralCustodyBoxException();
+            await _db.SaveChangesAsync(ct);
+
+            /* 5) الطلب → معتمد + ربط حركة التغذية (القفل ضد الموافقة مرتين) */
+            fr.Status               = "Approved";
+            fr.ApprovedAmount       = amount;
+            fr.DecidedBy            = uid;
+            fr.DecidedAt            = DateTime.UtcNow;
+            fr.DecisionNotes        = B(req?.Notes);
+            fr.TopUpTransactionId   = tx.CustodyTransactionId;
+            fr.UpdatedAt            = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+
+            await _db.Database.CommitTransactionAsync(ct);
+            funded = amount;
+        }
+        catch (GeneralCustodyBoxException)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            return BadRequest(new { message = "تعذّر صرف التغذية من خزينة الموظف — الموافقة اتلغت بالكامل" });
+        }
+        catch (Exception)
+        {
+            try { await _db.Database.RollbackTransactionAsync(ct); } catch { /* تجاهل */ }
+            throw;
+        }
+
+        await _audit.LogAsync(FastCom.Server.Services.AuditActions.Approve, "CustodyFundRequest",
+            fr.FundRequestId.ToString(),
+            description: $"اعتماد تمويل {funded:N2} على العهدة {c.CustodyNumber} (مطلوب {fr.RequestedAmount:N2})", ct: ct);
+
+        await NotifyUserAsync(fr.RequestedBy,
+            $"اتوافق على طلب تمويل عهدتك {c.CustodyNumber}",
+            $"اتحوّل {funded:N2} ج.م من الخزينة الرئيسية لخزينتك، وزاد مبلغ العهدة بنفس القيمة.",
+            c, "Normal", ct);
+
+        return Ok(new { message = $"اتحوّل {funded:N2} ج.م لخزينة الموظف وزاد مبلغ العهدة بنفس القيمة" });
+    }
+
+    [HttpPost("fund-requests/{rid:long}/reject")]
+    [Authorize(Policy = "PERM:CUSTODY.APPROVE")]
+    public async Task<IActionResult> RejectFundRequest(long rid, [FromBody] FundDecisionBody? req, CancellationToken ct)
+    {
+        var fr = await _db.CustodyFundRequests.FirstOrDefaultAsync(x => x.FundRequestId == rid && !x.IsDeleted, ct);
+        if (fr is null) return NotFound(new { message = "الطلب مش موجود" });
+        if (fr.Status != "Pending")
+            return BadRequest(new { message = $"الطلب حالته {FundStatusAr(fr.Status)} — الرفض على طلب منتظر بس" });
+
+        var c = await _db.DriverCustodies.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.CustodyId == fr.CustodyId && !x.IsDeleted, ct);
+
+        fr.Status         = "Rejected";
+        fr.DecidedBy      = CurrentUserId();
+        fr.DecidedAt      = DateTime.UtcNow;
+        fr.DecisionNotes  = B(req?.Notes);
+        fr.UpdatedAt      = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        await _audit.LogAsync(FastCom.Server.Services.AuditActions.Update, "CustodyFundRequest",
+            fr.FundRequestId.ToString(),
+            description: $"رفض طلب تمويل {fr.RequestedAmount:N2}" + (string.IsNullOrWhiteSpace(req?.Notes) ? "" : $" — السبب: {B(req!.Notes)}"), ct: ct);
+
+        if (c is not null)
+            await NotifyUserAsync(fr.RequestedBy,
+                $"اترفض طلب تمويل عهدتك {c.CustodyNumber}",
+                string.IsNullOrWhiteSpace(req?.Notes)
+                    ? $"اترفض طلب التمويل بمبلغ {fr.RequestedAmount:N2} ج.م."
+                    : $"اترفض طلب التمويل بمبلغ {fr.RequestedAmount:N2} ج.م — السبب: {B(req!.Notes)}",
+                c, "High", ct);
+
+        return Ok(new { message = "اترفض الطلب" });
     }
 }

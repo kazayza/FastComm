@@ -40,8 +40,12 @@ public class VehicleAccountsController : ControllerBase
     public record StatementOut(string PlateNumber, decimal Opening, List<StmtLine> Lines,
         decimal TotalDebit, decimal TotalCredit, decimal Closing);
 
+    /* #105 — ‏`SupplierId > 0` ⇒ الدفعة على **المورد المالك** (كشف مجمع) مش على مركبة.
+       ‏`VoidIn` لإلغاء دفعة نولون (مركبة أو مورد) — المرجع الكامل بالظبط. */
     public record PaymentIn(int VehicleId, string? TxDate, decimal Amount,
-        int? PaymentMethodId, string? Description);
+        int? PaymentMethodId, string? Description, int SupplierId = 0);
+
+    public record VoidIn(string Reference);
 
     /* ═══════════════ LIST — العربيات ═══════════════ */
 
@@ -444,9 +448,46 @@ public class VehicleAccountsController : ControllerBase
         if (req.Amount <= 0)
             return BadRequest(new { message = "المبلغ لازم يكون أكتر من صفر" });
 
-        var vehicle = await _db.Vehicles.AsNoTracking()
-            .FirstOrDefaultAsync(v => v.VehicleId == req.VehicleId && !v.IsDeleted, ct);
-        if (vehicle is null) return BadRequest(new { message = "العربية مش موجودة" });
+        /* ═══════ #105 — المستفيد: مورد (كشف مجمع) أو مركبة واحدة ═══════
+           🔴🔴 قاعدة ما تتكسرش: الحركة تتسجل بـ`SupplierId` **من غير** `VehicleId`،
+           أو بـ`VehicleId` **من غير** `SupplierId` — **مش الاتنين**.
+           السبب: ‏`BuildSupplierStatementAsync` بتجمع من مصدرين:
+             1) سطور كل مركبات المورد (`BuildStatementAsync` ← `t.VehicleId == …`)
+             2) دفعات المورد نفسه (`t.SupplierId == supplierId`)
+           ⇒ حركة بالاتنين **تتحسب مرتين** في الكشف المجمع. */
+        string refNo, ownerLabel;
+        int supplierId = 0, vehicleId = 0;
+
+        if (req.SupplierId > 0)
+        {
+            var sup = await _db.Suppliers.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.SupplierId == req.SupplierId && !x.IsDeleted, ct);
+            if (sup is null) return BadRequest(new { message = "المورد غير موجود" });
+
+            /* مورد من غير مركبات ⇒ مافيش نولون يتحاسب عليه من الشاشة دي */
+            var vehCount = await _db.Vehicles.AsNoTracking()
+                .CountAsync(v => !v.IsDeleted && v.SupplierId == sup.SupplierId, ct);
+            if (vehCount == 0)
+                return BadRequest(new { message =
+                    $"مافيش مركبات مسجلة على المورد {sup.NameAr} — لو الدفعة على فواتير مورّد سجّلها من شاشة دفعات الموردين" });
+
+            supplierId = sup.SupplierId;
+            /* ‏`SPAYV` مش `SPAY`: ‏`SPAY:` مربوط بسجل رسمي في `SupplierPayments`
+               وبيتوزع على فواتير المورد، و`Treasury.razor` بيحوّله على `/supplier-payments`.
+               دفعة نولون تحت الحساب ملهاش سجل هناك ⇒ بادئة مستقلة. */
+            refNo      = $"SPAYV:{sup.SupplierId}:{DateTime.UtcNow:yyyyMMddHHmmss}";
+            ownerLabel = sup.NameAr;
+        }
+        else
+        {
+            var vehicle = await _db.Vehicles.AsNoTracking()
+                .FirstOrDefaultAsync(v => v.VehicleId == req.VehicleId && !v.IsDeleted, ct);
+            if (vehicle is null) return BadRequest(new { message = "العربية مش موجودة" });
+
+            vehicleId  = vehicle.VehicleId;
+            refNo      = $"VEHPAY:{vehicle.VehicleId}:{DateTime.UtcNow:yyyyMMddHHmmss}";
+            ownerLabel = vehicle.PlateNumber;
+        }
 
         /* طريقة الدفع: لو مش محددة، أول طريقة دفع نشطة */
         var methodId = req.PaymentMethodId;
@@ -470,12 +511,17 @@ public class VehicleAccountsController : ControllerBase
         }
 
         /* الخزينة — فلوس خرجت */
+        /* الخزينة — فلوس خرجت. ‏`CashEntry` بيحوّل الـ0 إلى null ⇒ واحد بس من
+           ‏`SupplierId`/`VehicleId` هو اللي هيتسجل فعلًا. */
         var ok = await _cash.PaymentAsync(new CashEntry(
-            $"VEHPAY:{req.VehicleId}:{DateTime.UtcNow:yyyyMMddHHmmss}",
+            refNo,
             req.Amount,
             methodId.Value,
-            VehicleId: req.VehicleId,
-            Description: req.Description ?? $"دفعة على العربية {vehicle.PlateNumber}",
+            SupplierId: supplierId,
+            VehicleId:  vehicleId,
+            Description: req.Description ?? (supplierId > 0
+                ? $"دفعة نولون للمورد {ownerLabel}"
+                : $"دفعة على العربية {ownerLabel}"),
             Date: payDate), ct);
 
         if (!ok)
@@ -485,7 +531,56 @@ public class VehicleAccountsController : ControllerBase
            (نفس نمط SupplierPayments) — الحفظ ده كان ناقص فالدفعة كانت بتضيع */
         await _db.SaveChangesAsync(ct);
 
-        return Ok(new { message = $"اتسجلت دفعة {req.Amount:N0} على العربية {vehicle.PlateNumber}" });
+        return Ok(new { message = supplierId > 0
+            ? $"اتسجلت دفعة {req.Amount:N0} على المورد {ownerLabel} — هتنزل في كشف حسابه المجمع"
+            : $"اتسجلت دفعة {req.Amount:N0} على العربية {ownerLabel}" });
+    }
+
+    /* ═══════════════ VOID — إلغاء دفعة نولون ═══════════════ */
+
+    /// <summary>
+    /// ‏#105 — إلغاء دفعة نولون (مركبة `VEHPAY` أو مورد `SPAYV`).
+    /// 🔴 المرجع **الكامل بالظبط** — `VoidByReferenceAsync` بتطابق بـ`StartsWith`،
+    /// فلو بعتنا `VEHPAY:5:` بس هتُلغي **كل** دفعات العربية 5.
+    /// </summary>
+    [HttpPost("payment/void")]
+    [Authorize(Policy = "PERM:TREASURY.MANAGE")]
+    public async Task<IActionResult> VoidPayment([FromBody] VoidIn req, CancellationToken ct)
+    {
+        var refNo = (req.Reference ?? "").Trim();
+
+        /* نلغي بس دفعات النولون بتاعتنا — أي مرجع تاني (فاتورة/مصروف/عهدة/SPAY)
+           بيتلغى من شاشته هو عشان مستنده ما يفضلش قائم. */
+        if (!refNo.StartsWith("VEHPAY:") && !refNo.StartsWith("SPAYV:"))
+            return BadRequest(new { message = "الحركة دي مش دفعة نولون — تُلغى من شاشتها الأصلية" });
+
+        /* بحث بالمطابقة الكاملة الأول — نتأكد إنها موجودة وموجودة مرة واحدة */
+        var matches = await _db.CashTransactions.AsNoTracking()
+            .Where(t => !t.IsDeleted && t.ReferenceNumber == refNo)
+            .Select(t => new { t.CashTransactionId, t.Status, t.TransactionType })
+            .ToListAsync(ct);
+
+        if (matches.Count == 0) return NotFound(new { message = "الدفعة مش موجودة" });
+        if (matches.Count > 1)
+            return BadRequest(new { message = "في أكتر من حركة بنفس المرجع — راجع الخزينة" });
+
+        var tx = matches[0];
+        if (tx.Status == "Void")
+            return BadRequest(new { message = "الدفعة ملغية أصلًا" });
+        if (tx.Status != "Posted")
+            return BadRequest(new { message = $"الدفعة حالتها {tx.Status} — ما تتلغاش" });
+        if (tx.TransactionType != "Payment")
+            return BadRequest(new { message = "المرجع ده مش حركة صرف" });
+
+        /* الـ trigger بيحدّث رصيد الخزينة من حالة `Void` */
+        var n = await _cash.VoidByReferenceAsync(refNo, ct);
+        if (n != 1)
+            return BadRequest(new { message = "تعذر إلغاء الدفعة — المرجع طابق أكتر من حركة" });
+
+        /* RULE #43 — ‏CashBook ما بيحفظش، الكنترولر هو اللي بيحفظ */
+        await _db.SaveChangesAsync(ct);
+
+        return Ok(new { message = "اتلغت الدفعة ورجعت الفلوس للخزينة" });
     }
 
     /* ═══════════════ HELPERS ═══════════════ */

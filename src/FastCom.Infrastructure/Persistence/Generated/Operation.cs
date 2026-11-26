@@ -56,6 +56,13 @@ public partial class Operation
     [Column(TypeName = "decimal(19, 4)")]
     public decimal ActualCost { get; set; }
 
+    /* #90 — مجموع «يتحمّله العميل» في مصروفات العملية.
+       بيحسبه `usp_Operations_RecalcCost` (مش عمود محسوب — SQL Server
+       ما بيسمحش لعمود محسوب يشير لجدول تاني).
+       🔴 **مش إيراد** — فلوس مدفوعة بالنيابة عن العميل وهيردّها. للعِلم بس. */
+    [Column(TypeName = "decimal(19, 4)")]
+    public decimal BillableRevenue { get; set; }
+
     [StringLength(1000)]
     public string? Notes { get; set; }
 

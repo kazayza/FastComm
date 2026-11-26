@@ -448,6 +448,48 @@
                             </div>
                         </div>
 
+                        @* #82 — التعتيق: الميناء النهائي للرحلة *@
+                        <div class="svc-field">
+                            <label class="svc-label" for="fr-tahteeq">التعتيق</label>
+                            <div class="svc-input-wrap">
+                                <span class="svc-prefix">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+                                         stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="10" r="3"/>
+                                        <path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 10-16 0c0 3 2.7 7 8 11.7z"/>
+                                    </svg>
+                                </span>
+                                <select id="fr-tahteeq" class="svc-input svc-select with-prefix" @bind="_f.TahteeqPortId">
+                                    <option value="">— أي تعتيق —</option>
+                                    @foreach (var o in _ports)
+                                    {
+                                        <option value="@o.Id">@o.Label</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+
+                        @* #82 — نوع الحاوية *@
+                        <div class="svc-field">
+                            <label class="svc-label" for="fr-ctype">نوع الحاوية</label>
+                            <div class="svc-input-wrap">
+                                <span class="svc-prefix">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+                                         stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="7" width="18" height="12" rx="1"/>
+                                        <path d="M3 11h18M9 7v12M15 7v12"/>
+                                    </svg>
+                                </span>
+                                <select id="fr-ctype" class="svc-input svc-select with-prefix" @bind="_f.ContainerTypeId">
+                                    <option value="">— أي نوع حاوية —</option>
+                                    @foreach (var o in _containerTypes)
+                                    {
+                                        <option value="@o.Id">@o.Label</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+
                         <div class="svc-field">
                             <label class="svc-label" for="fr-amount">
                                 النولون (ج.م) <span class="svc-req">*</span>
@@ -1368,6 +1410,7 @@
     private List<Opt>  _ports       = new();
     private List<Opt>  _destinations = new();
     private List<Opt>  _tripTypes   = new();
+    private List<Opt>  _containerTypes = new();   // #82
 
     private bool    _loading;
     private string  _search    = "";
@@ -1394,6 +1437,10 @@
         public string?  DestinationName     { get; set; }
         public int?     TripTypeId          { get; set; }
         public string?  TripTypeName        { get; set; }
+        public int?     TahteeqPortId       { get; set; }
+        public string?  TahteeqPortName     { get; set; }
+        public int?     ContainerTypeId     { get; set; }
+        public string?  ContainerTypeName   { get; set; }
         public decimal  Amount              { get; set; }
         public string   ValidFrom           { get; set; } = "";
         public string?  ValidTo             { get; set; }
@@ -1407,6 +1454,8 @@
         public int?     PortId        { get; set; }
         public int?     DestinationId { get; set; }
         public int?     TripTypeId    { get; set; }
+        public int?     TahteeqPortId   { get; set; }
+        public int?     ContainerTypeId { get; set; }
         public decimal  Amount        { get; set; }
         public DateOnly  ValidFrom    { get; set; } = DateOnly.FromDateTime(DateTime.Today);
         public DateOnly? ValidTo      { get; set; }
@@ -1420,7 +1469,10 @@
         var from = string.IsNullOrWhiteSpace(r.PortName) ? "أي ميناء" : r.PortName;
         var to   = string.IsNullOrWhiteSpace(r.DestinationName) ? "أي وجهة" : r.DestinationName;
         var type = string.IsNullOrWhiteSpace(r.TripTypeName) ? "" : $" · {r.TripTypeName}";
-        return $"{from} ← {to}{type}";
+        /* #82 — التعتيق ونوع الحاوية بقوا جزء من وصف القاعدة */
+        var tah  = string.IsNullOrWhiteSpace(r.TahteeqPortName) ? "" : $" → تعتيق {r.TahteeqPortName}";
+        var ct   = string.IsNullOrWhiteSpace(r.ContainerTypeName) ? "" : $" · {r.ContainerTypeName}";
+        return $"{from} ← {to}{type}{tah}{ct}";
     }
 
     private int CoveringToday()
@@ -1437,6 +1489,8 @@
         (r.PortName ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
         (r.DestinationName ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
         (r.TripTypeName ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+        (r.TahteeqPortName ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+        (r.ContainerTypeName ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
         (r.Notes ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase)));
 
     protected override async Task OnInitializedAsync()
@@ -1448,6 +1502,7 @@
             _ports        = await Http.GetFromJsonAsync<List<Opt>>("api/options/ports") ?? new();
             _destinations = await Http.GetFromJsonAsync<List<Opt>>("api/options/destinations") ?? new();
             _tripTypes    = await Http.GetFromJsonAsync<List<Opt>>("api/options/trip-types") ?? new();
+            _containerTypes = await Http.GetFromJsonAsync<List<Opt>>("api/options/container-types") ?? new();
         }
         catch { /* القوائم اختيارية — الشاشة تشتغل من غيرها */ }
         await LoadAsync();
@@ -1511,6 +1566,8 @@
             PortId        = r.PortId,
             DestinationId = r.DestinationId,
             TripTypeId    = r.TripTypeId,
+            TahteeqPortId   = r.TahteeqPortId,
+            ContainerTypeId = r.ContainerTypeId,
             Amount        = r.Amount,
             ValidFrom     = DateOnly.TryParse(r.ValidFrom, out var vf) ? vf : DateOnly.FromDateTime(DateTime.Today),
             ValidTo       = DateOnly.TryParse(r.ValidTo, out var vt) ? vt : null,
@@ -1575,6 +1632,8 @@
                 portId        = _f.PortId,
                 destinationId = _f.DestinationId,
                 tripTypeId    = _f.TripTypeId,
+                tahteeqPortId   = _f.TahteeqPortId,
+                containerTypeId = _f.ContainerTypeId,
                 amount        = _f.Amount,
                 validFrom     = _f.ValidFrom.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
                 validTo       = _f.ValidTo?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),

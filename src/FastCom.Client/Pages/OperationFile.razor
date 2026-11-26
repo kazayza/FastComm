@@ -59,7 +59,7 @@
                         <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke-linecap="round"/></svg>
                     </div>
                     <div>
-                        <div class="opf-stat-num">@_d.RevenueNet.ToString("N2")</div>
+                        <div class="opf-stat-num">@Revenue.ToString("N2")</div>
                         <div class="opf-stat-lbl">إيراد (صافي)</div>
                     </div>
                 </div>
@@ -139,6 +139,36 @@
                     }
                 </div>
 
+                @* #78 — رحلات العملية موزعة على أكتر من خط سير *@
+                @if (CanEditLines && !_splitDone && TripGroups().Count > 1)
+                {
+                    <div class="opf-split-banner" role="status">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <circle cx="12" cy="10" r="3"/><path d="M12 21s7-5.6 7-11a7 7 0 10-14 0c0 5.4 7 11 7 11z"/>
+                        </svg>
+                        <div class="opf-split-body">
+                            <strong>@_trips.Count رحلات</strong> على <strong>@TripGroups().Count خطوط سير مختلفة</strong> — سعر كل وجهة ممكن يختلف
+                            <ul class="opf-split-list">
+                                @foreach (var g in TripGroups())
+                                {
+                                    <li>@g.Route — <strong>@g.Count</strong> رحلة</li>
+                                }
+                            </ul>
+                        </div>
+                        <button type="button" class="opf-split-fix" @onclick="SplitRevenueByDestinationAsync">
+                            وزّع على بنود
+                        </button>
+                        <button type="button" class="opf-split-x" @onclick="() => _splitDone = true"
+                                aria-label="إخفاء التنبيه">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none"
+                                 stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                }
+
                 @if (_lines.Count == 0)
                 {
                     <div class="opf-empty">
@@ -153,7 +183,8 @@
                         <table class="doc-table">
                             <thead>
                                 <tr>
-                                    <th>الخدمة</th><th>البيان</th><th>الكمية</th><th>السعر</th><th>الخصم</th><th>الصافي</th>
+                                    <th>الخدمة</th><th>البيان</th><th>الكمية</th>
+                                    @if (CanViewFinancials) { <th>السعر</th><th>الخصم</th><th>الصافي</th> }
                                     @if (CanEditLines) { <th></th> }
                                 </tr>
                             </thead>
@@ -172,10 +203,22 @@
                                         else
                                         {
                                             <td class="num">@l.Quantity</td>
-                                            <td class="num">@l.UnitPrice.ToString("N2")</td>
-                                            <td class="num">@l.Discount.ToString("N2")</td>
+                                            @if (CanViewFinancials)
+                                            {
+                                                <td class="num">@l.UnitPrice.ToString("N2")</td>
+                                                <td class="num">@l.Discount.ToString("N2")</td>
+                                            }
                                         }
-                                        <td class="num"><b class="net">@l.LineNet.ToString("N2")</b></td>
+                                        <td class="num">
+                                            @if (CanViewFinancials)
+                                            {
+                                                <b class="net">@l.LineNet.ToString("N2")</b>
+                                            }
+                                            else
+                                            {
+                                                <span class="opf-mask" title="مبلغ — يحتاج صلاحية رؤية المبالغ">••••</span>
+                                            }
+                                        </td>
                                         @if (CanEditLines)
                                         {
                                             <td>
@@ -198,7 +241,8 @@
                             <div class="form-field" style="flex:2">
                                 <label class="field-label">خدمة جديدة <span class="field-required">*</span></label>
                                 <div class="field-select-wrap">
-                                    <select class="field-input field-select" @bind="_newRevServiceId">
+                                    <select class="field-input field-select" value="@_newRevServiceId"
+                                            @onchange="OnNewRevServicePicked" disabled="@_suggestBusy">
                                         <option value="0">— اختر الخدمة —</option>
                                         @foreach (var sv in _services) { <option value="@sv.Id">@sv.Label</option> }
                                     </select>
@@ -219,8 +263,12 @@
                             <div class="form-field" style="flex:1">
                                 <label class="field-label">السعر</label>
                                 <div class="field-input-group">
-                                    <input type="number" class="field-input" min="0" step="any" value="@Fmt(_newRevPrice)" @onchange="e => _newRevPrice = ParseDec(e.Value)" />
+                                    <input type="number" class="field-input" min="0" step="any" value="@Fmt(_newRevPrice)"
+                                           @onchange="e => _newRevPrice = ParseDec(e.Value)" disabled="@_suggestBusy" />
                                 </div>
+                                <span class="opf-price-src @(_suggestBusy ? "busy" : "")">
+                                    @(_suggestBusy ? "جاري جلب السعر من قائمة الأسعار…" : _priceSource)
+                                </span>
                             </div>
                             <div class="form-field" style="flex:1">
                                 <label class="field-label">الخصم</label>
@@ -229,7 +277,10 @@
                                 </div>
                             </div>
                             <div class="form-field doc-form-action">
-                                <button type="button" class="doc-btn" @onclick="AddRevenueLine">+ إضافة سطر</button>
+                                <button type="button" class="doc-btn" @onclick="SuggestNewPriceAsync"
+                                        disabled="@(_suggestBusy || _newRevServiceId <= 0)">اقترح السعر</button>
+                                <button type="button" class="doc-btn primary" @onclick="AddRevenueLine"
+                                        disabled="@_suggestBusy">+ إضافة سطر</button>
                                 <button type="button" class="doc-btn" @onclick="AddRevenueLineFromLast" disabled="@_lines.Count == 0">نسخ من آخر سطر</button>
                             </div>
                         </div>
@@ -273,7 +324,16 @@
                                         <td>@(l.TypeName ?? "—")</td>
                                         <td class="num">@l.RequestedQty</td>
                                         <td class="num">@(l.WeightKg?.ToString("N0") ?? "—")</td>
-                                        <td class="num">@(l.GuaranteePerContainer?.ToString("N0") ?? "—")</td>
+                                        <td class="num">
+                                            @if (CanViewFinancials)
+                                            {
+                                                @(l.GuaranteePerContainer?.ToString("N0") ?? "—")
+                                            }
+                                            else
+                                            {
+                                                <span class="opf-mask" title="مبلغ — يحتاج صلاحية رؤية المبالغ">••••</span>
+                                            }
+                                        </td>
                                         <td>@(l.Notes ?? "—")</td>
                                     </tr>
                                 }
@@ -454,7 +514,16 @@
                                         <td>@t.DriverName</td>
                                         <td>@t.VehiclePlate</td>
                                         <td class="num">@(t.PlannedStartAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
-                                        <td class="num">@(t.FreightAmount?.ToString("N2") ?? "—")</td>
+                                        <td class="num">
+                                            @if (CanViewFinancials)
+                                            {
+                                                @(t.FreightAmount?.ToString("N2") ?? "—")
+                                            }
+                                            else
+                                            {
+                                                <span class="opf-mask" title="مبلغ — يحتاج صلاحية رؤية المبالغ">••••</span>
+                                            }
+                                        </td>
                                         <td><span class="opf-status sm @TripStatusClass(t.Status)">@TripStatusAr(t.Status)</span></td>
                                         <td>
                                             <a class="doc-icon-btn" title="تعديل الرحلة" href="@($"/trips/new/{t.TripId}")">
@@ -538,6 +607,13 @@
                                 </div>
                             </div>
                             <div class="form-field" style="flex:1">
+                                <label class="field-label">تاريخ المصروف <span class="field-required">*</span></label>
+                                <div class="field-input-group">
+                                    <input type="date" class="field-input" value="@_qe.Date"
+                                           @onchange="SetQeDate" />
+                                </div>
+                            </div>
+                            <div class="form-field" style="flex:1">
                                 <label class="field-label">يتحمّله العميل</label>
                                 <div class="field-input-group">
                                     <input type="number" class="field-input" min="0" step="any" value="@FmtN(_qe.Billable)" @onchange="e => _qe.Billable = ParseDecN(e.Value)" />
@@ -564,6 +640,17 @@
                                     </div>
                                 </div>
                             }
+                            @* #79 — نسب المصروف لرحلة (مبيت، أعطال، غرامات...) *@
+                            <div class="form-field" style="flex:1.6">
+                                <label class="field-label">الرحلة</label>
+                                <select class="field-input field-select" value="@_qe.TripId" @onchange="PickQeTrip">
+                                    <option value="">— بدون رحلة —</option>
+                                    @foreach (var tr in _trips)
+                                    {
+                                        <option value="@tr.TripId">@tr.TripNumber — @tr.DriverName</option>
+                                    }
+                                </select>
+                            </div>
                             <div class="form-field" style="flex:1.6">
                                 <label class="field-label">البيان</label>
                                 <div class="field-input-group">
@@ -588,9 +675,14 @@
                 else
                 {
                     <div class="doc-table-wrap">
-                        <table class="doc-table">
+                        <table class="doc-table opf-exp-table">
+                            <colgroup>
+                                <col style="width:12%" /><col style="width:23%" /><col style="width:17%" />
+                                <col style="width:11%" /><col style="width:13%" /><col style="width:12%" />
+                                <col style="width:9%" /><col style="width:3%" />
+                            </colgroup>
                             <thead>
-                                <tr><th>الرقم</th><th>النوع</th><th>الإيصال</th><th>التاريخ</th><th>المبلغ</th><th>الحالة</th><th></th></tr>
+                                <tr><th>الرقم</th><th>النوع</th><th>الإيصال</th><th>التاريخ</th><th>المبلغ</th><th class="th-bill">على العميل</th><th>الحالة</th><th></th></tr>
                             </thead>
                             <tbody>
                                 @foreach (var x in _expenses)
@@ -611,6 +703,13 @@
                                         </td>
                                         <td class="num">@x.ExpenseDate.ToString("yyyy-MM-dd")</td>
                                         <td class="num"><b>@x.Amount.ToString("N2")</b></td>
+                                        <td class="num">
+                                            @if (x.BillableAmount > 0)
+                                            {
+                                                <b class="opf-bill">@x.BillableAmount.ToString("N2")</b>
+                                            }
+                                            else { <span class="doc-sub">—</span> }
+                                        </td>
                                         <td><span class="opf-status sm @StatusClass(x.Status)">@StatusLabel(x.Status)</span></td>
                                         <td>
                                             <a class="doc-icon-btn" title="تعديل المصروف" href="@($"/expenses/new/{x.ExpenseId}")">
@@ -620,6 +719,38 @@
                                     </tr>
                                 }
                             </tbody>
+                            <tfoot>
+                                <tr class="opf-tot">
+                                    <td colspan="4" class="opf-tot-lbl">
+                                        <b>الإجمالي</b>
+                                        <span class="opf-tot-cnt">
+                                            @_expenses.Count مصروف مربوط بالعملية
+                                            <span class="opf-tot-info" tabindex="0">i
+                                                <span class="opf-tot-tip" role="tooltip">
+                                                    <b>على الشركة</b> = إجمالي المصروف − على العميل
+                                                    (اللي بيتفوتر للعميل ويرجعله).
+                                                    <b>التكلفة الفعلية</b> = نصيب الشركة من المصروفات
+                                                    + نصيب العملية من نولون السائق + توزيع مصروفات الرحلة،
+                                                    وبتستثني سلف النولون لأنها متغطّية ضمن نولون النقلَة.
+                                                </span>
+                                            </span>
+                                        </span>
+                                    </td>
+                                    <td class="num opf-tot-v">@ExpTotal.ToString("N2")</td>
+                                    <td class="num opf-tot-v bill">@ExpBillable.ToString("N2")</td>
+                                    <td colspan="2"></td>
+                                </tr>
+                                <tr class="opf-tot2">
+                                    <td colspan="8">
+                                        <div class="opf-tot-chips">
+                                            <span class="opf-chip">إجمالي المصروف <b>@ExpTotal.ToString("N2")</b></span>
+                                            <span class="opf-chip">على العميل <b>@ExpBillable.ToString("N2")</b></span>
+                                            <span class="opf-chip">على الشركة <b>@ExpCompany.ToString("N2")</b></span>
+                                            <span class="opf-chip dark">التكلفة الفعلية <b>@OpCost.ToString("N2")</b></span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                 }
@@ -636,14 +767,25 @@
     private string TabCls(string t) => _activeTab == t ? "opf-tab on" : "opf-tab";
 
     /* ── عرض الحالة والأرباح ── */
-    private decimal Profit => _d is null ? 0m : _d.RevenueNet - _d.ActualCost;
+    /* #90 — 🔴 المحمّل على العميل **ليس إيرادًا** (فلوس مدفوعة بالنيابة عن
+       العميل وهيردّها) ⇒ الإيراد = RevenueNet بس. والتكلفة `ActualCost`
+       محسوبة في الداتا = نصيب الشركة (بعد خصم المحمّل، وعدا سلف النولون)
+       + توزيع الرحلة + نولون السائق. */
+    /* ── #92 سطر الإجماليات في تاب المصروفات ── */
+    private decimal ExpTotal    => _expenses.Sum(x => x.Amount);
+    private decimal ExpBillable => _expenses.Sum(x => x.BillableAmount);
+    private decimal ExpCompany  => ExpTotal - ExpBillable;
+    private decimal OpCost      => _d is null ? 0m : _d.ActualCost;
+
+    private decimal Revenue => _d is null ? 0m : _d.RevenueNet;
+    private decimal Profit  => _d is null ? 0m : _d.RevenueNet - _d.ActualCost;
     private string MarginCls => Profit >= 0 ? "opf-margin" : "opf-margin neg";
     private string? MarginText
     {
         get
         {
-            if (_d is null || _d.RevenueNet <= 0) return null;
-            return $"{(Profit >= 0 ? "+" : "−")}{Math.Abs(Profit / _d.RevenueNet * 100):N0}%";
+            if (_d is null || Revenue <= 0) return null;
+            return $"{(Profit >= 0 ? "+" : "−")}{Math.Abs(Profit / Revenue * 100):N0}%";
         }
     }
 
@@ -652,13 +794,17 @@
         "New" => "جديدة", "Draft" => "مسودة", "Confirmed" => "مؤكدة",
         "Assigned" => "معرّفة", "InProgress" => "قيد التنفيذ", "Completed" => "مكتملة",
         "Closed" => "مغلقة", "Cancelled" => "ملغاة",
+        /* #92 — «Posted» هي الحالة الافتراضية لكل مصروف (DF_Expenses_Status)
+           وكانت بتطلع بالإنجليزي لأنها مش في القاموس. */
+        "Posted" => "مُرحّل", "Unpaid" => "غير مدفوع",
+        "PartiallyPaid" => "مدفوع جزئيًا", "Active" => "نشط", "Suspended" => "موقوف",
         "Paid" => "مدفوع", "Approved" => "معتمد", "Pending" => "معلّق", "Rejected" => "مرفوض",
         _ => s
     };
     private static string StatusClass(string s) => s switch
     {
         "New" or "Confirmed" => "st-blue",
-        "Completed" or "Paid" => "st-green",
+        "Completed" or "Paid" or "Posted" or "Active" => "st-green",
         "Cancelled" or "Rejected" => "st-red",
         "InProgress" or "Draft" or "Pending" => "st-amber",
         "Assigned" or "Approved" => "st-purple",
@@ -685,9 +831,14 @@
     private bool _savingRev;
     private int _newRevServiceId;
     private decimal _newRevPrice;
+    /* #93 — السعر بييجي أوتوماتيك من قائمة الأسعار لما تختار الخدمة */
+    private bool _suggestBusy;
+    private string _priceSource = "";
     private decimal _newRevQty;
     private string? _newRevDesc;
     private decimal _newRevDisc;
+    private int? _newRevTaxRateId;
+    private long? _newRevRuleId;
     private string? _newContNumber, _newContBl;
     private int _newContTypeId;
     private bool _addingCont;
@@ -698,8 +849,29 @@
         public decimal? Billable { get; set; } public string? Description { get; set; }
         public int? ReceiptTypeId { get; set; } public string? ReceiptNumber { get; set; }
         public string Source { get; set; } = "Treasury"; public long? CustodyId { get; set; }
+        /* التاريخ كان DateTime.Today ثابت في الـ payload — بقى خانة في الفورم،
+           وافتراضيًا النهارده. السيرفر بيقبله زي ما هو (ExpensesController:39 Dt()). */
+        public string Date { get; set; } = DateTime.Today.ToString("yyyy-MM-dd");
+        /* #79 — المصروف بيتنسب لرحلة وسائق (كانوا null ثابت في الـ payload) */
+        public long? TripId { get; set; } public int? DriverId { get; set; }
     }
     private QuickExp _qe = new();
+
+    /* تاريخ المصروف — method group مش lambda: السلسلة "yyyy-MM-dd" جوه
+       خاصية @onchange="..." كانت بتكسر الرازور (CS1026). */
+    private void SetQeDate(ChangeEventArgs e)
+    {
+        var v = e.Value?.ToString();
+        _qe.Date = DateTime.TryParse(v, out var d) ? d.ToString("yyyy-MM-dd")
+                                                   : DateTime.Today.ToString("yyyy-MM-dd");
+    }
+
+    /* #79 — لمّا تختار رحلة، السائق يتعبّى منها تلقائي */
+    private void PickQeTrip(ChangeEventArgs e)
+    {
+        _qe.TripId   = long.TryParse(e.Value?.ToString(), out var id) && id > 0 ? id : null;
+        _qe.DriverId = _trips.FirstOrDefault(t => t.TripId == _qe.TripId)?.DriverId;
+    }
     private bool _savingExp;
 
     public class QExpType { public int Id { get; set; } public string Label { get; set; } = ""; public bool IsReceiptRequired { get; set; } public bool IsFreightAdvance { get; set; } }
@@ -733,7 +905,52 @@
     private void PickQeType(QExpType t)
     { _showQeTypeDd = false; _qeTypeTouched = true; _qeTypeSearch = t.Label; _qe.TypeId = t.Id; }
 
-private void AddRevenueLine()
+/* ═══════ #93 — السعر الأوتوماتيك من قوائم الأسعار ═══════
+       نفس endpoint `price-suggest` اللي بيستخدمه RequestForm:
+       قاعدة العميل → التعريفة العامة.  (#95 شال سعر الخدمة الافتراضي)
+       🔴 الشاشة دي ما بتبعتش containerTypeId — فقاعدة محدّدة بنوع حاوية
+       مش هتطابق هنا. معروف ومتسجّل في #99.
+       البُعد (ميناء/وجهة/تحقيق) بيتاخد من أكثر وجهة رحلات متكررة
+       عشان القاعدة الأخص هي اللي تكسب. */
+    private TripGroup? MainTripGroup() => TripGroups().FirstOrDefault();
+
+    private async Task OnNewRevServicePicked(ChangeEventArgs e)
+    {
+        var id = ParseInt(e.Value);
+        _newRevServiceId = id;
+        _newRevPrice = 0;
+        _priceSource = "";
+        if (id > 0) await SuggestNewPriceAsync();
+    }
+
+    private async Task SuggestNewPriceAsync()
+    {
+        if (_d is null || _d.CustomerId <= 0 || _newRevServiceId <= 0 || _suggestBusy) return;
+        _suggestBusy = true;
+        try
+        {
+            var g = MainTripGroup();
+            var url = $"api/operations/price-suggest?customerId={_d.CustomerId}&serviceId={_newRevServiceId}" +
+                      (g?.PortId        is not null ? $"&portId={g.PortId}" : "") +
+                      (g?.DestinationId is not null ? $"&destinationId={g.DestinationId}" : "") +
+                      (g?.TahteeqPortId is not null ? $"&tahteeqPortId={g.TahteeqPortId}" : "");
+            var r = await Http.GetFromJsonAsync<SuggRes>(url);
+            if (r is null) { _priceSource = "ما قدرش يجيب السعر"; return; }
+            /* #95 — السعر من قوائم الأسعار بس؛ null ⇒ مفيش قاعدة مطابقة */
+            if (r.UnitPrice is null)
+            {   /* #99 — جملة بسيطة بس */
+                _priceSource = "لا يوجد قاعدة تسعير";
+                return; }
+            _newRevPrice = r.UnitPrice.Value;
+            _newRevTaxRateId = r.TaxRateId;
+            _newRevRuleId = r.PriceRuleId;
+            _priceSource = "يوجد قاعدة تسعير";   /* #99 — جملة بسيطة بس */
+        }
+        catch { _priceSource = "تعذّر جلب السعر من قائمة الأسعار"; }
+        finally { _suggestBusy = false; }
+    }
+
+    private void AddRevenueLine()
         {
             if (_newRevServiceId <= 0) { Snackbar.Add("اختر الخدمة أولًا", Severity.Warning); return; }
             _lines.Add(new RevLine
@@ -743,12 +960,17 @@ private void AddRevenueLine()
                 Quantity    = _newRevQty,
                 UnitPrice   = _newRevPrice,
                 Discount    = _newRevDisc,
-                Description = _newRevDesc ?? ""
+                Description = _newRevDesc ?? "",
+                TaxRateId   = _newRevTaxRateId,
+                PriceRuleId = _newRevRuleId
             });
             _newRevPrice = 0;
             _newRevQty = 0;
             _newRevDesc = "";
             _newRevDisc = 0;
+            _newRevTaxRateId = null;
+            _newRevRuleId = null;
+            _priceSource = "";
         }
 
     private void AddRevenueLineFromLast()
@@ -769,6 +991,95 @@ private void AddRevenueLine()
         _newRevQty = last.Quantity;
         _newRevDesc = last.Description;
         _newRevDisc = last.Discount;
+    }
+
+    /* ═══════ #78 — توزيع سطور الإيراد حسب وجهة كل رحلة ═══════ */
+
+    private class TripGroup
+    {
+        public int? PortId { get; set; } public int? DestinationId { get; set; } public int? TahteeqPortId { get; set; }
+        public string Route { get; set; } = ""; public int Count { get; set; }
+    }
+
+    private class SuggRes
+    {
+        /* #95 — null ⇒ مفيش قاعدة مطابقة في قوائم الأسعار */
+        public decimal? UnitPrice { get; set; } public decimal? CostPrice { get; set; }
+        public int? TaxRateId { get; set; } public long? PriceRuleId { get; set; } public string? Source { get; set; }
+    }
+
+    private static string RouteOf(OpTrip t)
+    {
+        var s = t.PortName is not null && t.DestName is not null ? $"من {t.PortName} إلى {t.DestName}"
+              : t.PortName is not null                           ? $"من {t.PortName}"
+              : t.DestName is not null                           ? $"إلى {t.DestName}" : "";
+        if (t.TahteeqName is not null) s = s.Length > 0 ? $"{s} — تعتيق {t.TahteeqName}" : $"تعتيق {t.TahteeqName}";
+        return s.Length > 0 ? s : "بدون خط سير محدد";
+    }
+
+    /* مجموعات الرحلات حسب خط السير — بتتحسب من الرحلات المحمّلة أصلًا */
+    private List<TripGroup> TripGroups() =>
+        _trips.GroupBy(t => new { t.PortId, t.DestinationId, t.TahteeqPortId })
+              .Select(g => new TripGroup
+              {
+                  PortId        = g.Key.PortId,
+                  DestinationId = g.Key.DestinationId,
+                  TahteeqPortId = g.Key.TahteeqPortId,
+                  Count         = g.Count(),
+                  Route         = RouteOf(g.First())
+              })
+              .OrderByDescending(x => x.Count)
+              .ToList();
+
+    /* اقتراح فقط — المستخدم يعدّل أو يلغي، ومافيش منع */
+    private async Task SplitRevenueByDestinationAsync()
+    {
+        if (_d is null) return;
+        var groups = TripGroups();
+        if (groups.Count < 2) return;
+
+        var svcId = _d.ServiceId ?? (_lines.Count > 0 ? _lines[0].ServiceId : 0);
+        if (svcId <= 0) { Snackbar.Add("اختر الخدمة أولًا قبل التوزيع", Severity.Warning); return; }
+        var svcName = _services.FirstOrDefault(s => s.Id == svcId)?.Label ?? "";
+
+        var built = new List<RevLine>();
+        foreach (var g in groups)
+        {
+            var ln = new RevLine
+            {
+                ServiceId   = svcId,
+                ServiceName = svcName,
+                Quantity    = g.Count,
+                Description = g.Route
+            };
+            await SuggestForRouteAsync(ln, g);
+            built.Add(ln);
+        }
+
+        _lines.Clear();
+        foreach (var ln in built) _lines.Add(ln);
+        _splitDone = true;
+        Snackbar.Add($"تم توزيع الإيراد على {groups.Count} بنود حسب وجهات الرحلات — راجع الأسعار واحفظ", Severity.Info);
+    }
+
+    private async Task SuggestForRouteAsync(RevLine ln, TripGroup g)
+    {
+        if (_d is null || _d.CustomerId <= 0 || ln.ServiceId <= 0) return;
+        var url = $"api/operations/price-suggest?customerId={_d.CustomerId}&serviceId={ln.ServiceId}" +
+                  (g.PortId        is not null ? $"&portId={g.PortId}" : "") +
+                  (g.DestinationId is not null ? $"&destinationId={g.DestinationId}" : "") +
+                  (g.TahteeqPortId is not null ? $"&tahteeqPortId={g.TahteeqPortId}" : "");
+        try
+        {
+            var s = await Http.GetFromJsonAsync<SuggRes>(url);
+            if (s is null) return;
+            /* #95 — null ⇒ مفيش قاعدة مطابقة؛ ما نلمسش السعر الموجود */
+            if (s.UnitPrice is null) return;
+            ln.UnitPrice   = s.UnitPrice.Value;
+            ln.TaxRateId   = s.TaxRateId;
+            ln.PriceRuleId = s.PriceRuleId;
+        }
+        catch { /* الاقتراح اختياري */ }
     }
 
     private async Task SaveRevenueAsync()
@@ -861,12 +1172,13 @@ private void AddRevenueLine()
             var payload = new
             {
                 expenseTypeId   = _qe.TypeId,
-                expenseDate     = DateTime.Today.ToString("yyyy-MM-dd"),
+                expenseDate     = _qe.Date,
                 description     = _qe.Description,
                 amount          = _qe.Amount,
                 operationId     = Id,
-                tripId          = (long?)null,
-                driverId        = (int?)null,
+                /* #79 — المصروف بقى بيتنسب للرحلة والسائق */
+                tripId          = _qe.TripId,
+                driverId        = _qe.DriverId,
                 vehicleId       = (int?)null,
                 supplierId      = (int?)null,
                 custodyId       = _qe.Source == "Custody" ? _qe.CustodyId : (long?)null,
@@ -987,6 +1299,8 @@ private void AddRevenueLine()
         public string? Notes { get; set; }
         public string Status { get; set; } = ""; public string? PlannedDate { get; set; }
         public decimal RevenueNet { get; set; } public decimal RevenueTax { get; set; } public decimal ActualCost { get; set; }
+        /* #90 — المحمّل على العميل: **للعلم بس** — مش إيراد ومش في حساب الربح */
+        public decimal BillableRevenue { get; set; }
     }
     public class RevLine
     {
@@ -1000,9 +1314,13 @@ private void AddRevenueLine()
     public class OpTrip
     {
         public long TripId { get; set; } public string TripNumber { get; set; } = "";
+        public int DriverId { get; set; }   /* #79 — لربط المصروف بسائق الرحلة */
         public string DriverName { get; set; } = ""; public string VehiclePlate { get; set; } = "";
         public string Status { get; set; } = ""; public DateTime? PlannedStartAt { get; set; }
         public decimal? FreightAmount { get; set; } public int SequenceNo { get; set; }
+        /* #78 — خط سير الرحلة نفسها (بيرجع من api/operations/{id}/trips) */
+        public int? PortId { get; set; } public int? DestinationId { get; set; } public int? TahteeqPortId { get; set; }
+        public string? PortName { get; set; } public string? DestName { get; set; } public string? TahteeqName { get; set; }
     }
     public class OpContainer
     {
@@ -1021,11 +1339,15 @@ private void AddRevenueLine()
         public long ExpenseId { get; set; } public string ExpenseNumber { get; set; } = "";
         public string TypeName { get; set; } = ""; public DateTime ExpenseDate { get; set; }
         public string? ReceiptTypeName { get; set; } public string? ReferenceNumber { get; set; }
-        public decimal Amount { get; set; } public string Status { get; set; } = "";
+        public decimal Amount { get; set; }
+        /* #92 — الجزء اللي هيتحمّل على العميل (مش إيراد — العميل بيردّه) */
+        public decimal BillableAmount { get; set; }
+        public string Status { get; set; } = "";
     }
 
     private Detail? _d;
     private List<RevLine> _lines = new();
+    private bool _splitDone;   /* #78 — المستخدم صرف تنبيه التوزيع */
     private List<OpTrip> _trips = new();
     private List<OpContainer> _containers = new();
     private List<BkLineView> _bkLines = new();
@@ -1105,9 +1427,11 @@ private void AddRevenueLine()
             plannedStartAt = _tf.PlannedStartAt,
             notes         = (string?)null,
             freightAmount = _tf.Freight,
-            portId        = (int?)null,
-            destinationId = (int?)null,
-            tahteeqPortId = (int?)null,
+            /* #79 — الرحلة الجديدة ترث خط سير العملية (زي quick-create بالظبط).
+               كانت بتتعمل بمسار فاضي. */
+            portId        = _d?.PortId,
+            destinationId = _d?.DestinationId,
+            tahteeqPortId = _d?.TahteeqPortId,
             operations    = new[] { new { operationId = Id, sequenceNo = _trips.Count + 1, pickupAt = (string?)null, deliveryAt = (string?)null, notes = (string?)null } }
         };
         _savingTrip = true;
@@ -1317,6 +1641,13 @@ private void AddRevenueLine()
         font-variant-numeric: tabular-nums;
     }
     .opf-stat-num.pos { color: var(--fc-green); }
+
+    /* مبلغ محجوب — اللي ملوش OPERATION.VIEW_FINANCIALS */
+    .opf-mask {
+        display: inline-block; letter-spacing: 1.5px;
+        color: #A8B4C4; font-size: 12px; font-weight: 700;
+        cursor: help; user-select: none;
+    }
     .opf-stat-num.neg { color: var(--fc-red); }
     .opf-stat-sep { color: #b6c2d4; font-weight: 700; }
     .opf-stat-lbl { font-size: 11px; font-weight: 700; color: var(--fc-muted); margin-top: 3px; display: flex; align-items: center; gap: 6px; }
@@ -1411,6 +1742,76 @@ private void AddRevenueLine()
     .doc-table tbody tr:hover td { background: #f8fbff; }
     .doc-table .num { font-variant-numeric: tabular-nums; }
     .doc-table .net { color: var(--fc-blue-dk); font-weight: 900; }
+
+    /* ───────── #92 · عمود «على العميل» + سطر الإجماليات ───────── */
+    .doc-table th.th-bill { color: #9a5b00; }
+    .opf-bill { color: #9a5b00; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+    .doc-table tfoot td { border-bottom: none; }
+    .opf-tot td {
+        background: linear-gradient(180deg, #f5f9ff, #eaf2fd);
+        border-top: 1.5px solid #d6e3f4;
+        padding: 12px 12px; vertical-align: middle;
+    }
+    .opf-tot-lbl { display: flex; flex-direction: column; gap: 2px; }
+    .opf-tot-lbl b { font-size: 13px; font-weight: 900; color: var(--fc-text); letter-spacing: .2px; }
+    .opf-tot-cnt { font-size: 11px; font-weight: 700; color: var(--fc-muted); }
+    .opf-tot-v {
+        font-size: 15px; font-weight: 900; color: var(--fc-blue-dk);
+        font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+    .opf-tot-v.bill { color: #9a5b00; }
+
+    .opf-tot2 td {
+        background: #fbfdff; border-top: 1px solid #edf2f9;
+        padding: 12px 14px; text-align: right;
+    }
+    .opf-tot-chips { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+    .opf-chip.dark {
+        background: var(--fc-blue-lt); border-color: #cfe0f7; color: #1c4a94;
+    }
+    .opf-chip.dark b { color: var(--fc-blue-dk); font-weight: 900; }
+    /* تثبيت الأعمدة عشان أرقام الإجمالي تنزل تحت أعمدتها بالظبط */
+    .opf-exp-table { table-layout: fixed; }
+    .opf-exp-table td, .opf-exp-table th {
+        overflow-wrap: anywhere; word-break: break-word;
+    }
+
+    /* أيقونة (i) — التوضيح يظهر تول تيب عند المرور */
+    .opf-tot-info {
+        position: relative; display: inline-flex; align-items: center; justify-content: center;
+        width: 15px; height: 15px; margin-inline-start: 6px;
+        border-radius: 50%; background: #dce8f8; color: #1c4a94;
+        font-size: 10px; font-weight: 900; font-style: italic;
+        font-family: Georgia, "Times New Roman", serif;
+        cursor: help; vertical-align: middle;
+    }
+    .opf-tot-info:hover, .opf-tot-info:focus { background: var(--fc-blue); color: #fff; outline: none; }
+    .opf-tot-tip {
+        position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+        width: 350px; max-width: 76vw; padding: 11px 13px;
+        background: var(--fc-navy, #0A1B3B); color: #e8f0fb;
+        border-radius: 9px; box-shadow: 0 8px 24px rgba(10,27,59,.3);
+        font-size: 11.5px; font-weight: 600; font-style: normal; line-height: 1.9;
+        text-align: right; white-space: normal;
+        opacity: 0; visibility: hidden; transition: opacity .16s ease, visibility .16s ease;
+        pointer-events: none; z-index: 60;
+    }
+    .opf-tot-tip b { color: #ffd08a; font-weight: 900; }
+    .opf-tot-tip::after {
+        content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+        border: 6px solid transparent; border-top-color: var(--fc-navy, #0A1B3B);
+    }
+    .opf-tot-info:hover .opf-tot-tip,
+    .opf-tot-info:focus .opf-tot-tip { opacity: 1; visibility: visible; }
+
+    @@media (max-width: 680px) {
+        .opf-tot td { padding: 10px; }
+        .opf-tot-lbl b { font-size: 12px; }
+        .opf-tot-v { font-size: 13px; }
+        .opf-tot-chips { gap: 6px; }
+        .opf-tot-tip { width: 280px; font-size: 11px; }
+    }
     .doc-link { color: var(--fc-blue); font-weight: 800; text-decoration: none; }
     .doc-link:hover { text-decoration: underline; }
     .doc-sub { font-size: 11px; color: #8496b0; font-weight: 700; }
@@ -1449,7 +1850,15 @@ private void AddRevenueLine()
     ================================================================ */
     .doc-form-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
     .doc-form-row .form-field { min-width: 150px; }
-    .doc-form-action { display: flex; align-items: flex-end; padding-top: 23px; }
+    .doc-form-action { display: flex; align-items: flex-end; padding-top: 23px; gap: 8px; flex-wrap: wrap; }
+    .doc-form-action .doc-btn { flex: 1 1 auto; white-space: nowrap; }
+
+    /* ── #93 · مؤشر مصدر السعر تحت خانة السعر ── */
+    .opf-price-src {
+        display: block; margin-top: 5px; min-height: 15px;
+        font-size: 10.5px; font-weight: 700; color: var(--fc-muted); line-height: 1.5;
+    }
+    .opf-price-src.busy { color: var(--fc-blue); font-style: italic; }
 
     .form-field { display: flex; flex-direction: column; gap: 6px; position: relative; }
     .field-label { font-size: 12px; font-weight: 800; color: #344258; display: flex; align-items: center; gap: 4px; }
@@ -1532,9 +1941,26 @@ private void AddRevenueLine()
         .doc-form-row .form-field { min-width: 100%; }
         .doc-form-action { width: 100%; padding-top: 0; }
         .doc-form-action .doc-btn { width: 100%; }
+        .opf-price-src { font-size: 10px; }
     }
 
     @@media (prefers-reduced-motion: reduce) {
         .opf-head, .opf-strip, .opf-tabsbar, .opf-panel { animation: none; }
+    }
+
+    /* ═══════ #78 — تنبيه توزيع الإيراد على الوجهات ═══════ */
+    .opf-split-banner { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 14px; padding: 11px 14px; background: #fff8e6; border: 1.5px solid #f0d898; border-radius: 11px; font-size: 12.5px; font-weight: 600; color: #7a5a08; }
+    .opf-split-banner > svg { flex: none; color: #e09a10; margin-top: 1px; }
+    .opf-split-body { flex: 1; line-height: 1.6; min-width: 0; }
+    .opf-split-list { margin: 6px 0 0; padding-inline-start: 18px; font-size: 12px; font-weight: 600; color: #8a6210; }
+    .opf-split-list li { margin: 2px 0; }
+    .opf-split-list strong { color: #7a5a08; }
+    .opf-split-fix { flex: none; background: #e09a10; border: none; color: #fff; border-radius: 8px; padding: 7px 14px; font-size: 12px; font-weight: 800; cursor: pointer; font-family: inherit; }
+    .opf-split-fix:hover { filter: brightness(1.08); }
+    .opf-split-x { flex: none; background: none; border: none; color: #a08030; cursor: pointer; padding: 4px; display: inline-flex; }
+    @@media (max-width: 680px) {
+        .opf-split-banner { flex-wrap: wrap; }
+        .opf-split-body { flex: 1 1 100%; }
+        .opf-split-fix { flex: 1 1 100%; }
     }
 </style>

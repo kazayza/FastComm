@@ -37,6 +37,8 @@ public partial class FastComDbContext
 
     public virtual DbSet<ContainerType> ContainerTypes { get; set; }
 
+    public virtual DbSet<CustodyFundRequest> CustodyFundRequests { get; set; }
+
     public virtual DbSet<CustodyTransaction> CustodyTransactions { get; set; }
 
     public virtual DbSet<Customer> Customers { get; set; }
@@ -329,6 +331,30 @@ public partial class FastComDbContext
             entity.Property(e => e.IsActive).HasDefaultValue(true);
         });
 
+        modelBuilder.Entity<CustodyFundRequest>(entity =>
+        {
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.RequestedAt).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.Status)
+                .HasDefaultValue("Pending")
+                .HasMaxLength(20);
+
+            /* 🔴 unique **بفلتر** — SQL Server بيعامل NULL كقيمة في الفهرس الفريد،
+               فلو الفهرس من غير فلتر كان هيسمح بطلب منتظر واحد بس في النظام كله. */
+            entity.HasIndex(e => e.TopUpTransactionId)
+                .IsUnique()
+                .HasFilter("[TopUpTransactionId] IS NOT NULL")
+                .HasDatabaseName("UQ_CustodyFundRequests_TopUpTx");
+
+            entity.HasOne(d => d.Custody).WithMany(p => p.FundRequests)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CustodyFundRequests_Custody");
+
+            entity.HasOne(d => d.TopUpTransaction).WithMany()
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("FK_CustodyFundRequests_TopUpTx");
+        });
+
         modelBuilder.Entity<CustodyTransaction>(entity =>
         {
             entity.ToTable(tb => tb.HasTrigger("trg_CustodyTransactions_Sync"));
@@ -494,6 +520,15 @@ public partial class FastComDbContext
             entity.HasOne<Destination>().WithMany()
                 .HasForeignKey(d => d.DestinationId)
                 .HasConstraintName("FK_DFR_Destinations");
+
+            /* #82 — التعتيق + نوع الحاوية */
+            entity.HasOne<Port>().WithMany()
+                .HasForeignKey(d => d.TahteeqPortId)
+                .HasConstraintName("FK_DFR_TahteeqPorts");
+
+            entity.HasOne<ContainerType>().WithMany()
+                .HasForeignKey(d => d.ContainerTypeId)
+                .HasConstraintName("FK_DFR_ContainerTypes");
 
             entity.HasOne<TripType>().WithMany()
                 .HasForeignKey(d => d.TripTypeId)
@@ -743,6 +778,16 @@ public partial class FastComDbContext
                 .HasConstraintName("FK_ORI_Services");
 
             entity.HasOne(d => d.TaxRateNavigation).WithMany(p => p.OperationRevenueItems).HasConstraintName("FK_ORI_TaxRates");
+
+            /* #83 — أبعاد السطر (خط سيره ونوع رحلته). WithMany() من غير مجموعة
+               عكسية عشان ما نلمسش كيانات Ports/Destinations/TripTypes */
+            entity.HasOne(d => d.Port).WithMany().HasForeignKey(d => d.PortId).HasConstraintName("FK_ORI_Ports");
+
+            entity.HasOne(d => d.Destination).WithMany().HasForeignKey(d => d.DestinationId).HasConstraintName("FK_ORI_Destinations");
+
+            entity.HasOne(d => d.TahteeqPort).WithMany().HasForeignKey(d => d.TahteeqPortId).HasConstraintName("FK_ORI_TahteeqPorts");
+
+            entity.HasOne(d => d.TripType).WithMany().HasForeignKey(d => d.TripTypeId).HasConstraintName("FK_ORI_TripTypes");
         });
 
         modelBuilder.Entity<OperationStatus>(entity =>
@@ -953,6 +998,15 @@ public partial class FastComDbContext
 
         modelBuilder.Entity<Trip>(entity =>
         {
+            /* #100 — 🔴 `trg_Trips_OpCostSync` (من sql/FastCom-operation-cost-fix-v1.sql:215).
+               من غير السطر ده EF Core بيستخدم `OUTPUT INSERTED.…` عشان يقرا الـ TripId
+               بعد الـ INSERT، وSQL Server بيرفضه على جدول فيه trigger مفعّل:
+               «The target table 'Trips' of the DML statement cannot have any enabled
+               triggers if the statement contains an OUTPUT clause without INTO clause.»
+               ‏`HasTrigger` بتقول لـ EF يتجنّب الـ OUTPUT clause ويقرا القيم بـ SELECT منفصل.
+               نفس النمط موجود لـ8 جداول تانية عندها triggers (ابحث عن HasTrigger). */
+            entity.ToTable(tb => tb.HasTrigger("trg_Trips_OpCostSync"));
+
             entity.HasIndex(e => new { e.BranchId, e.Status }, "IX_Trips_Branch_Status").HasFilter("([IsDeleted]=(0))");
 
             entity.HasIndex(e => new { e.DriverId, e.PlannedStartAt }, "IX_Trips_Driver_Date").HasFilter("([IsDeleted]=(0))");
@@ -1005,6 +1059,9 @@ public partial class FastComDbContext
 
         modelBuilder.Entity<TripOperation>(entity =>
         {
+            /* #100 — 🔴 `trg_TripOperations_OpCostSync` (من نفس السكربت، سطر 242) — نفس سبب Trips */
+            entity.ToTable(tb => tb.HasTrigger("trg_TripOperations_OpCostSync"));
+
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysutcdatetime())");
             entity.Property(e => e.SequenceNo).HasDefaultValue(1);
             entity.Property(e => e.Status).HasDefaultValue("Assigned");

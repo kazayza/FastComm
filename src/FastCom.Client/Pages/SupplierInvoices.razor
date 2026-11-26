@@ -308,10 +308,9 @@
                                 <th scope="col">نسبة السداد</th>
                                 <th scope="col">حالة الفاتورة</th>
                                 <th scope="col">حالة الدفع</th>
-                                @if (CanEdit)
-                                {
-                                    <th scope="col" style="width:120px">إجراءات</th>
-                                }
+                                @* #106 — العمود بقى يظهر **دايمًا**: فيه زرار «عرض» متاح
+                                   لكل من يشوف الشاشة، مش بس لصاحب `SUPPLIER.EDIT`. *@
+                                <th scope="col" style="width:180px">إجراءات</th>   @* #107 — 5 أزرار في المسودة: عرض · تحويل · تعديل · اعتماد · إلغاء *@
                             </tr>
                         </thead>
                         <tbody>
@@ -322,8 +321,11 @@
                                     ? (double)(i.PaidAmount / i.GrandTotal * 100)
                                     : 0;
 
-                                <tr class="@(i.Status == "Cancelled" ? "row-cancelled" : "")
-                                           @(isOverdue ? "row-overdue" : "")">
+                                @* #106 — الصف كله قابل للدوس ⇒ يفتح الفاتورة.
+                                   أزرار الإجراءات عليها `stopPropagation` عشان ما تعملش حاجتين. *@
+                                <tr class="si-row-open @(i.Status == "Cancelled" ? "row-cancelled" : "") @(isOverdue ? "row-overdue" : "")"
+                                    @onclick="() => Edit(i)"
+                                    title="دوس لفتح الفاتورة">
 
                                     <td class="td-start">
                                         <div class="si-inv-cell">
@@ -427,49 +429,83 @@
                                         </span>
                                     </td>
 
-                                    @if (CanEdit)
-                                    {
-                                        <td>
-                                            <div class="si-actions">
-                                                @if (i.Status == "Draft")
-                                                {
-                                                    <button class="si-act-btn act-edit"
-                                                            @onclick="() => Edit(i)"
-                                                            title="تعديل الفاتورة"
-                                                            aria-label="تعديل @i.SupplierInvoiceNumber">
-                                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-                                                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                                                        </svg>
-                                                    </button>
+                                    <td>
+                                        <div class="si-actions">
 
-                                                    <button class="si-act-btn act-approve"
-                                                            @onclick="() => Approve(i)"
-                                                            title="اعتماد الفاتورة"
-                                                            aria-label="اعتماد @i.SupplierInvoiceNumber"
-                                                            disabled="@_busy">
-                                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <path d="M9 12l2 2 4-4"/>
-                                                            <circle cx="12" cy="12" r="10"/>
-                                                        </svg>
-                                                    </button>
-                                                }
+                                            @* ── #106 «عرض» — **دايمًا** موجود لكل الحالات ──
+                                               بيفتح نفس الفورم، والفورم بيقفل نفسه لوحده:
+                                               ‏`SupplierInvoiceForm:1280  Locked => _id is not null && _status != "Draft"`
+                                               ⇒ فاتورة معتمدة/مدفوعة/ملغاة تفتح **للقراءة فقط**. *@
+                                            <button class="si-act-btn act-view"
+                                                    @onclick="() => Edit(i)" @onclick:stopPropagation="true"
+                                                    title="@ViewTitle(i)"
+                                                    aria-label="عرض @i.SupplierInvoiceNumber">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                                    <circle cx="12" cy="12" r="3"/>
+                                                </svg>
+                                            </button>
 
-                                                @if (i.Status != "Cancelled" && i.Status != "Paid" && i.PaidAmount <= 0)
-                                                {
-                                                    <button class="si-act-btn act-cancel"
-                                                            @onclick="() => AskCancel(i)"
-                                                            title="إلغاء الفاتورة"
-                                                            aria-label="إلغاء @i.SupplierInvoiceNumber">
-                                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <circle cx="12" cy="12" r="10"/>
-                                                            <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
-                                                        </svg>
-                                                    </button>
-                                                }
-                                            </div>
-                                        </td>
-                                    }
+                                            @* ── #107 تحويل لفاتورة عميل ──
+                                               بيوديه على شاشة فاتورة عميل جديدة، والبنود
+                                               بتتحط أول ما يختار العميل هناك.
+                                               🔴 **مافيش دايلوج اختيار عميل هنا** — ‏`DESIGN-STANDARD.md §6`:
+                                               «Dialog مسموح بس في: تأكيد الحذف · عرض بيانات للقراءة فقط».
+                                               شاشة الفاتورة فيها بحث عملاء كامل أصلًا. *@
+                                            @if (CanConvert && i.Status != "Cancelled")
+                                            {
+                                                <button class="si-act-btn act-convert"
+                                                        @onclick="() => Convert(i)" @onclick:stopPropagation="true"
+                                                        title="تحويل لفاتورة عميل"
+                                                        aria-label="تحويل @i.SupplierInvoiceNumber لفاتورة عميل">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M17 1l4 4-4 4"/>
+                                                        <path d="M3 11V9a4 4 0 014-4h14"/>
+                                                        <path d="M7 23l-4-4 4-4"/>
+                                                        <path d="M21 13v2a4 4 0 01-4 4H3"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @if (CanEdit && i.Status == "Draft")
+                                            {
+                                                <button class="si-act-btn act-edit"
+                                                        @onclick="() => Edit(i)" @onclick:stopPropagation="true"
+                                                        title="تعديل الفاتورة"
+                                                        aria-label="تعديل @i.SupplierInvoiceNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                    </svg>
+                                                </button>
+
+                                                <button class="si-act-btn act-approve"
+                                                        @onclick="() => Approve(i)" @onclick:stopPropagation="true"
+                                                        title="اعتماد الفاتورة"
+                                                        aria-label="اعتماد @i.SupplierInvoiceNumber"
+                                                        disabled="@_busy">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M9 12l2 2 4-4"/>
+                                                        <circle cx="12" cy="12" r="10"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @if (CanEdit && i.Status != "Cancelled" && i.Status != "Paid" && i.PaidAmount <= 0)
+                                            {
+                                                <button class="si-act-btn act-cancel"
+                                                        @onclick="() => AskCancel(i)" @onclick:stopPropagation="true"
+                                                        title="إلغاء الفاتورة"
+                                                        aria-label="إلغاء @i.SupplierInvoiceNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <circle cx="12" cy="12" r="10"/>
+                                                        <path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                        </div>
+                                    </td>
 
                                 </tr>
                             }
@@ -957,6 +993,14 @@
         transition: all .15s ease; background: transparent;
     }
     .si-act-btn:disabled { opacity: .5; cursor: not-allowed; }
+    /* ── #106 ── */
+    .si-table tbody tr.si-row-open { cursor: pointer; }
+    .si-table tbody tr.si-row-open:hover { background: #f2f7ff; }
+    .act-view { color: #526070; }
+    /* #107 — تحويل لفاتورة عميل (ذهبي — إجراء تحويل مش تعديل ولا حذف) */
+    .act-convert { color: #b7791f; }
+    .act-convert:hover { background: var(--fc-amber-lt); border-color: #f0d898; }
+    .act-view:hover { background: #eef3fa; border-color: #dde5f0; }
     .act-edit { color: var(--fc-blue); }
     .act-approve { color: var(--fc-green); }
     .act-cancel { color: var(--fc-red); }
@@ -1297,6 +1341,18 @@
 
     private void SetTab(string k) { _tab = k; }
     private void ToggleFab() => _fabOpen = !_fabOpen;
+
+    /* #106 — عنوان زرار «عرض».
+       🔴 مش شرط ternary جوه `title="@(...)"` مباشرة — التنصيص المتداخل بيوقع Razor بـ CS1026. */
+    /* #107 — التحويل لفاتورة عميل محتاج صلاحية إنشاء فاتورة عميل،
+       عشان شاشة الفاتورة نفسها بترجع فاضية من غيرها (`if (!CanSave) return;`). */
+    private bool CanConvert => _user?.Can("INVOICE.CREATE") ?? false;
+
+    private void Convert(Item i) =>
+        Nav.NavigateTo($"/invoices/new?fromSupplierInvoice={i.SupplierInvoiceId}");
+
+    private static string ViewTitle(Item i) =>
+        i.Status == "Draft" ? "فتح الفاتورة للتعديل" : "عرض الفاتورة (للقراءة فقط)";
 
     private void New()        => Nav.NavigateTo("/supplier-invoices/new");
     private void Edit(Item i) => Nav.NavigateTo($"/supplier-invoices/new/{i.SupplierInvoiceId}");

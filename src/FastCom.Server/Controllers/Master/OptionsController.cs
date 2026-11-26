@@ -99,6 +99,34 @@ public class OptionsController : ControllerBase
                                      v.SupplierId, v.OwnershipType == "Company", v.DefaultDriverId))
             .ToListAsync(ct));
 
+    /* #82 — العربيات المتاحة **بتاريخ الرحلة**:
+       المحجوزة = عندها رحلة نشطة (مش ملغية/مكتملة) لسه على الطريق، أو مخططة في نفس اليوم.
+       عربية محجوزة يوم 25 تفضل متاحة لرحلة يوم 20 — نفس منطق فحص التعارض في TripsController. */
+    [HttpGet("vehicles-available")]
+    [Authorize(Policy = "PERM:FLEET.VIEW")]
+    public async Task<IActionResult> VehiclesAvailable(
+        [FromQuery] string? date, [FromQuery] long? exceptTripId, CancellationToken ct)
+    {
+        var on = DateTime.TryParse(date, out var d) ? d.Date : DateTime.UtcNow.Date;
+
+        // معرّفات العربيات المحجوزة في التاريخ ده
+        var busy = await _db.Trips.AsNoTracking()
+            .Where(t => !t.IsDeleted && t.Status != "Cancelled" && t.Status != "Completed" &&
+                        (exceptTripId == null || t.TripId != exceptTripId) &&
+                        ((t.ActualStartAt != null && t.ActualEndAt == null) ||
+                         (t.PlannedStartAt != null && t.PlannedStartAt.Value.Date == on)))
+            .Select(t => t.VehicleId)
+            .Distinct()
+            .ToListAsync(ct);
+
+        return Ok(await _db.Vehicles.AsNoTracking()
+            .Where(v => !v.IsDeleted && v.Status != "OutOfService" && !busy.Contains(v.VehicleId))
+            .OrderBy(v => v.PlateNumber)
+            .Select(v => new PairOpt(v.VehicleId, v.PlateNumber + " — " + v.VehicleType,
+                                     v.SupplierId, v.OwnershipType == "Company", v.DefaultDriverId))
+            .ToListAsync(ct));
+    }
+
     [HttpGet("employees")]
     [Authorize(Policy = "PERM:EMPLOYEE.VIEW")]
     public async Task<IActionResult> Employees(CancellationToken ct) =>

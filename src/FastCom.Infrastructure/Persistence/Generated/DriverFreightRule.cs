@@ -20,6 +20,12 @@ public partial class DriverFreightRule
 
     public int? TripTypeId { get; set; }
 
+    /* #82 — التعتيق (الميناء النهائي) — NULL = أي قيمة */
+    public int? TahteeqPortId { get; set; }
+
+    /* #82 — نوع الحاوية — NULL = أي قيمة */
+    public int? ContainerTypeId { get; set; }
+
     [Column(TypeName = "decimal(19, 4)")]
     public decimal Amount { get; set; }
 

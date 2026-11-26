@@ -53,6 +53,14 @@ public partial class Trip
     [Column(TypeName = "decimal(19, 4)")]
     public decimal? FreightAmount { get; set; }
 
+    /* #82 — مبيت السائق عند العميل */
+    [Column(TypeName = "decimal(19, 4)")]
+    public decimal? OvernightAmount { get; set; }
+
+    /* #82 — التحويلة */
+    [Column(TypeName = "decimal(19, 4)")]
+    public decimal? TransferAmount { get; set; }
+
     [StringLength(30)]
     public string Status { get; set; } = null!;
 

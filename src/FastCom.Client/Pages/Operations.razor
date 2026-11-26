@@ -63,16 +63,19 @@
                     <div class="fc-kpi-ic fc-kpi-green"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" /></div>
                     <div><div class="fc-kpi-num">@_items.Count(o => o.Status == "Closed")</div><div class="fc-kpi-lb">مغلقة</div></div>
                 </div>
-                <div class="fc-kpi fc-kpi-click @(_tab == "loss" ? "fc-kpi-active" : "")"
-                     @onclick='() => SetTab("loss")' role="button" aria-pressed="@(_tab == "loss")">
-                    <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
-                    <div>
-                        <div class="fc-kpi-num @(_items.Sum(o => o.RevenueNet - o.ActualCost) >= 0 ? "" : "kpi-negative")">
-                            @Money(_items.Sum(o => o.RevenueNet - o.ActualCost))
+                @if (CanViewFinancials)
+                {
+                    <div class="fc-kpi fc-kpi-click @(_tab == "loss" ? "fc-kpi-active" : "")"
+                         @onclick='() => SetTab("loss")' role="button" aria-pressed="@(_tab == "loss")">
+                        <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
+                        <div>
+                            <div class="fc-kpi-num @(_items.Sum(o => Prof(o)) >= 0 ? "" : "kpi-negative")">
+                                @Money(_items.Sum(o => Prof(o)))
+                            </div>
+                            <div class="fc-kpi-lb">صافي الربح — اضغط لفلترة الخسائر</div>
                         </div>
-                        <div class="fc-kpi-lb">صافي الربح — اضغط لفلترة الخسائر</div>
                     </div>
-                </div>
+                }
             </div>
             }
         </div>
@@ -171,7 +174,7 @@
                 }
 
                 @* ── Financial Summary ── *@
-                @if (_items.Any() && !_loading)
+                @if (_items.Any() && !_loading && CanViewFinancials)
                 {
                     <div class="op-fin-summary">
                         <div class="op-fin-item">
@@ -191,7 +194,7 @@
                         <div class="op-fin-item">
                             <span class="op-fin-label">الربح</span>
                             @{
-                                var profit = Filtered.Sum(o => o.RevenueNet - o.ActualCost);
+                                var profit = Filtered.Sum(o => Prof(o));
                             }
                             <span class="op-fin-val @(profit >= 0 ? "fin-green" : "fin-red")">
                                 @Money(profit)
@@ -258,16 +261,19 @@
                                 <th scope="col">المسار</th>
                                 <th scope="col">التاريخ</th>
                                 <th scope="col">الحالة</th>
-                                <th scope="col">الإيراد</th>
-                                <th scope="col">التكلفة</th>
-                                <th scope="col">الربح</th>
+                                @if (CanViewFinancials)
+                                {
+                                    <th scope="col">الإيراد</th>
+                                    <th scope="col">التكلفة</th>
+                                    <th scope="col">الربح</th>
+                                }
                                 <th scope="col" style="width:190px">إجراءات</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var o in Filtered)
                             {
-                                var profit = o.RevenueNet - o.ActualCost;
+                                var profit = Prof(o);
 
                                 <tr class="@(o.Status == "Cancelled" ? "row-cancelled" : "")
                                            @(o.Status == "Closed" ? "row-closed" : "")">
@@ -375,35 +381,38 @@
                                         </span>
                                     </td>
 
-                                    @* ── الإيراد ── *@
-                                    <td>
-                                        <div class="op-money-cell">
-                                            <span class="op-money-main">@Money(o.RevenueNet)</span>
-                                            @if (o.RevenueTax > 0)
-                                            {
-                                                <span class="op-money-sub">+ ضريبة @Money(o.RevenueTax)</span>
-                                            }
-                                        </div>
-                                    </td>
+                                    @if (CanViewFinancials)
+                                    {
+                                        @* ── الإيراد ── *@
+                                        <td>
+                                            <div class="op-money-cell">
+                                                <span class="op-money-main">@Money(o.RevenueNet)</span>
+                                                @if (o.RevenueTax > 0)
+                                                {
+                                                    <span class="op-money-sub">+ ضريبة @Money(o.RevenueTax)</span>
+                                                }
+                                            </div>
+                                        </td>
 
-                                    @* ── التكلفة ── *@
-                                    <td>
-                                        <div class="op-money-cell">
-                                            <span class="op-money-main cost">@Money(o.ActualCost)</span>
-                                            @if (o.EstimatedCost > 0 && o.EstimatedCost != o.ActualCost)
-                                            {
-                                                <span class="op-money-sub">تقدير @Money(o.EstimatedCost)</span>
-                                            }
-                                        </div>
-                                    </td>
+                                        @* ── التكلفة ── *@
+                                        <td>
+                                            <div class="op-money-cell">
+                                                <span class="op-money-main cost">@Money(o.ActualCost)</span>
+                                                @if (o.EstimatedCost > 0 && o.EstimatedCost != o.ActualCost)
+                                                {
+                                                    <span class="op-money-sub">تقدير @Money(o.EstimatedCost)</span>
+                                                }
+                                            </div>
+                                        </td>
 
-                                    @* ── الربح ── *@
-                                    <td>
-                                        <span class="op-profit-badge @(profit >= 0 ? "profit-pos" : "profit-neg")">
-                                            <span aria-hidden="true">@(profit >= 0 ? "↑" : "↓")</span>
-                                            @Money(profit)
-                                        </span>
-                                    </td>
+                                        @* ── الربح ── *@
+                                        <td>
+                                            <span class="op-profit-badge @(profit >= 0 ? "profit-pos" : "profit-neg")">
+                                                <span aria-hidden="true">@(profit >= 0 ? "↑" : "↓")</span>
+                                                @Money(profit)
+                                            </span>
+                                        </td>
+                                    }
 
                                     @* ── إجراءات ── *@
                                     <td>
@@ -1408,6 +1417,18 @@
     private bool CanClose  => _user?.Can("OPERATION.CLOSE")  ?? false;
     private bool CanReopen => _user?.Can("OPERATION.REOPEN") ?? false;
 
+    /* 🔴 رؤية المبالغ — نفس تعريف OperationFile.razor:719.
+       السيرفر بيصفّر الأرقام أصلًا (OperationsController.HasFin)، فده إخفاء
+       للواجهة بس: من غيره كانت الأعمدة هتفضل ظاهرة بصفر أو بالأرقام. */
+    private bool CanViewFinancials =>
+        (_user?.IsAdmin ?? false) || (_user?.Can("OPERATION.VIEW_FINANCIALS") ?? false);
+
+    /* #90 — 🔴 المحمّل على العميل **ليس إيرادًا**: فلوس المكتب دفعها
+       بالنيابة عن العميل وهيردّها — عدّت عليه مش له. ⇒ الإيراد = RevenueNet بس.
+       والتكلفة `ActualCost` محسوبة في الداتا = نصيب الشركة من المصروفات
+       (بعد خصم المحمّل، وعدا سلف النولون) + توزيع الرحلة + نولون السائق. */
+    private static decimal Prof(Item o) => o.RevenueNet - o.ActualCost;
+
     private static readonly (string Key, string Value)[] _statusTabs =
     {
         ("all",        "الكل"),
@@ -1449,6 +1470,8 @@
         public decimal   RevenueTax      { get; set; }
         public decimal   EstimatedCost   { get; set; }
         public decimal   ActualCost      { get; set; }
+        /* #90 — المحمّل على العميل: **للعلم بس** — مش إيراد ومش في حساب الربح */
+        public decimal   BillableRevenue { get; set; }
         public DateTime  CreatedAt       { get; set; }
         public long?     TripId          { get; set; }
         public string?   TripNumber      { get; set; }
@@ -1536,7 +1559,7 @@
     {
         "all"  => true,
         "open" => OpenStatuses.Contains(o.Status),
-        "loss" => (o.RevenueNet - o.ActualCost) < 0,
+        "loss" => Prof(o) < 0,
         _      => o.Status == _tab
     };
 

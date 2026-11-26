@@ -56,7 +56,10 @@ public class ExpensesController : ControllerBase
 
     public record ListItem(long ExpenseId, string ExpenseNumber, string TypeName,
         string? CustomerName, string? BookingRef, int? CustodyOwnerId, string? CustodyOwnerName,
-        string? Description, DateTime ExpenseDate, decimal Amount, decimal TaxRate,
+        string? Description, DateTime ExpenseDate, decimal Amount,
+        /* #92 — الجزء اللي هيتحمّل على العميل (بيتفوتر في فاتورته).
+           للعِلم: 🔴 مش إيراد — مدفوع بالنيابة والعميل بيردّه. */
+        decimal BillableAmount, decimal TaxRate,
         string? OperationNumber, string? TripNumber, string? VehiclePlate, string? SupplierName, string? DriverName, string? CustodyNumber,
         string PaymentStatus, string Status, bool IsApproved,
         string? CreatedByName, string? PayBoxKind, string? PayBoxName,
@@ -111,7 +114,7 @@ public class ExpensesController : ControllerBase
                         ? _db.Employees.Where(x => x.EmployeeId == e.Custody.OwnerId).Select(x => x.FullNameAr).FirstOrDefault()
                         : _db.Drivers.Where(x => x.DriverId == e.Custody.OwnerId).Select(x => x.FullName).FirstOrDefault(),
                 e.Description,
-                e.ExpenseDate, e.Amount, e.TaxRate,
+                e.ExpenseDate, e.Amount, e.BillableAmount ?? 0, e.TaxRate,
                 e.Operation != null ? e.Operation.OperationNumber : null,
                 e.Trip != null ? e.Trip.TripNumber : null,
                 e.Vehicle != null ? e.Vehicle.PlateNumber : null,
@@ -202,7 +205,13 @@ public class ExpensesController : ControllerBase
         var err = await ValidateAsync(req, ct);
                 if (err is not null) return BadRequest(new { message = err });
         var postsToCashbox = req.CustodyId is null && req.BillableAmount is null; // صرف مباشر (غير محمّل على عميل) قد يترحل للخزينة حسب طريقة/حالة الدفع
-        if (postsToCashbox && !User.IsInRole("ADMIN") && !User.HasClaim("perm","TREASURY.POST") && !User.HasClaim("perm","TREASURY.VIEW"))
+        /* 🔴 كان `User.HasClaim("perm", …)` — وclaim اسمه `perm` **مفيش أي مكان
+           بيحطه في الـ JWT** (`grep -rn 'Claim("perm"' src/FastCom.Server` = قراءة بس)
+           ⇒ الشرط كان بيرفض **كل** المستخدمين غير ADMIN، حتى اللي عندهم
+           `TREASURY.POST` فعلًا. الفحص الحقيقي من `IPermissionService`. */
+        if (postsToCashbox && !User.IsInRole("ADMIN")
+            && !await _perms.HasAsync(CurrentUserId(), "TREASURY.POST", ct)
+            && !await _perms.HasAsync(CurrentUserId(), "TREASURY.VIEW", ct))
             return StatusCode(403, new { message = "غير مصرح بالترحيل للخزينة الرئيسية — استخدم عهدة أو اطلب صلاحية." });
 
         var branchId = await ResolveBranchIdAsync(ct);
@@ -291,7 +300,13 @@ public class ExpensesController : ControllerBase
         var err = await ValidateAsync(req, ct, e.CustodyId);
                 if (err is not null) return BadRequest(new { message = err });
         var postsToCashbox = req.CustodyId is null && req.BillableAmount is null; // صرف مباشر (غير محمّل على عميل) قد يترحل للخزينة حسب طريقة/حالة الدفع
-        if (postsToCashbox && !User.IsInRole("ADMIN") && !User.HasClaim("perm","TREASURY.POST") && !User.HasClaim("perm","TREASURY.VIEW"))
+        /* 🔴 كان `User.HasClaim("perm", …)` — وclaim اسمه `perm` **مفيش أي مكان
+           بيحطه في الـ JWT** (`grep -rn 'Claim("perm"' src/FastCom.Server` = قراءة بس)
+           ⇒ الشرط كان بيرفض **كل** المستخدمين غير ADMIN، حتى اللي عندهم
+           `TREASURY.POST` فعلًا. الفحص الحقيقي من `IPermissionService`. */
+        if (postsToCashbox && !User.IsInRole("ADMIN")
+            && !await _perms.HasAsync(CurrentUserId(), "TREASURY.POST", ct)
+            && !await _perms.HasAsync(CurrentUserId(), "TREASURY.VIEW", ct))
             return StatusCode(403, new { message = "غير مصرح بالترحيل للخزينة الرئيسية — استخدم عهدة أو اطلب صلاحية." });
 
         // 🔴 العهدة مقدّمة/معتمدة + نفس الربط → تغيير المبلغ هيعبث بأرقام التسوية
@@ -687,6 +702,13 @@ public class ExpensesController : ControllerBase
                                                         SettingDefaults.ExpenseMaxAmount, ct);
         if (expenseMax > 0 && r.Amount > expenseMax)
             return $"المبلغ أكبر من سقف المصروف المسموح ({expenseMax:N0})";
+
+        /* 🔴 #90 — المحمّل على العميل ما يزيدش عن مبلغ المصروف.
+           «نصيب الشركة» = Amount − BillableAmount، ولو طلع سالب
+           `usp_Operations_RecalcCost` بيصفّره ⇒ الشركة هتتحاسب بصفر
+           من غير ما حد ياخد باله. الأفضل نرفضها من هنا. */
+        if (r.BillableAmount is > 0 && r.BillableAmount > r.Amount)
+            return $"«يتحمّله العميل» ({r.BillableAmount:N2}) أكبر من مبلغ المصروف ({r.Amount:N2}) — المحمّل جزء من المصروف مش أكتر منه";
 
         var type = await _db.ExpenseTypes.AsNoTracking()
             .FirstOrDefaultAsync(t => t.ExpenseTypeId == r.ExpenseTypeId && !t.IsDeleted, ct);

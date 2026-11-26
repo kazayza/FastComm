@@ -1,4 +1,5 @@
-﻿using System.Security.Claims;
+﻿using System.Globalization;
+using System.Security.Claims;
 using FastCom.Domain.Entities;
 using FastCom.Infrastructure.Persistence;
 using FastCom.Server.Auth;
@@ -32,6 +33,22 @@ public class OperationsController : ControllerBase
 
     private static string? B(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
+    /* 🔴 رؤية مبالغ العمليات — **بالفحص الحقيقي مش بالـ claim**.
+       الكود القديم كان `User.HasClaim("perm", "OPERATION.VIEW_FINANCIALS")`،
+       و`grep -rn 'Claim("perm"' src/FastCom.Server` بيطلّع **الصلاحيات بتتقرا بس —
+       مفيش أي مكان بيحطها في الـ JWT** ⇒ الشرط كان `false` دايمًا،
+       يعني الفحص كان شغّال لـ ADMIN بس. (`TokenService` بيحط `role` و Claims
+       الـ claims بتاعة Identity، مش `perm`.)
+       `IPermissionService` بيقرأ من `AppRolePermissions` (كاش 60 ثانية) — وده
+       نفس الباس المستخدم في باقي الـ Controllers.
+       async ⇒ بتتنادى مرة في أول كل action وتتحط في local، لأن EF
+       ما ينفعش يترجم `await` جوه `Select`. */
+    private Task<bool> HasFinAsync(CancellationToken ct)
+    {
+        if (User.IsInRole("ADMIN")) return Task.FromResult(true);   /* ADMIN فوق الفحص كله */
+        return _perms.HasAsync(CurrentUserId(), "OPERATION.VIEW_FINANCIALS", ct);
+    }
+
     private static DateTime? Dt(string? s) =>
         DateTime.TryParse(s, out var d) ? d : null;
 
@@ -44,8 +61,11 @@ public class OperationsController : ControllerBase
 
     // ═══════════════ DTOs ═══════════════
 
+    /* #83 — أبعاد السطر بقت اختيارية في الآخر: النداء الموضعي القديم
+       (new(svcId, desc, 1, price, 0, tax, null)) يفضل يشتغل من غير تعديل */
     public record RevenueLineDto(int ServiceId, string? Description, decimal Quantity,
-        decimal UnitPrice, decimal Discount, int? TaxRateId, long? PriceRuleId);
+        decimal UnitPrice, decimal Discount, int? TaxRateId, long? PriceRuleId,
+        int? PortId = null, int? DestinationId = null, int? TahteeqPortId = null, int? TripTypeId = null);
 
     public record OperationUpsert(long? BookingId, int CustomerId, int? ServiceId, int? PortId,
         int? DestinationId, int? TahteeqPortId, int? TripTypeId, string? PlannedDate, decimal EstimatedCost,
@@ -57,21 +77,29 @@ public class OperationsController : ControllerBase
         string? TahteeqPortName,
         DateTime? PlannedDate, string Status, decimal RevenueNet, decimal RevenueTax,
         decimal EstimatedCost, decimal ActualCost, DateTime CreatedAt,
-        long? TripId, string? TripNumber);
+        long? TripId, string? TripNumber,
+        /* #90 — مجموع «يتحمّله العميل». 🔴 **مش إيراد** — للعِلم بس */
+        decimal BillableRevenue = 0m);
 
+    /* #83 — بترجع أبعاد السطر عشان الشاشة تعبّيها وقت التعديل */
     public record RevenueLineItem(long OperationRevenueItemId, int ServiceId, string ServiceName,
         string? Description, decimal Quantity, decimal UnitPrice, decimal Discount,
-        int? TaxRateId, decimal TaxRate, decimal LineNet, decimal LineTax, long? PriceRuleId);
+        int? TaxRateId, decimal TaxRate, decimal LineNet, decimal LineTax, long? PriceRuleId,
+        int? PortId = null, int? DestinationId = null, int? TahteeqPortId = null, int? TripTypeId = null);
 
     public record Detail(long OperationId, string OperationNumber, long? BookingId,
         string? BookingNumber, int CustomerId, string CustomerName, int? ServiceId, int? PortId,
         int? DestinationId, int? TahteeqPortId, string? TahteeqPortName, int? TripTypeId, string? PlannedDate, decimal EstimatedCost,
         string? Notes, string Status, decimal RevenueNet, decimal RevenueTax, decimal ActualCost,
-        DateTime CreatedAt, string? AgentReference = null);
+        DateTime CreatedAt, string? AgentReference = null,
+        /* #90 */ decimal BillableRevenue = 0m);
 
     public record DetailResponse(Detail Operation, List<RevenueLineItem> RevenueLines);
 
-    public record PriceSuggestion(decimal UnitPrice, decimal? CostPrice, int? TaxRateId,
+    /* #95 — 🔴 `UnitPrice = null` = مفيش قاعدة مطابقة في قوائم الأسعار.
+       السعر **من جدول الأسعار بس** (قاعدة العميل أو التعريفة العامة) —
+       **مش من `Services.DefaultSellingPrice`**. */
+    public record PriceSuggestion(decimal? UnitPrice, decimal? CostPrice, int? TaxRateId,
         decimal TaxRate, long? PriceRuleId, string Source);
 
     // ═══════════════ LIST ═══════════════
@@ -82,6 +110,7 @@ public class OperationsController : ControllerBase
         [FromQuery] int take = 200, CancellationToken ct = default)
     {
         if (take is < 1 or > 500) take = 200;
+        var hasFin = await HasFinAsync(ct);
 
         var query = _db.Operations.AsNoTracking().Where(o => !o.IsDeleted);
 
@@ -110,13 +139,15 @@ public class OperationsController : ControllerBase
                 o.Destination != null ? o.Destination.NameAr : null,
                 o.TahteeqPort != null ? o.TahteeqPort.NameAr : null,
                 o.PlannedDate, o.Status,
-                o.RevenueNet, o.RevenueTax, o.EstimatedCost, o.ActualCost, o.CreatedAt,
+                hasFin ? o.RevenueNet : 0m, hasFin ? o.RevenueTax : 0m,
+                hasFin ? o.EstimatedCost : 0m, hasFin ? o.ActualCost : 0m, o.CreatedAt,
                 _db.TripOperations
                     .Where(to => to.OperationId == o.OperationId && to.Status != "Cancelled")
                     .Select(to => (long?)to.TripId).FirstOrDefault(),
                 _db.TripOperations
                     .Where(to => to.OperationId == o.OperationId && to.Status != "Cancelled")
-                    .Select(to => to.Trip.TripNumber).FirstOrDefault()))
+                    .Select(to => to.Trip.TripNumber).FirstOrDefault(),
+                hasFin ? o.BillableRevenue : 0m))
             .ToListAsync(ct);
 
         return Ok(rows);
@@ -130,6 +161,7 @@ public class OperationsController : ControllerBase
         string? TahteeqPortName, DateTime? PlannedDate, string Status,
         int ContainersQty, int TripsCount,
         decimal RevenueNet, decimal RevenueTax, decimal ActualCost, DateTime CreatedAt,
+        decimal BillableRevenue,
         long? StartTripId, string? StartTripNumber, string? StartTripDriverName, string? StartTripVehiclePlate,
         long? CompleteTripId, string? CompleteTripNumber, string? CompleteTripDriverName, string? CompleteTripVehiclePlate,
         bool CanCloseOp);
@@ -139,6 +171,7 @@ public class OperationsController : ControllerBase
     public async Task<IActionResult> Requests(int take = 300, CancellationToken ct = default)
     {
         if (take <= 0 || take > 1000) take = 300;
+        var hasFin = await HasFinAsync(ct);
 
         var rows = await _db.Operations.AsNoTracking()
             .Where(o => !o.IsDeleted)
@@ -158,7 +191,8 @@ public class OperationsController : ControllerBase
                 o.PlannedDate, o.Status,
                 o.Booking != null ? o.Booking.BookingContainerLines.Sum(l => l.RequestedQty) : 0,
 _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "Cancelled"),
-                (User.IsInRole("ADMIN") || User.HasClaim("perm","OPERATION.VIEW_FINANCIALS") ? o.RevenueNet : 0m), (User.IsInRole("ADMIN") || User.HasClaim("perm","OPERATION.VIEW_FINANCIALS") ? o.RevenueTax : 0m), (User.IsInRole("ADMIN") || User.HasClaim("perm","OPERATION.VIEW_FINANCIALS") ? o.ActualCost : 0m), o.CreatedAt,
+                hasFin ? o.RevenueNet : 0m, hasFin ? o.RevenueTax : 0m, hasFin ? o.ActualCost : 0m, o.CreatedAt,
+                hasFin ? o.BillableRevenue : 0m,
                 _db.TripOperations
                     .Where(to => to.OperationId == o.OperationId && to.Status != "Cancelled"
                                  && (to.Trip.Status == "Planned" || to.Trip.Status == "Assigned"))
@@ -215,6 +249,8 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
     [Authorize(Policy = "PERM:OPERATION.VIEW")]
     public async Task<IActionResult> Get(long id, CancellationToken ct)
     {
+        var hasFin = await HasFinAsync(ct);
+
         var o = await _db.Operations.AsNoTracking()
             .FirstOrDefaultAsync(x => x.OperationId == id && !x.IsDeleted, ct);
         if (o is null) return NotFound(new { message = "العملية مش موجودة" });
@@ -246,15 +282,20 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
             .OrderBy(r => r.OperationRevenueItemId)
             .Select(r => new RevenueLineItem(
                 r.OperationRevenueItemId, r.ServiceId, r.Service.NameAr, r.Description,
-                r.Quantity, r.UnitPrice, r.Discount, r.TaxRateId, r.TaxRate,
-                r.LineNet ?? 0, r.LineTax ?? 0, r.PriceRuleId))
+                r.Quantity,
+                hasFin ? r.UnitPrice : 0m, hasFin ? r.Discount : 0m,
+                r.TaxRateId, r.TaxRate,
+                hasFin ? (r.LineNet ?? 0) : 0m, hasFin ? (r.LineTax ?? 0) : 0m,
+                r.PriceRuleId,
+                r.PortId, r.DestinationId, r.TahteeqPortId, r.TripTypeId))
             .ToListAsync(ct);
 
         var detail = new Detail(o.OperationId, o.OperationNumber, o.BookingId, bookingNumber,
             o.CustomerId, customerName, o.ServiceId, o.PortId, o.DestinationId,
             o.TahteeqPortId, tahteeqPortName, o.TripTypeId,
-            o.PlannedDate?.ToString("yyyy-MM-ddTHH:mm"), o.EstimatedCost, o.Notes, o.Status,
-            ((User.IsInRole("ADMIN") || User.HasClaim("perm","OPERATION.VIEW_FINANCIALS")) ? o.RevenueNet : 0m), ((User.IsInRole("ADMIN") || User.HasClaim("perm","OPERATION.VIEW_FINANCIALS")) ? o.RevenueTax : 0m), ((User.IsInRole("ADMIN") || User.HasClaim("perm","OPERATION.VIEW_FINANCIALS")) ? o.ActualCost : 0m), o.CreatedAt, agentReference);
+            o.PlannedDate?.ToString("yyyy-MM-ddTHH:mm"), hasFin ? o.EstimatedCost : 0m, o.Notes, o.Status,
+            hasFin ? o.RevenueNet : 0m, hasFin ? o.RevenueTax : 0m, hasFin ? o.ActualCost : 0m,
+            o.CreatedAt, agentReference, hasFin ? o.BillableRevenue : 0m);
 
         return Ok(new DetailResponse(detail, lines));
     }
@@ -284,7 +325,7 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
         [FromQuery] int customerId, [FromQuery] int serviceId,
         [FromQuery] int? portId, [FromQuery] int? destinationId,
         [FromQuery] int? tahteeqPortId, [FromQuery] int? tripTypeId, [FromQuery] int? containerTypeId,
-        [FromQuery] string? date, CancellationToken ct = default)
+        [FromQuery] string? date, CancellationToken token = default)
     {
         if (customerId <= 0 || serviceId <= 0)
             return BadRequest(new { message = "العميل والخدمة مطلوبين" });
@@ -294,14 +335,16 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
         // الأبعاد الاختيارية: القاعدة الفاضية (NULL) = "أي قيمة" → بتطبق على كل الحالات.
         // 🔴 قاعدة تابعة لقائمة أسعار: القائمة لازم تكون سارية هي كمان — قفل القائمة
         //    (ValidTo) أو تعطيلها أو حذفها بيوقف قواعدها فورًا.
+        /* #83 — بنجيب قواعد العميل **والتعريفة العامة** (CustomerId = NULL) مع بعض،
+           والترتيب تحت بيخلّي قاعدة العميل تكسب دايمًا */
         var rules = await _db.CustomerPriceRules.AsNoTracking()
             .Where(r => !r.IsDeleted && r.IsActive &&
-                        r.CustomerId == customerId && r.ServiceId == serviceId &&
+                        (r.CustomerId == customerId || r.CustomerId == null) && r.ServiceId == serviceId &&
                         r.ValidFrom <= on && (r.ValidTo == null || r.ValidTo >= on) &&
                         (r.PriceListId == null || _db.PriceLists.Any(p =>
                             p.PriceListId == r.PriceListId && !p.IsDeleted && p.IsActive &&
                             p.ValidFrom <= on && (p.ValidTo == null || p.ValidTo >= on))))
-            .ToListAsync(ct);
+            .ToListAsync(token);
 
         /* 🔴 البُعد اللي الطلب ما حدّدوش: القاعدة اللي محدّداه **ما تطابقش** —
            قبل كده كانت بتطابق وبتكسب بترتيب الأخصّية، فطلب ناقص كان بياخد
@@ -313,7 +356,9 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
             .Where(r => r.TripTypeId == null || (tripTypeId != null && r.TripTypeId == tripTypeId))
             .Where(r => r.ContainerTypeId == null || (containerTypeId != null && r.ContainerTypeId == containerTypeId))
             // القاعدة الأخص (أبعاد معبّاة أكتر) تكسب، وبعدين الأولوية (الرقم الأصغر أعلى)
-            .OrderByDescending(r => (r.PortId is not null ? 1 : 0) + (r.DestinationId is not null ? 1 : 0)
+            /* #83 — قاعدة العميل أولًا (حتى لو العامة أخص بالأبعاد)، وبعدين الأخص */
+            .OrderByDescending(r => r.CustomerId is not null)
+            .ThenByDescending(r => (r.PortId is not null ? 1 : 0) + (r.DestinationId is not null ? 1 : 0)
                                   + (r.TahteeqPortId is not null ? 1 : 0)
                                   + (r.TripTypeId is not null ? 1 : 0) + (r.ContainerTypeId is not null ? 1 : 0))
             .ThenBy(r => r.Priority)
@@ -322,35 +367,87 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
 
         var service = await _db.Services.AsNoTracking()
             .Where(s => s.ServiceId == serviceId)
-            .Select(s => new { s.DefaultSellingPrice, s.TaxRateId })
-            .FirstOrDefaultAsync(ct);
+            /* #95 — DefaultSellingPrice ما بقتش مستخدمة: السعر من قوائم الأسعار بس */
+            .Select(s => new { s.TaxRateId })
+            .FirstOrDefaultAsync(token);
         if (service is null) return NotFound(new { message = "الخدمة مش موجودة" });
 
-        decimal unit; decimal? cost; int? taxId; long? ruleId; string source;
+        /* #95 — 🔴 السعر من **قوائم الأسعار بس**. لو مفيش قاعدة مطابقة ⇒
+           `unit = null` والشاشة بتقول «مفيش قاعدة سعر مطابقة».
+           كان بيرجع `Services.DefaultSellingPrice` — وده غلط: سعر الخدمة
+           سعر افتراضي للتعريف، مش سعر بيع من قائمة أسعار. */
+        decimal? unit; decimal? cost; int? taxId; long? ruleId; string source;
 
         if (match is not null)
         {
             unit = match.UnitPrice; cost = match.CostPrice;
             taxId = match.TaxRateId ?? service.TaxRateId;
             ruleId = match.CustomerPriceRuleId;
-            source = "قاعدة تسعير العميل";
+            source = match.CustomerId is null ? "التعريفة العامة" : "قاعدة تسعير العميل";
         }
         else
         {
-            unit = service.DefaultSellingPrice; cost = null;
+            unit = null; cost = null;
             taxId = service.TaxRateId; ruleId = null;
-            source = "سعر الخدمة الافتراضي";
+            /* #96 — 🔴 «مفيش قاعدة مطابقة» لوحدها ما بتفيدش: المستخدم ما يعرفش
+               القاعدة محتاجة إيه، وبيفضل يدوّر في قاعدة البيانات بالساعات.
+               بنقول السبب بالحرف — أبعاد محدّدة، قائمة مش سارية، أو مفيش قواعد. */
+            source = await ExplainNoMatchAsync(serviceId, rules, token);
         }
 
         // آخر احتياط: ضريبة نوع الرحلة (الترانزيت مثلًا معفاة)
         if (taxId is null && tripTypeId is not null)
             taxId = await _db.TripTypes.AsNoTracking()
                 .Where(t => t.TripTypeId == tripTypeId).Select(t => t.DefaultTaxRateId)
-                .FirstOrDefaultAsync(ct);
+                .FirstOrDefaultAsync(token);
 
-        var rate = await RateOfAsync(taxId, on, ct);
+        var rate = await RateOfAsync(taxId, on, token);
 
         return Ok(new PriceSuggestion(unit, cost, taxId, rate, ruleId, source));
+    }
+
+    /* #96 — 🔴 ليه مفيش سعر؟
+       `valid` = القواعد اللي عدّت من فلتر السريان والقائمة:
+         · فيها حاجة  ⇒ السبب أكيد الأبعاد (القاعدة محدّدة على خط سير تاني).
+         · فاضية      ⇒ بندوّر في الجدول كله: فيه قواعد والقائمة مقفولة، ولا مفيش أصلًا. */
+    private async Task<string> ExplainNoMatchAsync(int serviceId,
+        List<CustomerPriceRule> valid, CancellationToken token)
+    {
+        var near = valid.OrderByDescending(r => r.CustomerId is not null).FirstOrDefault();
+        if (near is not null)
+            return "فيه قاعدة سعر " + near.UnitPrice.ToString("N2", CultureInfo.InvariantCulture)
+                 + " بس محدّدة على: " + await DimNamesAsync(near, token)
+                 + " — ظبطها في الطلب، أو سيب الأبعاد فاضية في القاعدة";
+
+        var anyRules = await _db.CustomerPriceRules.AsNoTracking()
+            .CountAsync(r => r.ServiceId == serviceId && !r.IsDeleted && r.IsActive, token);
+        if (anyRules > 0)
+            return "فيه " + anyRules
+                 + " قاعدة سعر للخدمة دي بس قائمة الأسعار اللي فيها مش سارية (مقفولة أو خارج التاريخ)";
+
+        return "مفيش أي قاعدة سعر للخدمة دي في قوائم الأسعار";
+    }
+
+    /* أسماء الأبعاد اللي القاعدة محدّداها — عشان الرسالة تبقى مفهومة من غير ما يدخل SQL */
+    private async Task<string> DimNamesAsync(CustomerPriceRule r, CancellationToken token)
+    {
+        var parts = new List<string>();
+        if (r.PortId is int p)
+            parts.Add("التحميل = " + (await _db.Ports.AsNoTracking()
+                .Where(x => x.PortId == p).Select(x => x.NameAr).FirstOrDefaultAsync(token) ?? "؟"));
+        if (r.DestinationId is int d)
+            parts.Add("الوجهة = " + (await _db.Destinations.AsNoTracking()
+                .Where(x => x.DestinationId == d).Select(x => x.NameAr).FirstOrDefaultAsync(token) ?? "؟"));
+        if (r.TahteeqPortId is int t)
+            parts.Add("التعتيق = " + (await _db.Ports.AsNoTracking()
+                .Where(x => x.PortId == t).Select(x => x.NameAr).FirstOrDefaultAsync(token) ?? "؟"));
+        if (r.TripTypeId is int tt)
+            parts.Add("نوع الرحلة = " + (await _db.TripTypes.AsNoTracking()
+                .Where(x => x.TripTypeId == tt).Select(x => x.NameAr).FirstOrDefaultAsync(token) ?? "؟"));
+        if (r.ContainerTypeId is int c)
+            parts.Add("الحاوية = " + (await _db.ContainerTypes.AsNoTracking()
+                .Where(x => x.ContainerTypeId == c).Select(x => x.NameAr).FirstOrDefaultAsync(token) ?? "؟"));
+        return parts.Count == 0 ? "(بلا أبعاد)" : string.Join(" · ", parts);
     }
 
     // ═══════════════ ضمان الحاويات (تكلفة على الشركة — غير مسترد) ═══════════════
@@ -517,7 +614,9 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
         decimal? UnitPrice, List<QuickLineDto>? Lines,
         int? EndCustomerId = null, string? EndCustomerName = null, int? ContactId = null, string? CustomerReference = null,
         List<QuickTripDto>? Trips = null,
-        List<QuickDetailDto>? ContainerDetails = null);
+        List<QuickDetailDto>? ContainerDetails = null,
+        /* #83 — سطور الإيراد كاملة. لو مبعوتة، UnitPrice بيتجاهل */
+        List<RevenueLineDto>? RevenueLines = null);
 
     /* تفصيلة حاوية فردية (برقمها) — نفس حقول تفاصيل الحجز الأساسية،
        وLineIndex هو موضع السطر الأم داخل مصفوفة Lines المرسلة */
@@ -525,8 +624,11 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
         string? ShippingLine, string? BLNumber, string? BookingReference, decimal? WeightKg, string? Notes,
         int? LineIndex = null);
 
+    /* #78 — الرحلة بقت تشيل خط سيرها هي (سحب/وجهة/تعتيق).
+       لو المستخدم سيبهم فاضيين → الرحلة ترث خط سير العملية زي قبل كده بالظبط. */
     public record QuickTripDto(int DriverId, int VehicleId, int? TrailerId,
-        decimal? FreightAmount, string? PlannedStartAt);
+        decimal? FreightAmount, string? PlannedStartAt,
+        int? PortId = null, int? DestinationId = null, int? TahteeqPortId = null);
 
     [HttpPost("quick-create")]
     [Authorize(Policy = "PERM:OPERATION.CREATE")]
@@ -679,20 +781,31 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
             _db.Operations.Add(o);
             await _db.SaveChangesAsync(ct);
 
-            /* سطر الإيراد: بالسعر المقترح المعدّل من المستخدم، وبيانه من خط السير */
-            if (req.ServiceId is int svcId && req.UnitPrice is > 0)
+            /* #83 — الشاشة بقت بتبعت سطور الإيراد كلها (إنشاء وتعديل).
+               السلوك القديم (سطر واحد من UnitPrice) فضل احتياطي لأي منادي تاني */
+            var hasRevLines = req.RevenueLines is { Count: > 0 };
+            if (hasRevLines || (req.ServiceId is not null && req.UnitPrice is > 0))
             {
-                var desc = await BuildRouteDescAsync(req.PortId, req.DestinationId, req.TahteeqPortId, ct);
-                var svcTax = await _db.Services.AsNoTracking()
-                    .Where(s => s.ServiceId == svcId).Select(s => s.TaxRateId).FirstOrDefaultAsync(ct);
-                AddRevenueLines(o.OperationId,
-                    new List<RevenueLineDto> { new(svcId, desc, 1, req.UnitPrice.Value, 0, svcTax, null) },
-                    CurrentUserId());
+                if (hasRevLines)
+                {
+                    AddRevenueLines(o.OperationId, req.RevenueLines!, CurrentUserId());
+                }
+                else if (req.ServiceId is int svcId && req.UnitPrice is > 0)
+                {
+                    var desc = await BuildRouteDescAsync(req.PortId, req.DestinationId, req.TahteeqPortId, ct);
+                    var svcTax = await _db.Services.AsNoTracking()
+                        .Where(s => s.ServiceId == svcId).Select(s => s.TaxRateId).FirstOrDefaultAsync(ct);
+                    AddRevenueLines(o.OperationId,
+                        new List<RevenueLineDto> { new(svcId, desc, 1, req.UnitPrice.Value, 0, svcTax, null) },
+                        CurrentUserId());
+                }
+                /* TaxRate snapshot لازم يتملأ قبل الحفظ، والـ trigger بيعيد حساب الإيراد */
                 await FillTaxRateSnapshotsAsync(ct);
                 await _db.SaveChangesAsync(ct);
             }
 
-            /* رحلات التعيين: بتتخلق مربوطة بالعملية، وخط السير والنوع وارثين منها */
+            /* رحلات التعيين: بتتخلق مربوطة بالعملية.
+               #78 — خط السير بقى من الرحلة نفسها لو المستخدم حدده، وإلا يرث من العملية */
             var seq = 0;
             foreach (var t in qTrips)
             {
@@ -704,9 +817,9 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
                     VehicleId      = t.VehicleId,
                     TrailerId      = t.TrailerId,
                     TripTypeId     = o.TripTypeId,
-                    PortId         = o.PortId,
-                    DestinationId  = o.DestinationId,
-                    TahteeqPortId  = o.TahteeqPortId,
+                    PortId         = t.PortId        ?? o.PortId,
+                    DestinationId  = t.DestinationId ?? o.DestinationId,
+                    TahteeqPortId  = t.TahteeqPortId ?? o.TahteeqPortId,
                     PlannedStartAt = Dt(t.PlannedStartAt) ?? o.PlannedDate,
                     FreightAmount  = t.FreightAmount is > 0 ? t.FreightAmount : null,
                     Status         = "Planned",
@@ -797,19 +910,34 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
 
     // ═══════════════ ملف العملية: رحلاتها وحاوياتها ═══════════════
 
-    public record OpTripLine(long TripId, string TripNumber, string DriverName, string VehiclePlate,
-        string Status, DateTime? PlannedStartAt, decimal? FreightAmount, int SequenceNo);
+    /* #78 — خط سير كل رحلة بقى بيرجع مع الرحلات، عشان شاشة ملف العملية
+       تعرف توزّع سطور الإيراد على الوجهات المختلفة */
+    /* #79 — DriverId اتضاف عشان المصروف السريع يعرف يربط المصروف بسائق الرحلة */
+    /* #82 — المبيت والتحويلة بيتقرأوا مع الرحلة عشان التعديل ما يمسحهمش */
+    public record OpTripLine(long TripId, string TripNumber, int DriverId, string DriverName, string VehiclePlate,
+        string Status, DateTime? PlannedStartAt, decimal? FreightAmount, int SequenceNo,
+        int? PortId, int? DestinationId, int? TahteeqPortId,
+        string? PortName, string? DestName, string? TahteeqName,
+        decimal? OvernightAmount = null, decimal? TransferAmount = null);
 
     [HttpGet("{id:long}/trips")]
     [Authorize(Policy = "PERM:OPERATION.VIEW")]
     public async Task<IActionResult> OperationTrips(long id, CancellationToken ct)
     {
+        var hasFin = await HasFinAsync(ct);
+
         var rows = await _db.TripOperations.AsNoTracking()
             .Where(to => to.OperationId == id)
             .OrderBy(to => to.SequenceNo)
             .Select(to => new OpTripLine(
-                to.Trip.TripId, to.Trip.TripNumber, to.Trip.Driver.FullName, to.Trip.Vehicle.PlateNumber,
-                to.Trip.Status, to.Trip.PlannedStartAt, to.Trip.FreightAmount, to.SequenceNo))
+                to.Trip.TripId, to.Trip.TripNumber, to.Trip.DriverId, to.Trip.Driver.FullName, to.Trip.Vehicle.PlateNumber,
+                to.Trip.Status, to.Trip.PlannedStartAt,
+                hasFin ? to.Trip.FreightAmount : null, to.SequenceNo,
+                to.Trip.PortId, to.Trip.DestinationId, to.Trip.TahteeqPortId,
+                to.Trip.Port        != null ? to.Trip.Port.NameAr        : null,
+                to.Trip.Destination != null ? to.Trip.Destination.NameAr : null,
+                to.Trip.TahteeqPort != null ? to.Trip.TahteeqPort.NameAr : null,
+                to.Trip.OvernightAmount, to.Trip.TransferAmount))
             .ToListAsync(ct);
         return Ok(rows);
     }
@@ -826,6 +954,8 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
     [Authorize(Policy = "PERM:OPERATION.VIEW")]
     public async Task<IActionResult> BookingLines(long id, CancellationToken ct)
     {
+        var hasFin = await HasFinAsync(ct);
+
         var o = await _db.Operations.AsNoTracking()
             .Where(x => x.OperationId == id && !x.IsDeleted)
             .Select(x => new { x.BookingId }).FirstOrDefaultAsync(ct);
@@ -837,7 +967,8 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
             .OrderBy(l => l.LineNo)
             .Select(l => new BookingLineView(
                 l.ContainerType != null ? l.ContainerType.NameAr : null,
-                l.RequestedQty, l.WeightKg, l.GuaranteePerContainer, l.Notes))
+                l.RequestedQty, l.WeightKg,
+                hasFin ? l.GuaranteePerContainer : null, l.Notes))
             .ToListAsync(ct);
         return Ok(rows);
     }
@@ -1084,6 +1215,11 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
                 Discount    = l.Discount < 0 ? 0 : l.Discount,
                 TaxRateId   = l.TaxRateId,
                 TaxRate     = 0,                   // بتتملأ من TaxRates تحت (Snapshot)
+                /* #83 — خط سير السطر ونوع رحلته بيتحفظوا (كانوا للعرض بس) */
+                PortId        = l.PortId,
+                DestinationId = l.DestinationId,
+                TahteeqPortId = l.TahteeqPortId,
+                TripTypeId    = l.TripTypeId,
                 CreatedBy   = userId
             });
         }

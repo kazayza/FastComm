@@ -30,6 +30,15 @@ public partial class OperationRevenueItem
     [Column(TypeName = "decimal(19, 4)")]
     public decimal Discount { get; set; }
 
+    /* #83 — خط سير السطر ونوع رحلته. كانوا للعرض بس في الشاشة وما بيتحفظوش */
+    public int? PortId { get; set; }
+
+    public int? DestinationId { get; set; }
+
+    public int? TahteeqPortId { get; set; }
+
+    public int? TripTypeId { get; set; }
+
     public int? TaxRateId { get; set; }
 
     [Column(TypeName = "decimal(9, 4)")]
@@ -61,4 +70,18 @@ public partial class OperationRevenueItem
     [ForeignKey("TaxRateId")]
     [InverseProperty("OperationRevenueItems")]
     public virtual TaxRate? TaxRateNavigation { get; set; }
+
+    /* #83 — العلاقات دي متظبطة صراحة في ScaffoldedDbContext بـ WithMany()
+       عشان ما نضيفش مجموعات عكسية على Ports/Destinations/TripTypes */
+    [ForeignKey("PortId")]
+    public virtual Port? Port { get; set; }
+
+    [ForeignKey("DestinationId")]
+    public virtual Destination? Destination { get; set; }
+
+    [ForeignKey("TahteeqPortId")]
+    public virtual Port? TahteeqPort { get; set; }
+
+    [ForeignKey("TripTypeId")]
+    public virtual TripType? TripType { get; set; }
 }

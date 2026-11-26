@@ -65,8 +65,8 @@
                              @onclick='() => SetTab("Closed")' role="button" aria-pressed="@(_tab == "Closed")">
                             <div class="fc-kpi-ic fc-kpi-red"><MudIcon Icon="@Icons.Material.Filled.Savings" /></div>
                             <div>
-                                <div class="fc-kpi-num @(_items.Sum(o => o.RevenueNet - o.ActualCost) >= 0 ? "" : "kpi-negative")">
-                                    @Money(_items.Sum(o => o.RevenueNet - o.ActualCost))
+                                <div class="fc-kpi-num @(_items.Sum(o => Prof(o)) >= 0 ? "" : "kpi-negative")">
+                                    @Money(_items.Sum(o => Prof(o)))
                                 </div>
                                 <div class="fc-kpi-lb">صافي الربح</div>
                             </div>
@@ -177,7 +177,7 @@
                         <div class="op-fin-item">
                             <span class="op-fin-label">الربح</span>
                             @{
-                                var profit = Filtered.Sum(o => o.RevenueNet - o.ActualCost);
+                                var profit = Filtered.Sum(o => Prof(o));
                             }
                             <span class="op-fin-val @(profit >= 0 ? "fin-green" : "fin-red")">
                                 @Money(profit)
@@ -256,7 +256,7 @@
                         <tbody>
                             @foreach (var o in Filtered)
                             {
-                                var profit = o.RevenueNet - o.ActualCost;
+                                var profit = Prof(o);
                                 <tr class="@(o.Status == "Cancelled" ? "row-cancelled" : "")">
 
                                     @* ── الطلب والعميل ── *@
@@ -575,6 +575,11 @@
     private AuthUser? _user;
     private bool CanView   => _user?.Can("OPERATION.VIEW") ?? false;
     private bool CanViewFinancials => (_user?.IsAdmin ?? false) || (_user?.Can("OPERATION.VIEW_FINANCIALS") ?? false);
+
+    /* #90 — 🔴 المحمّل على العميل **ليس إيرادًا** (فلوس مدفوعة بالنيابة
+       وهترجع) ⇒ الإيراد = RevenueNet بس. و`ActualCost` محسوبة في الداتا =
+       نصيب الشركة (بعد خصم المحمّل، وعدا سلف النولون) + توزيع الرحلة + النولون. */
+    private static decimal Prof(Item o) => o.RevenueNet - o.ActualCost;
     private bool CanCreate => (_user?.Can("OPERATION.CREATE") ?? false) && (_user?.Can("BOOKING.CREATE") ?? false);
     private bool CanEdit   => (_user?.Can("OPERATION.EDIT") ?? false) && (_user?.Can("BOOKING.EDIT") ?? false);
     private bool CanTripEdit => _user?.Can("TRIP.EDIT") ?? false;
@@ -656,6 +661,8 @@
         public decimal RevenueNet      { get; set; }
         public decimal RevenueTax      { get; set; }
         public decimal ActualCost      { get; set; }
+        /* #90 — المحمّل على العميل: **للعلم بس** — مش إيراد ومش في حساب الربح */
+        public decimal BillableRevenue { get; set; }
         public DateTime CreatedAt      { get; set; }
         public List<RequestTripAction> ActionableTrips { get; set; } = new();
         public bool _actionsOpen { get; set; } /* legacy, unused */

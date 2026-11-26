@@ -26,12 +26,16 @@ public class DriverFreightRulesController : ControllerBase
 
     // ═══════════════ DTOs ═══════════════
 
+    /* #82 — التعتيق + نوع الحاوية بقوا أبعاد في قاعدة النولون */
     public record ListItem(int DriverFreightRuleId, int? PortId, string? PortName,
         int? DestinationId, string? DestinationName, int? TripTypeId, string? TripTypeName,
+        int? TahteeqPortId, string? TahteeqPortName,
+        int? ContainerTypeId, string? ContainerTypeName,
         decimal Amount, DateOnly ValidFrom, DateOnly? ValidTo, int Priority,
         bool IsActive, string? Notes);
 
     public record Upsert(int? PortId, int? DestinationId, int? TripTypeId,
+        int? TahteeqPortId, int? ContainerTypeId,
         decimal Amount, string ValidFrom, string? ValidTo, int Priority,
         bool IsActive, string? Notes);
 
@@ -61,6 +65,14 @@ public class DriverFreightRulesController : ControllerBase
                 r.TripTypeId != null
                     ? _db.TripTypes.Where(t => t.TripTypeId == r.TripTypeId).Select(t => t.NameAr).FirstOrDefault()
                     : null,
+                r.TahteeqPortId,
+                r.TahteeqPortId != null
+                    ? _db.Ports.Where(p => p.PortId == r.TahteeqPortId).Select(p => p.NameAr).FirstOrDefault()
+                    : null,
+                r.ContainerTypeId,
+                r.ContainerTypeId != null
+                    ? _db.ContainerTypes.Where(c => c.ContainerTypeId == r.ContainerTypeId).Select(c => c.NameAr).FirstOrDefault()
+                    : null,
                 r.Amount, r.ValidFrom, r.ValidTo, r.Priority, r.IsActive, r.Notes))
             .ToListAsync(ct);
 
@@ -83,9 +95,14 @@ public class DriverFreightRulesController : ControllerBase
             .Where(d => d.DestinationId == r.DestinationId).Select(d => d.NameAr).FirstOrDefaultAsync(ct);
         var typeName = r.TripTypeId is null ? null : await _db.TripTypes.AsNoTracking()
             .Where(t => t.TripTypeId == r.TripTypeId).Select(t => t.NameAr).FirstOrDefaultAsync(ct);
+        var tahteeqName = r.TahteeqPortId is null ? null : await _db.Ports.AsNoTracking()
+            .Where(p => p.PortId == r.TahteeqPortId).Select(p => p.NameAr).FirstOrDefaultAsync(ct);
+        var ctName = r.ContainerTypeId is null ? null : await _db.ContainerTypes.AsNoTracking()
+            .Where(c => c.ContainerTypeId == r.ContainerTypeId).Select(c => c.NameAr).FirstOrDefaultAsync(ct);
 
         return Ok(new ListItem(r.DriverFreightRuleId, r.PortId, portName,
             r.DestinationId, destName, r.TripTypeId, typeName,
+            r.TahteeqPortId, tahteeqName, r.ContainerTypeId, ctName,
             r.Amount, r.ValidFrom, r.ValidTo, r.Priority, r.IsActive, r.Notes));
     }
 
@@ -106,6 +123,8 @@ public class DriverFreightRulesController : ControllerBase
             PortId        = req.PortId,
             DestinationId = req.DestinationId,
             TripTypeId    = req.TripTypeId,
+            TahteeqPortId = req.TahteeqPortId,
+            ContainerTypeId = req.ContainerTypeId,
             Amount        = req.Amount,
             ValidFrom     = from,
             ValidTo       = to,
@@ -136,6 +155,8 @@ public class DriverFreightRulesController : ControllerBase
         r.PortId        = req.PortId;
         r.DestinationId = req.DestinationId;
         r.TripTypeId    = req.TripTypeId;
+        r.TahteeqPortId   = req.TahteeqPortId;
+        r.ContainerTypeId = req.ContainerTypeId;
         r.Amount        = req.Amount;
         r.ValidFrom     = DateOnly.Parse(req.ValidFrom);
         r.ValidTo       = DateOnly.TryParse(req.ValidTo, out var d) ? d : null;
@@ -191,12 +212,17 @@ public class DriverFreightRulesController : ControllerBase
             return "الوجهة مش موجودة";
         if (r.TripTypeId is > 0 && !await _db.TripTypes.AnyAsync(t => t.TripTypeId == r.TripTypeId, ct))
             return "نوع الرحلة مش موجود";
+        if (r.TahteeqPortId is > 0 && !await _db.Ports.AnyAsync(p => p.PortId == r.TahteeqPortId, ct))
+            return "التعتيق مش موجود";
+        if (r.ContainerTypeId is > 0 && !await _db.ContainerTypes.AnyAsync(c => c.ContainerTypeId == r.ContainerTypeId, ct))
+            return "نوع الحاوية مش موجود";
 
         /* قاعدة مكررة = نفس الأبعاد بالظبط + فترة متداخلة + شغالة —
            هيخلي الاقتراح التلقائي محتار من غير لازمة */
         var dup = await _db.DriverFreightRules.AsNoTracking().AnyAsync(x =>
             !x.IsDeleted && x.IsActive && x.PortId == r.PortId &&
             x.DestinationId == r.DestinationId && x.TripTypeId == r.TripTypeId &&
+            x.TahteeqPortId == r.TahteeqPortId && x.ContainerTypeId == r.ContainerTypeId &&
             x.ValidFrom <= (to ?? DateOnly.MaxValue) && (x.ValidTo == null || x.ValidTo >= from) &&
             (currentId == null || x.DriverFreightRuleId != currentId), ct);
         if (dup) return "فيه قاعدة شغالة بنفس الأبعاد وفترة متداخلة — عدّل الموجودة بدل ما تعمل جديدة";

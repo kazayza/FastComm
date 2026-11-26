@@ -343,7 +343,7 @@
                                         <div class="field-dropdown" @onmousedown:preventDefault="true">
                                             @foreach (var c in _filteredCustomers)
                                             {
-                                                <div class="field-dropdown-item" @onmousedown="() => PickCustomer(c)">
+                                                <div class="field-dropdown-item" @onmousedown="() => PickCustomerAsync(c)">
                                                     @c.Label
                                                 </div>
                                             }
@@ -707,7 +707,8 @@
                                                                   stroke-linecap="round"/>
                                                         </svg>
                                                         <select class="field-input field-select"
-                                                                @bind="ln.ServiceId"
+                                                                value="@ln.ServiceId"
+                                                                @onchange="e => OnRevServicePicked(ln, e)"
                                                                 disabled="@_locked">
                                                             <option value="0">— اختر —</option>
                                                             @foreach (var s in _services)
@@ -760,7 +761,7 @@
                                                                value="@ln.UnitPrice"
                                                                disabled="@_locked"
                                                                placeholder="0.00"
-                                                               @onchange="e => ln.UnitPrice = ParseDec(e.Value) ?? 0m" />
+                                                               @onchange="e => OnRevPriceInput(ln, e)" />
                                                     </div>
                                                 </div>
 
@@ -2077,6 +2078,8 @@
         public decimal  Discount    { get; set; }
         public int?     TaxRateId   { get; set; }
         public long?    PriceRuleId { get; set; }
+        /* #94 — المستخدم كتب السعر بإيده ⇒ الاقتراح الأوتوماتيك ما يدوسش عليه */
+        public bool     PriceTouched { get; set; }
     }
 
     public class Form
@@ -2095,7 +2098,8 @@
 
     public class Suggestion
     {
-        public decimal  UnitPrice   { get; set; }
+        /* #95 — null ⇒ مفيش قاعدة مطابقة في قوائم الأسعار */
+        public decimal? UnitPrice   { get; set; }
         public decimal? CostPrice   { get; set; }
         public int?     TaxRateId   { get; set; }
         public decimal  TaxRate     { get; set; }
@@ -2369,13 +2373,16 @@
             .ToList();
     }
 
-    private void PickCustomer(Opt c)
+    /* #94 — السعر بيتحدد بالعميل، فاختياره بيحدّث أسعار كل السطور
+       (اللي المستخدم كتبه بإيده يفضل — نفس سلوك RequestForm) */
+    private async Task PickCustomerAsync(Opt c)
     {
         _f.CustomerId    = c.Id;
         _customerSearch  = c.Label;
         _custTouched     = false;
         _showCustomerDropdown = false;
         _priceSource     = null;   /* نفس سلوك اختيار العميل القديم */
+        foreach (var ln in _lines) await SuggestAsync(ln, auto: true);
     }
 
     private static string NormalizeArabic(string s)
@@ -2425,8 +2432,25 @@
         catch (Exception ex) { _msg = "فشل قراءة الحجز: " + ex.Message; _ok = false; }
     }
 
-    private async Task SuggestAsync(RevRow ln)
+    /* #94 — اختيار الخدمة في السطر بيجيب السعر لوحده من قائمة الأسعار
+       (زي RequestForm). زرار «اقتراح» لسه موجود للإعادة الإجبارية. */
+    private async Task OnRevServicePicked(RevRow ln, ChangeEventArgs e)
     {
+        ln.ServiceId = int.TryParse(e.Value?.ToString(), out var v) ? v : 0;
+        ln.PriceTouched = false;             /* خدمة جديدة ⇒ السعر القديم ما يعدش كلام المستخدم */
+        if (ln.ServiceId > 0 && _f.CustomerId > 0) await SuggestAsync(ln, auto: true);
+    }
+
+    private void OnRevPriceInput(RevRow ln, ChangeEventArgs e)
+    {
+        ln.UnitPrice = ParseDec(e.Value) ?? 0m;
+        ln.PriceTouched = ln.UnitPrice > 0;   /* كتب سعر بإيده ⇒ ما ندوسش عليه */
+    }
+
+    private async Task SuggestAsync(RevRow ln, bool auto = false)
+    {
+        /* #94 — auto: اقتراح تلقائي، فما يلمسش السعر اللي المستخدم كتبه بإيده */
+        if (auto && ln.PriceTouched) return;
         if (_f.CustomerId <= 0) { _msg = "اختر العميل أولًا"; _ok = false; return; }
         if (ln.ServiceId <= 0)  { _msg = "اختر الخدمة في السطر"; _ok = false; return; }
 
@@ -2441,7 +2465,17 @@
             var s = await Http.GetFromJsonAsync<Suggestion>(url);
             if (s is null) return;
 
-            ln.UnitPrice   = s.UnitPrice;
+            /* #95 — 🔴 السعر من قوائم الأسعار بس. null ⇒ مفيش قاعدة مطابقة،
+               وما نلمسش السعر الموجود (لا صفر ولا سعر خدمة افتراضي) */
+            if (s.UnitPrice is null)
+            {
+                /* #99 — جملة بسيطة بس */
+                _priceSource = "لا يوجد قاعدة تسعير";
+                if (!auto) { _msg = "لا يوجد قاعدة تسعير — أدخل السعر يدوي"; _ok = false; }
+                return;
+            }
+
+            ln.UnitPrice   = s.UnitPrice.Value;
             ln.TaxRateId   = s.TaxRateId;
             ln.PriceRuleId = s.PriceRuleId;
             if (string.IsNullOrWhiteSpace(ln.Description))
@@ -2449,7 +2483,7 @@
             if (s.CostPrice is not null && s.CostPrice > 0)
                 _f.EstimatedCost = s.CostPrice.Value;
 
-            _priceSource = s.Source;
+            _priceSource = "يوجد قاعدة تسعير";   /* #99 — جملة بسيطة بس */
             _msg = null;
         }
         catch (Exception ex) { _msg = "فشل اقتراح السعر: " + ex.Message; _ok = false; }

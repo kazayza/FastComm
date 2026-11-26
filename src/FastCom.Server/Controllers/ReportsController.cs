@@ -135,9 +135,12 @@ public class ReportsController : ControllerBase
             .ToDictionary(x => x.CustomerId, x => x.NameAr);
 
         // ── التكلفة المباشرة: مصروفات مربوطة بالعملية ──
+        /* 🔴 #90 — سلف النولون **مستثناة**: جزء من نولون النقلَة ومتغطّية بـ
+           `Trips.FreightAmount`، فلو اتعدّت هنا هتتحسب مرتين. */
         var exp = await _db.Expenses.AsNoTracking()
             .Where(e => !e.IsDeleted && e.Status != "Cancelled"
-                        && e.OperationId != null && opIds.Contains(e.OperationId.Value))
+                        && e.OperationId != null && opIds.Contains(e.OperationId.Value)
+                        && !e.ExpenseType.IsFreightAdvance)
             .Select(e => new { OpId = e.OperationId!.Value, e.Amount, e.BillableAmount }).ToListAsync(ct);
 
         // ── نصيب العملية من تكلفة الرحلات ──
@@ -219,15 +222,17 @@ public class ReportsController : ControllerBase
 
         foreach (var o in ops)
         {
+            /* 🔴 #90 — «يتحمّله العميل» **ليس إيرادًا**: فلوس المكتب دفعها
+               بالنيابة عن العميل وهيردّها — عدّت عليه مش له. بتدخل الفاتورة
+               بس ما تدخلش إيراد العملية. ⇒ الإيراد = RevenueNet بس. */
             var direct   = exp.Where(x => x.OpId == o.OperationId).Sum(x => x.Amount);
-            // 🔴 القيمة المحمّلة على العميل = إيراد (تتفوتر في الفاتورة) — مش تكلفة
             var billable = exp.Where(x => x.OpId == o.OperationId).Sum(x => x.BillableAmount ?? 0m);
             var tripCs   = alloc.Where(x => x.OperationId == o.OperationId).Sum(x => x.AllocatedAmount);
             var freight  = freightByOp.TryGetValue(o.OperationId, out var frOp) ? frOp : 0m;
-            // الإيراد الحقيقي = نولون الحاويات + المحمّل على العميل
-            var revenue  = o.RevenueNet + billable;
-            // التكلفة الحقيقية = مباشر (يشمل الضمان) + رحلات + نولون السائق
-            var cost     = direct + tripCs + freight;
+            var revenue  = o.RevenueNet;
+            /* التكلفة = نصيب الشركة (المبلغ − المحمّل) + رحلات + نولون السائق.
+               المحمّل بيتخصم لأن العميل هيردّه — مش خسارة على الشركة. */
+            var cost     = direct - billable + tripCs + freight;
             var profit   = revenue - cost;
             var margin   = revenue > 0 ? profit / revenue * 100m : 0m;
 
@@ -845,10 +850,12 @@ public class ReportsController : ControllerBase
         var opIds = ops.Select(o => o.OperationId).ToList();
 
         /* 🔴 التكلفة = مصروفات العملية المباشرة + نصيبها من تكلفة الرحلات
-              + نولون السائق (مش `ActualCost` — عشان ما نحسبش نفس الحاجة مرتين) */
+              + نولون السائق (مش `ActualCost` — عشان ما نحسبش نفس الحاجة مرتين)
+           🔴 #90 — وسلف النولون مستثناة برضه (جزء من النولون نفسه) */
         var exp = await _db.Expenses.AsNoTracking()
             .Where(e => !e.IsDeleted && e.Status != "Cancelled"
-                        && e.OperationId != null && opIds.Contains(e.OperationId.Value))
+                        && e.OperationId != null && opIds.Contains(e.OperationId.Value)
+                        && !e.ExpenseType.IsFreightAdvance)
             .Select(e => new { OpId = e.OperationId!.Value, e.Amount, e.BillableAmount }).ToListAsync(ct);
 
         var alloc = await _db.TripCostAllocations.AsNoTracking()
@@ -895,9 +902,11 @@ public class ReportsController : ControllerBase
 
         var rows = ops.Select(o => new OpProfit(
             o.OperationId, o.PortId, o.DestinationId, o.TahteeqPortId, o.ServiceId,
-            // الإيراد الحقيقي = نولون الحاويات + المحمّل على العميل — نفس تقرير العمليات
-            o.RevenueNet + (bilByOp.TryGetValue(o.OperationId, out var b) ? b : 0m),
-            (expByOp.TryGetValue(o.OperationId, out var e) ? e : 0m) +
+            /* 🔴 #90 — الإيراد = RevenueNet بس (المحمّل مش إيراد)،
+               والتكلفة = نصيب الشركة (بعد خصم المحمّل) + رحلات + نولون */
+            o.RevenueNet,
+            (expByOp.TryGetValue(o.OperationId, out var e) ? e : 0m)
+            - (bilByOp.TryGetValue(o.OperationId, out var b) ? b : 0m) +
             (alByOp.TryGetValue(o.OperationId, out var a) ? a : 0m) +
             (freightByOp.TryGetValue(o.OperationId, out var fr) ? fr : 0m),
             o.CustomerId))
@@ -1579,6 +1588,10 @@ public class ReportsController : ControllerBase
             "CUST-REIMB"    => "استعاضة عهد الموظفين",
             "EXP"           => "مصروفات التشغيل",
             "SPAY"          => "سداد فواتير الموردين",
+            /* #105 — دفعات نولون من شاشة كشف حساب المركبات.
+               🔴 ‏`VEHPAY` كان ساقط من التصنيف ده ⇒ كان بيطلع «حركات أخرى». */
+            "VEHPAY"        => "دفعات نولون المركبات",
+            "SPAYV"         => "دفعات نولون الموردين",
             "RCV"           => "سند قبض يدوي",
             "PMT"           => "سند صرف يدوي",
             ""              => "حركات بدون مرجع",

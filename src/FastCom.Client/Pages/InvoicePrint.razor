@@ -181,6 +181,14 @@ else
                             <td class="inv-detail-key">العملة</td>
                             <td class="inv-detail-val" dir="ltr">@_e.Invoice.CurrencyCode</td>
                         </tr>
+                        @* #102 — رقم/أرقام الحجز المرتبط بالفاتورة *@
+                        @if (!string.IsNullOrWhiteSpace(_e.Invoice.BookingNumbers))
+                        {
+                            <tr>
+                                <td class="inv-detail-key">رقم الحجز</td>
+                                <td class="inv-detail-val" dir="ltr">@_e.Invoice.BookingNumbers</td>
+                            </tr>
+                        }
                     </tbody>
                 </table>
             </div>
@@ -225,10 +233,15 @@ else
                     <tr class="@(rowIdx % 2 == 0 ? "row-alt" : "")">
                         <td class="col-num">@rowIdx</td>
                         <td class="col-desc">
-                            <div class="item-desc">@StripExpenseCode(l.Description)</div>
-                            @if (l.OperationNumber is not null)
+                            @* #103 — البيان بقى سطرَيْن بس:
+                                 1) **اسم الخدمة** (ولبنود المصروفات اللي مالهاش خدمة ⇒ البيان نفسه)
+                                 2) **خط السير** تحته
+                               ‏رقم العملية اتشال — المالك: «ملوش اى لازمه تحطه خالص». *@
+                            <div class="item-desc">@(string.IsNullOrWhiteSpace(l.ServiceName)
+                                    ? StripExpenseCode(l.Description) : l.ServiceName)</div>
+                            @if (!string.IsNullOrWhiteSpace(RouteOf(l)))
                             {
-                                <div class="item-op">@l.OperationNumber</div>
+                                <div class="item-route">@RouteOf(l)</div>
                             }
                         </td>
                         <td class="col-qty num-cell" dir="ltr">@l.Quantity.ToString("0.###")</td>
@@ -438,9 +451,14 @@ else
 
     .inv-company-details { display: flex; flex-direction: column; gap: 3px; }
 
+    /* #104 — 🔴 كانت `flex-end`. الحاوية `dir="rtl"` (سطر 68) والمحور الرئيسي
+       بيمشي من اليمين للشمال ⇒ ‏`flex-end` = **الشمال**. يعني صفوف الشركة
+       (الرقم الضريبي · العنوان · التليفون · البريد) كانت **متزقة شمال** داخل
+       بلوك الشركة، واسم الشركة نفسه على اليمين بـ`text-align: right` ⇒ شكل متناقض.
+       ‏`flex-start` في الـ RTL = **اليمين** ⇒ كل الصفوف بقت على يمين الصفحة. */
     .inv-co-row {
         display: flex; align-items: center;
-        justify-content: flex-end;
+        justify-content: flex-start;
         gap: 6px; font-size: 8pt; color: #5a6e88;
     }
 
@@ -645,7 +663,18 @@ else
     }
 
     .item-desc { font-weight: 700; color: #1c2b43; }
+    /* #103 — .item-op اتشال من الطباعة (رقم العملية ما بقاش بيظهر) — سايب القاعدة
+       عشان لو اتعاد تاني ما نحتاجش نكتبها من جديد */
     .item-op   { font-size: 7pt; color: #8899ae; margin-top: 2px; }
+
+    /* #102 — خط سير البند: أوضح من رقم العملية وأخف من البيان */
+    .item-route {
+        font-size: 7.5pt;
+        font-weight: 600;
+        color: #4a6484;          /* بين #1c2b43 (البيان) و#8899ae (رقم العملية) */
+        margin-top: 2px;
+        line-height: 1.5;
+    }
 
     .empty-row {
         text-align: center; color: #9aaabb;
@@ -812,6 +841,8 @@ else
 
     public class Line
     {
+        /* #103 — اسم الخدمة: بيظهر في عمود البيان بدل Description */
+        public string? ServiceName    { get; set; }
         public long    InvoiceItemId  { get; set; }
         public long?   OperationId    { get; set; }
         public string? OperationNumber { get; set; }
@@ -825,6 +856,10 @@ else
         public decimal LineSubtotal   { get; set; }
         public decimal LineTax        { get; set; }
         public decimal LineTotal      { get; set; }
+        /* #102 — خط سير البند، جاي من سطر الإيراد في العملية */
+        public string? PortName       { get; set; }
+        public string? DestinationName { get; set; }
+        public string? TahteeqName    { get; set; }
     }
 
     public class Head
@@ -851,6 +886,8 @@ else
         public string? OriginalInvoiceNumber { get; set; }
         public DateTime? IssuedAt            { get; set; }
         public string  CurrencyCode          { get; set; } = "EGP";
+        /* #102 — أرقام الحجوزات المرتبطة بالفاتورة */
+        public string? BookingNumbers        { get; set; }
     }
 
     private static string StripExpenseCode(string? desc)
@@ -885,6 +922,17 @@ else
         : (IsTax ? "ضريبية" : "غير ضريبية");
 
     private string TaxBadgeCls => "fc-doc-tax " + (IsTax ? "is-tax" : "is-nontax");
+
+    /* #102 — خط سير البند. بيبني الجملة من الأجزاء الموجودة بس —
+       لو بُعد فاضي ما يطلعش، وما يسيبش «—» يتيمة. */
+    private static string RouteOf(Line l)
+    {
+        var head = "";
+        if (!string.IsNullOrWhiteSpace(l.PortName))        head += "من " + l.PortName;
+        if (!string.IsNullOrWhiteSpace(l.DestinationName)) head += (head.Length > 0 ? " " : "") + "إلى " + l.DestinationName;
+        if (!string.IsNullOrWhiteSpace(l.TahteeqName))     head += (head.Length > 0 ? " — " : "") + "تعتيق " + l.TahteeqName;
+        return head;
+    }
 
     private static string Money(decimal v) => v.ToString("N2");
 

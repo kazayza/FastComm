@@ -42,7 +42,9 @@ public class BookingsController : ControllerBase
 
     // ═══════════════ DTOs ═══════════════
 
-    public record BookingLineDto(int ContainerTypeId, int RequestedQty, decimal? WeightKg, string? Notes, decimal? GuaranteePerContainer);
+    /* #82 — BookingContainerLineId = null يعنى سطر جديد، وقيمة يعنى سطر موجود بيتم تحديثه */
+    public record BookingLineDto(int ContainerTypeId, int RequestedQty, decimal? WeightKg, string? Notes, decimal? GuaranteePerContainer,
+        long? BookingContainerLineId = null);
 
     public record ContainerDetailDto(long? BookingContainerDetailId, long? ContainerId, string? ContainerNumber, string? SealNumber,
         string? ShippingLine, string? BLNumber, string? BookingReference, decimal? WeightKg, string? Notes,
@@ -314,9 +316,10 @@ public class BookingsController : ControllerBase
         b.UpdatedAt       = DateTime.UtcNow;
         b.UpdatedBy       = CurrentUserId();
 
-        // الفحص (قراءة فقط) قبل المعاملة — عشان مفيش معاملة تفتح لتحقق يرفضها
-        var lockedLines = false;
+        /* #82 — الفحص (قراءة فقط) قبل المعاملة:
+           السطور الموجودة + أي سطر له حاويات فعلية (ده ممنوع يتمسح) */
         List<BookingContainerLine> checkLines = new();
+        HashSet<long> linesWithDetails = new();
         if (req.Lines is not null || req.ContainerDetails is not null)
         {
             checkLines = await _db.BookingContainerLines
@@ -324,30 +327,33 @@ public class BookingsController : ControllerBase
             if (checkLines.Count > 0)
             {
                 var lineIds = checkLines.Select(l => l.BookingContainerLineId).ToList();
-                lockedLines = await _db.BookingContainerDetails
-                    .AnyAsync(d => lineIds.Contains(d.BookingContainerLineId), ct);
+                linesWithDetails = (await _db.BookingContainerDetails.AsNoTracking()
+                    .Where(d => lineIds.Contains(d.BookingContainerLineId))
+                    .Select(d => d.BookingContainerLineId)
+                    .Distinct().ToListAsync(ct)).ToHashSet();
             }
         }
 
-        // لو السطور مقفولة (فيه حاويات فعلية) ممنوع استبدال السطور — بس نسمح بتحديث تفاصيل الحاويات
-        if (lockedLines && req.Lines is not null)
-            return BadRequest(new { message = "فيه حاويات فعلية متسجلة على الحجز — السطور مقفولة، لكن تقدر تعدّل أرقام/تفاصيل الحاويات وتحفظ." });
+        /* #82 — مفيش قفل للسطور تاني. بدل «امسح الكل وأعِد» (اللي كان بيتيم تفاصيل الحاويات)
+           بنعمل مقارنة: الموجود بيتحدّث، الجديد بيتضاف، والمحذوف بيتشال بس لو ملوش تفاصيل. */
 
         // 🔴 Atomicity
         await _db.Database.BeginTransactionAsync(ct);
         try
         {
-            if (!lockedLines && req.Lines is not null)
+            if (req.Lines is not null)
             {
-                var oldLines = await _db.BookingContainerLines
-                    .Where(l => l.BookingId == id).ToListAsync(ct);
-                _db.BookingContainerLines.RemoveRange(oldLines);
+                var map = DiffLines(id, req.Lines, checkLines, linesWithDetails, CurrentUserId());
+                await _db.SaveChangesAsync(ct);   // عشان السطور الجديدة تاخد معرّفها
 
-                var createdLines = AddLines(id, req.Lines, CurrentUserId());
-                await _db.SaveChangesAsync(ct);
-                AddContainerDetails(createdLines, req.ContainerDetails, CurrentUserId());
+                /* #82 — Upsert مش Add: السطور بقت بتفضل موجودة بعد التعديل،
+                   فلو ضيفنا تفاصيل بـ Add هتتكرر كل مرة نحفظ.
+                   Upsert بيطابق بالمعرّف → يعدّل الموجود، يضيف الجديد، ويمسح اللي اتشال. */
+                var ordered = map.OrderBy(x => x.ReqIndex).Select(x => x.Line).ToList();
+                if (req.ContainerDetails is not null)
+                    UpsertContainerDetails(id, ordered, req.ContainerDetails, CurrentUserId());
             }
-            else if (lockedLines && req.ContainerDetails is not null)
+            else if (req.ContainerDetails is not null)
             {
                 UpsertContainerDetails(id, checkLines.OrderBy(l => l.LineNo).ToList(), req.ContainerDetails, CurrentUserId());
             }
@@ -363,6 +369,67 @@ public class BookingsController : ControllerBase
         }
 
         return Ok(new { message = "تم حفظ التعديل" });
+    }
+
+    /* #82 — مقارنة السطور بدل مسحها وإعادة إنشائها.
+       بيرجع خريطة (فهرس الطلب → السطر) للسطور الجديدة **والموجودة**،
+       عشان تفاصيل الحاويات تتربط بسطرها الصح في الحالتين. */
+    private List<(int ReqIndex, BookingContainerLine Line)> DiffLines(
+        long bookingId, List<BookingLineDto> reqLines, List<BookingContainerLine> existing,
+        HashSet<long> linesWithDetails, int userId)
+    {
+        var map   = new List<(int, BookingContainerLine)>();
+        var byId  = existing.ToDictionary(l => l.BookingContainerLineId);
+        var seen  = new HashSet<long>();
+        var no    = 0;
+
+        for (var i = 0; i < reqLines.Count; i++)
+        {
+            var l = reqLines[i];
+            if (l.RequestedQty < 1 || l.ContainerTypeId <= 0) continue;
+            no++;
+
+            if (l.BookingContainerLineId is not null && byId.TryGetValue(l.BookingContainerLineId.Value, out var cur))
+            {
+                // سطر موجود → حدّثه
+                cur.ContainerTypeId       = l.ContainerTypeId;
+                cur.RequestedQty          = l.RequestedQty;
+                cur.WeightKg              = l.WeightKg is > 0 ? l.WeightKg : null;
+                cur.GuaranteePerContainer = l.GuaranteePerContainer is > 0 ? l.GuaranteePerContainer : null;
+                cur.Notes                 = B(l.Notes);
+                cur.LineNo                = no;
+                seen.Add(cur.BookingContainerLineId);
+                map.Add((i, cur));
+            }
+            else
+            {
+                // سطر جديد → ضيفه
+                var line = new BookingContainerLine
+                {
+                    BookingId             = bookingId,
+                    LineNo                = no,
+                    ContainerTypeId       = l.ContainerTypeId,
+                    RequestedQty          = l.RequestedQty,
+                    AssignedQty           = 0,
+                    WeightKg              = l.WeightKg is > 0 ? l.WeightKg : null,
+                    GuaranteePerContainer = l.GuaranteePerContainer is > 0 ? l.GuaranteePerContainer : null,
+                    Status                = "Pending",
+                    Notes                 = B(l.Notes),
+                    CreatedBy             = userId
+                };
+                _db.BookingContainerLines.Add(line);
+                map.Add((i, line));
+            }
+        }
+
+        // السطور اللي اختفت من الطلب: بتتمسح بس لو ملهاش حاويات فعلية
+        foreach (var old in existing.Where(l => !seen.Contains(l.BookingContainerLineId)))
+        {
+            // لو السطر له حاويات فعلية → ملحوط، مش هنيتّم تفاصيله
+            if (linesWithDetails.Contains(old.BookingContainerLineId)) continue;
+            _db.BookingContainerLines.Remove(old);
+        }
+        return map;
     }
 
     /* بيرجع السطور اللي اتعملت فعلًا مربوطة بفهرسها في طلب الإدخال —

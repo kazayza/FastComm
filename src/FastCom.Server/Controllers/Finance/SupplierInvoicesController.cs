@@ -158,6 +158,53 @@ public class SupplierInvoicesController : ControllerBase
             inv.Status, inv.PaymentStatus, inv.Notes, lines));
     }
 
+    /* ═══════════════ #107 — تحويل لفاتورة عميل ═══════════════ */
+
+    /// <summary>
+    /// ‏#107 — بنود فاتورة المورد **بصيغة سطور فاتورة عميل** — عشان شاشة
+    /// ‏`InvoiceForm` تستوردها وتسيب المالك يعدّل الأسعار قبل الحفظ.
+    /// 🔴 **قراءة فقط — مافيش أي كتابة هنا.** الفاتورة الجديدة بتتحفظ من
+    /// شاشة فواتير العملاء بالطريق العادي (نفس validate ونفس ترقيم).
+    /// </summary>
+    [HttpGet("{id:long}/to-customer-lines")]
+    [Authorize(Policy = "PERM:SUPPLIER.VIEW")]
+    public async Task<IActionResult> ToCustomerLines(long id, CancellationToken ct)
+    {
+        var inv = await _db.SupplierInvoices.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.SupplierInvoiceId == id && !x.IsDeleted, ct);
+        if (inv is null) return NotFound(new { message = "الفاتورة مش موجودة" });
+        if (inv.Status == "Cancelled")
+            return BadRequest(new { message = "الفاتورة ملغاة — ما تتحولش لفاتورة عميل" });
+
+        /* 🔴 خريطة الحقول:
+             ✅ Description · Quantity · UnitPrice · TaxRate  ← بتتنقل زي ما هي
+             ➖ Discount = 0        — مافيش عمود خصم في فاتورة المورد
+             ➖ TaxRateId = null    — المورد بيخزّن **النسبة المباشرة** فبننقلها هي
+             ❌ ExpenseTypeId       — ده نوع **مصروف**، وفاتورة العميل بتاخد `ServiceId`
+             ❌ TripId              — مافيش عمود مقابل في `InvoiceItems`
+             ❌ OperationId         — **مقصود**. `InvoicesController.ValidateAsync` بترفض
+                أي عملية **اتفوترت قبل كده** («العمليات دي مفوترة قبل كده») وأي عملية
+                `op.CustomerId != r.CustomerId` («العملية لعميل تاني»). وفاتورة المورد
+                غالبًا على عملية **مفوترة للعميل أصلًا** ⇒ الحفظ كان هيفشل.
+                ⇒ البنود المحوَّلة **بنود نص حر** من غير ربط عملية. */
+        var lines = await _db.SupplierInvoiceItems.AsNoTracking()
+            .Where(i => i.SupplierInvoiceId == id)
+            .OrderBy(i => i.SupplierInvoiceItemId)
+            .Select(i => new ToCustomerLine(null, null, null, null,
+                i.Description, i.Quantity, i.UnitPrice, 0m, null, null, i.TaxRate))
+            .ToListAsync(ct);
+
+        if (lines.Count == 0)
+            return BadRequest(new { message = "الفاتورة مافيهاش بنود تتحول" });
+
+        return Ok(lines);
+    }
+
+    /// <summary>‏#107 — أسماء الحقول مطابقة لـ`LineForm` في `InvoiceForm.razor`.</summary>
+    public record ToCustomerLine(long? OperationId, string? OperationNumber, int? ServiceId,
+        long? PriceRuleId, string Description, decimal Quantity, decimal UnitPrice,
+        decimal Discount, int? TaxRateId, long? ExpenseId, decimal? TaxRate);
+
     /* ═══════════════ ضمان الحاويات — #35 ═══════════════ */
 
     public record GuarBooking(long BookingId, string BookingNumber, string CustomerName,

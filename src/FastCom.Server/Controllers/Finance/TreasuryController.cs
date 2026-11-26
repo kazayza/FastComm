@@ -261,7 +261,8 @@ public class TreasuryController : ControllerBase
         var linked = t.InvoiceId is not null || t.CustodyId is not null ||
                      refNo.StartsWith("PAY:") || refNo.StartsWith("SPAY:") ||
                      refNo.StartsWith("EXP:") || refNo.StartsWith("CUST-ISSUE:") ||
-                     refNo.StartsWith("VEHPAY:") || refNo.StartsWith("BOXSETTLE-");
+                     refNo.StartsWith("VEHPAY:") || refNo.StartsWith("SPAYV:") ||
+                     refNo.StartsWith("BOXSETTLE-");
         if (linked)
             return BadRequest(new { message = "الحركة مرتبطة بمستند (قبض/مصروف/عهدة/دفعة/تسوية) — الإلغاء يتم من شاشة المستند نفسه حتى تظل الأرصدة متطابقة" });
 
@@ -318,6 +319,9 @@ public class TreasuryController : ControllerBase
         if (r.StartsWith("CUST-ISSUE:"))  return "سلفة عهدة — " + r[11..];
         if (r.StartsWith("CUST-REFUND:")) return "رد باقي عهدة — " + r[12..];
         if (r.StartsWith("VEHPAY:"))      return "دفعة مركبة";
+        /* #105 — دفعة نولون على مورد مالك (كشف مجمع) — بادئة مستقلة عن `SPAY:`
+           لأن دي ملهاش سجل في `SupplierPayments` ولا بتتوزع على فواتير. */
+        if (r.StartsWith("SPAYV:"))       return "دفعة نولون مورد";
         if (r.StartsWith("BOXSETTLE-"))   return "تسوية صندوق";
         return r;
     }

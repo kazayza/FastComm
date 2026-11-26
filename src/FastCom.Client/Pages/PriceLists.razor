@@ -83,174 +83,203 @@
 </div>
 
 @* ═══════════════════════════════════════════
-   BODY — مصفوفة تشغيلية مقسمة لعمودين (Split Layout)
+   BODY — عمودان: قوائم الأسعار يمين · قواعد التسعير شمال
 ═══════════════════════════════════════════ *@
 <div class="doc-body">
+    @if (!string.IsNullOrEmpty(_msg) && !_listOpen && !_ruleOpen)
+    {
+        <div class="pxl-banner @(_ok ? "ok" : "err")">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+            </svg>
+            <span>@_msg</span>
+            <button type="button" class="pxl-banner-x" @onclick="() => _msg = null" aria-label="إخفاء الرسالة">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/></svg>
+            </button>
+        </div>
+    }
+
+    @if (_loading)
+    {
+        <div class="pxl-load">
+            <span class="pxl-load-bar" aria-hidden="true"></span>
+            جاري تحميل قوائم الأسعار...
+        </div>
+    }
+
     @if (!CanView)
     {
-        <div class="doc-state-box">
-            <div class="state-icon-wrap perm">
-                <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.7">
-                    <rect x="3" y="11" width="18" height="11" rx="2"/>
-                    <path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
+        <div class="pxl-state">
+            <div class="pxl-state-icon">
+                <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/>
                 </svg>
             </div>
             <h3>ليس لديك صلاحية</h3>
-            <p>ليست لديك الصلاحية الكافية لعرض واستعراض لوحة أسعار وتعميرات العملاء (PRICING.VIEW)</p>
+            <p>تحتاج صلاحية <code>PRICING.VIEW</code> لعرض قوائم الأسعار وقواعد التسعير.</p>
         </div>
     }
     else
     {
         <div class="fc-overlap">
-            <div class="prl-layout">
+            <div class="pxl-grid">
 
-                @* ── العمود الأيمن: قوائم الأسعار (Pricelists) ── *@
-                <div class="prl-sidebar-card">
-                    <div class="prl-sidebar-head">
-                        <div class="prl-sidebar-title">
-                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6" stroke-linecap="round"/>
-                            </svg>
-                            قوائم الأسعار المعرفة
+                @* ══ العمود الجانبي: قوائم الأسعار ══ *@
+                <aside class="pxl-rail">
+                    <div class="pxl-rail-head">
+                        <div class="pxl-rail-head-txt">
+                            <span class="pxl-rail-title">قوائم الأسعار</span>
+                            <span class="pxl-rail-sub">@_lists.Count قائمة · @(_lists.Count(IsLive)) سارية</span>
                         </div>
-                        <span class="prl-sidebar-badge">@_lists.Count</span>
+                        @if (CanCreate)
+                        {
+                            <button type="button" class="pxl-icon-btn" @onclick="NewList" title="قائمة أسعار جديدة" aria-label="قائمة أسعار جديدة">
+                                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+                            </button>
+                        }
                     </div>
 
-                    <div class="prl-sidebar-list">
+                    <div class="pxl-rail-list">
                         @if (!_lists.Any())
                         {
-                            <div class="prl-sidebar-empty">لا توجد قوائم أسعار مسجلة</div>
+                            <div class="pxl-rail-empty">لا توجد قوائم أسعار مسجلة</div>
                         }
                         else
                         {
                             @foreach (var l in _lists)
                             {
-                                <button type="button" class="prl-item-row @(RowCls(l))" @onclick="() => SelectList(l)">
-                                    <div class="prl-item-indicator" aria-hidden="true"></div>
-                                    <div class="prl-item-details">
-                                        <div class="prl-item-title-row">
-                                            <span class="prl-item-title">@l.NameAr</span>
-                                            <span class="prl-item-badge">@l.RuleCount قاعدة</span>
-                                        </div>
-                                        <div class="prl-item-meta">
-                                            <span class="prl-item-code">@l.PriceListCode</span>
-                                            <span class="prl-item-date-badge @(IsLive(l) ? "valid" : "expired")">
-                                                <span class="chip-dot"></span>
-                                                @(IsLive(l) ? "سارية" : "غير سارية")
-                                            </span>
-                                        </div>
-                                    </div>
+                                <div class="pxl-item @(_sel == l.PriceListId ? "is-active" : "")" @onclick="() => SelectList(l)">
+                                    <span class="pxl-item-bar" aria-hidden="true"></span>
+                                    <span class="pxl-item-body">
+                                        <span class="pxl-item-name">@l.NameAr</span>
+                                        <span class="pxl-item-meta">
+                                            <span class="pxl-item-code">@l.PriceListCode</span>
+                                            <span class="pxl-item-live @(IsLive(l) ? "ok" : "off")">@(IsLive(l) ? "سارية" : "غير سارية")</span>
+                                        </span>
+                                    </span>
+                                    <span class="pxl-item-count" title="عدد القواعد">@l.RuleCount</span>
                                     @if (CanEdit)
                                     {
-                                        <button type="button" class="prl-item-edit-btn" @onclick="() => EditList(l)" @onclick:stopPropagation="true" title="تعديل القائمة">
-                                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-                                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                                            </svg>
+                                        <button type="button" class="pxl-item-edit" @onclick="() => EditList(l)" @onclick:stopPropagation="true" title="تعديل القائمة" aria-label="تعديل القائمة">
+                                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                         </button>
                                     }
-                                </button>
+                                </div>
                             }
                         }
                     </div>
-                </div>
+                </aside>
 
-                @* ── العمود الأيسر: قواعد مصفوفة السعر للقائمة المختارة ── *@
-                <div class="prl-main-card">
+                @* ══ المنطقة الرئيسية: قواعد القائمة المختارة ══ *@
+                <section class="pxl-main">
                     @if (_sel is null)
                     {
-                        <div class="prl-main-empty">
-                            <div class="prl-main-empty-icon">
-                                <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5">
-                                    <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 8v8M8 12h8" stroke-linecap="round"/>
-                                </svg>
-                            </div>
-                            <h3>يرجى اختيار قائمة أسعار من العمود الأيمن</h3>
-                            <p>لتتمكن من استعراض مصفوفة الصلاحيات والقواعد السعرية المحددة للعملاء والخدمات اللوجستية.</p>
+                        <div class="pxl-main-empty">
+                            <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.4">
+                                <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 8v8M8 12h8" stroke-linecap="round"/>
+                            </svg>
+                            <h3>اختر قائمة أسعار للبدء</h3>
+                            <p>القوائم في العمود الجانبي — اختار واحدة عشان تشوف قواعد التسعير بتاعتها وتضيف عليها.</p>
                         </div>
                     }
                     else
                     {
-                        @* ترويسة مصفوفة القواعد *@
-                        <div class="prl-main-head">
-                            <div class="prl-main-head-info">
-                                <span class="prl-main-head-tag">مصفوفة التسعير</span>
-                                <h2 class="prl-main-head-title">قواعد القائمة: @_selName</h2>
+                        var cur = _lists.FirstOrDefault(x => x.PriceListId == _sel);
+                        <div class="pxl-main-head">
+                            <div class="pxl-main-head-txt">
+                                <h2 class="pxl-main-title">@_selName</h2>
+                                <div class="pxl-chips">
+                                    <span class="pxl-chip">@_rules.Count قاعدة</span>
+                                    <span class="pxl-chip pxl-chip-blue">@(_rules.Count(r => r.CustomerId is null)) تعريفة عامة</span>
+                                    @if (_rules.Any())
+                                    {
+                                        <span class="pxl-chip pxl-chip-green">من @Money(_rules.Min(r => r.UnitPrice)) ج.م</span>
+                                        <span class="pxl-chip pxl-chip-gold">لغاية @Money(_rules.Max(r => r.UnitPrice)) ج.م</span>
+                                    }
+                                    @if (cur is not null)
+                                    {
+                                        <span class="pxl-chip @(IsLive(cur) ? "pxl-chip-green" : "pxl-chip-red")">
+                                            @(IsLive(cur) ? "سارية" : "غير سارية") · من @cur.ValidFrom.ToString("yyyy-MM-dd")@(cur.ValidTo is null ? "" : " لغاية " + cur.ValidTo.Value.ToString("yyyy-MM-dd"))
+                                        </span>
+                                    }
+                                </div>
                             </div>
-                            <div class="prl-main-head-meta">
-                                <span class="prl-main-badge-count">@_rules.Count قاعدة تسعير مفعّلة</span>
-                            </div>
+                            @if (CanCreate)
+                            {
+                                <button type="button" class="pxl-btn pxl-btn-primary" @onclick="NewRule">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+                                    قاعدة سعر جديدة
+                                </button>
+                            }
                         </div>
 
-                        @* تنبيه أولوية القواعد *@
-                        <div class="doc-banner banner-info" role="alert" style="border-bottom: 1px solid #edf1f7;">
-                            <div class="banner-icon" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
-                                </svg>
-                            </div>
-                            <span>
-                                <strong>تنبيه مصفوفة الأولويات:</strong> يتم تطبيق قاعدة التسعير الأكثر تخصصاً وتحديداً للعملية (التي تشتمل على ميناء، وجهة، نوع الحاوية، نوع الرحلة) وإذا تساوت القواعد يتم ترجيح القاعدة ذات قيمة الأولوية الأقل رقمياً (مثال: أولوية 1 تسبق 100).
-                            </span>
+                        <div class="pxl-note">
+                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+                            </svg>
+                            <span><strong>الأولوية:</strong> بتطبق القاعدة الأخص (ميناء / وجهة / تعتيق / نوع حاوية / نوع رحلة). ولو اتساوت القواعد، الرقم الأقل في عمود الأولوية هو اللي يكسب. القاعدة اللي من غير عميل = <strong>تعريفة عامة</strong> بتطبق على الكل، وقاعدة العميل بتكسب عليها دايمًا.</span>
                         </div>
 
-                        @* جدول قواعد التسعير *@
-                        <div class="doc-table-wrap">
-                            <table class="doc-table" aria-label="جدول قواعد الأسعار">
+                        <div class="pxl-table-wrap">
+                            <table class="pxl-table">
                                 <thead>
                                     <tr>
-                                        <th scope="col" class="th-start">العميل المستهدف</th>
-                                        <th scope="col" class="th-start">الخدمة اللوجستية</th>
-                                        <th scope="col" class="th-start">الأبعاد الجغرافية والتشغيلية</th>
+                                        <th scope="col" class="td-start">العميل</th>
+                                        <th scope="col" class="td-start">الخدمة</th>
+                                        <th scope="col" class="td-start">الأبعاد</th>
                                         <th scope="col">سعر البيع</th>
-                                        <th scope="col">التكلفة المتوقعة</th>
-                                        <th scope="col">صلاحية القاعدة</th>
+                                        <th scope="col">التكلفة</th>
+                                        <th scope="col">الصلاحية</th>
                                         <th scope="col">الأولوية</th>
                                         @if (CanEdit)
                                         {
-                                            <th scope="col" style="width: 120px">إجراءات</th>
+                                            <th scope="col" class="pxl-th-act">إجراءات</th>
                                         }
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach (var r in _rules)
                                     {
-                                        <tr class="@(!r.IsActive ? "row-inactive" : "")">
-                                            <td class="td-start"><strong>@r.CustomerName</strong></td>
-                                            <td class="td-start"><span class="doc-type-badge">@r.ServiceName</span></td>
-                                            <td class="td-start td-muted text-xs">@Dims(r)</td>
-                                            <td class="td-money"><strong>@Money(r.UnitPrice)</strong><small> ج.م</small></td>
-                                            <td class="td-money td-muted">
-                                                @(r.CostPrice is null ? "—" : Money(r.CostPrice.Value) + " ج.م")
-                                            </td>
-                                            <td class="td-muted text-xs">
-                                                <span>@r.ValidFrom.ToString("yyyy-MM-dd")</span>
-                                                @if (r.ValidTo is not null)
+                                        <tr class="@(!r.IsActive ? "is-off" : "")">
+                                            <td class="td-start">
+                                                @if (r.CustomerId is null)
                                                 {
-                                                    <span class="td-date-sep"> ← @r.ValidTo.Value.ToString("yyyy-MM-dd")</span>
+                                                    <span class="pxl-general">تعريفة عامة</span>
+                                                }
+                                                else
+                                                {
+                                                    <strong>@r.CustomerName</strong>
                                                 }
                                             </td>
-                                            <td class="font-mono">
-                                                <span class="prl-priority-badge">@r.Priority</span>
+                                            <td class="td-start"><span class="pxl-svc">@r.ServiceName</span></td>
+                                            <td class="td-start pxl-dims">@(string.IsNullOrWhiteSpace(Dims(r)) ? "— بدون أبعاد —" : Dims(r))</td>
+                                            <td class="pxl-money"><strong>@Money(r.UnitPrice)</strong><small> ج.م</small></td>
+                                            <td class="pxl-money pxl-muted">@(r.CostPrice is null ? "—" : Money(r.CostPrice.Value) + " ج.م")</td>
+                                            <td class="pxl-muted pxl-dates">
+                                                @r.ValidFrom.ToString("yyyy-MM-dd")
+                                                @if (r.ValidTo is not null)
+                                                {
+                                                    <span> لغاية @r.ValidTo.Value.ToString("yyyy-MM-dd")</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="pxl-prio">@r.Priority</span>
                                                 @if (!r.IsActive)
                                                 {
-                                                    <span class="doc-status-chip chip-expired" style="margin-right: 4px;">موقوفة</span>
+                                                    <span class="pxl-off-chip">موقوفة</span>
                                                 }
                                             </td>
                                             @if (CanEdit)
                                             {
                                                 <td>
-                                                    <div class="doc-row-actions">
-                                                        <button class="doc-btn-download" @onclick="() => EditRule(r)" title="تعديل القاعدة">
-                                                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5">
-                                                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                                                            </svg>
+                                                    <div class="pxl-row-act">
+                                                        <button type="button" class="pxl-row-btn" @onclick="() => EditRule(r)" title="تعديل" aria-label="تعديل القاعدة">
+                                                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                                         </button>
                                                         @if (CanDelete)
                                                         {
-                                                            <button class="doc-btn-del" @onclick="() => DeleteRuleAsync(r)" title="حذف القاعدة">
-                                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                                                                    <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                                                                </svg>
+                                                            <button type="button" class="pxl-row-btn pxl-row-del" @onclick="() => DeleteRuleAsync(r)" title="حذف" aria-label="حذف القاعدة">
+                                                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
                                                             </button>
                                                         }
                                                     </div>
@@ -261,8 +290,8 @@
                                     @if (!_rules.Any())
                                     {
                                         <tr>
-                                            <td colspan="@(CanEdit ? "8" : "7")">
-                                                <div class="doc-empty-table">لا توجد قواعد تسعير مسجلة لهذه القائمة</div>
+                                            <td colspan="@(CanEdit ? 8 : 7)">
+                                                <div class="pxl-table-empty">لا توجد قواعد تسعير على القائمة دي — ضيف أول قاعدة.</div>
                                             </td>
                                         </tr>
                                     }
@@ -270,7 +299,7 @@
                             </table>
                         </div>
                     }
-                </div>
+                </section>
 
             </div>
         </div>
@@ -278,409 +307,212 @@
 </div>
 
 @* ═══════════════════════════════════════════
-   MODAL 1 — إنشاء / تعديل قائمة أسعار (وعاء القواعد)
+   محرر قائمة الأسعار
 ═══════════════════════════════════════════ *@
 @if (_listOpen && CanCreate)
 {
-    <div class="cust-modal-backdrop" @onclick="() => _listOpen = false" role="dialog" aria-modal="true">
-        <div class="cust-modal cust-modal-sm" @onclick:stopPropagation="true">
-
-            <div class="modal-head">
-                <div class="modal-head-icon icon-blue" aria-hidden="true">
-                    @if (_listEditId is null)
-                    {
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                        </svg>
-                    }
-                    else
-                    {
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-                        </svg>
-                    }
-                </div>
+    <div class="pxl-backdrop" @onclick="() => _listOpen = false">
+        <div class="pxl-modal pxl-modal-sm" role="dialog" aria-modal="true" @onclick:stopPropagation="true">
+            <div class="pxl-modal-head">
                 <div>
-                    <div class="modal-title">@(_listEditId is null ? "قائمة أسعار جديدة" : "تعديل بيانات القائمة")</div>
-                    <div class="modal-sub">القائمة تمثل وعاءً تصنيفياً يتم ربط مصفوفة القواعد السعرية بداخله</div>
+                    <div class="pxl-modal-title">@(_listEditId is null ? "قائمة أسعار جديدة" : "تعديل قائمة الأسعار")</div>
+                    <div class="pxl-modal-sub">القائمة هي الوعاء اللي بيجمع قواعد التسعير</div>
                 </div>
-                <button class="modal-close-btn" @onclick="() => _listOpen = false" aria-label="إغلاق">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
-                    </svg>
+                <button type="button" class="pxl-modal-x" @onclick="() => _listOpen = false" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/></svg>
                 </button>
             </div>
 
-            <div class="modal-body">
-                <div class="modal-form-grid">
-                    <div class="modal-form-field modal-field-full">
-                        <label class="modal-field-label">كود القائمة <span class="field-required">*</span></label>
-                        <input class="modal-field-input" @bind="_lf.PriceListCode" maxlength="30" dir="ltr" placeholder="ROLE_CODE" />
+            <div class="pxl-modal-body">
+                <div class="pxl-form">
+                    <div class="pxl-field">
+                        <label class="pxl-label">كود القائمة <span class="pxl-req">*</span></label>
+                        <input type="text" class="pxl-input" @bind="_lf.PriceListCode" placeholder="PL-2026-01" />
                     </div>
-                    <div class="modal-form-field modal-field-full">
-                        <label class="modal-field-label">الاسم بالعربية <span class="field-required">*</span></label>
-                        <input class="modal-field-input" @bind="_lf.NameAr" maxlength="150" placeholder="مثال: أسعار شركة كذا" />
+                    <div class="pxl-field">
+                        <label class="pxl-label">الاسم العربي <span class="pxl-req">*</span></label>
+                        <input type="text" class="pxl-input" @bind="_lf.NameAr" placeholder="أسعار عملاء الإسكندرية" />
                     </div>
-                    <div class="modal-form-field modal-field-full">
-                        <label class="modal-field-label">الاسم بالإنجليزية</label>
-                        <input class="modal-field-input" @bind="_lf.NameEn" maxlength="150" placeholder="Price list English name" dir="ltr" />
+                    <div class="pxl-field">
+                        <label class="pxl-label">الاسم الإنجليزي</label>
+                        <input type="text" class="pxl-input" @bind="_lf.NameEn" placeholder="Alexandria rates" />
                     </div>
-                    <div class="modal-form-field">
-                        <label class="modal-field-label">سارية من <span class="field-required">*</span></label>
-                        <input type="date" class="modal-field-input" value="@_lf.ValidFrom" @onchange="e => _lf.ValidFrom = e.Value?.ToString()" />
+                    <div class="pxl-field">
+                        <label class="pxl-label">سارية من <span class="pxl-req">*</span></label>
+                        <input type="date" class="pxl-input" value="@_lf.ValidFrom" @onchange="e => _lf.ValidFrom = e.Value?.ToString()" />
                     </div>
-                    <div class="modal-form-field">
-                        <label class="modal-field-label">سارية لغاية</label>
-                        <input type="date" class="modal-field-input" value="@_lf.ValidTo" @onchange="e => _lf.ValidTo = e.Value?.ToString()" />
-                        <div class="modal-field-hint">اتركه فارغاً لتظل مفتوحة الصلاحية</div>
+                    <div class="pxl-field">
+                        <label class="pxl-label">سارية لغاية</label>
+                        <input type="date" class="pxl-input" value="@_lf.ValidTo" @onchange="e => _lf.ValidTo = e.Value?.ToString()" />
+                        <span class="pxl-hint">فاضية = مفتوحة من غير نهاية</span>
                     </div>
                 </div>
             </div>
 
-            <div class="modal-foot">
-                <button class="modal-cancel-btn" @onclick="() => _listOpen = false">إلغاء</button>
-                <button class="modal-save-btn" @onclick="SaveListAsync" disabled="@_saving">
-                    @if (_saving)
-                    {
-                        <span class="btn-spinner sm"></span>
-                        <span>جاري الحفظ...</span>
-                    }
-                    else
-                    {
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
-                            <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        <span>حفظ البيانات</span>
-                    }
+            <div class="pxl-modal-foot">
+                @if (!string.IsNullOrEmpty(_msg))
+                {
+                    <span class="pxl-foot-msg @(_ok ? "ok" : "err")">@_msg</span>
+                }
+                <span class="pxl-foot-spacer"></span>
+                <button type="button" class="pxl-btn" @onclick="() => _listOpen = false">إلغاء</button>
+                <button type="button" class="pxl-btn pxl-btn-primary" @onclick="SaveListAsync" disabled="@_saving">
+                    @(_saving ? "جاري الحفظ..." : "حفظ القائمة")
                 </button>
             </div>
-
         </div>
     </div>
 }
 
 @* ═══════════════════════════════════════════
-   MODAL 2 — إنشاء / تعديل قاعدة تسعير بـ MudTabs المخصصة
+   محرر قاعدة التسعير
 ═══════════════════════════════════════════ *@
 @if (_ruleOpen && CanCreate && _sel is not null)
 {
-    <div class="cust-modal-backdrop" @onclick="() => _ruleOpen = false" role="dialog" aria-modal="true">
-        <div class="cust-modal" @onclick:stopPropagation="true">
-
-            <div class="modal-head">
-                <div class="modal-head-icon icon-blue" aria-hidden="true">
-                    @if (_ruleEditId is null)
-                    {
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                        </svg>
-                    }
-                    else
-                    {
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-                        </svg>
-                    }
-                </div>
+    <div class="pxl-backdrop" @onclick="() => _ruleOpen = false">
+        <div class="pxl-modal" role="dialog" aria-modal="true" @onclick:stopPropagation="true">
+            <div class="pxl-modal-head">
                 <div>
-                    <div class="modal-title">@(_ruleEditId is null ? "قاعدة سعر جديدة" : "تعديل قاعدة التسعير")</div>
-                    <div class="modal-sub">في القائمة: @_selName</div>
+                    <div class="pxl-modal-title">@(_ruleEditId is null ? "قاعدة تسعير جديدة" : "تعديل قاعدة التسعير")</div>
+                    <div class="pxl-modal-sub">في قائمة: @_selName</div>
                 </div>
-                <button class="modal-close-btn" @onclick="() => _ruleOpen = false" aria-label="إغلاق">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
-                    </svg>
+                <button type="button" class="pxl-modal-x" @onclick="() => _ruleOpen = false" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/></svg>
                 </button>
             </div>
 
-            @if (_msg is not null)
-            {
-                <div class="modal-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
-                    <span>@_msg</span>
-                    <button class="banner-close" @onclick="() => _msg = null">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
-                        </svg>
-                    </button>
+            <div class="pxl-modal-body">
+
+                <div class="pxl-sec">
+                    <div class="pxl-sec-head"><span class="pxl-sec-n">1</span> لمين القاعدة؟</div>
+                    <div class="pxl-form">
+                        <div class="pxl-field">
+                            <label class="pxl-label">العميل</label>
+                            <select class="pxl-input" @bind="_rf.CustomerId">
+                                <option value="0">— بدون عميل (تعريفة عامة) —</option>
+                                @foreach (var c in _customers) { <option value="@c.Id">@c.Label</option> }
+                            </select>
+                            <span class="pxl-hint">من غير عميل = تعريفة عامة بتطبق على كل العملاء</span>
+                        </div>
+                        <div class="pxl-field">
+                            <label class="pxl-label">الخدمة <span class="pxl-req">*</span></label>
+                            <select class="pxl-input @(_rf.ServiceId <= 0 && _triedSave ? "pxl-err" : "")" @bind="_rf.ServiceId">
+                                <option value="0">— اختر الخدمة —</option>
+                                @foreach (var s in _services) { <option value="@s.Id">@s.Label</option> }
+                            </select>
+                        </div>
+                    </div>
                 </div>
-            }
 
-            <div class="modal-body">
-                <MudTabs Elevation="0" Rounded="false" ApplyEffectsToContainer="true"
-                         PanelClass="saf-tab-panel" @bind-ActivePanelIndex="_activeTab" Class="saf-mud-tabs">
-
-                    @* ── Tab 1: الأطراف والأسعار ── *@
-                    <MudTabPanel>
-                        <TabContent>
-                            <div class="ctab-label">
-                                <div class="ctab-icon ctab-icon-blue">
-                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                                        <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
-                                    </svg>
-                                </div>
-                                <span>الأسعار والتسعير</span>
-                                @if (_triedSave && (_rf.CustomerId <= 0 || _rf.ServiceId <= 0))
-                                {
-                                    <span class="ctab-err-dot"></span>
-                                }
+                <div class="pxl-sec">
+                    <div class="pxl-sec-head"><span class="pxl-sec-n">2</span> الأبعاد — سيبها فاضية عشان القاعدة تطبق على أي قيمة</div>
+                    <div class="pxl-form">
+                        <div class="pxl-field">
+                            <label class="pxl-label">ميناء التحميل</label>
+                            <select class="pxl-input" value="@_rf.PortId" @onchange="e => _rf.PortId = Nul(e.Value)">
+                                <option value="">— أي ميناء —</option>
+                                @foreach (var p in _ports) { <option value="@p.Id">@p.Label</option> }
+                            </select>
+                        </div>
+                        <div class="pxl-field">
+                            <label class="pxl-label">الوجهة</label>
+                            <select class="pxl-input" value="@_rf.DestinationId" @onchange="e => _rf.DestinationId = Nul(e.Value)">
+                                <option value="">— أي وجهة —</option>
+                                @foreach (var d in _dests) { <option value="@d.Id">@d.Label</option> }
+                            </select>
+                        </div>
+                        <div class="pxl-field">
+                            <label class="pxl-label">ميناء التعتيق</label>
+                            <select class="pxl-input" value="@_rf.TahteeqPortId" @onchange="e => _rf.TahteeqPortId = Nul(e.Value)">
+                                <option value="">— أي ميناء —</option>
+                                @foreach (var p in _ports) { <option value="@p.Id">@p.Label</option> }
+                            </select>
+                        </div>
+                        <div class="pxl-field">
+                            <label class="pxl-label">نوع الحاوية</label>
+                            <select class="pxl-input" value="@_rf.ContainerTypeId" @onchange="e => _rf.ContainerTypeId = Nul(e.Value)">
+                                <option value="">— أي نوع —</option>
+                                @foreach (var c in _ctypes) { <option value="@c.Id">@c.Label</option> }
+                            </select>
+                        </div>
+                        <div class="pxl-field">
+                            <label class="pxl-label">نوع الرحلة</label>
+                            <select class="pxl-input" value="@_rf.TripTypeId" @onchange="e => _rf.TripTypeId = Nul(e.Value)">
+                                <option value="">— أي نوع —</option>
+                                @foreach (var t in _ttypes) { <option value="@t.Id">@t.Label</option> }
+                            </select>
+                        </div>
+                        <div class="pxl-field pxl-field-wide">
+                            <div class="pxl-margin @((_rf.UnitPrice - (_rf.CostPrice ?? 0)) >= 0 ? "up" : "down")">
+                                <span class="pxl-margin-k">هامش الربح المتوقع</span>
+                                <span class="pxl-margin-v">@((_rf.UnitPrice - (_rf.CostPrice ?? 0)).ToString("N2")) ج.م</span>
                             </div>
-                        </TabContent>
-                        <ChildContent>
-                            <div class="tab-section">
-                                <div class="tab-section-head">
-                                    <div class="tab-section-icon blue">
-                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <div class="tab-section-title">الأطراف والأسعار المطبقة</div>
-                                        <div class="tab-section-sub">تحديد العميل، الخدمة، وسعر البيع مع احتساب الهامش التلقائي</div>
-                                    </div>
-                                </div>
+                        </div>
+                    </div>
+                </div>
 
-                                <div class="saf-form-grid">
-                                    <div class="form-field">
-                                        <label class="field-label">العميل المستهدف <span class="field-required">*</span></label>
-                                        <select class="field-input @(_rf.CustomerId <= 0 && _triedSave ? "field-error" : "")" @bind="_rf.CustomerId">
-                                            <option value="0">— اختر العميل —</option>
-                                            @foreach (var c in _customers) { <option value="@c.Id">@c.Label</option> }
-                                        </select>
-                                    </div>
+                <div class="pxl-sec">
+                    <div class="pxl-sec-head"><span class="pxl-sec-n">3</span> السعر والصلاحية</div>
+                    <div class="pxl-form">
+                        <div class="pxl-field">
+                            <label class="pxl-label">سعر البيع <span class="pxl-req">*</span></label>
+                            <input type="number" min="0" step="0.01" class="pxl-input" value="@_rf.UnitPrice" @onchange="e => _rf.UnitPrice = Dec(e.Value)" />
+                        </div>
+                        <div class="pxl-field">
+                            <label class="pxl-label">التكلفة</label>
+                            <input type="number" min="0" step="0.01" class="pxl-input" value="@_rf.CostPrice" @onchange="e => _rf.CostPrice = Dec(e.Value)" />
+                        </div>
+                        <div class="pxl-field">
+                            <label class="pxl-label">نسبة الضريبة</label>
+                            <select class="pxl-input" value="@_rf.TaxRateId" @onchange="e => _rf.TaxRateId = Nul(e.Value)">
+                                <option value="">— بدون —</option>
+                                @foreach (var x in _taxRates) { <option value="@x.Id">@x.Label</option> }
+                            </select>
+                        </div>
+                        <div class="pxl-field">
+                            <label class="pxl-label">الأولوية</label>
+                            <input type="number" min="1" max="9999" step="1" class="pxl-input" value="@_rf.Priority" @onchange="e => _rf.Priority = (int)Lng(e.Value)" />
+                            <span class="pxl-hint">الرقم الأقل = أولوية أعلى</span>
+                        </div>
+                        <div class="pxl-field">
+                            <label class="pxl-label">سارية من <span class="pxl-req">*</span></label>
+                            <input type="date" class="pxl-input" value="@_rf.ValidFrom" @onchange="e => _rf.ValidFrom = e.Value?.ToString()" />
+                        </div>
+                        <div class="pxl-field">
+                            <label class="pxl-label">سارية لغاية</label>
+                            <input type="date" class="pxl-input" value="@_rf.ValidTo" @onchange="e => _rf.ValidTo = e.Value?.ToString()" />
+                        </div>
+                        <div class="pxl-field pxl-field-wide">
+                            <label class="pxl-label">ملاحظات</label>
+                            <textarea class="pxl-input pxl-textarea" rows="2" maxlength="500" @bind="_rf.Notes" placeholder="أي ملاحظات على القاعدة..."></textarea>
+                        </div>
+                        <div class="pxl-field pxl-field-wide">
+                            <label class="pxl-switch">
+                                <input type="checkbox" @bind="_rf.IsActive" />
+                                <span class="pxl-switch-box" aria-hidden="true"></span>
+                                <span class="pxl-switch-txt">القاعدة مفعّلة <small>لو مقفولة مش هتطبق على أي عملية</small></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
 
-                                    <div class="form-field">
-                                        <label class="field-label">الخدمة اللوجستية <span class="field-required">*</span></label>
-                                        <select class="field-input @(_rf.ServiceId <= 0 && _triedSave ? "field-error" : "")" @bind="_rf.ServiceId">
-                                            <option value="0">— اختر الخدمة —</option>
-                                            @foreach (var s in _services) { <option value="@s.Id">@s.Label</option> }
-                                        </select>
-                                    </div>
-
-                                    <div class="form-field">
-                                        <label class="field-label">سعر البيع المعتمد <span class="field-required">*</span></label>
-                                        <div class="field-input-group">
-                                            <span class="field-prefix" aria-hidden="true">ج.م</span>
-                                            <input type="number" min="0" step="0.01" class="field-input with-prefix" value="@_rf.UnitPrice" @onchange="e => _rf.UnitPrice = Dec(e.Value)" />
-                                        </div>
-                                    </div>
-
-                                    <div class="form-field">
-                                        <label class="field-label">سعر التكلفة المقدرة</label>
-                                        <div class="field-input-group">
-                                            <span class="field-prefix" aria-hidden="true">ج.م</span>
-                                            <input type="number" min="0" step="0.01" class="field-input with-prefix" value="@_rf.CostPrice" @onchange="e => _rf.CostPrice = Dec(e.Value)" />
-                                        </div>
-                                    </div>
-
-                                    @if (_rf.UnitPrice > 0 || (_rf.CostPrice ?? 0) > 0)
-                                    {
-                                        <div class="form-field saf-full">
-                                            <div class="saf-toggle-box" style="background:#f8fafc">
-                                                <div class="saf-toggle-content">
-                                                    <div class="saf-toggle-icon" style="background:#e6f9ee; color:#16a35b">
-                                                        <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" />
-                                                    </div>
-                                                    <div class="saf-toggle-text">
-                                                        <div class="saf-toggle-title">هامش الربح المتوقع للقاعدة</div>
-                                                        <div class="saf-toggle-sub">سعر البيع مطروحاً منه سعر التكلفة المدخلة</div>
-                                                    </div>
-                                                </div>
-                                                <span class="saf-sw-text @((_rf.UnitPrice - (_rf.CostPrice ?? 0)) >= 0 ? "text-green" : "text-red")" style="font-size:16px; font-weight:900">
-                                                    @Money(_rf.UnitPrice - (_rf.CostPrice ?? 0)) ج.م
-                                                </span>
-                                            </div>
-                                        </div>
-                                    }
-
-                                    <div class="form-field">
-                                        <label class="field-label">الضريبة المطبقة</label>
-                                        <select class="field-input" value="@_rf.TaxRateId" @onchange="e => _rf.TaxRateId = Nul(e.Value)">
-                                            <option value="">— بدون ضريبة مضافة —</option>
-                                            @foreach (var t in _taxRates) { <option value="@t.Id">@t.Label</option> }
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                        </ChildContent>
-                    </MudTabPanel>
-
-                    @* ── Tab 2: الأبعاد الجغرافية والتشغيلية ── *@
-                    <MudTabPanel>
-                        <TabContent>
-                            <div class="ctab-label">
-                                <div class="ctab-icon ctab-icon-green">
-                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
-                                    </svg>
-                                   </div>
-                                <span>الأبعاد والتشغيل</span>
-                            </div>
-                        </TabContent>
-                        <ChildContent>
-                            <div class="tab-section">
-                                <div class="tab-section-head">
-                                    <div class="tab-section-icon green">
-                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <div class="tab-section-title">الأبعاد التشغيلية المحددة</div>
-                                        <div class="tab-section-sub">تحديد الميناء، الوجهات، نوع الحاوية، ونوع الرحلة لتخصيص القاعدة السعرية</div>
-                                    </div>
-                                </div>
-
-                                <div class="saf-form-grid">
-                                    <div class="form-field">
-                                        <label class="field-label">ميناء الشحن</label>
-                                        <select class="field-input" value="@_rf.PortId" @onchange="e => _rf.PortId = Nul(e.Value)">
-                                            <option value="">أي ميناء شحن</option>
-                                            @foreach (var p in _ports) { <option value="@p.Id">@p.Label</option> }
-                                        </select>
-                                    </div>
-
-                                    <div class="form-field">
-                                        <label class="field-label">وجهة الشحن والوصول</label>
-                                        <select class="field-input" value="@_rf.DestinationId" @onchange="e => _rf.DestinationId = Nul(e.Value)">
-                                            <option value="">أي وجهة شحن</option>
-                                            @foreach (var d in _dests) { <option value="@d.Id">@d.Label</option> }
-                                        </select>
-                                    </div>
-
-                                    <div class="form-field">
-                                        <label class="field-label">ميناء التعتيق والتفريغ</label>
-                                        <select class="field-input" value="@_rf.TahteeqPortId" @onchange="e => _rf.TahteeqPortId = Nul(e.Value)">
-                                            <option value="">أي ميناء تعتيق</option>
-                                            @foreach (var p in _ports) { <option value="@p.Id">@p.Label</option> }
-                                        </select>
-                                    </div>
-
-                                    <div class="form-field">
-                                        <label class="field-label">طراز وحجم الحاوية</label>
-                                        <select class="field-input" value="@_rf.ContainerTypeId" @onchange="e => _rf.ContainerTypeId = Nul(e.Value)">
-                                            <option value="">أي طراز/حجم</option>
-                                            @foreach (var c in _ctypes) { <option value="@c.Id">@c.Label</option> }
-                                        </select>
-                                    </div>
-
-                                    <div class="form-field">
-                                        <label class="field-label">تصنيف ونوع الرحلة</label>
-                                        <select class="field-input" value="@_rf.TripTypeId" @onchange="e => _rf.TripTypeId = Nul(e.Value)">
-                                            <option value="">أي نوع رحلة</option>
-                                            @foreach (var t in _ttypes) { <option value="@t.Id">@t.Label</option> }
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                        </ChildContent>
-                    </MudTabPanel>
-
-                    @* ── Tab 3: الصلاحية والمعاملات ── *@
-                    <MudTabPanel>
-                        <TabContent>
-                            <div class="ctab-label">
-                                <div class="ctab-icon ctab-icon-amber">
-                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                                    </svg>
-                                </div>
-                                <span>الصلاحية والمعاملات</span>
-                                @if (_triedSave && string.IsNullOrWhiteSpace(_rf.ValidFrom))
-                                {
-                                    <span class="ctab-err-dot"></span>
-                                }
-                            </div>
-                        </TabContent>
-                        <ChildContent>
-                            <div class="tab-section">
-                                <div class="tab-section-head">
-                                    <div class="tab-section-icon amber">
-                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <div class="tab-section-title">فترة الصلاحية وأولوية القاعدة</div>
-                                        <div class="tab-section-sub">تحديد المدى الزمني للفاعلية والقيمة الرقمية للأولوية وحالة التفعيل</div>
-                                    </div>
-                                </div>
-
-                                <div class="saf-form-grid">
-                                    <div class="form-field">
-                                        <label class="field-label">سارية من تاريخ <span class="field-required">*</span></label>
-                                        <input type="date" class="field-input @(string.IsNullOrWhiteSpace(_rf.ValidFrom) && _triedSave ? "field-error" : "")" value="@_rf.ValidFrom" @onchange="e => _rf.ValidFrom = e.Value?.ToString()" />
-                                        @if (string.IsNullOrWhiteSpace(_rf.ValidFrom) && _triedSave)
-                                        {
-                                            <div class="field-err-msg">تاريخ الفاعلية مطلوب</div>
-                                        }
-                                    </div>
-
-                                    <div class="form-field">
-                                        <label class="field-label">سارية لغاية تاريخ</label>
-                                        <input type="date" class="field-input" value="@_rf.ValidTo" @onchange="e => _rf.ValidTo = e.Value?.ToString()" />
-                                    </div>
-
-                                    <div class="form-field">
-                                        <label class="field-label">قيمة معامل الأولوية</label>
-                                        <input type="number" min="1" max="9999" class="field-input" value="@_rf.Priority" @onchange="e => _rf.Priority = (int)Lng(e.Value)" />
-                                        <div class="field-hint">القيمة الرقمية الأقل تعني أولوية تطبيق تسبق القيم الأعلى</div>
-                                    </div>
-
-                                    <div class="form-field saf-full">
-                                        <div class="saf-toggle-box @(_rf.IsActive ? "toggle-active" : "")">
-                                            <div class="saf-toggle-content">
-                                                <div class="saf-toggle-icon @(_rf.IsActive ? "icon-active" : "")">
-                                                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
-                                                        <circle cx="12" cy="12" r="10"/><path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
-                                                    </svg>
-                                                </div>
-                                                <div class="saf-toggle-text">
-                                                    <div class="saf-toggle-title">تفعيل قاعدة التسعير</div>
-                                                    <div class="saf-toggle-sub">القواعد الفعالة والنشطة فقط هي التي تدخل في معادلة التقييم التلقائي</div>
-                                                </div>
-                                            </div>
-                                            <label class="toggle-switch">
-                                                <input type="checkbox" @bind="_rf.IsActive" role="switch" aria-checked="@_rf.IsActive" />
-                                                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                                            </label>
-                                        </div>
-                                    </div>
-
-                                    <div class="form-field saf-full">
-                                        <label class="field-label">ملاحظات وبيان القاعدة السعرية</label>
-                                        <input class="field-input" @bind="_rf.Notes" maxlength="500" placeholder="أدخل أي ملاحظات تشغيلية خاصة بهذه القاعدة..." />
-                                    </div>
-                                </div>
-                            </div>
-                        </ChildContent>
-                    </MudTabPanel>
-
-                </MudTabs>
             </div>
 
-            <div class="modal-foot">
-                <button class="modal-cancel-btn" @onclick="() => _ruleOpen = false">إلغاء</button>
-                <button class="modal-save-btn" @onclick="SaveRuleAsync" disabled="@_saving">
-                    @if (_saving)
-                    {
-                        <span class="btn-spinner sm"></span>
-                        <span>جاري الحفظ...</span>
-                    }
-                    else
-                    {
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
-                            <path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        <span>حفظ القاعدة السعرية</span>
-                    }
+            <div class="pxl-modal-foot">
+                @if (!string.IsNullOrEmpty(_msg))
+                {
+                    <span class="pxl-foot-msg @(_ok ? "ok" : "err")">@_msg</span>
+                }
+                <span class="pxl-foot-spacer"></span>
+                <button type="button" class="pxl-btn" @onclick="() => _ruleOpen = false">إلغاء</button>
+                <button type="button" class="pxl-btn pxl-btn-primary" @onclick="SaveRuleAsync" disabled="@_saving">
+                    @(_saving ? "جاري الحفظ..." : "حفظ القاعدة")
                 </button>
             </div>
-
         </div>
     </div>
 }
+
 
 @* ═══════════════════════════════════════════
    ⚡ GLOW FAB — التزام كامل بالـ Markup لـ app.css ومحاذاة RTL والـ z-index
@@ -870,503 +702,6 @@
         z-index: 2;
     }
 
-    .doc-card {
-        background: #fff;
-        border: 1px solid #dde5f0;
-        border-radius: 18px;
-        box-shadow: 0 4px 24px rgba(15, 41, 82, 0.05);
-        overflow: hidden;
-    }
-
-    /* Banners */
-    .doc-banner {
-        display: flex;
-        align-items: flex-start;
-        gap: 12px;
-        padding: 14px 18px;
-        border-radius: 0;
-        font-size: 13px;
-        font-weight: 600;
-        line-height: 1.6;
-        border-bottom: 1px solid transparent;
-    }
-    .banner-info {
-        background: #f4f8ff;
-        color: #1a56db;
-        border-bottom-color: #dbe8fc;
-    }
-    .banner-success { background: #e9f8f0; color: #0e7a43; border-bottom-color: #b5e8d0; }
-    .banner-error   { background: #fff0f2; color: var(--fc-error); border-bottom-color: #ffc8cf; }
-    .banner-icon { flex: 0 0 auto; margin-top: 2px; }
-    .banner-close {
-        margin-right: auto; background: none; border: none;
-        color: inherit; opacity: 0.6; cursor: pointer;
-        display: flex; align-items: center; justify-content: center;
-        width: 24px; height: 24px; border-radius: 5px;
-    }
-    .banner-close:hover { opacity: 1; }
-
-    /* State Box */
-    .doc-state-box {
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        gap: 12px; min-height: 300px;
-        background: #fff; border: 1px solid #dde5f0;
-        border-radius: 14px; padding: 40px; text-align: center;
-        box-shadow: 0 4px 20px rgba(15,41,82,.06);
-    }
-    .state-icon-wrap {
-        width: 68px; height: 68px; border-radius: 50%;
-        display: flex; align-items: center; justify-content: center;
-    }
-    .state-icon-wrap.perm { background: #fff0f2; color: var(--fc-red); }
-    .doc-state-box h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--fc-text); }
-    .doc-state-box p  { margin: 0; font-size: 13px; color: var(--fc-muted); }
-
-    /* Toolbar & Filters */
-    .doc-toolbar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 14px 18px;
-        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
-        border-bottom: 1px solid #edf1f7;
-        flex-wrap: wrap;
-    }
-
-    .doc-search-wrap {
-        position: relative;
-        display: flex;
-        align-items: center;
-        flex: 0 1 280px;
-        min-width: 180px;
-    }
-    .doc-search-icon {
-        position: absolute;
-        right: 10px;
-        color: #9aaabb;
-        pointer-events: none;
-    }
-    .doc-search-input {
-        width: 100%;
-        height: 36px;
-        padding: 0 32px 0 10px;
-        border: 1px solid #d8e2f0;
-        border-radius: 8px;
-        background: #fafcff;
-        color: var(--fc-text);
-        font-family: inherit;
-        font-size: 12px;
-        outline: none;
-        transition: border-color .15s ease;
-    }
-    .doc-search-input:focus {
-        border-color: var(--fc-blue);
-        box-shadow: 0 0 0 3px rgba(30,110,245,.08);
-    }
-    .doc-search-input::placeholder { color: #b0bcc8; }
-    .doc-search-clear {
-        position: absolute; left: 8px;
-        display: flex; align-items: center; justify-content: center;
-        width: 20px; height: 20px; border-radius: 50%;
-        border: none; background: #edf1f7; color: #8899ae;
-        cursor: pointer;
-    }
-
-    .doc-results-badge {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        font-size: 11px;
-        color: #8899ae;
-        font-weight: 600;
-        white-space: nowrap;
-    }
-    .doc-results-badge strong { color: #5a6e88; }
-
-    /* Table Styling */
-    .doc-table-wrap { overflow-x: auto; }
-    .doc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .doc-table tbody tr {
-        border-bottom: 1px solid #f0f3f8; transition: background .12s ease;
-    }
-    .doc-table tbody tr:last-child { border-bottom: none; }
-    .doc-table tbody tr:hover { background: #fafcff; }
-    .doc-table tbody td {
-        padding: 12px 14px; color: #526070; text-align: center; vertical-align: middle;
-    }
-    .td-start { text-align: right !important; }
-    .td-muted { color: #8899ae; font-size: 11.5px; }
-
-    .doc-type-badge {
-        display: inline-flex; align-items: center;
-        padding: 2.5px 8px; border-radius: 6px;
-        background: #f0f4fa; border: 1px solid #e0e8f4;
-        font-size: 10.5px; font-weight: 800; color: #344258;
-    }
-
-    .doc-file-info { display: flex; flex-direction: column; gap: 2px; }
-    .doc-file-title { font-size: 12.5px; font-weight: 700; color: #1c2b44; }
-    .doc-file-desc { font-size: 10.5px; color: #8899ae; }
-
-    /* Indicator Status Chips */
-    .doc-status-chip {
-        display: inline-flex; align-items: center; gap: 4px;
-        padding: 3px 9px; border-radius: 6px;
-        font-size: 10px; font-weight: 800; font-family: "Inter", sans-serif;
-    }
-    .chip-valid   { background: #e9f8f0; color: #0e7a43; border: 1px solid #b0e0c5; }
-    .chip-expired { background: #fff0f2; color: var(--fc-error); border: 1px solid #ffc8cf; }
-    .chip-dot { width: 5px; height: 5px; border-radius: 50%; }
-    .chip-valid .chip-dot   { background: #16a35b; }
-    .chip-expired .chip-dot { background: #e03048; }
-
-    /* Actions */
-    .doc-row-actions { display: flex; align-items: center; gap: 6px; justify-content: center; }
-
-    .doc-btn-download {
-        display: inline-flex; align-items: center; gap: 4px;
-        height: 28px; padding: 0 10px;
-        border: 1px solid #bdd4fc; border-radius: 6px;
-        background: #eaf1ff; color: var(--fc-blue);
-        font-family: inherit; font-size: 10.5px; font-weight: 800;
-        cursor: pointer; transition: all 0.12s ease;
-    }
-    .doc-btn-download:hover { background: var(--fc-blue); color: #fff; }
-
-    .doc-btn-del {
-        width: 28px; height: 28px; border-radius: 6px;
-        display: flex; align-items: center; justify-content: center;
-        border: 1px solid transparent; background: transparent;
-        color: var(--fc-error); cursor: pointer; transition: all 0.12s ease;
-    }
-    .doc-btn-del:hover { background: #fff0f2; border-color: #ffc8cf; }
-
-    .doc-btn-confirm-del {
-        height: 28px; padding: 0 8px; border-radius: 6px;
-        border: none; background: var(--fc-error); color: #fff;
-        font-size: 10px; font-weight: 800; cursor: pointer;
-        animation: pulse-del 1s ease infinite;
-    }
-    @@keyframes pulse-del {
-        0%,100% { box-shadow: 0 0 0 0 rgba(224,48,72,.35); }
-        50%     { box-shadow: 0 0 0 5px rgba(224,48,72,0); }
-    }
-
-    .doc-empty-table { padding: 40px; text-align: center; color: #9aaabb; font-size: 13px; font-weight: 700; }
-    .doc-loading { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 200px; color: #6b7d95; font-size: 12.5px; font-weight: 700; }
-    .doc-spinner { width: 28px; height: 28px; border: 2.5px solid #dde5f0; border-top-color: var(--fc-blue); border-radius: 50%; animation: doc-spin .7s linear infinite; }
-    @@keyframes doc-spin { to { transform: rotate(360deg); } }
-
-    /* ── PRICELISTS & RULES SPLIT LAYOUT (prl-*) ── */
-    .prl-layout {
-        display: grid;
-        grid-template-columns: 310px minmax(0, 1fr);
-        gap: 18px;
-        align-items: start;
-        position: relative;
-        z-index: 2;
-    }
-
-    .prl-sidebar-card {
-        background: #fff;
-        border: 1px solid #dde5f0;
-        border-radius: var(--fc-radius, 14px);
-        box-shadow: 0 4px 24px rgba(15, 41, 82, 0.05);
-        overflow: hidden;
-        position: sticky;
-        top: 80px;
-    }
-
-    .prl-sidebar-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        padding: 14px 16px;
-        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
-        border-bottom: 1px solid #edf1f7;
-    }
-
-    .prl-sidebar-title {
-        display: flex;
-        align-items: center;
-        gap: 7px;
-        font-size: 12px;
-        font-weight: 800;
-        color: var(--fc-text);
-    }
-
-    .prl-sidebar-badge {
-        min-width: 22px;
-        height: 22px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 6px;
-        padding: 0 5px;
-        background: var(--fc-blue-lt);
-        color: var(--fc-blue);
-        font-size: 10px;
-        font-weight: 900;
-        font-family: "Inter", Arial, sans-serif;
-    }
-
-    .prl-sidebar-list {
-        display: flex;
-        flex-direction: column;
-        padding: 8px;
-        gap: 4px;
-        max-height: 65vh;
-        overflow-y: auto;
-    }
-
-    .prl-sidebar-empty {
-        padding: 30px;
-        text-align: center;
-        color: #9aaabb;
-        font-size: 12px;
-        font-weight: 600;
-    }
-
-    /* Pricelist Item Card */
-    .prl-item-row {
-        width: 100%;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 12px 14px;
-        border-radius: 11px;
-        border: 1px solid transparent;
-        background: transparent;
-        cursor: pointer;
-        text-align: right;
-        font-family: inherit;
-        transition: all 0.15s ease;
-        position: relative;
-    }
-
-    .prl-item-row:hover {
-        background: #f5f7fc;
-        border-color: #e4eaf3;
-    }
-
-    .prl-item-row.fc-row-sel {
-        background: var(--fc-blue-lt) !important;
-        border-color: #bdd4fc !important;
-        box-shadow: 0 2px 10px rgba(30,110,245,.08);
-    }
-
-    .prl-item-indicator {
-        position: absolute;
-        right: 0; top: 12px; bottom: 12px;
-        width: 3.5px;
-        border-radius: 0 4px 4px 0;
-        background: transparent;
-        transition: background 0.15s ease;
-    }
-    .prl-item-row.fc-row-sel .prl-item-indicator {
-        background: var(--fc-blue);
-    }
-
-    .prl-item-details {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 3px;
-    }
-
-    .prl-item-title-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-    }
-
-    .prl-item-title {
-        font-size: 13px;
-        font-weight: 800;
-        color: #1c2b44;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .prl-item-row.fc-row-sel .prl-item-title {
-        color: var(--fc-blue);
-    }
-
-    .prl-item-badge {
-        font-size: 9.5px;
-        font-weight: 800;
-        padding: 2px 7px;
-        border-radius: 5px;
-        background: #f0f4fa;
-        color: #5a6e88;
-        font-family: "Inter", sans-serif;
-    }
-    .prl-item-row.fc-row-sel .prl-item-badge {
-        background: #fff;
-        color: var(--fc-blue);
-        border: 1px solid #bdd4fc;
-    }
-
-    .prl-item-meta {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-
-    .prl-item-code {
-        font-size: 10px;
-        font-weight: 700;
-        color: #8899ae;
-        font-family: "Inter", Arial, sans-serif;
-    }
-    .prl-item-row.fc-row-sel .prl-item-code {
-        color: #6b9bd2;
-    }
-
-    .prl-item-date-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 1px 6px;
-        border-radius: 4px;
-        font-size: 9px;
-        font-weight: 800;
-    }
-    .prl-item-date-badge.valid { background: #e9f8f0; color: #16a35b; border: 1px solid #b0e0c5; }
-    .prl-item-date-badge.expired { background: #fff0f2; color: #e03048; border: 1px solid #ffc8cf; }
-    .prl-item-date-badge .chip-dot { width: 4.5px; height: 4.5px; border-radius: 50%; }
-    .prl-item-date-badge.valid .chip-dot { background: #16a35b; }
-    .prl-item-date-badge.expired .chip-dot { background: #e03048; }
-
-    .prl-item-edit-btn {
-        width: 28px;
-        height: 28px;
-        border-radius: 6px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border: 1px solid transparent;
-        background: transparent;
-        color: var(--fc-muted);
-        cursor: pointer;
-        transition: all 0.12s ease;
-        flex-shrink: 0;
-    }
-    .prl-item-edit-btn:hover {
-        background: rgba(255, 255, 255, 0.2);
-        color: var(--fc-blue);
-        border-color: #bdd4fc;
-    }
-    .prl-item-row.fc-row-sel .prl-item-edit-btn {
-        color: var(--fc-blue);
-    }
-    .prl-item-row.fc-row-sel .prl-item-edit-btn:hover {
-        background: #fff;
-    }
-
-    /* ── Main Rules Panel ── */
-    .prl-main-card {
-        background: #fff;
-        border: 1px solid #dde5f0;
-        border-radius: var(--fc-radius, 14px);
-        box-shadow: 0 4px 24px rgba(15, 41, 82, 0.05);
-        overflow: hidden;
-    }
-
-    .prl-main-empty {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        min-height: 340px;
-        text-align: center;
-        padding: 40px;
-    }
-
-    .prl-main-empty-icon {
-        width: 80px;
-        height: 80px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #f0f4fa;
-        color: #b0c4d8;
-    }
-    .prl-main-empty h3 { font-size: 15.5px; font-weight: 800; color: #1c2b44; margin: 0; }
-    .prl-main-empty p { font-size: 12px; color: #6B7A8F; margin: 0; max-width: 340px; line-height: 1.6; }
-
-    .prl-main-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 14px;
-        padding: 16px 20px;
-        background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
-        border-bottom: 1px solid #edf1f7;
-        flex-wrap: wrap;
-    }
-
-    .prl-main-head-info {
-        display: flex;
-        flex-direction: column;
-        gap: 3px;
-    }
-    .prl-main-head-tag {
-        font-size: 10px;
-        font-weight: 800;
-        color: var(--fc-blue);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .prl-main-head-title {
-        font-size: 14.5px;
-        font-weight: 900;
-        color: #1c2b43;
-        margin: 0;
-    }
-
-    .prl-main-badge-count {
-        font-size: 11px;
-        font-weight: 800;
-        color: var(--fc-blue);
-        background: var(--fc-blue-lt);
-        padding: 3px 10px;
-        border-radius: 6px;
-        border: 1px solid #bdd4fc;
-    }
-
-    .td-date-sep { color: #8899ae; font-family: "Cairo", sans-serif; font-weight: 600; margin: 0 2px; }
-    .prl-priority-badge {
-        font-family: "Inter", sans-serif;
-        font-size: 10.5px; font-weight: 800;
-        color: #1c2b44; background: #f0f3f8;
-        padding: 1.5px 6px; border-radius: 5px;
-    }
-
-    /* ── Warning & Info Alerts ── */
-    .ptl-inline-alert {
-        display: flex; align-items: flex-start; gap: 12px;
-        padding: 12px 16px; border-radius: 10px;
-        background: #fff0f2; border: 1px solid #ffc8cf;
-    }
-    .ptl-alert-icon { flex: 0 0 auto; color: var(--fc-red); margin-top: 2px; }
-    .ptl-alert-body { font-size: 11.5px; color: #c02040; line-height: 1.6; }
-    .ptl-alert-body strong { display: block; font-size: 12.5px; font-weight: 800; color: #b02040; }
-
-    /* ── الـ Overlap لحماية الهيرو والتأكد من عدم تغطية المحتوى ── */
-    .fc-overlap {
-        margin-top: 20px !important;
-        position: relative;
-        z-index: 2;
-    }
-
     /* ════════════════════════════════════════════════════════
        ⚡ GLOW FAB — التزام كامل بالـ Markup لـ app.css ومحاذاة RTL والـ z-index
     ════════════════════════════════════════════════════════ */
@@ -1480,34 +815,568 @@
     }
 
     /* ── Responsive ── */
-    @@media (max-width: 1200px) {
-        .prl-layout { grid-template-columns: 1fr; }
-        .prl-sidebar-card { position: static; }
-        .prl-sidebar-list { max-height: 280px; }
-    }
     @@media (max-width: 1024px) {
         .doc-kpis-row { grid-template-columns: repeat(2, 1fr); }
     }
-    @@media (max-width: 900px) {
-        .doc-toolbar { flex-direction: column; align-items: stretch; gap: 10px; }
-        .doc-select, .doc-search-wrap { width: 100% !important; flex: 1 1 100%; }
-        .saf-form-grid { grid-template-columns: 1fr; }
-    }
+
     @@media (max-width: 680px) {
         .hero-wrapper { padding: 12px 12px 0; }
         .hero-wrapper .fc-hero { border-radius: 16px !important; }
         .doc-hero-chip:first-child { display: none; }
-        .doc-body { padding: 14px 12px 90px; }
-        .doc-table { font-size: 11px; }
+        .doc-body { padding: 14px 12px 96px; }
         .fc-overlap { margin-top: 14px !important; }
     }
+
     @@media (max-width: 480px) {
         .doc-kpis-row { grid-template-columns: 1fr 1fr; }
-        .saf-mud-tabs .mud-tab { font-size: 11px !important; padding: 0 8px !important; }
     }
+
     @@media (prefers-reduced-motion: reduce) {
         .glow-halo, .glow-ring { animation: none; }
         .glow-halo { opacity: 0.5; }
+    }
+
+
+    /* ================================================================
+       #85 — شاشة قوائم الأسعار: عائلة pxl-* (الشاشة مكتفية ذاتيًا)
+       الهوية: كحلي #0A1B3B · أزرق #1e6ef5 · دهبي #E8A317 · أخضر #0e9f6e · أحمر #e02424
+    ================================================================ */
+    .pxl-grid {
+        display: grid;
+        grid-template-columns: 296px minmax(0, 1fr);
+        gap: 16px;
+        align-items: start;
+    }
+
+    /* ── العمود الجانبي ─────────────────────────────────────────── */
+    .pxl-rail {
+        background: #fff;
+        border: 1px solid #E3E9F0;
+        border-radius: 14px;
+        overflow: hidden;
+        position: sticky;
+        top: 12px;
+    }
+
+    .pxl-rail-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 13px 14px;
+        background: linear-gradient(180deg, #0d2654, #0A1B3B);
+        color: #fff;
+    }
+
+    .pxl-rail-head-txt { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .pxl-rail-title { font-size: 13.5px; font-weight: 800; }
+    .pxl-rail-sub { font-size: 11px; color: rgba(255, 255, 255, .68); }
+
+    .pxl-icon-btn {
+        flex: none;
+        width: 28px; height: 28px;
+        display: inline-flex; align-items: center; justify-content: center;
+        border: 1px solid rgba(255, 255, 255, .28);
+        background: rgba(255, 255, 255, .1);
+        color: #fff;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background .15s ease;
+    }
+
+    .pxl-icon-btn:hover { background: rgba(255, 255, 255, .22); }
+
+    .pxl-rail-list {
+        max-height: calc(100vh - 250px);
+        overflow-y: auto;
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .pxl-rail-empty { padding: 22px 12px; text-align: center; font-size: 12.5px; color: #8595A8; }
+
+    .pxl-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 10px 9px 8px;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background .15s ease, border-color .15s ease;
+    }
+
+    .pxl-item:hover { background: #F5F8FC; }
+
+    .pxl-item.is-active { background: rgba(30, 110, 245, .07); border-color: rgba(30, 110, 245, .3); }
+
+    .pxl-item-bar {
+        flex: none;
+        width: 3px; height: 26px;
+        border-radius: 999px;
+        background: #D7E1EC;
+    }
+
+    .pxl-item.is-active .pxl-item-bar { background: #1e6ef5; }
+
+    .pxl-item-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+
+    .pxl-item-name {
+        font-size: 12.5px; font-weight: 800; color: #0A1B3B;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .pxl-item-meta { display: flex; align-items: center; gap: 6px; }
+    .pxl-item-code { font-size: 10.5px; font-weight: 700; color: #8595A8; font-family: ui-monospace, monospace; }
+
+    .pxl-item-live {
+        font-size: 10px; font-weight: 800;
+        padding: 1px 6px; border-radius: 999px;
+    }
+
+    .pxl-item-live.ok  { color: #0e9f6e; background: rgba(14, 159, 110, .12); }
+    .pxl-item-live.off { color: #94A3B8; background: #EEF2F7; }
+
+    .pxl-item-count {
+        flex: none;
+        min-width: 24px; height: 22px;
+        display: inline-flex; align-items: center; justify-content: center;
+        padding: 0 6px;
+        font-size: 11px; font-weight: 800; color: #0B56DF;
+        background: rgba(30, 110, 245, .1);
+        border-radius: 7px;
+    }
+
+    .pxl-item-edit {
+        flex: none;
+        width: 24px; height: 24px;
+        display: inline-flex; align-items: center; justify-content: center;
+        border: 1px solid #E3E9F0;
+        background: #fff; color: #64748B;
+        border-radius: 7px; cursor: pointer;
+        transition: color .15s ease, border-color .15s ease;
+    }
+
+    .pxl-item-edit:hover { color: #0B56DF; border-color: #1e6ef5; }
+
+    /* ── المنطقة الرئيسية ───────────────────────────────────────── */
+    .pxl-main {
+        background: #fff;
+        border: 1px solid #E3E9F0;
+        border-radius: 14px;
+        overflow: hidden;
+        min-height: 420px;
+    }
+
+    .pxl-main-empty {
+        height: 100%; min-height: 420px;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 8px; padding: 40px 24px; text-align: center;
+        color: #8595A8;
+    }
+
+    .pxl-main-empty h3 { font-size: 15px; font-weight: 800; color: #33475B; }
+    .pxl-main-empty p  { font-size: 12.5px; max-width: 380px; line-height: 1.7; }
+
+    .pxl-main-head {
+        display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap;
+        padding: 16px 18px 14px;
+        border-bottom: 1px solid #EDF1F7;
+    }
+
+    .pxl-main-head-txt { flex: 1; min-width: 220px; }
+    .pxl-main-title { font-size: 16px; font-weight: 900; color: #0A1B3B; margin: 0 0 8px; }
+
+    .pxl-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+    .pxl-chip {
+        font-size: 11px; font-weight: 800; color: #64748B;
+        background: #F1F5F9; border-radius: 999px; padding: 3px 10px;
+    }
+
+    .pxl-chip-blue  { color: #0B56DF; background: rgba(30, 110, 245, .1); }
+    .pxl-chip-green { color: #0e9f6e; background: rgba(14, 159, 110, .12); }
+    .pxl-chip-gold  { color: #B45309; background: rgba(232, 163, 23, .14); }
+    .pxl-chip-red   { color: #e02424; background: rgba(224, 36, 36, .1); }
+
+    /* ── ملاحظة الأولوية ────────────────────────────────────────── */
+    .pxl-note {
+        display: flex; align-items: flex-start; gap: 9px;
+        margin: 14px 18px 0;
+        padding: 10px 12px;
+        border: 1px solid rgba(30, 110, 245, .22);
+        border-inline-start: 3px solid #1e6ef5;
+        background: rgba(30, 110, 245, .05);
+        border-radius: 10px;
+        font-size: 11.5px; line-height: 1.75; color: #33475B;
+    }
+
+    .pxl-note svg { flex: none; color: #1e6ef5; margin-top: 2px; }
+
+    /* ── الجدول ─────────────────────────────────────────────────── */
+    .pxl-table-wrap { overflow-x: auto; padding: 14px 18px 18px; }
+
+    .pxl-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+
+    .pxl-table thead th {
+        text-align: center;
+        font-size: 11px; font-weight: 800; color: #64748B;
+        text-transform: none;
+        padding: 9px 10px;
+        background: #F7FAFD;
+        border-bottom: 1px solid #E3E9F0;
+        white-space: nowrap;
+    }
+
+    .pxl-table thead th.td-start, .pxl-table thead th.pxl-th-act { text-align: start; }
+
+    .pxl-table tbody td {
+        padding: 10px;
+        text-align: center;
+        border-bottom: 1px solid #F1F5F9;
+        color: #33475B;
+        vertical-align: middle;
+    }
+
+    .pxl-table tbody tr:hover { background: #FAFCFF; }
+    .pxl-table tbody tr.is-off { background: #FBFCFD; color: #94A3B8; }
+
+    .pxl-table td.td-start { text-align: start; }
+
+    .pxl-general {
+        display: inline-block;
+        font-size: 11px; font-weight: 800; color: #B45309;
+        background: rgba(232, 163, 23, .14);
+        border-radius: 999px; padding: 2px 9px;
+    }
+
+    .pxl-svc {
+        display: inline-block;
+        font-size: 11.5px; font-weight: 800; color: #0B56DF;
+        background: rgba(30, 110, 245, .09);
+        border-radius: 7px; padding: 2px 8px;
+    }
+
+    .pxl-dims  { font-size: 11px; color: #64748B; max-width: 260px; }
+    .pxl-muted { color: #8595A8; }
+    .pxl-dates { font-size: 11px; white-space: nowrap; }
+    .pxl-money { font-weight: 800; white-space: nowrap; }
+    .pxl-money small { font-size: 10px; font-weight: 700; color: #8595A8; }
+
+    .pxl-prio {
+        display: inline-block;
+        min-width: 26px;
+        font-size: 11.5px; font-weight: 800; color: #0A1B3B;
+        background: #EEF2F7; border-radius: 7px; padding: 2px 8px;
+        font-family: ui-monospace, monospace;
+    }
+
+    .pxl-off-chip {
+        display: inline-block; margin-inline-start: 5px;
+        font-size: 10px; font-weight: 800; color: #e02424;
+        background: rgba(224, 36, 36, .1);
+        border-radius: 999px; padding: 1px 7px;
+    }
+
+    .pxl-table-empty { padding: 30px 12px; text-align: center; font-size: 12.5px; color: #8595A8; }
+
+    .pxl-row-act { display: inline-flex; gap: 5px; }
+
+    .pxl-row-btn {
+        width: 27px; height: 27px;
+        display: inline-flex; align-items: center; justify-content: center;
+        border: 1px solid #E3E9F0; background: #fff; color: #64748B;
+        border-radius: 8px; cursor: pointer;
+        transition: color .15s ease, border-color .15s ease, background .15s ease;
+    }
+
+    .pxl-row-btn:hover { color: #0B56DF; border-color: #1e6ef5; background: rgba(30, 110, 245, .06); }
+    .pxl-row-del:hover { color: #e02424; border-color: #e02424; background: rgba(224, 36, 36, .06); }
+
+    /* ── الأزرار ────────────────────────────────────────────────── */
+    .pxl-btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+        border: 1px solid #D7E1EC; background: #fff; color: #33475B;
+        font-size: 12.5px; font-weight: 800;
+        border-radius: 10px; padding: 8px 15px;
+        cursor: pointer; white-space: nowrap;
+        transition: background .15s ease, color .15s ease, border-color .15s ease;
+    }
+
+    .pxl-btn:hover:not(:disabled) { background: #F1F5F9; border-color: #B9C7D6; }
+    .pxl-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+    .pxl-btn-primary {
+        border-color: #1e6ef5; color: #fff;
+        background: linear-gradient(180deg, #1e6ef5, #0B56DF);
+        box-shadow: 0 6px 16px -8px rgba(11, 86, 223, .8);
+    }
+
+    .pxl-btn-primary:hover:not(:disabled) {
+        background: linear-gradient(180deg, #2f7bff, #1259d6);
+        border-color: #1e6ef5; color: #fff;
+    }
+
+    /* ── حالة «مفيش صلاحية» ─────────────────────────────────────── */
+    .pxl-state {
+        background: #fff;
+        border: 1px solid #E3E9F0;
+        border-radius: 14px;
+        padding: 46px 24px;
+        text-align: center;
+        color: #64748B;
+    }
+
+    .pxl-state-icon {
+        width: 58px; height: 58px; margin: 0 auto 14px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 50%;
+        background: rgba(224, 36, 36, .08); color: #e02424;
+    }
+
+    .pxl-state h3 { font-size: 15px; font-weight: 800; color: #0A1B3B; margin-bottom: 6px; }
+    .pxl-state p  { font-size: 12.5px; }
+    .pxl-state code { font-family: ui-monospace, monospace; font-size: 11.5px; background: #F1F5F9; padding: 1px 5px; border-radius: 5px; }
+
+    /* ── الدايلوج (راس كحلي زي القانون) ─────────────────────────── */
+    .pxl-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1200;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 40px 16px;
+        overflow-y: auto;
+        background: rgba(10, 27, 59, .55);
+        backdrop-filter: blur(3px);
+    }
+
+    .pxl-modal {
+        width: 100%;
+        max-width: 880px;
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 30px 70px -25px rgba(10, 27, 59, .55);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 80px);
+    }
+
+    .pxl-modal-sm { max-width: 560px; }
+
+    .pxl-modal-head {
+        flex: none;
+        display: flex; align-items: center; gap: 12px;
+        padding: 15px 18px;
+        background: linear-gradient(180deg, #0d2654, #0A1B3B);
+        color: #fff;
+    }
+
+    .pxl-modal-head > div { flex: 1; min-width: 0; }
+    .pxl-modal-title { font-size: 14.5px; font-weight: 900; }
+    .pxl-modal-sub { font-size: 11.5px; color: rgba(255, 255, 255, .68); margin-top: 2px; }
+
+    .pxl-modal-x {
+        flex: none;
+        width: 30px; height: 30px;
+        display: inline-flex; align-items: center; justify-content: center;
+        border: 1px solid rgba(255, 255, 255, .25);
+        background: rgba(255, 255, 255, .08); color: #fff;
+        border-radius: 9px; cursor: pointer;
+        transition: background .15s ease;
+    }
+
+    .pxl-modal-x:hover { background: rgba(255, 255, 255, .2); }
+
+    .pxl-modal-body { flex: 1; overflow-y: auto; padding: 16px 18px; }
+
+    .pxl-modal-foot {
+        flex: none;
+        display: flex; align-items: center; gap: 9px;
+        padding: 12px 18px;
+        border-top: 1px solid #EDF1F7;
+        background: #FAFCFF;
+    }
+
+    .pxl-foot-spacer { flex: 1; }
+
+    .pxl-foot-msg { font-size: 11.5px; font-weight: 800; }
+    .pxl-foot-msg.ok  { color: #0e9f6e; }
+    .pxl-foot-msg.err { color: #e02424; }
+
+    /* ── أقسام المحرر ───────────────────────────────────────────── */
+    .pxl-sec { margin-bottom: 18px; }
+    .pxl-sec:last-child { margin-bottom: 0; }
+
+    .pxl-sec-head {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 12.5px; font-weight: 900; color: #0A1B3B;
+        margin-bottom: 11px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #EDF1F7;
+    }
+
+    .pxl-sec-n {
+        width: 20px; height: 20px;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 11px; font-weight: 900; color: #fff;
+        background: #1e6ef5; border-radius: 6px;
+    }
+
+    .pxl-form {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px 14px;
+    }
+
+    .pxl-modal-sm .pxl-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+    .pxl-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .pxl-field-wide { grid-column: 1 / -1; }
+
+    .pxl-label { font-size: 11.5px; font-weight: 800; color: #33475B; }
+    .pxl-req { color: #e02424; }
+
+    .pxl-input {
+        width: 100%;
+        border: 1px solid #D7E1EC;
+        background: #fff;
+        color: #0A1B3B;
+        font-size: 12.5px; font-weight: 600;
+        border-radius: 9px;
+        padding: 8px 10px;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    .pxl-input:focus {
+        outline: none;
+        border-color: #1e6ef5;
+        box-shadow: 0 0 0 3px rgba(30, 110, 245, .12);
+    }
+
+    .pxl-input.pxl-err { border-color: #e02424; box-shadow: 0 0 0 3px rgba(224, 36, 36, .1); }
+
+    .pxl-textarea { resize: vertical; min-height: 54px; line-height: 1.6; }
+
+    .pxl-hint { font-size: 10.5px; color: #8595A8; line-height: 1.5; }
+
+    /* هامش الربح */
+    .pxl-margin {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        padding: 10px 13px;
+        border-radius: 10px;
+        border: 1px solid rgba(14, 159, 110, .25);
+        background: rgba(14, 159, 110, .07);
+    }
+
+    .pxl-margin.down { border-color: rgba(224, 36, 36, .25); background: rgba(224, 36, 36, .06); }
+    .pxl-margin-k { font-size: 11.5px; font-weight: 800; color: #33475B; }
+    .pxl-margin-v { font-size: 15px; font-weight: 900; color: #0e9f6e; }
+    .pxl-margin.down .pxl-margin-v { color: #e02424; }
+
+    /* مفتاح التفعيل */
+    .pxl-switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+    .pxl-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+
+    .pxl-switch-box {
+        flex: none;
+        width: 38px; height: 21px;
+        border-radius: 999px;
+        background: #CBD5E1;
+        position: relative;
+        transition: background .18s ease;
+    }
+
+    .pxl-switch-box::after {
+        content: "";
+        position: absolute;
+        top: 2.5px; inset-inline-start: 3px;
+        width: 16px; height: 16px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(10, 27, 59, .3);
+        transition: transform .18s ease;
+    }
+
+    .pxl-switch input:checked + .pxl-switch-box { background: #0e9f6e; }
+    .pxl-switch input:checked + .pxl-switch-box::after { transform: translateX(-17px); }
+    .pxl-switch input:focus-visible + .pxl-switch-box { box-shadow: 0 0 0 3px rgba(14, 159, 110, .25); }
+
+    .pxl-switch-txt { font-size: 12px; font-weight: 800; color: #33475B; display: flex; flex-direction: column; gap: 1px; }
+    .pxl-switch-txt small { font-size: 10.5px; font-weight: 600; color: #8595A8; }
+
+    /* ── الاستجابة ──────────────────────────────────────────────── */
+    @@media (max-width: 1100px) {
+        .pxl-grid { grid-template-columns: 1fr; }
+        .pxl-rail { position: static; }
+        .pxl-rail-list { max-height: 260px; }
+    }
+
+    @@media (max-width: 768px) {
+        .pxl-form, .pxl-modal-sm .pxl-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .pxl-main-head { padding: 14px; }
+        .pxl-table-wrap { padding: 12px 14px 14px; }
+    }
+
+    @@media (max-width: 560px) {
+        .pxl-backdrop { padding: 0; align-items: stretch; }
+        .pxl-modal { max-width: none; max-height: none; min-height: 100vh; border-radius: 0; }
+        .pxl-form, .pxl-modal-sm .pxl-form { grid-template-columns: 1fr; }
+        .pxl-modal-foot { flex-wrap: wrap; }
+        .pxl-foot-msg { flex: 1 1 100%; }
+        .pxl-btn { flex: 1; }
+    }
+    /* ── بانر الصفحة + مؤشر التحميل ─────────────────────────────── */
+    .fc-fab-svg { display: block; }
+
+    .pxl-banner {
+        display: flex; align-items: center; gap: 10px;
+        margin-bottom: 14px;
+        padding: 11px 14px;
+        border-radius: 11px;
+        font-size: 12.5px; font-weight: 800;
+    }
+
+    .pxl-banner span { flex: 1; min-width: 0; }
+    .pxl-banner.ok  { color: #0e9f6e; background: rgba(14, 159, 110, .08); border: 1px solid rgba(14, 159, 110, .25); }
+    .pxl-banner.err { color: #e02424; background: rgba(224, 36, 36, .07); border: 1px solid rgba(224, 36, 36, .25); }
+
+    .pxl-banner-x {
+        flex: none;
+        width: 24px; height: 24px;
+        display: inline-flex; align-items: center; justify-content: center;
+        border: none; background: transparent; color: inherit;
+        border-radius: 7px; cursor: pointer; opacity: .7;
+    }
+
+    .pxl-banner-x:hover { opacity: 1; background: rgba(10, 27, 59, .06); }
+
+    .pxl-load {
+        display: flex; align-items: center; gap: 10px;
+        margin-bottom: 14px;
+        padding: 11px 14px;
+        border: 1px solid #E3E9F0;
+        background: #fff;
+        border-radius: 11px;
+        font-size: 12.5px; font-weight: 800; color: #64748B;
+    }
+
+    .pxl-load-bar {
+        flex: none;
+        width: 34px; height: 4px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #1e6ef5 0%, #1e6ef5 40%, #D7E1EC 40%, #D7E1EC 100%);
+        background-size: 200% 100%;
+        animation: pxl-load-slide 1.1s linear infinite;
+    }
+
+    @@keyframes pxl-load-slide {
+        from { background-position: 0% 0; }
+        to   { background-position: -200% 0; }
     }
 </style>
 
@@ -1533,7 +1402,6 @@
     private ListForm _lf = new();
     private RuleForm _rf = new();
     private bool _fabOpen;
-    private int _activeTab;
     private bool _triedSave;
     private bool _loading;
 
@@ -1554,7 +1422,8 @@
     public class Rule
     {
         public long CustomerPriceRuleId { get; set; }
-        public int CustomerId { get; set; }
+        /* #83 — null = تعريفة عامة */
+        public int? CustomerId { get; set; }
         public string CustomerName { get; set; } = "";
         public int? PriceListId { get; set; }
         public string? PriceListName { get; set; }
@@ -1709,7 +1578,7 @@
         _ruleEditId = null;
         _rf = new RuleForm { ValidFrom = DateTime.Now.ToString("yyyy-MM-dd") };
         _msg = null; _ruleOpen = true;
-        _triedSave = false; _activeTab = 0;
+        _triedSave = false;
     }
 
     private void EditRule(Rule r)
@@ -1717,7 +1586,7 @@
         _ruleEditId = r.CustomerPriceRuleId;
         _rf = new RuleForm
         {
-            CustomerId      = r.CustomerId,
+            CustomerId      = r.CustomerId ?? 0,
             ServiceId       = r.ServiceId,
             PortId          = r.PortId,
             DestinationId   = r.DestinationId,
@@ -1734,7 +1603,7 @@
             Notes           = r.Notes
         };
         _msg = null; _ruleOpen = true;
-        _triedSave = false; _activeTab = 0;
+        _triedSave = false;
     }
 
     private async Task SaveRuleAsync()
@@ -1742,20 +1611,16 @@
         if (_saving || _sel is null) return;
         _triedSave = true;
 
-        if (_rf.CustomerId <= 0)
-        {
-            _ok = false; _msg = "يرجى تحديد العميل أولاً";
-            _activeTab = 0; return;
-        }
+        /* #83 — العميل بقى اختياري (بدون عميل = تعريفة عامة) */
         if (_rf.ServiceId <= 0)
         {
             _ok = false; _msg = "يرجى تحديد الخدمة المطلوبة";
-            _activeTab = 0; return;
+            return;
         }
         if (string.IsNullOrWhiteSpace(_rf.ValidFrom))
         {
             _ok = false; _msg = "تاريخ بداية سريان القاعدة مطلوب";
-            _activeTab = 2; return;
+            return;
         }
 
         _saving = true; _msg = null;
@@ -1763,7 +1628,8 @@
         {
             var payload = new
             {
-                customerId = _rf.CustomerId, priceListId = _sel, serviceId = _rf.ServiceId,
+                customerId = _rf.CustomerId > 0 ? _rf.CustomerId : (int?)null,
+                priceListId = _sel, serviceId = _rf.ServiceId,
                 portId = _rf.PortId, destinationId = _rf.DestinationId, tahteeqPortId = _rf.TahteeqPortId,
                 containerTypeId = _rf.ContainerTypeId, tripTypeId = _rf.TripTypeId,
                 unitPrice = _rf.UnitPrice, costPrice = _rf.CostPrice, taxRateId = _rf.TaxRateId,
@@ -1800,7 +1666,6 @@
     }
 
     /* ── Helpers ── */
-    private string RowCls(Lst l) => _sel == l.PriceListId ? "fc-row-sel" : "";
 
     private static bool IsLive(Lst l)
     {
@@ -1813,6 +1678,7 @@
         var d = new List<string>();
         if (!string.IsNullOrWhiteSpace(r.PortName))          d.Add(r.PortName!);
         if (!string.IsNullOrWhiteSpace(r.DestinationName))   d.Add(r.DestinationName!);
+        if (!string.IsNullOrWhiteSpace(r.TahteeqPortName))   d.Add("تعتيق: " + r.TahteeqPortName!);
         if (!string.IsNullOrWhiteSpace(r.ContainerTypeName)) d.Add(r.ContainerTypeName!);
         if (!string.IsNullOrWhiteSpace(r.TripTypeName))      d.Add(r.TripTypeName!);
         return d.Count == 0 ? "قاعدة عامة (أي بعد تشغيلي)" : string.Join(" · ", d);

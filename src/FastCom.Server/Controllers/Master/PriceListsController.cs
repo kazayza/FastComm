@@ -151,7 +151,8 @@ public class PriceListsController : ControllerBase
     //  قواعد أسعار العملاء  CustomerPriceRules
     // ══════════════════════════════════════════════════════════════
 
-    public record RuleItem(long CustomerPriceRuleId, int CustomerId, string CustomerName,
+    /* #83 — CustomerId = null ⇒ تعريفة عامة (مش مرتبطة بعميل) */
+    public record RuleItem(long CustomerPriceRuleId, int? CustomerId, string CustomerName,
         int? PriceListId, string? PriceListName, int ServiceId, string ServiceName,
         int? PortId, string? PortName, int? DestinationId, string? DestinationName,
         int? TahteeqPortId, string? TahteeqPortName,
@@ -160,7 +161,7 @@ public class PriceListsController : ControllerBase
         DateOnly ValidFrom, DateOnly? ValidTo, int Priority, bool IsActive, string? Notes,
         int Specificity);
 
-    public record RuleUpsert(int CustomerId, int? PriceListId, int ServiceId,
+    public record RuleUpsert(int? CustomerId, int? PriceListId, int ServiceId,
         int? PortId, int? DestinationId, int? TahteeqPortId, int? ContainerTypeId, int? TripTypeId,
         decimal UnitPrice, decimal? CostPrice, int? TaxRateId,
         string ValidFrom, string? ValidTo, int Priority, bool IsActive, string? Notes);
@@ -264,7 +265,7 @@ public class PriceListsController : ControllerBase
         r.UpdatedBy       = UserId(User);
 
         await _db.SaveChangesAsync(ct);
-        return Ok(new { message = "✅ اتعدّلت قاعدة السعر" });
+        return Ok(new { message = "✅ تم تحديث قاعدة السعر" });
     }
 
     /// <summary>حذف ناعم — القاعدة بتبطّل فورًا من `price-suggest`.</summary>
@@ -279,7 +280,7 @@ public class PriceListsController : ControllerBase
         r.UpdatedAt = DateTime.UtcNow;
         r.UpdatedBy = UserId(User);
         await _db.SaveChangesAsync(ct);
-        return Ok(new { message = "✅ اتحذفت قاعدة السعر — مبقتش بتتطبق" });
+        return Ok(new { message = "✅ تم حذف قاعدة السعر " });
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -293,8 +294,9 @@ public class PriceListsController : ControllerBase
         [FromQuery] int? tahteeqPortId, [FromQuery] int? containerTypeId, [FromQuery] int? tripTypeId,
         [FromQuery] string? date, CancellationToken ct)
     {
-        if (customerId <= 0 || serviceId <= 0)
-            return BadRequest(new { message = "العميل والخدمة مطلوبين" });
+        /* #83 — الخدمة مطلوبة. العميل اختياري: صفر = معاينة التعريفة العامة */
+        if (serviceId <= 0)
+            return BadRequest(new { message = "الخدمة مطلوبة" });
 
         var on = DateOnly.TryParse(date, out var d) ? d : DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -307,9 +309,10 @@ public class PriceListsController : ControllerBase
             (list.ValidTo != null && list.ValidTo < on))
             return Ok(new { matched = false, rule = (RuleItem?)null, checked_ = 0 });
 
+        /* #83 — بنقارن بقواعد العميل **والتعريفة العامة** — وقاعدة العميل تكسب دايمًا */
         var q = _db.CustomerPriceRules.AsNoTracking()
             .Where(r => !r.IsDeleted && r.IsActive && r.PriceListId == id &&
-                        r.CustomerId == customerId && r.ServiceId == serviceId &&
+                        (r.CustomerId == customerId || r.CustomerId == null) && r.ServiceId == serviceId &&
                         r.ValidFrom <= on && (r.ValidTo == null || r.ValidTo >= on));
         var all = await ProjectAsync(q, ct);
 
@@ -321,7 +324,8 @@ public class PriceListsController : ControllerBase
             .Where(r => r.TahteeqPortId == null || (tahteeqPortId != null && r.TahteeqPortId == tahteeqPortId))
             .Where(r => r.TripTypeId == null || (tripTypeId != null && r.TripTypeId == tripTypeId))
             .Where(r => r.ContainerTypeId == null || (containerTypeId != null && r.ContainerTypeId == containerTypeId))
-            .OrderByDescending(r => r.Specificity)
+            .OrderByDescending(r => r.CustomerId is not null)
+            .ThenByDescending(r => r.Specificity)
             .ThenBy(r => r.Priority)
             .ThenByDescending(r => r.ValidFrom)
             .FirstOrDefault();
@@ -345,7 +349,8 @@ public class PriceListsController : ControllerBase
         var raw = await q.ToListAsync(ct);
         if (raw.Count == 0) return new();
 
-        var custIds = raw.Select(r => r.CustomerId).Distinct().ToList();
+        /* #83 — التعريفة العامة ملهاش عميل ⇒ ما ندوّرش على null */
+        var custIds = raw.Where(r => r.CustomerId != null).Select(r => r.CustomerId!.Value).Distinct().ToList();
         var svcIds  = raw.Select(r => r.ServiceId).Distinct().ToList();
         var listIds = raw.Where(r => r.PriceListId != null).Select(r => r.PriceListId!.Value).Distinct().ToList();
         var portIds = raw.Where(r => r.PortId != null).Select(r => r.PortId!.Value).Distinct().ToList();
@@ -380,7 +385,8 @@ public class PriceListsController : ControllerBase
                      + (r.TripTypeId is not null ? 1 : 0) + (r.ContainerTypeId is not null ? 1 : 0);
             return new RuleItem(
                 r.CustomerPriceRuleId, r.CustomerId,
-                cust.TryGetValue(r.CustomerId, out var cn) ? cn : "?",
+                r.CustomerId is null ? "تعريفة عامة"
+                    : cust.TryGetValue(r.CustomerId.Value, out var cn) ? cn : "?",
                 r.PriceListId,
                 r.PriceListId is not null && lst.TryGetValue(r.PriceListId.Value, out var ln) ? ln : null,
                 r.ServiceId,
@@ -398,7 +404,11 @@ public class PriceListsController : ControllerBase
     private async Task<string?> ValidateRuleAsync(RuleUpsert? r, CancellationToken ct, long? cur = null)
     {
         if (r is null) return "البيانات غير كاملة";
-        if (r.CustomerId <= 0) return "العميل مطلوب";
+        /* #83 — العميل اختياري: null = تعريفة عامة بتطبق على كل العملاء
+           🔴 #96 — كان `is <= 0` بيرفض null، فـ«بدون عميل (تعريفة عامة)» اللي
+           الـ UI بيوفره كان **مستحيل يتحفظ** (رسالة «العميل غير صالح»).
+           null = تعريفة عامة مقصودة · صفر أو سالب = غلط */
+        if (r.CustomerId is < 0) return "العميل غير صالح";
         if (r.ServiceId <= 0)  return "الخدمة مطلوبة";
         if (r.UnitPrice < 0)   return "السعر ماينفعش يكون سالب";
         if (r.CostPrice is < 0) return "التكلفة ماينفعش تكون سالب";
@@ -412,7 +422,7 @@ public class PriceListsController : ControllerBase
             if (to < from) return "«ساري لغاية» قبل «ساري من»";
         }
 
-        if (!await _db.Customers.AnyAsync(c => c.CustomerId == r.CustomerId && !c.IsDeleted, ct))
+        if (r.CustomerId is int cid && !await _db.Customers.AnyAsync(c => c.CustomerId == cid && !c.IsDeleted, ct))
             return "العميل غير موجود";
         if (!await _db.Services.AnyAsync(s => s.ServiceId == r.ServiceId && !s.IsDeleted, ct))
             return "الخدمة غير موجودة";

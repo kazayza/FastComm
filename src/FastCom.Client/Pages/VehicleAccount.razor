@@ -384,6 +384,27 @@
                                             }
                                         </div>
                                     }
+                                    @* #105 — إلغاء دفعة نولون (مركبة أو مورد).
+                                       تأكيد في نفس المكان — مافيش مودال جديد. *@
+                                    @if (CanVoid(l))
+                                    {
+                                        @if (_voidRef == l.Ref)
+                                        {
+                                            <div class="va-void-confirm">
+                                                <button type="button" class="va-void-yes" disabled="@_voiding"
+                                                        @onclick="() => ConfirmVoid(l.Ref)">
+                                                    @(_voiding ? "جاري الإلغاء..." : "تأكيد الإلغاء")
+                                                </button>
+                                                <button type="button" class="va-void-no"
+                                                        @onclick="() => _voidRef = null">تراجع</button>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="va-void-btn" @onclick="() => AskVoid(l)"
+                                                    title="إلغاء الدفعة وإرجاع المبلغ إلى الخزينة">إلغاء الدفعة</button>
+                                        }
+                                    }
                                     else
                                     {
                                         <span class="td-muted">—</span>
@@ -459,7 +480,10 @@
                 </div>
                 <div class="svc-head-text">
                     <div class="svc-head-title">تسجيل دفعة مالية جديدة</div>
-                    <div class="svc-head-sub">تحصيل مبلغ من حساب المركبة <strong>@_stmt?.PlateNumber</strong></div>
+                    <div class="svc-head-sub">
+                        @(_selectedSupplierId > 0 ? "دفعة نولون على حساب المورد" : "تحصيل مبلغ من حساب المركبة")
+                        <strong>@PayTarget</strong>
+                    </div>
                 </div>
                 <button class="svc-head-close" @onclick="() => _payOpen = false" aria-label="إغلاق" type="button">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -475,7 +499,7 @@
                 {
                     <div class="svc-sum-strip">
                         <div class="svc-sum-item">
-                            <span class="svc-sum-label">المتبقي على السيارة</span>
+                            <span class="svc-sum-label">@(_selectedSupplierId > 0 ? "المتبقي على المورد (كل مركباته)" : "المتبقي على السيارة")</span>
                             <span class="svc-sum-val sum-amber">@Money(_stmt.Closing) <small>ج.م</small></span>
                         </div>
                         <div class="svc-sum-div" aria-hidden="true"></div>
@@ -875,6 +899,27 @@
     }
     .va-ref-stack { display: flex; flex-direction: column; gap: 3px; align-items: center; }
     .va-ref-chip.ref-booking { background: #eef6ff; color: var(--fc-blue); border-color: #cfe3fb; }
+
+    /* ── #105 إلغاء دفعة نولون ── */
+    .va-void-btn {
+        margin-top: 5px; padding: 3px 9px;
+        font-size: 11px; font-weight: 800; font-family: inherit;
+        color: #b42318; background: #fef3f2;
+        border: 1px solid #fbcfc9; border-radius: 7px;
+        cursor: pointer; transition: background .15s, border-color .15s;
+    }
+    .va-void-btn:hover { background: #fee4e2; border-color: #f79b91; }
+    .va-void-confirm {
+        display: flex; flex-direction: column; gap: 4px;
+        margin-top: 5px; align-items: center;
+    }
+    .va-void-yes, .va-void-no {
+        padding: 3px 9px; font-size: 11px; font-weight: 800; font-family: inherit;
+        border-radius: 7px; cursor: pointer; white-space: nowrap;
+    }
+    .va-void-yes { color: #fff; background: #e02424; border: 1px solid #c81e1e; }
+    .va-void-yes:disabled { opacity: .6; cursor: default; }
+    .va-void-no  { color: #475467; background: #fff; border: 1px solid #dde5f0; }
     .va-kind-chip.kind-custodyfreight { background: #eaf7ef; color: #15803d; border-color: #bfe8cd; }
     .va-kind-chip.kind-custodyroad { background: #fff8e6; color: #9a6d08; border-color: #f0d898; }
     .va-total-label {
@@ -1095,9 +1140,11 @@
     private void OpenPayment()
     {
         _fabOpen = false;
-        if (_selectedVehicleId <= 0)
+        /* #105 — في وضع الكشف المجمع الدفعة بتتسجل على **المورد**، وفي وضع المركبة
+           بتتسجل على **المركبة**. الاتنين بيظهروا في كشف المورد المجمع. */
+        if (_selectedSupplierId <= 0 && _selectedVehicleId <= 0)
         {
-            Snackbar.Add("اختر مركبة واحدة أولاً لتسجيل دفعة عليها", Severity.Info);
+            Snackbar.Add("اختر مركبة — أو مورد في الكشف المجمع — لتسجيل دفعة", Severity.Info);
             return;
         }
         _payAmount = 0;
@@ -1106,6 +1153,47 @@
         if (_payMethods.Count == 0) _ = LoadPayMethods();
         _payDesc = null;
         _payOpen = true;
+    }
+
+    /* ── #105 — المستفيد في دايلوج الدفعة ── */
+    private string PayTarget => _selectedSupplierId > 0
+        ? (_suppliers.FirstOrDefault(x => x.Id == _selectedSupplierId)?.Label
+           ?? _stmt?.PlateNumber ?? "—")
+        : (_stmt?.PlateNumber ?? "—");
+
+    /* ── #105 — إلغاء دفعة نولون ──
+       🔴 بنلغي بس `VEHPAY:` و`SPAYV:` — أي مرجع تاني بيتلغى من شاشته الأصلية
+       عشان مستنده (فاتورة/مصروف/عهدة) ما يفضلش قائم بعد ما الرصيد ينزل. */
+    private string? _voidRef;
+    private bool    _voiding;
+
+    private static bool CanVoid(Line l) =>
+        l.Credit > 0 &&
+        (l.Ref.StartsWith("VEHPAY:") || l.Ref.StartsWith("SPAYV:"));
+
+    private void AskVoid(Line l) => _voidRef = _voidRef == l.Ref ? null : l.Ref;
+
+    private async Task ConfirmVoid(string refNo)
+    {
+        _voiding = true;
+        try
+        {
+            var res = await Http.PostAsJsonAsync("api/vehicle-accounts/payment/void",
+                                                 new { reference = refNo });
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add("اتلغت الدفعة ورجع المبلغ للخزينة", Severity.Success);
+                _voidRef = null;
+                await LoadAsync();
+            }
+            else
+            {
+                var err = await res.Content.ReadAsStringAsync();
+                Snackbar.Add(err, Severity.Error);
+            }
+        }
+        catch { Snackbar.Add("تعذر إلغاء الدفعة — يرجى المحاولة مرة أخرى", Severity.Error); }
+        finally { _voiding = false; }
     }
 
     private async Task SavePayment()
@@ -1118,9 +1206,13 @@
         _saving = true;
         try
         {
+            /* #105 — واحد بس من الاتنين: مورد **أو** مركبة (مش الاتنين — الكشف المجمع
+               بيحسب الحركة مرتين لو اتسجلت بالمفتاحين) */
+            var toSupplier = _selectedSupplierId > 0;
             var res = await Http.PostAsJsonAsync("api/vehicle-accounts/payment", new
             {
-                vehicleId = _selectedVehicleId,
+                vehicleId  = toSupplier ? 0 : _selectedVehicleId,
+                supplierId = toSupplier ? _selectedSupplierId : 0,
                 txDate = _payDate?.ToString("yyyy-MM-dd"),
                 amount = _payAmount,
                 paymentMethodId = _payMethodId,

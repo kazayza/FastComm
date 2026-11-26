@@ -244,6 +244,34 @@
             }
             else
             {
+                @* #88 — طابور طلبات التمويل المنتظرة *@
+                @if (CanApprove && _pending.Any())
+                {
+                    <div class="cu-fund-panel">
+                        <div class="cu-fund-head">
+                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M13.73 21a2 2 0 01-3.46 0" stroke-linecap="round"/>
+                            </svg>
+                            <strong>طلبات تمويل منتظرة — @_pending.Count</strong>
+                        </div>
+                        @foreach (var r in _pending)
+                        {
+                            <div class="cu-fund-row">
+                                <span class="cu-fund-cust">@r.CustodyNumber</span>
+                                <span class="cu-fund-who">@r.OwnerName</span>
+                                <span class="cu-fund-amt">@Money(r.RequestedAmount) ج.م</span>
+                                <span class="cu-fund-by">من @r.RequestedByName · @r.RequestedAt.ToString("MM-dd HH:mm")</span>
+                                <span class="cu-fund-reason">@(string.IsNullOrWhiteSpace(r.Reason) ? "—" : r.Reason)</span>
+                                <span class="cu-fund-act">
+                                    <button type="button" class="cu-fund-btn ok"  @onclick="() => OpenFundApprove(r)">موافقة</button>
+                                    <button type="button" class="cu-fund-btn no"  @onclick="() => OpenFundReject(r)">رفض</button>
+                                </span>
+                            </div>
+                        }
+                    </div>
+                }
+
                 <div class="cu-table-wrap">
                     <table class="cu-table" aria-label="قائمة العهد">
                         <thead>
@@ -494,6 +522,21 @@
                                                          fill="none" stroke="currentColor" stroke-width="2">
                                                         <path d="M22 11.08V12a10 10 0 11-5.93-9.14" stroke-linecap="round"/>
                                                         <path d="M22 4L12 14.01l-3-3" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                </button>
+                                            }
+
+                                            @* #88 — طلب تمويل زيادة على العهدة *@
+                                            @if (c.Status is "Open" or "PartiallySettled" && CanSettle)
+                                            {
+                                                <button class="cu-act-btn act-fund"
+                                                        @onclick="() => OpenFundRequest(c)"
+                                                        title="طلب مبلغ زيادة على العهدة"
+                                                        aria-label="طلب تمويل @c.CustodyNumber">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14"
+                                                         fill="none" stroke="currentColor" stroke-width="2">
+                                                        <circle cx="12" cy="12" r="9"/>
+                                                        <path d="M12 8v8M8 12h8" stroke-linecap="round"/>
                                                     </svg>
                                                 </button>
                                             }
@@ -1749,6 +1792,173 @@
 }
 
 
+@* ═══════════════ #88 — طلب تمويل العهدة ═══════════════ *@
+@if (_fundOpen && _fundTarget is not null)
+{
+    <div class="cu-modal-backdrop" @onclick="CloseFundRequest"
+         role="dialog" aria-modal="true" aria-labelledby="cuFundTitle">
+        <div class="cu-modal cu-modal-sm" @onclick:stopPropagation="true">
+            <div class="cu-modal-head">
+                <div class="cu-modal-icon tx-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="cu-modal-title" id="cuFundTitle">طلب تمويل @_fundTarget.CustodyNumber</div>
+                    <div class="cu-modal-sub">باقي العهدة: <strong>@Money(_fundTarget.Remaining) ج.م</strong></div>
+                </div>
+                <button class="cu-modal-close" @onclick="CloseFundRequest" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            @if (_msg is not null)
+            {
+                <div class="cu-modal-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                    <span>@_msg</span>
+                    <button @onclick="() => _msg = null">✕</button>
+                </div>
+            }
+
+            <div class="cu-modal-body">
+                <div class="cu-fund-note">
+                    الطلب بيروح لمدير النظام — ولو وافق، بيتحوّل المبلغ من الخزينة الرئيسية
+                    لخزينتك وبيزود مبلغ العهدة بنفس القيمة.
+                </div>
+                <div class="cu-field">
+                    <label class="cu-label" for="cuFundAmount">المبلغ المطلوب <span class="cu-req">*</span></label>
+                    <input type="number" id="cuFundAmount" class="cu-input" min="1" step="0.01" @bind="_fundAmount" />
+                </div>
+                <div class="cu-field">
+                    <label class="cu-label" for="cuFundReason">السبب</label>
+                    <textarea id="cuFundReason" class="cu-input cu-textarea" rows="3" maxlength="500"
+                              @bind="_fundReason" placeholder="مثال: مصاريف نقل إضافية على عملية ..."></textarea>
+                </div>
+            </div>
+
+            <div class="cu-modal-foot">
+                <button class="cu-modal-save" @onclick="SubmitFundRequestAsync" disabled="@_saving">
+                    @(_saving ? "جاري الإرسال..." : "إرسال الطلب")
+                </button>
+                <button class="cu-modal-cancel" @onclick="CloseFundRequest">إلغاء</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ═══════════════ #88 — اعتماد طلب التمويل ═══════════════ *@
+@if (_fundAppOpen && _fundAppTarget is not null)
+{
+    <div class="cu-modal-backdrop" @onclick="CloseFundApprove"
+         role="dialog" aria-modal="true" aria-labelledby="cuFundAppTitle">
+        <div class="cu-modal cu-modal-sm" @onclick:stopPropagation="true">
+            <div class="cu-modal-head">
+                <div class="cu-modal-icon tx-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="cu-modal-title" id="cuFundAppTitle">اعتماد تمويل @_fundAppTarget.CustodyNumber</div>
+                    <div class="cu-modal-sub">الموظف: <strong>@_fundAppTarget.OwnerName</strong> · مطلوب @_fundAppTarget.RequestedAmount.ToString("N2") ج.م</div>
+                </div>
+                <button class="cu-modal-close" @onclick="CloseFundApprove" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            @if (_msg is not null)
+            {
+                <div class="cu-modal-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                    <span>@_msg</span>
+                    <button @onclick="() => _msg = null">✕</button>
+                </div>
+            }
+
+            <div class="cu-modal-body">
+                <div class="cu-fund-note">
+                    الموافقة بتعمل حاجتين في معاملة واحدة: تحويل من الخزينة الرئيسية لخزينة الموظف،
+                    وزيادة مبلغ العهدة بنفس القيمة. تقدر تعتمد مبلغ أقل من المطلوب.
+                </div>
+                <div class="cu-fund-sum">
+                    <div><span>مبلغ العهدة حاليًا</span><strong>@Money(_fundAppTarget.CustodyIssued) ج.م</strong></div>
+                    <div><span>الباقي مع الموظف</span><strong>@Money(_fundAppTarget.CustodyRemaining) ج.م</strong></div>
+                    <div><span>المطلوب</span><strong>@Money(_fundAppTarget.RequestedAmount) ج.م</strong></div>
+                </div>
+                <div class="cu-field">
+                    <label class="cu-label" for="cuFundAppAmount">المبلغ المعتمد <span class="cu-req">*</span></label>
+                    <input type="number" id="cuFundAppAmount" class="cu-input" min="1" step="0.01" @bind="_fundAppAmount" />
+                </div>
+                <div class="cu-field">
+                    <label class="cu-label" for="cuFundAppNotes">ملاحظات</label>
+                    <textarea id="cuFundAppNotes" class="cu-input cu-textarea" rows="2" maxlength="500" @bind="_fundAppNotes"></textarea>
+                </div>
+            </div>
+
+            <div class="cu-modal-foot">
+                <button class="cu-modal-save" @onclick="SubmitFundApproveAsync" disabled="@_saving">
+                    @(_saving ? "جاري الاعتماد..." : "اعتماد وتحويل")
+                </button>
+                <button class="cu-modal-cancel" @onclick="CloseFundApprove">إلغاء</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ═══════════════ #88 — رفض طلب التمويل ═══════════════ *@
+@if (_fundRejOpen && _fundRejTarget is not null)
+{
+    <div class="cu-modal-backdrop" @onclick="CloseFundReject"
+         role="dialog" aria-modal="true" aria-labelledby="cuFundRejTitle">
+        <div class="cu-modal cu-modal-sm" @onclick:stopPropagation="true">
+            <div class="cu-modal-head">
+                <div class="cu-modal-icon del-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="cu-modal-title" id="cuFundRejTitle">رفض طلب تمويل @_fundRejTarget.CustodyNumber</div>
+                    <div class="cu-modal-sub">مطلوب @_fundRejTarget.RequestedAmount.ToString("N2") ج.م</div>
+                </div>
+                <button class="cu-modal-close" @onclick="CloseFundReject" aria-label="إغلاق">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            @if (_msg is not null)
+            {
+                <div class="cu-modal-banner @(_ok ? "banner-success" : "banner-error")" role="alert">
+                    <span>@_msg</span>
+                    <button @onclick="() => _msg = null">✕</button>
+                </div>
+            }
+
+            <div class="cu-modal-body">
+                <div class="cu-field">
+                    <label class="cu-label" for="cuFundRejNotes">سبب الرفض</label>
+                    <textarea id="cuFundRejNotes" class="cu-input cu-textarea" rows="3" maxlength="500"
+                              @bind="_fundRejNotes" placeholder="هيظهر للموظف في الإشعار"></textarea>
+                </div>
+            </div>
+
+            <div class="cu-modal-foot">
+                <button class="cu-modal-save del-save" @onclick="SubmitFundRejectAsync" disabled="@_saving">
+                    @(_saving ? "جاري الرفض..." : "رفض الطلب")
+                </button>
+                <button class="cu-modal-cancel" @onclick="CloseFundReject">إلغاء</button>
+            </div>
+        </div>
+    </div>
+}
+
 @* ═══════════════════════════════════════════
    CSS
 ═══════════════════════════════════════════ *@
@@ -2432,6 +2642,98 @@
         max-height: 92vh; overflow-y: auto;
     }
     .cu-modal-sm { max-width: 460px; }
+
+    /* ══════ #88 — طلبات تمويل العهدة ══════ */
+    .act-fund { color: #0B56DF; }
+    .act-fund:hover { background: rgba(30, 110, 245, .1); border-color: #b9d0fb; }
+
+    .cu-fund-panel {
+        margin: 0 0 14px;
+        border: 1px solid rgba(232, 163, 23, .35);
+        background: rgba(232, 163, 23, .06);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .cu-fund-head {
+        display: flex; align-items: center; gap: 8px;
+        padding: 9px 13px;
+        font-size: 12.5px; color: #8a5a00;
+        border-bottom: 1px solid rgba(232, 163, 23, .25);
+    }
+
+    .cu-fund-row {
+        display: grid;
+        grid-template-columns: 120px 150px 110px 150px minmax(0, 1fr) 132px;
+        gap: 10px; align-items: center;
+        padding: 9px 13px;
+        font-size: 12px;
+        border-bottom: 1px solid rgba(232, 163, 23, .14);
+    }
+
+    .cu-fund-row:last-child { border-bottom: none; }
+
+    .cu-fund-cust { font-weight: 800; color: #0A1B3B; font-family: ui-monospace, monospace; }
+    .cu-fund-who  { font-weight: 700; color: #33475B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cu-fund-amt  { font-weight: 900; color: #0B56DF; white-space: nowrap; }
+    .cu-fund-by   { color: #8595A8; font-size: 11px; white-space: nowrap; }
+    .cu-fund-reason { color: #64748B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cu-fund-act  { display: inline-flex; gap: 6px; justify-self: end; }
+
+    .cu-fund-btn {
+        border: 1px solid #D7E1EC; background: #fff; color: #33475B;
+        font-size: 11.5px; font-weight: 800;
+        border-radius: 8px; padding: 4px 11px; cursor: pointer;
+        transition: background .15s ease, color .15s ease, border-color .15s ease;
+    }
+
+    .cu-fund-btn.ok:hover { background: #0e9f6e; border-color: #0e9f6e; color: #fff; }
+    .cu-fund-btn.no:hover { background: #e02424; border-color: #e02424; color: #fff; }
+
+    .cu-fund-note {
+        font-size: 11.5px; line-height: 1.7; color: #33475B;
+        background: rgba(30, 110, 245, .05);
+        border: 1px solid rgba(30, 110, 245, .2);
+        border-inline-start: 3px solid #1e6ef5;
+        border-radius: 9px; padding: 9px 11px; margin-bottom: 13px;
+    }
+
+    .cu-fund-sum {
+        display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;
+        margin-bottom: 13px;
+    }
+
+    .cu-fund-sum > div {
+        background: #F7FAFD; border: 1px solid #E3E9F0; border-radius: 10px;
+        padding: 8px 10px; display: flex; flex-direction: column; gap: 3px;
+    }
+
+    .cu-fund-sum span  { font-size: 10.5px; font-weight: 700; color: #8595A8; }
+    .cu-fund-sum strong { font-size: 13px; font-weight: 900; color: #0A1B3B; }
+
+    .cu-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+    .cu-label { font-size: 11.5px; font-weight: 800; color: #33475B; }
+    .cu-req   { color: #e02424; }
+
+    .cu-input {
+        width: 100%; box-sizing: border-box;
+        border: 1px solid #D7E1EC; background: #fff; color: #0A1B3B;
+        font-size: 12.5px; font-weight: 600;
+        border-radius: 9px; padding: 8px 10px;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    .cu-input:focus { outline: none; border-color: #1e6ef5; box-shadow: 0 0 0 3px rgba(30, 110, 245, .12); }
+    .cu-textarea { resize: vertical; min-height: 58px; line-height: 1.65; font-family: inherit; }
+
+    .cu-modal-icon.del-icon { background: rgba(224, 36, 36, .1); color: #e02424; }
+    .cu-modal-save.del-save { background: linear-gradient(180deg, #e02424, #c81e1e); }
+
+    @@media (max-width: 900px) {
+        .cu-fund-row { grid-template-columns: 1fr 1fr; gap: 6px; }
+        .cu-fund-reason { grid-column: 1 / -1; white-space: normal; }
+        .cu-fund-act { grid-column: 1 / -1; justify-self: start; }
+    }
     .cu-modal-xl { max-width: 760px; }
 
     @@keyframes cu-modal-in {
@@ -3611,6 +3913,147 @@
         try   { _items = await Http.GetFromJsonAsync<List<Item>>("api/custodies?take=300") ?? new(); }
         catch (Exception ex) { Snackbar.Add("فشل التحميل: " + ex.Message, Severity.Error); }
         finally { _loading = false; }
+        await LoadPendingAsync();          /* #88 — طابور طلبات التمويل */
+    }
+
+    /* ═══════════ #88 — طلبات تمويل العهدة ═══════════ */
+
+    public class FundReq
+    {
+        public long     FundRequestId      { get; set; }
+        public long     CustodyId          { get; set; }
+        public string   CustodyNumber      { get; set; } = "";
+        public string   OwnerName          { get; set; } = "";
+        public decimal  CustodyIssued      { get; set; }
+        public decimal  CustodyRemaining   { get; set; }
+        public string   CustodyStatus      { get; set; } = "";
+        public decimal  RequestedAmount    { get; set; }
+        public string?  Reason             { get; set; }
+        public string   Status             { get; set; } = "";
+        public decimal? ApprovedAmount     { get; set; }
+        public int      RequestedBy        { get; set; }
+        public string   RequestedByName    { get; set; } = "";
+        public DateTime RequestedAt        { get; set; }
+        public int?     DecidedBy          { get; set; }
+        public string?  DecidedByName      { get; set; }
+        public DateTime? DecidedAt         { get; set; }
+        public string?  DecisionNotes      { get; set; }
+        public long?    TopUpTransactionId { get; set; }
+    }
+
+    private List<FundReq> _pending = new();
+
+    /* طلب (الموظف) */
+    private bool     _fundOpen;
+    private Item?    _fundTarget;
+    private decimal  _fundAmount;
+    private string?  _fundReason;
+
+    /* اعتماد / رفض (مدير النظام) */
+    private bool     _fundAppOpen;
+    private FundReq? _fundAppTarget;
+    private decimal  _fundAppAmount;
+    private string?  _fundAppNotes;
+
+    private bool     _fundRejOpen;
+    private FundReq? _fundRejTarget;
+    private string?  _fundRejNotes;
+
+    private async Task LoadPendingAsync()
+    {
+        if (!CanApprove) { _pending = new(); return; }
+        try { _pending = await Http.GetFromJsonAsync<List<FundReq>>("api/custodies/fund-requests/pending") ?? new(); }
+        catch { _pending = new(); }
+    }
+
+    private void OpenFundRequest(Item c)
+    {
+        _fundTarget = c; _fundAmount = 0; _fundReason = null;
+        _msg = null; _ok = true; _fundOpen = true;
+    }
+
+    private void CloseFundRequest() { _fundOpen = false; _fundTarget = null; _msg = null; }
+
+    private async Task SubmitFundRequestAsync()
+    {
+        if (_fundTarget is null || _saving) return;
+        if (_fundAmount <= 0) { _ok = false; _msg = "اكتب مبلغ صحيح أكبر من صفر"; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var res = await Http.PostAsJsonAsync($"api/custodies/{_fundTarget.CustodyId}/fund-requests",
+                                                 new { amount = _fundAmount, reason = _fundReason?.Trim() });
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(_msg, Severity.Success);
+                CloseFundRequest();
+                await LoadPendingAsync();
+            }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private void OpenFundApprove(FundReq r)
+    {
+        _fundAppTarget = r; _fundAppAmount = r.RequestedAmount; _fundAppNotes = null;
+        _msg = null; _ok = true; _fundAppOpen = true;
+    }
+
+    private void CloseFundApprove() { _fundAppOpen = false; _fundAppTarget = null; _msg = null; }
+
+    private async Task SubmitFundApproveAsync()
+    {
+        if (_fundAppTarget is null || _saving) return;
+        if (_fundAppAmount <= 0) { _ok = false; _msg = "اكتب مبلغ معتمد صحيح"; return; }
+
+        _saving = true; _msg = null;
+        try
+        {
+            var res = await Http.PostAsJsonAsync($"api/custodies/fund-requests/{_fundAppTarget.FundRequestId}/approve",
+                                                 new { approvedAmount = _fundAppAmount, notes = _fundAppNotes?.Trim() });
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(_msg, Severity.Success);
+                CloseFundApprove();
+                await LoadPendingAsync();
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private void OpenFundReject(FundReq r)
+    {
+        _fundRejTarget = r; _fundRejNotes = null;
+        _msg = null; _ok = true; _fundRejOpen = true;
+    }
+
+    private void CloseFundReject() { _fundRejOpen = false; _fundRejTarget = null; _msg = null; }
+
+    private async Task SubmitFundRejectAsync()
+    {
+        if (_fundRejTarget is null || _saving) return;
+
+        _saving = true; _msg = null;
+        try
+        {
+            var res = await Http.PostAsJsonAsync($"api/custodies/fund-requests/{_fundRejTarget.FundRequestId}/reject",
+                                                 new { approvedAmount = (decimal?)null, notes = _fundRejNotes?.Trim() });
+            _msg = await MsgOf(res); _ok = res.IsSuccessStatusCode;
+            if (res.IsSuccessStatusCode)
+            {
+                Snackbar.Add(_msg, Severity.Success);
+                CloseFundReject();
+                await LoadPendingAsync();
+            }
+        }
+        catch (Exception ex) { _ok = false; _msg = "فشل: " + ex.Message; }
+        finally { _saving = false; }
     }
 
     /* ── صرف عهدة ── */

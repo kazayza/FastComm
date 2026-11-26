@@ -71,7 +71,7 @@
                     </div>
                     <div class="rf-sum-card">
                         <div class="rf-sum-k">الحاويات · السعر</div>
-                        <div class="rf-sum-v">@_lines.Sum(l => l.Qty) حاوية · @(_f.UnitPrice?.ToString("N0") ?? "—") ج.م</div>
+                        <div class="rf-sum-v">@_lines.Sum(l => l.Qty) حاوية · @_loadedRevLines.Sum(l => l.Quantity * l.UnitPrice - l.Discount).ToString("N0") ج.م</div>
                     </div>
                 </div>
             }
@@ -120,7 +120,7 @@
                             <div class="btab-icon btab-blue" aria-hidden="true">
                                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                             </div>
-                            <span>بيانات العميل</span>
+                            <span>بيانات العميل والحجز</span>
                         </div>
                     </TabContent>
                     <ChildContent>
@@ -131,7 +131,6 @@
                                 </div>
                                 <div>
                                     <div class="tab-section-title">بيانات العميل</div>
-                                    <div class="tab-section-sub">العميل (حساب الفاتورة) والعميل النهائي وجهة الاتصال والمرجع</div>
                                 </div>
                             </div>
                             @if (!string.IsNullOrWhiteSpace(EndCustomerDisplayText))
@@ -305,53 +304,8 @@
                                     </div>
                                 </div>
 
-                            </div>
-                        </div>
-                    </ChildContent>
-                </MudTabPanel>
 
-
-                @* ══════════════════════════════════════
-                   TAB 2 — بيانات النقل
-                ══════════════════════════════════════ *@
-                <MudTabPanel>
-                    <TabContent>
-                        <div class="btab-label">
-                            <div class="btab-icon btab-green" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" width="15" height="15"
-                                     fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="1" y="3" width="15" height="13" rx="2"/>
-                                    <path d="M16 8h4l3 3v5h-7V8z"/>
-                                    <circle cx="5.5" cy="18.5" r="2.5"/>
-                                    <circle cx="18.5" cy="18.5" r="2.5"/>
-                                </svg>
-                            </div>
-                            <span>بيانات النقل</span>
-                        </div>
-                    </TabContent>
-
-                    <ChildContent>
-                        <div class="tab-section">
-
-                            <div class="tab-section-head">
-                                <div class="tab-section-icon green" aria-hidden="true">
-                                    <svg viewBox="0 0 24 24" width="18" height="18"
-                                         fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="1" y="3" width="15" height="13" rx="2"/>
-                                        <path d="M16 8h4l3 3v5h-7V8z"/>
-                                        <circle cx="5.5" cy="18.5" r="2.5"/>
-                                        <circle cx="18.5" cy="18.5" r="2.5"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="tab-section-title">بيانات النقل</div>
-                                    <div class="tab-section-sub">الخدمة ونوع الرحلة ومسار الشحن</div>
-                                </div>
-                            </div>
-
-                            <div class="bk-form-grid">
-
-                                @* رقم البوكينج الرسمي *@
+                                @* ═══ #82 — منقولة من تاب «بيانات النقل» ═══ *@
                                 <div class="form-field">
                                     <label class="field-label" for="rf-bookingref">
                                         رقم البوكينج الرسمي
@@ -387,8 +341,6 @@
                                         <div class="field-err-msg" role="alert">رقم البوكينج الرسمي مطلوب</div>
                                     }
                                 </div>
-
-                                @* رقم البوليصة (BL) *@
                                 <div class="form-field">
                                     <label class="field-label" for="rf-blnumber">رقم البوليصة (BL)</label>
                                     <div class="field-input-group">
@@ -404,126 +356,6 @@
                                                @bind="_f.BLNumber" />
                                     </div>
                                 </div>
-
-                                @* الخدمة *@
-                                <div class="form-field">
-                                    <label class="field-label" for="rf-service">الخدمة</label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                             width="14" height="14" fill="none"
-                                             stroke="currentColor" stroke-width="2"
-                                             aria-hidden="true">
-                                            <rect x="2" y="7" width="20" height="14" rx="2"/>
-                                            <path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke-linecap="round"/>
-                                        </svg>
-                                        <select id="rf-service"
-                                                class="field-input field-select"
-                                                @bind="_f.ServiceId">
-                                            <option value="">— اختر الخدمة —</option>
-                                            @foreach (var s in _services)
-                                            {
-                                                <option value="@s.Id">@s.Label</option>
-                                            }
-                                        </select>
-                                    </div>
-                                    <div class="field-hint">
-                                        الخدمة المختارة تنتقل تلقائيًا إلى العملية وتُستخدم في اقتراح الأسعار
-                                    </div>
-                                </div>
-
-                                @* نوع الرحلة *@
-                                <div class="form-field">
-                                    <label class="field-label" for="rf-triptype">نوع الرحلة</label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                             width="14" height="14" fill="none"
-                                             stroke="currentColor" stroke-width="2"
-                                             aria-hidden="true">
-                                            <circle cx="12" cy="12" r="10"/>
-                                            <path d="M12 8v4l3 3" stroke-linecap="round"/>
-                                        </svg>
-                                        <select id="rf-triptype"
-                                                class="field-input field-select"
-                                                @bind="_f.TripTypeId">
-                                            <option value="">— اختر —</option>
-                                            @foreach (var t in _tripTypes)
-                                            {
-                                                <option value="@t.Id">@t.Label</option>
-                                            }
-                                        </select>
-                                    </div>
-                                </div>
-
-                                @* من (الميناء) *@
-                                <div class="form-field">
-                                    <label class="field-label" for="rf-port">من (الميناء)</label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                             width="14" height="14" fill="none"
-                                             stroke="currentColor" stroke-width="2"
-                                             aria-hidden="true">
-                                            <circle cx="12" cy="5" r="3"/>
-                                            <path d="M12 22V8M5 12H2a10 10 0 0020 0h-3" stroke-linecap="round"/>
-                                        </svg>
-                                        <select id="rf-port"
-                                                class="field-input field-select"
-                                                @bind="_f.PortId">
-                                            <option value="">— اختر —</option>
-                                            @foreach (var p in _ports)
-                                            {
-                                                <option value="@p.Id">@p.Label</option>
-                                            }
-                                        </select>
-                                    </div>
-                                </div>
-
-                                @* إلى (الجهة) *@
-                                <div class="form-field">
-                                    <label class="field-label" for="rf-dest">إلى (الجهة)</label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                             width="14" height="14" fill="none"
-                                             stroke="currentColor" stroke-width="2"
-                                             aria-hidden="true">
-                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
-                                            <circle cx="12" cy="10" r="3"/>
-                                        </svg>
-                                        <select id="rf-dest"
-                                                class="field-input field-select"
-                                                @bind="_f.DestinationId">
-                                            <option value="">— اختر —</option>
-                                            @foreach (var p in _destinations)
-                                            {
-                                                <option value="@p.Id">@p.Label</option>
-                                            }
-                                        </select>
-                                    </div>
-                                </div>
-
-                                @* التعتيق (الميناء النهائي) *@
-                                <div class="form-field">
-                                    <label class="field-label" for="rf-tahteeq">التعتيق (الميناء النهائي)</label>
-                                    <div class="field-select-wrap">
-                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                             width="14" height="14" fill="none"
-                                             stroke="currentColor" stroke-width="2"
-                                             aria-hidden="true">
-                                            <circle cx="12" cy="5" r="3"/>
-                                            <path d="M12 22V8M5 12H2a10 10 0 0020 0h-3" stroke-linecap="round"/>
-                                        </svg>
-                                        <select id="rf-tahteeq"
-                                                class="field-input field-select"
-                                                @bind="_f.TahteeqPortId">
-                                            <option value="">— اختر —</option>
-                                            @foreach (var p in _ports)
-                                            {
-                                                <option value="@p.Id">@p.Label</option>
-                                            }
-                                        </select>
-                                    </div>
-                                </div>
-
-                                @* الوكيل الملاحي *@
                                 <div class="form-field">
                                     <label class="field-label" for="rf-agent">الوكيل الملاحي</label>
                                     <div class="field-select-wrap">
@@ -544,8 +376,6 @@
                                         </select>
                                     </div>
                                 </div>
-
-                                @* مورد الضمان *@
                                 <div class="form-field">
                                     <label class="field-label" for="rf-guarsup">مورد الضمان</label>
                                     <div class="field-select-wrap">
@@ -566,9 +396,36 @@
                                         </select>
                                     </div>
                                 </div>
-
                             </div>
                         </div>
+                    </ChildContent>
+                </MudTabPanel>
+
+
+                @* ══════════════════════════════════════
+                   TAB 2 — بيانات النقل
+                ══════════════════════════════════════ *@
+                <MudTabPanel>
+                    <TabContent>
+                        <div class="btab-label">
+                            <div class="btab-icon btab-green" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="15" height="15"
+                                     fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                                </svg>
+                            </div>
+                            <span>بيانات النقل</span>
+                        </div>
+                    </TabContent>
+
+                    <ChildContent>
+
+
+                        @* #83 — خط سير الطلب بقى صف صغير (الخدمة ونوع الرحلة نزلوا على سطر الإيراد) *@
+
 
                         @if (CanViewFinancials)
                         {
@@ -583,33 +440,213 @@
                                         </svg>
                                     </div>
                                     <div>
-                                        <div class="tab-section-title">سعر البيع للعميل</div>
-                                        <div class="tab-section-sub">بيبقى سطر إيراد العملية — والمقترح جاي من قواعد تسعير العميل</div>
+                                        @* #83 — التاب بقى سطور إيراد بس *@
+                                        <div class="tab-section-title">إيرادات العميل</div>
                                     </div>
                                 </div>
 
-                                <div class="bk-form-grid">
-                                    <div class="form-field">
-                                        <label class="field-label" for="rf-price">سعر الوحدة</label>
-                                        <div class="field-input-group">
-                                            <span class="field-prefix" aria-hidden="true">ج.م</span>
-                                            <input id="rf-price" type="number" min="0" step="0.01"
-                                                   class="field-input with-prefix"
-                                                   @bind="_f.UnitPrice" />
-                                        </div>
-                                        @if (!string.IsNullOrEmpty(_suggestHint))
+                                @* ── #83 — سطور الإيراد ظاهرة في الإنشاء والتعديل.
+                                   السعر يظهر أوتوماتيك من قائمة الأسعار أو يتدخل يدوي ── *@
+                                    <div class="bk-container-cards">
+                                        @foreach (var rl in _loadedRevLines)
                                         {
-                                            <div class="field-hint">@_suggestHint</div>
+                                            <div class="bk-container-card">
+                                                <div class="bk-cc-head">
+                                                    <div class="bk-cc-num" aria-label="رقم السطر">@(_loadedRevLines.IndexOf(rl) + 1)</div>
+                                                    <div class="bk-cc-type-badge">@(_services.FirstOrDefault(sv => sv.Id == rl.ServiceId)?.Label ?? "بدون خدمة")</div>
+                                                    <div class="bk-cc-total">صافي: <strong>@((rl.Quantity * rl.UnitPrice - rl.Discount).ToString("N2"))</strong> ج.م</div>
+                                                    <button type="button" class="bk-cc-del" title="حذف السطر"
+                                                            aria-label="حذف سطر الإيراد"
+                                                            @onclick="() => _loadedRevLines.Remove(rl)">
+                                                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none"
+                                                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                                @* #80ب — bk-cc-body نفسه grid من 5 أعمدة، فالحقول بتتحط فيه على طول
+                                                   (لفّ bk-form-grid جواه كان بيحشرهم في العمود الأول = شكل رأسي) *@
+                                                <div class="bk-cc-body rf-rev-body">
+                                                <div class="form-field">
+                                                    <label class="field-label">الخدمة</label>
+                                                    <select class="field-input field-select" value="@rl.ServiceId"
+                                                            @onchange="e => OnRevLineServiceChange(rl, e)">
+                                                        <option value="0">— اختر —</option>
+                                                        @foreach (var sv in _services) { <option value="@sv.Id">@sv.Label</option> }
+                                                    </select>
+                                                </div>
+                                                <div class="form-field form-field-with-dropdown">
+                                                    <label class="field-label">التحميل</label>
+                                                    <div class="field-input-group">
+                                                        <input class="field-input" value="@rl.PortSearch" placeholder="اكتب للبحث..."
+                                                               @oninput="e => OnRevPortSearch(rl, e)"
+                                                               @onfocus="() => { rl.ShowPorts = true; rl.FilteredPorts = FilterOpts(_ports, rl.PortSearch); }"
+                                                               @onfocusout="() => rl.ShowPorts = false" />
+                                                    </div>
+                                                    @if (rl.ShowPorts && rl.FilteredPorts.Count > 0)
+                                                    {
+                                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                                            @foreach (var o in rl.FilteredPorts)
+                                                            { <div class="field-dropdown-item" @onmousedown="() => PickRevPort(rl, o)">@o.Label</div> }
+                                                        </div>
+                                                    }
+                                                </div>
+                                                <div class="form-field form-field-with-dropdown">
+                                                    <label class="field-label">الوجهة</label>
+                                                    <div class="field-input-group">
+                                                        <input class="field-input" value="@rl.DestSearch" placeholder="اكتب للبحث..."
+                                                               @oninput="e => OnRevDestSearch(rl, e)"
+                                                               @onfocus="() => { rl.ShowDests = true; rl.FilteredDests = FilterOpts(_destinations, rl.DestSearch); }"
+                                                               @onfocusout="() => rl.ShowDests = false" />
+                                                    </div>
+                                                    @if (rl.ShowDests && rl.FilteredDests.Count > 0)
+                                                    {
+                                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                                            @foreach (var o in rl.FilteredDests)
+                                                            { <div class="field-dropdown-item" @onmousedown="() => PickRevDest(rl, o)">@o.Label</div> }
+                                                        </div>
+                                                    }
+                                                </div>
+                                                <div class="form-field form-field-with-dropdown">
+                                                    <label class="field-label">التعتيق</label>
+                                                    <div class="field-input-group">
+                                                        <input class="field-input" value="@rl.TahteeqSearch" placeholder="اكتب للبحث..."
+                                                               @oninput="e => OnRevTahteeqSearch(rl, e)"
+                                                               @onfocus="() => { rl.ShowTahteeqs = true; rl.FilteredTahteeqs = FilterOpts(_ports, rl.TahteeqSearch); }"
+                                                               @onfocusout="() => rl.ShowTahteeqs = false" />
+                                                    </div>
+                                                    @if (rl.ShowTahteeqs && rl.FilteredTahteeqs.Count > 0)
+                                                    {
+                                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                                            @foreach (var o in rl.FilteredTahteeqs)
+                                                            { <div class="field-dropdown-item" @onmousedown="() => PickRevTahteeq(rl, o)">@o.Label</div> }
+                                                        </div>
+                                                    }
+                                                </div>
+                                                @* #83 — نوع الرحلة نزل من راس الطلب على السطر *@
+                                                <div class="form-field">
+                                                    <label class="field-label">نوع الرحلة</label>
+                                                    <select class="field-input field-select" value="@rl.TripTypeId"
+                                                            @onchange="e => OnRevLineTripTypeChange(rl, e)">
+                                                        <option value="">— اختر —</option>
+                                                        @foreach (var tt in _tripTypes) { <option value="@tt.Id">@tt.Label</option> }
+                                                    </select>
+                                                </div>
+                                                @* #99 — نوع الحاوية بُعد في قواعد التسعير، فبقى على السطر.
+                                                   بيتعبّى لوحده من تاب الحاويات وتقدر تغيّره *@
+                                                <div class="form-field">
+                                                    <label class="field-label">نوع الحاوية</label>
+                                                    <select class="field-input field-select" value="@rl.ContainerTypeId"
+                                                            @onchange="e => OnRevLineContainerChange(rl, e)">
+                                                        <option value="0">— أي نوع —</option>
+                                                        @foreach (var t in _containerTypes) { <option value="@t.Id">@t.Label</option> }
+                                                    </select>
+                                                </div>
+                                                <div class="form-field">
+                                                    <label class="field-label">الكمية</label>
+                                                    <input type="number" min="0" step="1" class="field-input" @bind="rl.Quantity" />
+                                                </div>
+                                                <div class="form-field">
+                                                    <label class="field-label">سعر الوحدة</label>
+                                                    <div class="field-input-group">
+                                                        <span class="field-prefix" aria-hidden="true">ج.م</span>
+                                                        <input type="number" min="0" step="0.01" class="field-input with-prefix"
+                                                               value="@Money(rl.UnitPrice)" @onchange="e => OnRevLinePriceInput(rl, e)" />
+                                                    </div>
+                                                    @if (!string.IsNullOrEmpty(rl.Hint))
+                                                    { <div class="field-hint" title="@rl.HintDetail">@rl.Hint</div> }
+                                                </div>
+                                                <div class="form-field">
+                                                    <label class="field-label">الخصم</label>
+                                                    <div class="field-input-group">
+                                                        <span class="field-prefix" aria-hidden="true">ج.م</span>
+                                                        <input type="number" min="0" step="0.01" class="field-input with-prefix" @bind="rl.Discount" />
+                                                    </div>
+                                                </div>
+                                                @* #83 — البيان بالعرض الكامل للسطر *@
+                                                <div class="form-field rf-rev-desc">
+                                                    <label class="field-label">البيان</label>
+                                                    <input type="text" class="field-input" value="@rl.Description"
+                                                           @onchange="e => OnRevLineDescInput(rl, e)"
+                                                           placeholder="مثال: نقل حاويات من ميناء الإسكندرية إلى مخزن العميل" />
+                                                </div>
+                                                <div class="form-field rf-rev-act">
+                                                    <button type="button" class="rf-btn rf-btn-primary" @onclick="() => SuggestForLineAsync(rl, true)">اقترح السعر</button>
+                                                </div>                                                </div>
+                                            </div>
                                         }
                                     </div>
-
-                                    <div class="form-field" style="display:flex;align-items:flex-end">
-                                        <button type="button" class="bk-next-btn"
-                                                @onclick="SuggestAsync"
-                                                disabled="@(_f.CustomerId <= 0 || _f.ServiceId is null)">
-                                            اقترح السعر
+                                    @if (_loadedRevLines.Count == 0)
+                                    {
+                                        <div class="field-hint" style="margin-bottom:10px">مفيش سطور إيراد على العملية دي — ضيف أول سطر.</div>
+                                    }
+                                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+                                        <button type="button" class="bk-add-line-btn" @onclick="AddRevLineAsync">+ إضافة سطر إيراد</button>
+                                        <button type="button" class="bk-next-btn" @onclick="SuggestAsync"
+                                                disabled="@(_f.CustomerId <= 0 || _loadedRevLines.Count == 0)">
+                                            اقترح السعر لكل السطور
                                         </button>
                                     </div>
+                                    @if (!string.IsNullOrEmpty(_suggestHint))
+                                    {
+                                        <div class="field-hint" style="margin-top:8px">@_suggestHint</div>
+                                    }
+                            </div>
+                        }
+
+                        @* ══════ #80 — المصروفات جوه شاشة طلب النقل (وضع التعديل) ══════ *@
+                        @if (CanViewFinancials && OperationId is not null)
+                        {
+                            <div class="tab-section">
+                                <div class="tab-section-head">
+                                    <div class="tab-section-icon amber" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><path d="M8 7h8M8 11h8M8 15h5" stroke-linecap="round"/></svg>
+                                    </div>
+                                    <div>
+                                        <div class="tab-section-title">المصروفات</div>
+                                    </div>
+                                </div>
+
+                                @if (_expenses.Count > 0)
+                                {
+                                    <div class="bk-container-cards">
+                                        @foreach (var ex in _expenses)
+                                        {
+                                            <div class="bk-container-card">
+                                                <div class="bk-cc-head">
+                                                    <div class="bk-cc-type-badge">@ex.TypeName</div>
+                                                    @if (!string.IsNullOrEmpty(ex.TripNumber))
+                                                    {
+                                                        <div class="rf-trip-route">@ex.TripNumber@if (!string.IsNullOrEmpty(ex.DriverName)){ <span> — @ex.DriverName</span>}</div>
+                                                    }
+                                                    @* ملاحظة: GET api/expenses (‏ListItem) مابيرجّعش BillableAmount —
+                                                       القيمة المحمّلة على العميل بتظهر في شاشة المصروفات *@
+                                                    <div class="bk-cc-total">@ex.Amount.ToString("N2") ج.م</div>
+                                                </div>
+                                                @if (!string.IsNullOrEmpty(ex.Description))
+                                                {
+                                                    <div class="bk-cc-notes">@ex.Description</div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="field-hint" style="margin-bottom:10px">مفيش مصروفات مسجلة على العملية دي.</div>
+                                }
+
+                                @* #80ب — التسجيل من شاشة المصروفات زي ما متعود.
+                                   هنا عرض بس، عشان تشوف مصروفات العملية من غير ما تسيب الشاشة. *@
+                                <div style="margin-top:12px">
+                                    <a class="bk-next-btn" href="/expenses"
+                                       style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">
+                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+                                             stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                                        </svg>
+                                        تسجيل مصروف من شاشة المصروفات
+                                    </a>
                                 </div>
                             </div>
                         }
@@ -627,8 +664,8 @@
                                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>
                             </div>
                             <span>الحاويات والرحلات</span>
-                            @if (_lines.Sum(l => l.Qty) > 0 || _tripRows.Count + _existingTrips.Count > 0)
-                            { <span class="btab-count">@_lines.Sum(l => l.Qty)/@(_tripRows.Count(t=>t.DriverId>0&&t.VehicleId>0)+_existingTrips.Count)</span> }
+                            @if (_lines.Sum(l => l.Qty) > 0)
+                            { <span class="btab-count">@_lines.Sum(l => l.Qty)/@_lines.Count(t=>t.Trip.DriverId>0&&t.Trip.VehicleId>0)</span> }
                         </div>
                     </TabContent>
                     <ChildContent>
@@ -639,11 +676,8 @@
                                 </div>
                                 <div>
                                     <div class="tab-section-title">1) سطور الحاويات المطلوبة</div>
-                                    <div class="tab-section-sub">النوع والعدد والوزن والضمان — يحدد عدد الرحلات غالبًا</div>
                                 </div>
                             </div>
-                            @if (_linesLocked)
-                            { <div class="field-hint" style="margin-bottom:12px">سطور الحاويات مقفولة (فيه حاويات فعلية مسجلة) — يمكنك تعديل أرقام/تفاصيل الحاويات وحفظ الطلب.</div> }
                             <div class="bk-container-cards">
                                 @foreach (var ln in _lines)
                                 {
@@ -652,15 +686,13 @@
                                         <div class="bk-cc-head">
                                             <div class="bk-cc-num" aria-label="رقم السطر">@(idx + 1)</div>
                                             <div class="bk-cc-type-badge">@(_containerTypes.FirstOrDefault(t => t.Id == ln.ContainerTypeId)?.Label ?? "نوع الحاوية")</div>
-                                            <div class="bk-cc-total">إجمالي: <strong>@ln.Qty</strong> حاوية@if (ln.WeightKg.HasValue){<span> · @ln.WeightKg كجم</span>}</div>
-                                            @if (!_linesLocked)
-                                            { <button type="button" class="bk-cc-del" @onclick="() => _lines.Remove(ln)" disabled="@(_lines.Count <= 1)" title="حذف السطر" aria-label="حذف السطر @(idx + 1)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button> }
+                                            <button type="button" class="bk-cc-del" @onclick="() => RemoveLineAsync(ln)" disabled="@(_lines.Count <= 1)" title="حذف السطر" aria-label="حذف السطر @(idx + 1)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
                                         </div>
                                         <div class="bk-cc-body">
                                             <div class="form-field">
                                                 <label class="field-label">نوع الحاوية</label>
                                                 <div class="field-select-wrap">
-                                                    <select class="field-input field-select" value="@ln.ContainerTypeId" disabled="@_linesLocked" @onchange="e => OnLineTypeChange(ln, e)">
+                                                    <select class="field-input field-select" value="@ln.ContainerTypeId" @onchange="e => OnLineTypeChange(ln, e)">
                                                         <option value="0" selected="@(ln.ContainerTypeId == 0)">— اختر النوع —</option>
                                                         @foreach (var t in _containerTypes) { <option value="@t.Id" selected="@(t.Id == ln.ContainerTypeId)">@t.Label</option> }
                                                     </select>
@@ -669,24 +701,24 @@
                                             <div class="form-field">
                                                 <label class="field-label">العدد</label>
                                                 <div class="bk-qty-control">
-                                                    <button type="button" class="qty-btn qty-minus" @onclick="() => ln.Qty = Math.Max(1, ln.Qty - 1)" disabled="@_linesLocked" aria-label="إنقاص">−</button>
-                                                    <input type="number" min="1" class="field-input qty-input" @bind="ln.Qty" disabled="@_linesLocked" />
-                                                    <button type="button" class="qty-btn qty-plus" @onclick="() => ln.Qty++" disabled="@_linesLocked" aria-label="زيادة">+</button>
+                                                    <button type="button" class="qty-btn qty-minus" @onclick="() => ln.Qty = Math.Max(1, ln.Qty - 1)" aria-label="إنقاص">−</button>
+                                                    <input type="number" min="1" class="field-input qty-input" @bind="ln.Qty" />
+                                                    <button type="button" class="qty-btn qty-plus" @onclick="() => ln.Qty++" aria-label="زيادة">+</button>
                                                 </div>
                                             </div>
                                             <div class="form-field">
                                                 <label class="field-label">الوزن (كجم)</label>
-                                                <input type="number" min="0" step="0.01" class="field-input" @bind="ln.WeightKg" disabled="@_linesLocked" />
+                                                <input type="number" min="0" step="0.01" class="field-input" @bind="ln.WeightKg" />
                                             </div>
                                             <div class="form-field">
                                                 <label class="field-label">ضمان الحاوية (ج.م)</label>
-                                                <input type="number" min="0" step="0.01" class="field-input" @bind="ln.Guarantee" disabled="@_linesLocked" />
+                                                <input type="number" min="0" step="0.01" class="field-input" @bind="ln.Guarantee" />
                                                 @if (ln.Guarantee is > 0) { <div class="bk-guar-linetotal">إجمالي ضمان السطر: <strong>@((ln.Guarantee.Value * ln.Qty).ToString("N0")) ج.م</strong></div> }
                                             </div>
                                             <div class="form-field bk-cc-notes">
                                                 <label class="field-label">ملاحظات الحاوية</label>
                                                 <div class="bk-notes-action-row">
-                                                    <input class="field-input" @bind="ln.Notes" disabled="@_linesLocked" placeholder="تفاصيل إضافية..." />
+                                                    <input class="field-input" @bind="ln.Notes" placeholder="تفاصيل إضافية..." />
                                                     @{ var remaining = Math.Max(0, ln.Qty - ln.Details.Count); }
                                                     <button type="button" class="bk-add-detail-inline-btn" @onclick="() => AddDetail(idx)" disabled="@(!CanEditContainerDetails)" title="إضافة رقم حاوية فعلية">
                                                         <span>تفاصيل حاوية فعلية</span>@if (remaining > 0){<span class="bk-add-detail-count" title="المتبقي">@remaining</span>}
@@ -713,326 +745,225 @@
                                                 }
                                             </div>
                                         }
+
+                                        @* ═══ #82 — رحلة السطر ده (1:1) جوه نفس القسم ═══ *@
+                                        <div class="rf-line-trip">
+                                            <div class="rf-lt-head">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+                                                     stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                    <rect x="1" y="3" width="15" height="13" rx="2"/>
+                                                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                                                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                                                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                                                </svg>
+                                                <span>رحلة هذا السطر</span>
+                                                @if (ln.Trip.TripId is not null)
+                                                {
+                                                    <span class="rf-lt-num">@ln.Trip.TripNumber</span>
+                                                    <span class="rf-lt-status">@TripStatusAr(ln.Trip.Status)</span>
+                                                }
+                                                @if (ln.Trip.DriverId > 0 && ln.Trip.VehicleId > 0)
+                                                {
+                                                    <span class="rf-lt-ready">@(ln.Trip.TripId is null ? "جاهزة للحفظ" : "مسجّلة — التعديل هيحدّثها")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="rf-lt-empty">اختيارية — السائق والعربية لازم يتحددوا عشان تتسجل</span>
+                                                }
+                                            </div>
+
+                                            @if (!string.IsNullOrWhiteSpace(ln.ConflictMsg))
+                                            {
+                                                @* #82 — تحذير فقط، مش بيمنع الحفظ *@
+                                                <div class="rf-lt-warn" role="status">
+                                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+                                                         stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                                        <path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/>
+                                                    </svg>
+                                                    <span>@ln.ConflictMsg</span>
+                                                </div>
+                                            }
+
+                                            <div class="bk-cc-body rf-trip-body">
+                                                <div class="form-field form-field-with-dropdown">
+                                                    <label class="field-label">السائق</label>
+                                                    <div class="field-input-group">
+                                                        <span class="field-prefix" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" stroke-linecap="round"/></svg></span>
+                                                        <input class="field-input with-prefix" value="@DriverText(ln.Trip)" placeholder="ابحث باسم السائق..."
+                                                               @oninput="e => OnDriverSearch(ln.Trip, e)"
+                                                               @onfocus="() => { ln.Trip.ShowDrivers = true; ln.Trip.FilteredDrivers = FilterPairs(OrderedDriversFor(ln.Trip), ln.Trip.DriverSearch); }"
+                                                               @onfocusout="() => ln.Trip.ShowDrivers = false" />
+                                                    </div>
+                                                    @if (ln.Trip.ShowDrivers && ln.Trip.FilteredDrivers.Count > 0)
+                                                    {
+                                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                                            @foreach (var d in ln.Trip.FilteredDrivers)
+                                                            { <div class="field-dropdown-item" @onmousedown="() => PickLineDriver(ln, d)">@d.Label</div> }
+                                                        </div>
+                                                    }
+                                                </div>
+
+                                                @* #82 — العربيات المتاحة بس (مش محجوزة ولا في رحلة بتاريخ الرحلة) *@
+                                                <div class="form-field form-field-with-dropdown">
+                                                    <label class="field-label">العربية المتاحة</label>
+                                                    <div class="field-input-group">
+                                                        <span class="field-prefix" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" stroke-linecap="round"/></svg></span>
+                                                        <input class="field-input with-prefix" value="@VehicleText(ln.Trip)" placeholder="ابحث برقم العربية المتاحة..."
+                                                               @oninput="e => OnVehicleSearch(ln.Trip, e)"
+                                                               @onfocus="() => OnLineVehicleFocus(ln)"
+                                                               @onfocusout="() => ln.Trip.ShowVehicles = false" />
+                                                    </div>
+                                                    @if (ln.Trip.ShowVehicles && ln.Trip.FilteredVehicles.Count > 0)
+                                                    {
+                                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                                            @foreach (var v in ln.Trip.FilteredVehicles)
+                                                            { <div class="field-dropdown-item" @onmousedown="() => PickLineVehicle(ln, v)">@v.Label</div> }
+                                                        </div>
+                                                    }
+                                                    @if (_availLoaded && OrderedVehiclesFor(ln.Trip).Count == 0)
+                                                    { <div class="field-hint">مفيش عربية متاحة في التاريخ ده</div> }
+                                                </div>
+
+                                                @* #101 — المالك طلب إخفاء حقل المقطورة. فلاج مش حذف:
+                                                   ‏`ln.Trip.TrailerId` لسه بيتحمل من الرحلة المسجّلة (MapTripsToLines)
+                                                   وبيتبعت في الحفظ — فالإخفاء ما بيضيّعش أي داتا. *@
+                                                @if (_showTrailerField)
+                                                {
+                                                    <div class="form-field">
+                                                        <label class="field-label">المقطورة</label>
+                                                        <div class="field-select-wrap">
+                                                            <select class="field-input field-select" @bind="ln.Trip.TrailerId">
+                                                                <option value="">— من غير مقطورة —</option>
+                                                                @foreach (var t2 in _trailers)
+                                                                { <option value="@t2.Id">@t2.Label</option> }
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                }
+
+                                                <div class="form-field form-field-with-dropdown">
+                                                    <label class="field-label">سحب الرحلة</label>
+                                                    <div class="field-input-group">
+                                                        <input class="field-input with-prefix" value="@ln.PortSearch" placeholder="اكتب اسم الجهة للبحث..."
+                                                               @oninput="e => OnLinePortSearch(ln, e)"
+                                                               @onfocus="() => { ln.ShowPorts = true; ln.FilteredPorts = FilterOpts(_ports, ln.PortSearch); }"
+                                                               @onfocusout="() => ln.ShowPorts = false" />
+                                                    </div>
+                                                    @if (ln.ShowPorts && ln.FilteredPorts.Count > 0)
+                                                    {
+                                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                                            @foreach (var o in ln.FilteredPorts)
+                                                            { <div class="field-dropdown-item" @onmousedown="() => PickLinePort(ln, o)">@o.Label</div> }
+                                                        </div>
+                                                    }
+                                                </div>
+
+                                                <div class="form-field form-field-with-dropdown">
+                                                    <label class="field-label">وجهة الرحلة</label>
+                                                    <div class="field-input-group">
+                                                        <input class="field-input with-prefix" value="@ln.DestSearch" placeholder="اكتب اسم الجهة للبحث..."
+                                                               @oninput="e => OnLineDestSearch(ln, e)"
+                                                               @onfocus="() => { ln.ShowDests = true; ln.FilteredDests = FilterOpts(_destinations, ln.DestSearch); }"
+                                                               @onfocusout="() => ln.ShowDests = false" />
+                                                    </div>
+                                                    @if (ln.ShowDests && ln.FilteredDests.Count > 0)
+                                                    {
+                                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                                            @foreach (var o in ln.FilteredDests)
+                                                            { <div class="field-dropdown-item" @onmousedown="() => PickLineDest(ln, o)">@o.Label</div> }
+                                                        </div>
+                                                    }
+                                                </div>
+
+                                                <div class="form-field form-field-with-dropdown">
+                                                    <label class="field-label">تعتيق الرحلة</label>
+                                                    <div class="field-input-group">
+                                                        <input class="field-input with-prefix" value="@ln.TahteeqSearch" placeholder="اكتب اسم الجهة للبحث..."
+                                                               @oninput="e => OnLineTahteeqSearch(ln, e)"
+                                                               @onfocus="() => { ln.ShowTahteeqs = true; ln.FilteredTahteeqs = FilterOpts(_ports, ln.TahteeqSearch); }"
+                                                               @onfocusout="() => ln.ShowTahteeqs = false" />
+                                                    </div>
+                                                    @if (ln.ShowTahteeqs && ln.FilteredTahteeqs.Count > 0)
+                                                    {
+                                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
+                                                            @foreach (var o in ln.FilteredTahteeqs)
+                                                            { <div class="field-dropdown-item" @onmousedown="() => PickLineTahteeq(ln, o)">@o.Label</div> }
+                                                        </div>
+                                                    }
+                                                </div>
+
+                                                @* #82 — المبالغ التلاتة: النولون كله = نولون + مبيت + تحويله *@
+                                                <div class="form-field">
+                                                    <label class="field-label">نولون السائق (ج.م)</label>
+                                                    <div class="field-input-group">
+                                                        <span class="field-prefix" aria-hidden="true">ج.م</span>
+                                                        @* #82 — value/onchange بدل @bind عشان نعرف إن المستخدم كتب بإيده *@
+                                                        <input type="number" min="0" step="0.01" class="field-input with-prefix"
+                                                               value="@ln.Trip.Freight"
+                                                               @onchange="e => OnLineFreightInput(ln, e)" />
+                                                    </div>
+                                                </div>
+                                                <div class="form-field">
+                                                    <label class="field-label">مبيت (ج.م)</label>
+                                                    <div class="field-input-group">
+                                                        <span class="field-prefix" aria-hidden="true">ج.م</span>
+                                                        <input type="number" min="0" step="0.01" class="field-input with-prefix" @bind="ln.Trip.Overnight" />
+                                                    </div>
+                                                </div>
+                                                <div class="form-field">
+                                                    <label class="field-label">تحويلة (ج.م)</label>
+                                                    <div class="field-input-group">
+                                                        <span class="field-prefix" aria-hidden="true">ج.م</span>
+                                                        <input type="number" min="0" step="0.01" class="field-input with-prefix" @bind="ln.Trip.Transfer" />
+                                                    </div>
+                                                </div>
+                                                <div class="form-field">
+                                                    <label class="field-label">حساب السيارة على الرحلة</label>
+                                                    <div class="rf-lt-total">@(ln.Trip.FreightTotal.ToString("N0")) ج.م</div>
+                                                    @if (!string.IsNullOrWhiteSpace(ln.FreightHint))
+                                                    { <div class="field-hint">@ln.FreightHint</div> }
+                                                </div>
+
+                                                @* #82 — التاريخ جزء من مطابقة قاعدة النولون ومن إتاحة العربية،
+                                                   فأي تغيير فيه بيحدّث الاتنين *@
+                                                <div class="form-field">
+                                                    <label class="field-label">ميعاد التحرك</label>
+                                                    <div class="field-input-group">
+                                                        <input type="datetime-local" class="field-input"
+                                                               value="@(ln.Trip.PlannedStartAt?.ToString("yyyy-MM-ddTHH:mm"))"
+                                                               @onchange="e => OnLineDateChange(ln, e)" />
+                                                    </div>
+                                                </div>
+
+                                                @* #84 — إجراءات الرحلة في شريط واحد جنب ميعاد التحرك *@
+                                                <div class="rf-lt-actions">
+                                                    <span class="rf-lt-actions-k">إجراءات الرحلة</span>
+                                                    @* #101 — بيسحب التحميل/الوجهة/التعتيق من سطور الإيراد (تاب بيانات النقل) *@
+                                                    <button type="button" class="rf-btn" title="ينسخ التحميل والوجهة والتعتيق من تاب «بيانات النقل» — وتقدر تغيّرهم بعده"
+                                                            @onclick="() => PullRouteFromRevenueAsync(ln)">اسحب الوجهات من بيانات النقل</button>
+                                                    <button type="button" class="rf-btn rf-btn-primary" @onclick="() => SuggestLineFreightAsync(ln, true)">اقترح النولون</button>
+                                                    <button type="button" class="rf-btn" @onclick="() => CheckLineConflictAsync(ln)">افحص التعارض</button>
+                                                    @if (ln.Trip.TripId is not null && ln.Trip.Status is not "Completed" and not "Closed" and not "Cancelled")
+                                                    {
+                                                        @if (ln.Trip.Status is "Planned" or "Assigned")
+                                                        { <button type="button" class="rf-btn rf-btn-go" @onclick="() => StartExistingTripAsync(LineTripRef(ln))">بدء الرحلة</button> }
+                                                        @if (ln.Trip.Status is "InTransit" or "Started" or "DriverReceived")
+                                                        { <button type="button" class="rf-btn rf-btn-go" @onclick="() => CompleteExistingTripAsync(LineTripRef(ln))">إنهاء الرحلة</button> }
+                                                        <button type="button" class="rf-btn rf-btn-danger" @onclick="() => RemoveTripAsync(LineTripRef(ln))">إلغاء الرحلة</button>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 }
                             </div>
-                            @if (!_linesLocked)
-                            { <button type="button" class="bk-add-line-btn mt-10" @onclick="() => _lines.Add(new())">+ إضافة سطر حاويات</button> }
+                            <button type="button" class="bk-add-line-btn mt-10" @onclick="AddLine">+ إضافة سطر حاويات ورحلة</button>
                             <div class="form-field" style="margin-top:14px">
                                 <label class="field-label">ملاحظات الطلب</label>
                                 <textarea class="field-input field-textarea" rows="3" maxlength="1000" placeholder="أي ملاحظات خاصة بهذا الطلب..." @onchange="e => _f.Notes = e.Value?.ToString()">@_f.Notes</textarea>
                             </div>
                         </div>
 
-                        <div class="tab-section" style="margin-top:14px">
-                            <div class="tab-section-head">
-                                <div class="tab-section-icon green" aria-hidden="true">
-                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                                </div>
-                                <div>
-                                    <div class="tab-section-title">2) الرحلات والتعيين</div>
-                                    <div class="tab-section-sub">أسند السائق والسيارة (اختياري الآن) — النولون إجباري لكل رحلة مُسندة</div>
-                                </div>
-                            </div>
-                            @if (OperationId is not null)
-                            {
-                                @* وضع التعديل: الرحلات المسجلة تُعرض بكروت بنفس تصميم
-                                   كروت الإضافة — عرض فقط، وتعديلها من شاشة الرحلة *@
-                                @if (_existingTrips.Count == 0)
-                                {
-                                    <div class="field-hint">لا توجد رحلات مسجلة على هذا الطلب بعد — أضف أول رحلة من الأسفل.</div>
-                                }
-                                else
-                                {
-                                    <div class="bk-container-cards">
-                                        @for (var i = 0; i < _existingTrips.Count; i++)
-                                        {
-                                            var t = _existingTrips[i];
-                                            <div class="bk-container-card">
-                                                <div class="bk-cc-head">
-                                                    <div class="bk-cc-num" aria-label="رقم الرحلة">@(i + 1)</div>
-                                                    <div class="bk-cc-type-badge">
-                                                        <svg viewBox="0 0 24 24" width="13" height="13"
-                                                             fill="none" stroke="currentColor" stroke-width="2"
-                                                             aria-hidden="true">
-                                                            <rect x="1" y="3" width="15" height="13" rx="2"/>
-                                                            <path d="M16 8h4l3 3v5h-7V8z"/>
-                                                            <circle cx="5.5" cy="18.5" r="2.5"/>
-                                                            <circle cx="18.5" cy="18.5" r="2.5"/>
-                                                        </svg>
-                                                        رحلة @t.TripNumber
-                                                    </div>
-                                                    <div class="bk-cc-total">@TripStatusAr(t.Status)</div>
-                                                    @if (CanEditTrips && t.Status is "Planned" or "Assigned")
-                                                    {
-                                                        <button type="button" class="rf-trip-act rf-trip-start" title="بدء الرحلة" aria-label="بدء @t.TripNumber" @onclick="() => StartExistingTripAsync(t)">
-                                                            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
-                                                            بدء
-                                                        </button>
-                                                    }
-                                                    @if (CanEditTrips && t.Status == "Started")
-                                                    {
-                                                        <button type="button" class="rf-trip-act rf-trip-done" title="إنهاء الرحلة" aria-label="إنهاء @t.TripNumber" @onclick="() => CompleteExistingTripAsync(t)">
-                                                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-                                                            إنهاء
-                                                        </button>
-                                                    }
-                                                    @if (CanTripCancel && t.Status is not ("Completed" or "Cancelled" or "Closed"))
-                                                    {
-                                                        <button type="button" class="rf-trip-act rf-trip-cancel" title="@(t.Status=="Planned"?"حذف الرحلة":"إلغاء الرحلة")" aria-label="إلغاء @t.TripNumber" @onclick="() => RemoveTripAsync(t)">
-                                                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
-                                                            @(t.Status=="Planned"?"حذف":"إلغاء")
-                                                        </button>
-                                                    }
-                                                    @if (CanEditTrips && t.Status is not ("Completed" or "Cancelled" or "Closed"))
-                                                    {
-                                                        <button type="button" class="bk-next-btn" style="padding:4px 10px;font-size:12px" @onclick="() => t._editing = !t._editing">@(t._editing ? "إخفاء" : "تعديل")</button>
-                                                    }
-                                                    <a href="@($"/trips/new/{t.TripId}")"
-                                                       style="font-size:12px;font-weight:800;color:var(--fc-blue);text-decoration:none">
-                                                        فتح الرحلة
-                                                    </a>
-                                                </div>
-                                                 <div class="bk-cc-body">
-                                                    @if (t._editing && CanEditTrips && t.Status is not ("Completed" or "Cancelled" or "Closed"))
-                                                    {
-                                                        <div class="form-field form-field-with-dropdown">
-                                                            <label class="field-label">السائق</label>
-                                                            <div class="field-input-group">
-                                                                <span class="field-prefix" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" stroke-linecap="round"/></svg></span>
-                                                                <input class="field-input with-prefix" value="@ExistingDriverText(t)" placeholder="ابحث باسم السائق..."
-                                                                       @oninput="e => OnExistingDriverSearch(t, e)"
-                                                                       @onfocus="() => { t.ShowDrivers = true; t.FilteredDrivers = FilterPairs(OrderedDriversForExisting(t), t.DriverSearch); }"
-                                                                       @onfocusout="() => t.ShowDrivers = false" />
-                                                            </div>
-                                                            @if (t.ShowDrivers && t.FilteredDrivers.Count > 0)
-                                                            {
-                                                                <div class="field-dropdown" @onmousedown:preventDefault="true">
-                                                                    @foreach (var d in t.FilteredDrivers)
-                                                                    { <div class="field-dropdown-item" @onmousedown="() => PickExistingDriver(t, d)">@d.Label</div> }
-                                                                </div>
-                                                            }
-                                                        </div>
-                                                        <div class="form-field form-field-with-dropdown">
-                                                            <label class="field-label">السيارة/اللوحة</label>
-                                                            <div class="field-input-group">
-                                                                <span class="field-prefix" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" stroke-linecap="round"/></svg></span>
-                                                                <input class="field-input with-prefix" value="@ExistingVehicleText(t)" placeholder="ابحث برقم اللوحة..."
-                                                                       @oninput="e => OnExistingVehicleSearch(t, e)"
-                                                                       @onfocus="() => { t.ShowVehicles = true; t.FilteredVehicles = FilterPairs(OrderedVehiclesForExisting(t), t.VehicleSearch); }"
-                                                                       @onfocusout="() => t.ShowVehicles = false" />
-                                                            </div>
-                                                            @if (t.ShowVehicles && t.FilteredVehicles.Count > 0)
-                                                            {
-                                                                <div class="field-dropdown" @onmousedown:preventDefault="true">
-                                                                    @foreach (var v in t.FilteredVehicles)
-                                                                    { <div class="field-dropdown-item" @onmousedown="() => PickExistingVehicle(t, v)">@v.Label</div> }
-                                                                </div>
-                                                            }
-                                                        </div>
-                                                        <div class="form-field">
-                                                            <label class="field-label">النولون</label>
-                                                            <input type="number" step="0.01" class="field-input" @bind="t.FreightAmount" />
-                                                        </div>
-                                                        <div class="form-field">
-                                                            <label class="field-label">موعد البدء المخطط</label>
-                                                            <input type="datetime-local" class="field-input"
-                                                                   value="@(t.PlannedStartAt?.ToString("yyyy-MM-ddTHH:mm"))"
-                                                                   @onchange="e => t.PlannedStartAt = DateTime.TryParse(e.Value?.ToString(), out var dt) ? dt : t.PlannedStartAt" />
-                                                        </div>
-                                                        <div class="form-field" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-                                                            <button type="button" class="bk-next-btn" @onclick="() => t._editing = false">تم</button>
-                                                        </div>
-                                                    }
-                                                    else
-                                                    {
-                                                        <div class="form-field">
-                                                            <label class="field-label">السائق</label>
-                                                            <div class="field-input-group"><input class="field-input" value="@t.DriverName" readonly /></div>
-                                                        </div>
-                                                        <div class="form-field">
-                                                            <label class="field-label">السيارة</label>
-                                                            <div class="field-input-group"><input class="field-input" value="@t.VehiclePlate" readonly /></div>
-                                                        </div>
-                                                        <div class="form-field">
-                                                            <label class="field-label">النولون</label>
-                                                            <div class="field-input-group"><input class="field-input" value="@(t.FreightAmount?.ToString("N0") ?? "—")" readonly /></div>
-                                                        </div>
-                                                        <div class="form-field">
-                                                            <label class="field-label">الحالة</label>
-                                                            <div class="field-input-group"><input class="field-input" value="@TripStatusAr(t.Status)" readonly /></div>
-                                                        </div>
-                                                    }
-                                                </div>
-                                            </div>
-                                        }
-                                    </div>
-                                    <div class="field-hint" style="margin-top:8px">يمكنك تعديل الرحلات غير المنتهية (السائق/السيارة/النولون/الموعد) وحفظ الطلب — أو فتح شاشة الرحلة للتفاصيل.</div>
-                                }
-                            }
-
-                            @if (OperationId is null || CanTripCreate)
-                            {
-                                @if (OperationId is not null)
-                                {
-                                    <div class="tab-section-title" style="margin:18px 0 10px;font-size:14.5px">إضافة رحلة جديدة</div>
-                                }
-                                <div class="bk-container-cards">
-                                    @foreach (var tr in _tripRows)
-                                    {
-                                        var tidx = _tripRows.IndexOf(tr);
-
-                                        <div class="bk-container-card">
-                                            <div class="bk-cc-head">
-                                                <div class="bk-cc-num" aria-label="رقم الرحلة">@(tidx + 1)</div>
-                                                <div class="bk-cc-type-badge">
-                                                    <svg viewBox="0 0 24 24" width="13" height="13"
-                                                         fill="none" stroke="currentColor" stroke-width="2"
-                                                         aria-hidden="true">
-                                                        <rect x="1" y="3" width="15" height="13" rx="2"/>
-                                                        <path d="M16 8h4l3 3v5h-7V8z"/>
-                                                        <circle cx="5.5" cy="18.5" r="2.5"/>
-                                                        <circle cx="18.5" cy="18.5" r="2.5"/>
-                                                    </svg>
-                                                    رحلة @(tidx + 1)
-                                                </div>
-                                                <div class="bk-cc-total">
-                                                    @(OrderedDriversFor(tr).FirstOrDefault(d => d.Id == tr.DriverId)?.Label ?? "بدون سائق بعد")
-                                                </div>
-                                                <button type="button" class="bk-cc-del"
-                                                        @onclick="() => _tripRows.Remove(tr)"
-                                                        disabled="@(OperationId is null && _tripRows.Count <= 1)"
-                                                        title="حذف الرحلة"
-                                                        aria-label="حذف الرحلة @(tidx + 1)">
-                                                    <svg viewBox="0 0 24 24" width="15" height="15"
-                                                         fill="none" stroke="currentColor" stroke-width="2">
-                                                        <path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
-                                                    </svg>
-                                                </button>
-                                            </div>
-
-                                            <div class="bk-cc-body">
-
-                                                <div class="form-field form-field-with-dropdown">
-                                                    <label class="field-label">السائق</label>
-                                                    <div class="field-input-group">
-                                                        <span class="field-prefix" aria-hidden="true">
-                                                            <svg viewBox="0 0 24 24" width="14" height="14"
-                                                                 fill="none" stroke="currentColor" stroke-width="2">
-                                                                <circle cx="11" cy="11" r="8"/>
-                                                                <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
-                                                            </svg>
-                                                        </span>
-                                                        <input class="field-input with-prefix"
-                                                               value="@DriverText(tr)"
-                                                               placeholder="ابحث باسم السائق..."
-                                                               @oninput="e => OnDriverSearch(tr, e)"
-                                                               @onfocus="() => { tr.ShowDrivers = true; tr.FilteredDrivers = FilterPairs(OrderedDriversFor(tr), tr.DriverSearch); }"
-                                                               @onfocusout="() => tr.ShowDrivers = false" />
-                                                    </div>
-                                                    @if (tr.ShowDrivers && tr.FilteredDrivers.Count > 0)
-                                                    {
-                                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
-                                                            @foreach (var d in tr.FilteredDrivers)
-                                                            {
-                                                                <div class="field-dropdown-item" @onmousedown="() => PickDriver(tr, d)">
-                                                                    @d.Label
-                                                                </div>
-                                                            }
-                                                        </div>
-                                                    }
-                                                </div>
-
-                                                <div class="form-field form-field-with-dropdown">
-                                                    <label class="field-label">العربية</label>
-                                                    <div class="field-input-group">
-                                                        <span class="field-prefix" aria-hidden="true">
-                                                            <svg viewBox="0 0 24 24" width="14" height="14"
-                                                                 fill="none" stroke="currentColor" stroke-width="2">
-                                                                <circle cx="11" cy="11" r="8"/>
-                                                                <path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
-                                                            </svg>
-                                                        </span>
-                                                        <input class="field-input with-prefix"
-                                                               value="@VehicleText(tr)"
-                                                               placeholder="ابحث برقم العربية..."
-                                                               @oninput="e => OnVehicleSearch(tr, e)"
-                                                               @onfocus="() => { tr.ShowVehicles = true; tr.FilteredVehicles = FilterPairs(OrderedVehiclesFor(tr), tr.VehicleSearch); }"
-                                                               @onfocusout="() => tr.ShowVehicles = false" />
-                                                    </div>
-                                                    @if (tr.ShowVehicles && tr.FilteredVehicles.Count > 0)
-                                                    {
-                                                        <div class="field-dropdown" @onmousedown:preventDefault="true">
-                                                            @foreach (var v in tr.FilteredVehicles)
-                                                            {
-                                                                <div class="field-dropdown-item" @onmousedown="() => PickVehicle(tr, v)">
-                                                                    @v.Label
-                                                                </div>
-                                                            }
-                                                        </div>
-                                                    }
-                                                </div>
-
-                                                <div class="form-field">
-                                                    <label class="field-label">المقطورة</label>
-                                                    <div class="field-select-wrap">
-                                                        <svg class="field-select-icon" viewBox="0 0 24 24"
-                                                             width="13" height="13" fill="none"
-                                                             stroke="currentColor" stroke-width="2"
-                                                             aria-hidden="true">
-                                                            <path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z"/>
-                                                            <circle cx="7" cy="17.5" r="1.8"/>
-                                                            <circle cx="17" cy="17.5" r="1.8"/>
-                                                        </svg>
-                                                        <select class="field-input field-select" @bind="tr.TrailerId">
-                                                            <option value="">— من غير مقطورة —</option>
-                                                            @foreach (var t2 in _trailers)
-                                                            {
-                                                                <option value="@t2.Id">@t2.Label</option>
-                                                            }
-                                                        </select>
-                                                    </div>
-                                                </div>
-
-                                                <div class="form-field">
-                                                    <label class="field-label">النولون (ج.م)</label>
-                                                    <div class="field-input-group">
-                                                        <span class="field-prefix" aria-hidden="true">ج.م</span>
-                                                        <input type="number" min="0" step="0.01"
-                                                               class="field-input with-prefix"
-                                                               @bind="tr.Freight" />
-                                                    </div>
-                                                </div>
-
-                                                <div class="form-field">
-                                                    <label class="field-label">ميعاد التحرك</label>
-                                                    <div class="field-input-group">
-                                                        <input type="datetime-local"
-                                                               class="field-input"
-                                                               @bind="tr.PlannedStartAt" />
-                                                    </div>
-                                                </div>
-
-                                            </div>
-                                        </div>
-                                    }
-                                </div>
-
-                                <button type="button" class="bk-add-line-btn mt-10" @onclick="AddTripRow">
-                                    <svg viewBox="0 0 24 24" width="14" height="14"
-                                         fill="none" stroke="currentColor" stroke-width="2.5"
-                                         aria-hidden="true">
-                                        <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
-                                    </svg>
-                                    إضافة رحلة
-                                </button>
-
-                                <div class="field-hint" style="margin-top:10px">
-                                    لا تُنشأ الرحلة دون سائق وسيارة — وعدد الحاويات هو ما يحدد غالبًا عدد الرحلات التي تحتاجها هذه العملية.
-                                </div>
-                            }
-
-                        </div>
                     </ChildContent>
                 </MudTabPanel>
 
@@ -1126,12 +1057,83 @@
     public class CTOpt { public int Id { get; set; } public string Label { get; set; } = ""; public decimal? GuaranteeAmount { get; set; } }
     private List<CTOpt> _containerTypes = new();
 
-    private void OnLineTypeChange(LineRow ln, ChangeEventArgs e)
+    /* #82 — async: نوع الحاوية بُعد في قاعدة النولون، فالاقتراح بيتحدّث معاه */
+    private async Task OnLineTypeChange(LineRow ln, ChangeEventArgs e)
     {
         ln.ContainerTypeId = int.TryParse(e.Value?.ToString(), out var id) ? id : 0;
         var t = _containerTypes.FirstOrDefault(x => x.Id == ln.ContainerTypeId);
         if (t is null) ln.Guarantee = null;                          // رجع «اختر» — الضمان يتفضى
         else if (t.GuaranteeAmount is not null) ln.Guarantee = t.GuaranteeAmount;
+        await SuggestLineFreightAsync(ln);
+        /* #94 — نوع الحاوية بُعد في قواعد التسعير، فاختياره لازم يحدّث سعر
+           سطور الإيراد كمان (مش النولون بس). اللي المستخدم كتبه بإيده ما يتداسش
+           لأن SuggestForLineAsync بترجع فورًا لو PriceTouched. */
+        /* #99 — نزامن نوع الحاوية على سطور الإيراد الأول، وبعدين نعيد التسعير */
+        SyncRevContainerTypes();
+        foreach (var rl in _loadedRevLines) await SuggestForLineAsync(rl);
+    }
+
+    /* #82 — اختيار السائق/العربية على سطر: بنعيد استخدام المنطق المشترك
+       وبعدين بنفحص التعارض تلقائي — التحذير يظهر من غير ما المستخدم يطلبه */
+    /* #101 — زرار «اسحب الوجهات من بيانات النقل»: بياخد التحميل/الوجهة/التعتيق
+       من أول سطر إيراد فيه خط سير، ويحطهم على رحلة السطر ده.
+       المستخدم يقدر يغيّرهم أو يعدّلهم بعده عادي — مافيش قفل.
+       وبيعيد اقتراح النولون لأن خط السير بُعد في قاعدة النوالين. */
+    private async Task PullRouteFromRevenueAsync(LineRow ln)
+    {
+        /* أول سطر إيراد فيه خط سير. ولو مفيش (مثلاً المستخدم مالوش حق المالية
+           فقسم الإيرادات مش ظاهرله) ⇒ بنرجع لخط سير راس الطلب اللي جاي من الحجز. */
+        var src = _loadedRevLines.FirstOrDefault(r =>
+            r.PortId is not null || r.DestinationId is not null || r.TahteeqPortId is not null);
+
+        int? portId = src?.PortId        ?? _f.PortId;
+        int? destId = src?.DestinationId ?? _f.DestinationId;
+        int? tahId  = src?.TahteeqPortId ?? _f.TahteeqPortId;
+
+        if (portId is null && destId is null && tahId is null)
+        {
+            ln.ConflictMsg = "مفيش خط سير — عبّي التحميل والوجهة في تاب «بيانات النقل» الأول";
+            return;
+        }
+
+        ln.ConflictMsg          = null;
+        ln.Trip.PortId          = portId;
+        ln.Trip.DestinationId   = destId;
+        ln.Trip.TahteeqPortId   = tahId;
+        ln.PortSearch           = PortLabel(portId);
+        ln.DestSearch           = DestLabel(destId);
+        ln.TahteeqSearch        = PortLabel(tahId);
+
+        await SuggestLineFreightAsync(ln);
+    }
+
+    private async Task PickLineDriver(LineRow ln, PairOpt d)
+    {
+        PickDriver(ln.Trip, d);
+        await CheckLineConflictAsync(ln);
+    }
+
+    private async Task PickLineVehicle(LineRow ln, PairOpt v)
+    {
+        PickVehicle(ln.Trip, v);
+        await CheckLineConflictAsync(ln);
+    }
+
+    /* #82 — تغيير الميعاد: التاريخ بُعد في قاعدة النولون **و**في إتاحة العربية */
+    private async Task OnLineDateChange(LineRow ln, ChangeEventArgs e)
+    {
+        ln.Trip.PlannedStartAt = DateTime.TryParse(e.Value?.ToString(), out var d) ? d : ln.Trip.PlannedStartAt;
+        await LoadAvailableVehiclesAsync(ln.Trip.PlannedStartAt);   // القائمة المتاحة بتتغيّر بالتاريخ
+        await SuggestLineFreightAsync(ln);                          // والقاعدة السارية كمان
+        await CheckLineConflictAsync(ln);                           // والتعارض بيتحسب بالتاريخ
+    }
+
+    /* #82 — المستخدم كتب النولون بإيده */
+    private void OnLineFreightInput(LineRow ln, ChangeEventArgs e)
+    {
+        ln.Trip.Freight = decimal.TryParse(e.Value?.ToString(), out var v) ? v : null;
+        ln.FreightTouched = true;
+        ln.FreightHint = null;
     }
 
     private List<Opt> _agents = new(), _customers = new(), _services = new(), _ports = new(),
@@ -1158,13 +1160,36 @@
     public class PairOpt { public int Id { get; set; } public string Label { get; set; } = ""; public int? SupplierId { get; set; } public bool IsCompany { get; set; } public int? DefaultDriverId { get; set; } }
     private List<PairOpt> _driverPairs = new(), _vehiclePairs = new();
 
+    /* #82 — العربيات المتاحة **بتاريخ الرحلة**. null = لسه ما اتحمّلتش،
+       ووقتها منفلترش (أحسن من إننا نقفل الاختيار على الفاضي) */
+    private HashSet<int>? _availVehicleIds;
+    private string? _availForDate;
+    private bool _availLoaded;
+
     private class TripRow
     {
         public int DriverId { get; set; }
         public int VehicleId { get; set; }
         public int? TrailerId { get; set; }
+        /* #82 — لو السطر ده ليه رحلة مسجّلة أصلًا، بنعرفها عشان التعديل يعدّلها
+           بدل ما يعمل رحلة تانية مكررة */
+        public long? TripId { get; set; }
+        public string TripNumber { get; set; } = "";
+        public string Status { get; set; } = "";
         public decimal? Freight { get; set; }
         public DateTime? PlannedStartAt { get; set; }
+
+        /* #82 — مبيت + تحويله. النولون الكلي = Freight + Overnight + Transfer
+           وده اللي بيتبعت في freightAmount عشان التقارير تفضل زي ما هي */
+        public decimal? Overnight { get; set; }
+        public decimal? Transfer { get; set; }
+        public decimal FreightTotal => (Freight ?? 0) + (Overnight ?? 0) + (Transfer ?? 0);
+
+        /* #78 — خط سير الرحلة نفسها. بيتملأ افتراضي من الطلب،
+           والمستخدم يغيّره لو الحاويات رايحة وجهات مختلفة. */
+        public int? PortId { get; set; }
+        public int? DestinationId { get; set; }
+        public int? TahteeqPortId { get; set; }
 
         /* حالة البحث في السائق/العربية */
         public string DriverSearch { get; set; } = "";
@@ -1230,12 +1255,296 @@
         AfterVehiclePicked(r);
         if (r.DriverId > 0) { r.DriverTouched = false; r.DriverSearch = ""; }
     }
-    private List<TripRow> _tripRows = new();
 
-    private void AddTripRow() => _tripRows.Add(new TripRow
+    /* #80 — سطر إيراد جديد (وضع التعديل)
+       #94 — بقى async: السطر الجديد بيجيب سعره من قائمة الأسعار على طول */
+    private async Task AddRevLineAsync()
     {
-        PlannedStartAt = DateTime.TryParse(_f.Date, out var d) ? d.AddHours(8) : DateTime.Today.AddHours(8)
-    });
+        var rl = new LoadedRevLine
+        {
+            ServiceId     = _f.ServiceId ?? 0,
+            Quantity      = 1,
+            UnitPrice     = 0,
+            Discount      = 0,
+            /* #81 — السطر الجديد يرث مسار الطلب، و#83 — ونوع الرحلة */
+            PortId        = _f.PortId,
+            DestinationId = _f.DestinationId,
+            TahteeqPortId = _f.TahteeqPortId,
+            TripTypeId    = _f.TripTypeId,
+            PortSearch    = PortLabel(_f.PortId),
+            DestSearch    = DestLabel(_f.DestinationId),
+            TahteeqSearch = PortLabel(_f.TahteeqPortId)
+        };
+        _loadedRevLines.Add(rl);
+        SyncRevContainerTypes();          /* #99 — السطر الجديد يرث نوع الحاوية */
+        await SuggestForLineAsync(rl);
+    }
+
+    /* #83 — اقتراح سعر لسطر معيّن حسب أبعاده هو (خدمة/مسار/نوع رحلة).
+       بيشتغل تلقائي مع كل تغيير، واللي المستخدم كتبه بإيده ما يتستبدلش */
+    private async Task SuggestForLineAsync(LoadedRevLine rl, bool force = false)
+    {
+        if (rl.PriceTouched && !force) return;
+
+        /* مفيش عميل أو خدمة في السطر ⇒ مفيش حاجة نطابق عليها (من غير نداء ولا رسالة) */
+        if (_f.CustomerId <= 0 || rl.ServiceId <= 0) { rl.Hint = null; return; }
+
+        /* #99 — نوع الحاوية من السطر نفسه، مش من أول حاوية في التاب */
+        var url = $"api/operations/price-suggest?customerId={_f.CustomerId}&serviceId={rl.ServiceId}" +
+                  (rl.PortId        is not null ? $"&portId={rl.PortId}" : "") +
+                  (rl.DestinationId is not null ? $"&destinationId={rl.DestinationId}" : "") +
+                  (rl.TahteeqPortId is not null ? $"&tahteeqPortId={rl.TahteeqPortId}" : "") +
+                  (rl.TripTypeId    is not null ? $"&tripTypeId={rl.TripTypeId}" : "") +
+                  (rl.ContainerTypeId > 0       ? $"&containerTypeId={rl.ContainerTypeId}" : "") +
+                  $"&date={_f.Date}";
+        try
+        {
+            var sg = await Http.GetFromJsonAsync<Suggestion>(url);
+            /* #95 — 🔴 السعر من قوائم الأسعار بس. null ⇒ مفيش قاعدة مطابقة،
+               والسعر يفضل زي ما هو (ما نكتبش صفر على اللي المستخدم كاتبه) */
+            /* #99 — الطلب: جملة بسيطة بس — «يوجد قاعدة تسعير» أو «لا يوجد».
+               السبب التفصيلي من السيرفر بقى في HintDetail (title بالماوس) مش ظاهر. */
+            if (sg is null) { rl.Hint = "لا يوجد قاعدة تسعير"; rl.HintDetail = null; }
+            else if (sg.UnitPrice is null) { rl.Hint = "لا يوجد قاعدة تسعير"; rl.HintDetail = sg.Source; }
+            else { rl.UnitPrice = sg.UnitPrice.Value; rl.Hint = "يوجد قاعدة تسعير"; rl.HintDetail = sg.Source; }
+        }
+        catch { rl.Hint = null; rl.HintDetail = null; /* الاقتراح اختياري — ما يوقفش الشغل */ }
+    }
+
+    /* #83 — تغييرات السطر: نحدّث راس الطلب وبعدين نقترح السعر */
+    private async Task OnRevLineServiceChange(LoadedRevLine rl, ChangeEventArgs e)
+    {
+        rl.ServiceId = int.TryParse(e.Value?.ToString(), out var v) ? v : 0;
+        SyncHeaderFromLines();
+        await SuggestForLineAsync(rl);
+    }
+
+    private async Task OnRevLineTripTypeChange(LoadedRevLine rl, ChangeEventArgs e)
+    {
+        rl.TripTypeId = int.TryParse(e.Value?.ToString(), out var v) ? v : (int?)null;
+        SyncHeaderFromLines();
+        await SuggestForLineAsync(rl);
+    }
+
+    /* #99 — المستخدم اختار نوع الحاوية بإيده على السطر ⇒ نعلّمها عشان
+       المزامنة التلقائية من تاب الحاويات ما تدوسش على اختياره */
+    private async Task OnRevLineContainerChange(LoadedRevLine rl, ChangeEventArgs e)
+    {
+        rl.ContainerTypeId   = int.TryParse(e.Value?.ToString(), out var v) ? v : 0;
+        rl.ContainerTouched  = rl.ContainerTypeId > 0;
+        await SuggestForLineAsync(rl);
+    }
+
+    /* #99 — نوع الحاوية يتعبّى لوحده في سطور الإيراد من تاب الحاويات.
+       سطر الإيراد رقم 1 ياخد نوع سطر الحاويات رقم 1، ورقم 2 ياخد رقم 2 —
+       عشان طلب فيه 20 قدم و40 قدم يسعّر كل سطر بنوعه صح.
+       اللي المستخدم اختاره بإيده (ContainerTouched) ما يتلمسش. */
+    private void SyncRevContainerTypes()
+    {
+        var types = _lines.Where(l => l.ContainerTypeId > 0).Select(l => l.ContainerTypeId).ToList();
+        if (types.Count == 0) return;
+        for (var i = 0; i < _loadedRevLines.Count; i++)
+        {
+            var rl = _loadedRevLines[i];
+            if (rl.ContainerTouched) continue;
+            rl.ContainerTypeId = i < types.Count ? types[i] : types[0];
+        }
+    }
+
+    /* #84 — التحميل/الوجهة/التعتيق: بحث بالكتابة. أول ما تختار، السعر يقترح نفسه */
+    private void OnRevPortSearch(LoadedRevLine rl, ChangeEventArgs e)
+    { rl.PortSearch = e.Value?.ToString() ?? ""; rl.ShowPorts = true; rl.FilteredPorts = FilterOpts(_ports, rl.PortSearch); if (string.IsNullOrWhiteSpace(rl.PortSearch)) rl.PortId = null; }
+
+    private async Task PickRevPort(LoadedRevLine rl, Opt o)
+    { rl.PortId = o.Id; rl.PortSearch = o.Label; rl.ShowPorts = false; AutoFillDesc(rl); SyncHeaderFromLines(); await SuggestForLineAsync(rl); }
+
+    private void OnRevDestSearch(LoadedRevLine rl, ChangeEventArgs e)
+    { rl.DestSearch = e.Value?.ToString() ?? ""; rl.ShowDests = true; rl.FilteredDests = FilterOpts(_destinations, rl.DestSearch); if (string.IsNullOrWhiteSpace(rl.DestSearch)) rl.DestinationId = null; }
+
+    private async Task PickRevDest(LoadedRevLine rl, Opt o)
+    { rl.DestinationId = o.Id; rl.DestSearch = o.Label; rl.ShowDests = false; AutoFillDesc(rl); SyncHeaderFromLines(); await SuggestForLineAsync(rl); }
+
+    private void OnRevTahteeqSearch(LoadedRevLine rl, ChangeEventArgs e)
+    { rl.TahteeqSearch = e.Value?.ToString() ?? ""; rl.ShowTahteeqs = true; rl.FilteredTahteeqs = FilterOpts(_ports, rl.TahteeqSearch); if (string.IsNullOrWhiteSpace(rl.TahteeqSearch)) rl.TahteeqPortId = null; }
+
+    private async Task PickRevTahteeq(LoadedRevLine rl, Opt o)
+    { rl.TahteeqPortId = o.Id; rl.TahteeqSearch = o.Label; rl.ShowTahteeqs = false; AutoFillDesc(rl); SyncHeaderFromLines(); await SuggestForLineAsync(rl); }
+
+    private void OnRevLineDescInput(LoadedRevLine rl, ChangeEventArgs e)
+    {
+        rl.Description = e.Value?.ToString();
+        rl.DescTouched = !string.IsNullOrWhiteSpace(rl.Description);
+    }
+
+    private void OnRevLinePriceInput(LoadedRevLine rl, ChangeEventArgs e)
+    {
+        rl.UnitPrice = decimal.TryParse(e.Value?.ToString(), out var v) && v > 0 ? v : 0;
+        rl.PriceTouched = true;
+        rl.Hint = null;
+    }
+
+    /* #83 — الخدمة ونوع الرحلة بقوا في السطر؛ راس الطلب (اللي بيتبعت للحجز
+       والعملية والرحلات) بتاخد قيمة أول سطر إيراد */
+    private void SyncHeaderFromLines()
+    {
+        var first = _loadedRevLines.FirstOrDefault();
+        if (first is null) return;
+        if (first.ServiceId > 0)          _f.ServiceId     = first.ServiceId;
+        if (first.TripTypeId is not null) _f.TripTypeId    = first.TripTypeId;
+        /* #84 — قسم خط السير اتشال من التاب؛ راس الطلب (اللي بيتبعت للحجز والعملية
+           وبيورّث لرحلات الحاويات) بياخد قيمته من أول سطر إيراد */
+        if (first.PortId is not null)        _f.PortId        = first.PortId;
+        if (first.DestinationId is not null) _f.DestinationId = first.DestinationId;
+        if (first.TahteeqPortId is not null) _f.TahteeqPortId = first.TahteeqPortId;
+    }
+
+    /* #83 — سطور الإيراد اللي بتتبعت للسيرفر (بأبعادها) */
+    private List<object> BuildRevLines() => _loadedRevLines
+        .Where(l => l.ServiceId > 0 && l.Quantity > 0)
+        .Select(l => (object)new
+        {
+            serviceId     = l.ServiceId,
+            description   = l.Description,
+            quantity      = l.Quantity,
+            unitPrice     = l.UnitPrice,
+            discount      = l.Discount,
+            taxRateId     = l.TaxRateId,
+            priceRuleId   = l.PriceRuleId,
+            portId        = l.PortId,
+            destinationId = l.DestinationId,
+            tahteeqPortId = l.TahteeqPortId,
+            tripTypeId    = l.TripTypeId
+        }).ToList();
+
+    /* #82 — سطر حاويات جديد وليه رحلته. الرحلة ترث خط سير الطلب
+       وتتعدّل لو الحاويات رايحة وجهة مختلفة */
+    /* #82 — اسم الجهة مكتوب. فاضي لو مش محدد */
+    /* #101 — المبلغ من غير أصفار زيادة: ‏18700.0000 ⇒ 18700 · ‏18700.50 ⇒ 18700.5
+       ‏InvariantCulture لازم: ‏<input type="number"> ما بيقبلش أرقام عربية (١٨٧٠٠) */
+    private static string Money(decimal v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    private string PortLabel(int? id) => _ports.FirstOrDefault(p => p.Id == id)?.Label ?? "";
+
+    /* #95 — البيان بيتكتب أوتوماتيك من المسار (زي OperationForm.BuildRouteDesc):
+       «من {التحميل} إلى {الوجهة} — تعتيق {التعتيق}».
+       بيتكتب **مرة واحدة** بس: لو المستخدم عدّله بإيده ما ندوسش على كلامه. */
+    private string? BuildRouteDesc(LoadedRevLine rl)
+    {
+        var from = PortLabel(rl.PortId);
+        var to   = DestLabel(rl.DestinationId);
+        var tah  = PortLabel(rl.TahteeqPortId);
+        if (from.Length == 0 && to.Length == 0 && tah.Length == 0) return null;
+        var s = from.Length > 0 && to.Length > 0 ? $"من {from} إلى {to}"
+              : from.Length > 0                  ? $"من {from}"
+              : to.Length   > 0                  ? $"إلى {to}" : "";
+        if (tah.Length > 0) s = s.Length > 0 ? $"{s} — تعتيق {tah}" : $"تعتيق {tah}";
+        return s;
+    }
+
+    private void AutoFillDesc(LoadedRevLine rl)
+    {
+        if (rl.DescTouched) return;                       /* المستخدم كتبه بإيده */
+        var d = BuildRouteDesc(rl);
+        if (d is not null) rl.Description = d;
+    }
+    private string DestLabel(int? id) => _destinations.FirstOrDefault(p => p.Id == id)?.Label ?? "";
+
+    /* #82 — وضع التعديل: كل رحلة مسجّلة بتروح جوه سطر الحاوية بتاعها (1:1 بالترتيب)،
+       فبيانات الرحلة تظهر في نفس القسم بدل ما تكون فاضية.
+       الرحلة اللي اتوزّعت على سطر بتتشال من قسم «الرحلات والتعيين» عشان ما تتكررش. */
+    private void MapTripsToLines()
+    {
+        var mapped = new List<ExistingTrip>();
+        for (var i = 0; i < _lines.Count && i < _existingTrips.Count; i++)
+        {
+            var ln = _lines[i];
+            var t  = _existingTrips[i];
+            ln.Trip.TripId         = t.TripId;
+            ln.Trip.TripNumber     = t.TripNumber;
+            ln.Trip.Status         = t.Status;
+            ln.Trip.DriverId       = t.DriverId;
+            ln.Trip.VehicleId      = t.VehicleId;
+            ln.Trip.TrailerId      = t.TrailerId;
+            ln.Trip.PlannedStartAt = t.PlannedStartAt;
+            ln.Trip.PortId         = t.PortId         ?? _f.PortId;
+            ln.Trip.DestinationId  = t.DestinationId  ?? _f.DestinationId;
+            ln.Trip.TahteeqPortId  = t.TahteeqPortId  ?? _f.TahteeqPortId;
+            ln.Trip.Overnight      = t.OvernightAmount;
+            ln.Trip.Transfer       = t.TransferAmount;
+            ln.Trip.Freight        = t.FreightBase;
+            ln.Trip.DriverSearch   = t.DriverName;
+            ln.Trip.VehicleSearch  = t.VehiclePlate;
+            ln.PortSearch          = t.PortName     ?? PortLabel(ln.Trip.PortId);
+            ln.DestSearch          = t.DestName     ?? DestLabel(ln.Trip.DestinationId);
+            ln.TahteeqSearch       = t.TahteeqName  ?? PortLabel(ln.Trip.TahteeqPortId);
+            /* النولون المحفوظ قيمة حقيقية — الاقتراح التلقائي ما يستبدلهاش */
+            ln.FreightTouched      = true;
+            mapped.Add(t);
+        }
+        _mappedTrips = mapped.Count;
+        if (mapped.Count > 0) _existingTrips = _existingTrips.Except(mapped).ToList();
+
+        /* السطور اللي ملهاش رحلة مسجّلة: تورّث خط سير الطلب وميعاده،
+           والجهات تفضل مكتوبة بأسمائها (ومش بنلمس سطر المستخدم بدأ يعدّل فيه) */
+        foreach (var ln in _lines.Where(x => x.Trip.TripId is null && x.Trip.DriverId == 0
+                                          && x.Trip.PortId is null && x.Trip.DestinationId is null
+                                          && x.Trip.TahteeqPortId is null))
+        {
+            ln.Trip.PlannedStartAt = DateTime.TryParse(_f.Date, out var d) ? d.AddHours(8) : DateTime.Today.AddHours(8);
+            ln.Trip.PortId         = _f.PortId;
+            ln.Trip.DestinationId  = _f.DestinationId;
+            ln.Trip.TahteeqPortId  = _f.TahteeqPortId;
+            ln.PortSearch          = PortLabel(ln.Trip.PortId);
+            ln.DestSearch          = DestLabel(ln.Trip.DestinationId);
+            ln.TahteeqSearch       = PortLabel(ln.Trip.TahteeqPortId);
+        }
+    }
+
+    /* #82 — أزرار الرحلة المسجّلة (بدء/إنهاء/إلغاء) بتشتغل على رحلة السطر */
+    private static ExistingTrip LineTripRef(LineRow ln) => new()
+    {
+        TripId = ln.Trip.TripId!.Value, TripNumber = ln.Trip.TripNumber, Status = ln.Trip.Status
+    };
+
+    private void AddLine() => _lines.Add(NewLineRow());
+
+    private LineRow NewLineRow()
+    {
+        var ln = new LineRow
+        {
+            Trip = new TripRow
+            {
+                PlannedStartAt = DateTime.TryParse(_f.Date, out var d) ? d.AddHours(8) : DateTime.Today.AddHours(8),
+                PortId         = _f.PortId,
+                DestinationId  = _f.DestinationId,
+                TahteeqPortId  = _f.TahteeqPortId
+            }
+        };
+        /* #82 — الجهات مكتوبة بأسمائها في خانات السطر */
+        ln.PortSearch     = PortLabel(ln.Trip.PortId);
+        ln.DestSearch     = DestLabel(ln.Trip.DestinationId);
+        ln.TahteeqSearch  = PortLabel(ln.Trip.TahteeqPortId);
+        return ln;
+    }
+
+    /* #82 — حذف السطر: محليًا بس. الحفظ هو اللي بيمسحه من السيرفر
+       (ولو ليه حاويات فعلية السيرفر بيرفض المسح) */
+    private Task RemoveLineAsync(LineRow ln)
+    {
+        if (_lines.Count > 1) _lines.Remove(ln);
+        return Task.CompletedTask;
+    }
+
+    /* #78 — ملخّص خط سير الرحلة للعرض */
+    private static string? RouteOf(ExistingTrip t)
+    {
+        var s = t.PortName is not null && t.DestName is not null ? $"من {t.PortName} إلى {t.DestName}"
+              : t.PortName is not null                           ? $"من {t.PortName}"
+              : t.DestName is not null                           ? $"إلى {t.DestName}" : null;
+        if (s is null && t.TahteeqName is null) return null;
+        if (t.TahteeqName is not null) s = s is null ? $"تعتيق {t.TahteeqName}" : $"{s} — تعتيق {t.TahteeqName}";
+        return s;
+    }
 
     private static string TripStatusAr(string s) => s switch
     {
@@ -1265,11 +1574,167 @@
         return _driverPairs.OrderByDescending(p => SameSource(p, v) ? 1 : 0).ToList();
     }
 
+    /* ═══ #82 — بحث بمجرد الكتابة في التحميل/الوجهة/التعتيق.
+       ملاحظة: FilterOpts نفسها موجودة أصلًا في الملف (بحث العميل النهائي) —
+       بنستخدم الموجودة وما نكررهاش (CS0111). ═══ */
+    private void OnPortSearch(ChangeEventArgs e)
+    {
+        _f.PortSearch = e.Value?.ToString() ?? "";
+        _f.ShowPorts = true;
+        _f.FilteredPorts = FilterOpts(_ports, _f.PortSearch);
+        if (string.IsNullOrWhiteSpace(_f.PortSearch)) _f.PortId = null;
+    }
+    private void PickPort(Opt o) { _f.PortId = o.Id; _f.PortSearch = o.Label; _f.ShowPorts = false; }
+
+    private void OnDestSearch(ChangeEventArgs e)
+    {
+        _f.DestSearch = e.Value?.ToString() ?? "";
+        _f.ShowDests = true;
+        _f.FilteredDests = FilterOpts(_destinations, _f.DestSearch);
+        if (string.IsNullOrWhiteSpace(_f.DestSearch)) _f.DestinationId = null;
+    }
+    private void PickDest(Opt o) { _f.DestinationId = o.Id; _f.DestSearch = o.Label; _f.ShowDests = false; }
+
+    private void OnTahteeqSearch(ChangeEventArgs e)
+    {
+        _f.TahteeqSearch = e.Value?.ToString() ?? "";
+        _f.ShowTahteeqs = true;
+        _f.FilteredTahteeqs = FilterOpts(_ports, _f.TahteeqSearch);
+        if (string.IsNullOrWhiteSpace(_f.TahteeqSearch)) _f.TahteeqPortId = null;
+    }
+    private void PickTahteeq(Opt o) { _f.TahteeqPortId = o.Id; _f.TahteeqSearch = o.Label; _f.ShowTahteeqs = false; }
+
+    /* ═══ #82 — بحث خط سير رحلة السطر (1:1) ═══ */
+    private void OnLinePortSearch(LineRow ln, ChangeEventArgs e)
+    {
+        ln.PortSearch = e.Value?.ToString() ?? "";
+        ln.ShowPorts = true;
+        ln.FilteredPorts = FilterOpts(_ports, ln.PortSearch);
+        if (string.IsNullOrWhiteSpace(ln.PortSearch)) ln.Trip.PortId = null;
+    }
+    private async Task PickLinePort(LineRow ln, Opt o)
+    { ln.Trip.PortId = o.Id; ln.PortSearch = o.Label; ln.ShowPorts = false; await SuggestLineFreightAsync(ln); }
+
+    private void OnLineDestSearch(LineRow ln, ChangeEventArgs e)
+    {
+        ln.DestSearch = e.Value?.ToString() ?? "";
+        ln.ShowDests = true;
+        ln.FilteredDests = FilterOpts(_destinations, ln.DestSearch);
+        if (string.IsNullOrWhiteSpace(ln.DestSearch)) ln.Trip.DestinationId = null;
+    }
+    private async Task PickLineDest(LineRow ln, Opt o)
+    { ln.Trip.DestinationId = o.Id; ln.DestSearch = o.Label; ln.ShowDests = false; await SuggestLineFreightAsync(ln); }
+
+    private void OnLineTahteeqSearch(LineRow ln, ChangeEventArgs e)
+    {
+        ln.TahteeqSearch = e.Value?.ToString() ?? "";
+        ln.ShowTahteeqs = true;
+        ln.FilteredTahteeqs = FilterOpts(_ports, ln.TahteeqSearch);
+        if (string.IsNullOrWhiteSpace(ln.TahteeqSearch)) ln.Trip.TahteeqPortId = null;
+    }
+    private async Task PickLineTahteeq(LineRow ln, Opt o)
+    { ln.Trip.TahteeqPortId = o.Id; ln.TahteeqSearch = o.Label; ln.ShowTahteeqs = false; await SuggestLineFreightAsync(ln); }
+
+    /* ═══ #82 — اقتراح نولون السائق من جدول النوالين
+       (التحميل + الوجهة + التعتيق + نوع الحاوية + نوع الرحلة) ═══ */
+    /* #82 — force=false (تلقائي): لو المستخدم كتب النولون بإيده ما ندوسش على كلامه.
+       force=true (زرار «اقترح النولون»): طلب صريح ⇒ بيستبدل. */
+    private async Task SuggestLineFreightAsync(LineRow ln, bool force = false)
+    {
+        if (ln.FreightTouched && !force) return;
+
+        /* مفيش خط سير ولا نوع حاوية ⇒ مفيش حاجة نطابق عليها */
+        if (ln.Trip.PortId is null && ln.Trip.DestinationId is null
+            && ln.Trip.TahteeqPortId is null && ln.ContainerTypeId <= 0) return;
+
+        try
+        {
+            var url = "api/trips/freight-suggest?_=1"
+                + (ln.Trip.PortId        is int pi ? $"&portId={pi}"        : "")
+                + (ln.Trip.DestinationId is int di ? $"&destinationId={di}" : "")
+                + (ln.Trip.TahteeqPortId is int ti ? $"&tahteeqPortId={ti}" : "")
+                + (_f.TripTypeId         is int tt ? $"&tripTypeId={tt}"    : "")
+                + (ln.ContainerTypeId > 0          ? $"&containerTypeId={ln.ContainerTypeId}" : "")
+                + (ln.Trip.PlannedStartAt is DateTime ps ? $"&date={ps:yyyy-MM-dd}" : "");
+
+            var res = await Http.GetFromJsonAsync<FreightSug>(url);
+            if (res is null || res.Amount <= 0)
+            { ln.FreightHint = "مفيش قاعدة نولون مطابقة — أدخل النولون يدوي"; return; }
+
+            /* المبيت والتحويلة فضلوا زي ما هما — الاقتراح بيعبّي نولون السائق بس */
+            ln.Trip.Freight = res.Amount;
+            ln.FreightHint  = "من جدول النوالين: " + res.Source;
+        }
+        catch { /* الاقتراح اختياري — ما يوقفش الشغل */ }
+    }
+    private class FreightSug { public decimal Amount { get; set; } public long? RuleId { get; set; } public string? Source { get; set; } }
+
+    /* ═══ #82 — فحص تعارض العربية/السائق: تحذير فيه رقم اللوحة، مش بيمنع الحفظ ═══ */
+    private async Task CheckLineConflictAsync(LineRow ln)
+    {
+        ln.ConflictMsg = null;
+        if (ln.Trip.VehicleId <= 0 && ln.Trip.DriverId <= 0) return;
+        try
+        {
+            var url = "api/trips/availability-check?_=1"
+                + (ln.Trip.VehicleId > 0 ? $"&vehicleId={ln.Trip.VehicleId}" : "")
+                + (ln.Trip.DriverId  > 0 ? $"&driverId={ln.Trip.DriverId}"   : "")
+                + (ln.Trip.PlannedStartAt is DateTime ps ? $"&date={ps:yyyy-MM-ddTHH:mm}" : "");
+
+            var res = await Http.GetFromJsonAsync<ConflictRes>(url);
+            ln.ConflictMsg = res is { Conflicted: true } ? res.Message : null;
+        }
+        catch { /* الفحص اختياري — ما يمنعش الشغل */ }
+    }
+    private class ConflictRes { public bool Conflicted { get; set; } public string? Message { get; set; } }
+
+
+    /* #82 — العربيات المتاحة في تاريخ الرحلة بس (مش محجوزة ولا في رحلة).
+       عربية محجوزة يوم 25 تفضل متاحة لرحلة يوم 20 — نفس منطق السيرفر. */
     private List<PairOpt> OrderedVehiclesFor(TripRow r)
     {
+        var src = _vehiclePairs;
+        /* نسخة محلية — تحليل الـ nullable ما بيدخلش جوه الـ lambda (CS8602) */
+        var avail = _availVehicleIds;
+        if (avail is not null)
+        {
+            var onlyAvail = src.Where(v => avail.Contains(v.Id)).ToList();
+            /* العربية المختارة حاليًا تفضل ظاهرة حتى لو بقت مش متاحة —
+               عشان المستخدم يشوفها ويقدر يغيّرها بدل ما تختفي من تحت إيده */
+            var cur = src.FirstOrDefault(v => v.Id == r.VehicleId);
+            if (cur is not null && !onlyAvail.Any(v => v.Id == cur.Id)) onlyAvail.Insert(0, cur);
+            src = onlyAvail;
+        }
         var d = _driverPairs.FirstOrDefault(x => x.Id == r.DriverId);
-        if (d is null) return _vehiclePairs;
-        return _vehiclePairs.OrderByDescending(p => SameSource(p, d) ? 1 : 0).ToList();
+        if (d is null) return src;
+        return src.OrderByDescending(p => SameSource(p, d) ? 1 : 0).ToList();
+    }
+
+    /* #82 — فتح قايمة عربيات السطر: بتظهر المتاحة حالًا، وبتعاد التصفية
+       بعد ما قائمة المتاحة توصل من السيرفر */
+    private async Task OnLineVehicleFocus(LineRow ln)
+    {
+        ln.Trip.ShowVehicles = true;
+        ln.Trip.FilteredVehicles = FilterPairs(OrderedVehiclesFor(ln.Trip), ln.Trip.VehicleSearch);
+        await LoadAvailableVehiclesAsync(ln.Trip.PlannedStartAt);
+        ln.Trip.FilteredVehicles = FilterPairs(OrderedVehiclesFor(ln.Trip), ln.Trip.VehicleSearch);
+    }
+
+    /* #82 — تحميل العربيات المتاحة لتاريخ معيّن (بيتنادى أول ما المستخدم
+       يفتح قايمة العربيات أو يغيّر الميعاد) */
+    private async Task LoadAvailableVehiclesAsync(DateTime? when)
+    {
+        var key = (when ?? DateTime.Today).ToString("yyyy-MM-dd");
+        if (_availForDate == key && _availLoaded) return;
+        try
+        {
+            var list = await Http.GetFromJsonAsync<List<PairOpt>>(
+                $"api/options/vehicles-available?date={key}") ?? new();
+            _availVehicleIds = list.Select(v => v.Id).ToHashSet();
+            _availForDate = key;
+            _availLoaded = true;
+        }
+        catch { _availLoaded = false; }   // لو الطلب فشل منفلترش — أحسن من قفل الاختيار
     }
 
     private void AfterDriverPicked(TripRow r)
@@ -1297,7 +1762,31 @@
     private string ExistingDriverText(ExistingTrip t) => !t.DriverTouched && t.DriverId > 0 ? (_driverPairs.FirstOrDefault(d => d.Id == t.DriverId)?.Label ?? t.DriverName) : t.DriverSearch;
     private string ExistingVehicleText(ExistingTrip t) => !t.VehicleTouched && t.VehicleId > 0 ? (_vehiclePairs.FirstOrDefault(v => v.Id == t.VehicleId)?.Label ?? t.VehiclePlate) : t.VehicleSearch;
     private List<PairOpt> OrderedDriversForExisting(ExistingTrip t) { var v = _vehiclePairs.FirstOrDefault(x => x.Id == t.VehicleId); return v is null ? _driverPairs : _driverPairs.OrderByDescending(p => SameSource(p, v) ? 1 : 0).ToList(); }
-    private List<PairOpt> OrderedVehiclesForExisting(ExistingTrip t) { var d = _driverPairs.FirstOrDefault(x => x.Id == t.DriverId); return d is null ? _vehiclePairs : _vehiclePairs.OrderByDescending(p => SameSource(p, d) ? 1 : 0).ToList(); }
+    /* #82 — نفس فلترة المتاحة بالزي السطور الجديدة: العربية المتاحة في تاريخ الرحلة بس،
+       والعربية المختارة حاليًا تفضل ظاهرة حتى لو بقت مش متاحة */
+    private List<PairOpt> OrderedVehiclesForExisting(ExistingTrip t)
+    {
+        var src = _vehiclePairs;
+        var avail = _availVehicleIds;
+        if (avail is not null)
+        {
+            var onlyAvail = src.Where(v => avail.Contains(v.Id)).ToList();
+            var cur = src.FirstOrDefault(v => v.Id == t.VehicleId);
+            if (cur is not null && !onlyAvail.Any(v => v.Id == cur.Id)) onlyAvail.Insert(0, cur);
+            src = onlyAvail;
+        }
+        var d = _driverPairs.FirstOrDefault(x => x.Id == t.DriverId);
+        return d is null ? src : src.OrderByDescending(p => SameSource(p, d) ? 1 : 0).ToList();
+    }
+
+    /* #82 — فتح قايمة عربيات رحلة مسجّلة: المتاحة بتتحمّل بتاريخ الرحلة دي */
+    private async Task OnExistingVehicleFocus(ExistingTrip t)
+    {
+        t.ShowVehicles = true;
+        t.FilteredVehicles = FilterPairs(OrderedVehiclesForExisting(t), t.VehicleSearch);
+        await LoadAvailableVehiclesAsync(t.PlannedStartAt);
+        t.FilteredVehicles = FilterPairs(OrderedVehiclesForExisting(t), t.VehicleSearch);
+    }
     private void OnExistingDriverSearch(ExistingTrip t, ChangeEventArgs e) { t.DriverSearch = e.Value?.ToString() ?? ""; t.DriverTouched = true; t.ShowDrivers = true; t.FilteredDrivers = FilterPairs(OrderedDriversForExisting(t), t.DriverSearch); if (string.IsNullOrWhiteSpace(t.DriverSearch)) t.DriverId = 0; }
     private void OnExistingVehicleSearch(ExistingTrip t, ChangeEventArgs e) { t.VehicleSearch = e.Value?.ToString() ?? ""; t.VehicleTouched = true; t.ShowVehicles = true; t.FilteredVehicles = FilterPairs(OrderedVehiclesForExisting(t), t.VehicleSearch); if (string.IsNullOrWhiteSpace(t.VehicleSearch)) t.VehicleId = 0; }
     private void PickExistingDriver(ExistingTrip t, PairOpt d) { t.DriverId = d.Id; t.DriverSearch = d.Label; t.DriverTouched = false; t.ShowDrivers = false; var dr = _driverPairs.FirstOrDefault(x => x.Id == t.DriverId); if (dr is not null) { var cur = _vehiclePairs.FirstOrDefault(x => x.Id == t.VehicleId); if (cur is null || !SameSource(cur, dr)) { var m = _vehiclePairs.Where(v => SameSource(v, dr)).ToList(); if (m.Count == 1) t.VehicleId = m[0].Id; } } if (t.VehicleId > 0) { t.VehicleTouched = false; t.VehicleSearch = ""; t.VehiclePlate = _vehiclePairs.FirstOrDefault(v => v.Id == t.VehicleId)?.Label ?? t.VehiclePlate; } t.DriverName = d.Label; }
@@ -1309,7 +1798,7 @@
         {
             var res = await Http.PostAsJsonAsync($"api/trips/{t.TripId}/start", new { actualStartAt = (string?)null, startOdometer = (string?)null });
             Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
-            if (res.IsSuccessStatusCode && OperationId is not null) _existingTrips = await SafeGetList<ExistingTrip>($"api/operations/{OperationId}/trips");
+            if (res.IsSuccessStatusCode && OperationId is not null) { _existingTrips = await SafeGetList<ExistingTrip>($"api/operations/{OperationId}/trips"); MapTripsToLines(); }
         }
         catch (Exception ex) { Snackbar.Add("فشل بدء الرحلة: " + ex.Message, Severity.Error); }
     }
@@ -1320,7 +1809,7 @@
         {
             var res = await Http.PostAsJsonAsync($"api/trips/{t.TripId}/complete", new { actualEndAt = (string?)null, endOdometer = (string?)null });
             Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
-            if (res.IsSuccessStatusCode && OperationId is not null) _existingTrips = await SafeGetList<ExistingTrip>($"api/operations/{OperationId}/trips");
+            if (res.IsSuccessStatusCode && OperationId is not null) { _existingTrips = await SafeGetList<ExistingTrip>($"api/operations/{OperationId}/trips"); MapTripsToLines(); }
         }
         catch (Exception ex) { Snackbar.Add("فشل إنهاء الرحلة: " + ex.Message, Severity.Error); }
     }
@@ -1336,7 +1825,7 @@
                 res = await Http.PostAsync($"api/trips/{t.TripId}/cancel", null);
             Snackbar.Add(await MsgOf(res), res.IsSuccessStatusCode ? Severity.Success : Severity.Error);
             if (res.IsSuccessStatusCode && OperationId is not null)
-                _existingTrips = await SafeGetList<ExistingTrip>($"api/operations/{OperationId}/trips");
+            { _existingTrips = await SafeGetList<ExistingTrip>($"api/operations/{OperationId}/trips"); MapTripsToLines(); }
         }
         catch (Exception ex) { Snackbar.Add("فشل حذف/إلغاء الرحلة: " + ex.Message, Severity.Error); }
     }
@@ -1347,7 +1836,23 @@
         public int DriverId { get; set; } public int VehicleId { get; set; } public int? TrailerId { get; set; }
         public string DriverName { get; set; } = ""; public string VehiclePlate { get; set; } = "";
         public string Status { get; set; } = ""; public decimal? FreightAmount { get; set; }
+        /* #82 — مبيت + تحويله. FreightAmount هو النولون الكلي (المجموع) */
+        public decimal? OvernightAmount { get; set; }
+        public decimal? TransferAmount { get; set; }
+
+        /* #82 — النولون الأساسي (من غير المبيت والتحويلة) — ده اللي بيتعدّل.
+           السيرفر بيرجّع المجموع في FreightAmount، فبنطرح الاتنين عشان ما يتجمعوش مرتين.
+           أول قراءة بتشتق من المحمّل، وأول كتابة بتثبّت قيمة المستخدم. */
+        private decimal? _freightBaseSet;
+        public decimal? FreightBase
+        {
+            get => _freightBaseSet ?? ((FreightAmount ?? 0) - (OvernightAmount ?? 0) - (TransferAmount ?? 0));
+            set => _freightBaseSet = value;
+        }
         public DateTime? PlannedStartAt { get; set; } public int? TripTypeId { get; set; }
+        /* #78 — خط سير الرحلة نفسها */
+        public int? PortId { get; set; } public int? DestinationId { get; set; } public int? TahteeqPortId { get; set; }
+        public string? PortName { get; set; } public string? DestName { get; set; } public string? TahteeqName { get; set; }
         public bool _editing;
         public string DriverSearch { get; set; } = ""; public bool DriverTouched; public bool ShowDrivers;
         public string VehicleSearch { get; set; } = ""; public bool VehicleTouched; public bool ShowVehicles;
@@ -1355,15 +1860,40 @@
         public List<PairOpt> FilteredVehicles { get; set; } = new();
     }
     private List<ExistingTrip> _existingTrips = new();
+    /* #82 — كام رحلة اتوزّعت جوه سطور الحاويات (عشان رسالة القسم التاني تكون صادقة) */
+    private int _mappedTrips;
 
     private class LineRow
     {
+        /* #82 — null = سطر جديد، قيمة = سطر موجود بيتم تحديثه */
+        public long? LineId { get; set; }
         public int ContainerTypeId { get; set; }
         public int Qty { get; set; } = 1;
         public decimal? WeightKg { get; set; }
         public decimal? Guarantee { get; set; }
         public string? Notes { get; set; }
         public List<DetailRow> Details { get; set; } = new();
+
+        /* #82 — كل سطر حاويات وليه رحلته في نفس القسم (1:1) */
+        public TripRow Trip { get; set; } = new();
+
+        /* #82 — المستخدم كتب النولون بإيده ⇒ الاقتراح التلقائي ما يستبدلوش.
+           زرار «اقترح النولون» بيتجاهل العلامة دي (طلب صريح). */
+        public bool FreightTouched { get; set; }
+
+        /* حالة بحث خط سير الرحلة بتاعة السطر */
+        public string PortSearch { get; set; } = "";
+        public string DestSearch { get; set; } = "";
+        public string TahteeqSearch { get; set; } = "";
+        public bool ShowPorts, ShowDests, ShowTahteeqs;
+        public List<Opt> FilteredPorts { get; set; } = new();
+        public List<Opt> FilteredDests { get; set; } = new();
+        public List<Opt> FilteredTahteeqs { get; set; } = new();
+
+        /* #82 — تحذير تعارض العربية/السائق (مش بيمنع الحفظ) */
+        public string? ConflictMsg { get; set; }
+        /* #82 — تلميح اقتراح النولون */
+        public string? FreightHint { get; set; }
     }
     private class DetailRow
     {
@@ -1388,8 +1918,11 @@
         var details = _lines[lineIdx].Details;
         if (detailIdx >= 0 && detailIdx < details.Count) details.RemoveAt(detailIdx);
     }
+    /* #101 — المالك طلب إخفاء حقل المقطورة من رحلة السطر. ‏false = مخفي.
+       الحقل نفسه لسه شغال تحت السطح (بيتحمّل وبيتبعت) — عشان كده فلاج مش حذف. */
+    private static readonly bool _showTrailerField = false;
+
     private List<LineRow> _lines = new() { new() };
-    private bool _linesLocked;
 
     private class Form
     {
@@ -1406,10 +1939,18 @@
         public int? DestinationId { get; set; }
         public int? TahteeqPortId { get; set; }
         public int? TripTypeId { get; set; }
+
+        /* #82 — بحث بمجرد الكتابة في التحميل/الوجهة/التعتيق */
+        public string PortSearch { get; set; } = "";
+        public string DestSearch { get; set; } = "";
+        public string TahteeqSearch { get; set; } = "";
+        public bool ShowPorts, ShowDests, ShowTahteeqs;
+        public List<Opt> FilteredPorts { get; set; } = new();
+        public List<Opt> FilteredDests { get; set; } = new();
+        public List<Opt> FilteredTahteeqs { get; set; } = new();
         public string Date { get; set; } = DateTime.Today.ToString("yyyy-MM-dd");
         public int? GuaranteeSupplierId { get; set; }
         public string? Notes { get; set; }
-        public decimal? UnitPrice { get; set; }
     }
     private Form _f = new();
 
@@ -1419,6 +1960,18 @@
     private long? _bookingId;
     private decimal _loadedEstimatedCost;
     private List<LoadedRevLine> _loadedRevLines = new();
+
+    /* ═══ #80 — قسم المصروفات جوه شاشة طلب النقل ═══ */
+    public class ExpLine
+    {
+        public long ExpenseId { get; set; } public string ExpenseNumber { get; set; } = "";
+        public string TypeName { get; set; } = ""; public DateTime ExpenseDate { get; set; }
+        public decimal Amount { get; set; }
+        public string Status { get; set; } = ""; public string? Description { get; set; }
+        public string? TripNumber { get; set; } public string? DriverName { get; set; }
+    }
+    /* #80ب — مصروفات العملية (عرض فقط — التسجيل من /expenses) */
+    private List<ExpLine> _expenses = new();
     private List<Opt> _contacts = new();
 
     /* بحث العميل */
@@ -1446,6 +1999,8 @@
         _showCustomerDropdown = false;
         _f.ContactId = null;
         await LoadContactsAsync(c.Id);
+        /* #83 — السعر بيتحدد بالعميل، فكل السطور تتحدث (اللي متكتب بإيده يفضل) */
+        foreach (var rl in _loadedRevLines) await SuggestForLineAsync(rl);
     }
 
     private async Task LoadContactsAsync(int customerId)
@@ -1516,6 +2071,32 @@
         public int ServiceId { get; set; } public string? Description { get; set; }
         public decimal Quantity { get; set; } public decimal UnitPrice { get; set; }
         public decimal Discount { get; set; } public int? TaxRateId { get; set; } public long? PriceRuleId { get; set; }
+        /* #81/#83 — مسار السطر ونوع رحلته. من #83 الأبعاد دي **بتتحفظ** في
+           OperationRevenueItems (PortId/DestinationId/TahteeqPortId/TripTypeId) */
+        public int? PortId { get; set; } public int? DestinationId { get; set; } public int? TahteeqPortId { get; set; }
+        public int? TripTypeId { get; set; }
+        /* #83 — المستخدم كتب السعر بإيده ⇒ الاقتراح التلقائي ما يستبدلوش.
+           زرار «اقترح السعر» بيتجاهل العلامة دي (طلب صريح). */
+        public bool PriceTouched { get; set; }
+        /* #95 — المستخدم كتب البيان بإيده ⇒ التعبئة الأوتوماتيك ما تدوسش عليه */
+        public bool DescTouched { get; set; }
+        public string? Hint { get; set; }
+        /* #99 — السبب التفصيلي من السيرفر. **ما بيظهرش** في الشاشة (الطلب كان
+           جملة بسيطة)، بس بيتحط في title — تعدّي بالماوس على الرسالة تشوفه. */
+        public string? HintDetail { get; set; }
+        /* #99 — نوع الحاوية بقى بُعد تسعير على السطر نفسه. كان بياخد أول حاوية
+           في تاب الحاويات، فطلب فيه 20 قدم و40 قدم كان بيسعّر الكل بأول واحدة.
+           بيتعبّى لوحده من تاب الحاويات، واللي المستخدم اختاره بإيده ما يتلمسش. */
+        public int ContainerTypeId { get; set; }
+        public bool ContainerTouched { get; set; }
+        /* #84 — التحميل/الوجهة/التعتيق بقت بحث بالكتابة زي باقي الشاشة */
+        public string PortSearch { get; set; } = "";
+        public string DestSearch { get; set; } = "";
+        public string TahteeqSearch { get; set; } = "";
+        public bool ShowPorts, ShowDests, ShowTahteeqs;
+        public List<Opt> FilteredPorts { get; set; } = new();
+        public List<Opt> FilteredDests { get; set; } = new();
+        public List<Opt> FilteredTahteeqs { get; set; } = new();
     }
     public class BkDetailResp { public BkDetail Booking { get; set; } = new(); public List<BkLine> Lines { get; set; } = new(); }
     public class BkDetail
@@ -1533,6 +2114,8 @@
     }
     public class BkLine
     {
+        /* #82 — المعرف بيتبعت في التعديل عشان السيرفر يعدّل السطر بدل ما يمسحه ويعمله من جديد */
+        public long? BookingContainerLineId { get; set; }
         public int ContainerTypeId { get; set; } public int RequestedQty { get; set; }
         public decimal? WeightKg { get; set; } public string? Notes { get; set; }
         public decimal? GuaranteePerContainer { get; set; }
@@ -1551,7 +2134,8 @@
         public string? Notes { get; set; }
     }
 
-    private class Suggestion { public decimal UnitPrice { get; set; } public string Source { get; set; } = ""; }
+    /* #95 — UnitPrice = null ⇒ مفيش قاعدة مطابقة في قوائم الأسعار */
+    private class Suggestion { public decimal? UnitPrice { get; set; } public string Source { get; set; } = ""; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -1588,10 +2172,19 @@
 
         if (OperationId is null)
         {
-            AddTripRow();
+            /* #101 — 🔴 كان `AddLine()` بيضيف سطر **تاني** على السطر الفاضي الموجود
+               أصلًا في الـ declaration (`_lines = new() { new() }`) ⇒ الطلب الجديد
+               كان بيفتح على **حاويتين**. بقينا نستبدل الفاضي بواحد متظبط عن طريق
+               `NewLineRow()` — بيرث تاريخ الطلب وخط سيره، وبيفضل **سطر واحد**.
+               (ما غيّرتش الـ declaration نفسها عشان مسار التعديل LoadForEditAsync
+               بيعتمد عليها لو الحجز مالوش سطور حاويات.) */
+            _lines = new() { NewLineRow() };
             /* الخدمة الافتراضية بالاسم زي ما المالك حددها حرفيًا: «نقل حاوية» —
                مش أول اسم شبهها (كانت بتقع على «نقل حاوية مبرده») */
             _f.ServiceId = _services.FirstOrDefault(s => s.Label.Trim() == "نقل حاوية")?.Id;
+            /* #83 — سطر إيراد جاهز للكتابة بدل خانة السعر الواحدة
+               (لمن له حق المالية بس — غيره القسم أصلاً مش ظاهرله) */
+            if (CanViewFinancials) await AddRevLineAsync();
         }
         else await LoadForEditAsync(OperationId.Value);
     }
@@ -1614,6 +2207,19 @@
             _bookingId = op.Operation.BookingId;
             _loadedEstimatedCost = op.Operation.EstimatedCost;
             _loadedRevLines = op.RevenueLines;
+            /* #83 — الأبعاد بقت محفوظة في السطر نفسه؛ بنكمّل الناقص من راس الطلب.
+               والسعر المحفوظ قيمة حقيقية ⇒ الاقتراح التلقائي ما يستبدلهاش */
+            foreach (var _rl in _loadedRevLines)
+            {
+                _rl.PortId        ??= _f.PortId;
+                _rl.DestinationId ??= _f.DestinationId;
+                _rl.TahteeqPortId ??= _f.TahteeqPortId;
+                _rl.PortSearch     = PortLabel(_rl.PortId);
+                _rl.DestSearch     = DestLabel(_rl.DestinationId);
+                _rl.TahteeqSearch  = PortLabel(_rl.TahteeqPortId);
+                if (_rl.UnitPrice > 0) _rl.PriceTouched = true;
+            }
+            SyncHeaderFromLines();
 
             /* الحجز والرحلات مش مرتبطين ببعض — بيتجابوا متوازيين */
             var bkTask    = _bookingId is not null
@@ -1622,6 +2228,8 @@
             var tripsTask = SafeGetList<ExistingTrip>($"api/operations/{operationId}/trips");
             await Task.WhenAll(bkTask, tripsTask);
             _existingTrips = tripsTask.Result;
+            /* #80 — مصروفات العملية */
+            _expenses = await SafeGetList<ExpLine>($"api/expenses?operationId={OperationId}");
 
             var bk = bkTask.Result;
             if (bk is not null)
@@ -1636,6 +2244,10 @@
                 _f.DestinationId       = b.DestinationId;
                 _f.TahteeqPortId       = b.TahteeqPortId;
                 _f.TripTypeId          = b.TripTypeId;
+                /* #82 — حقول خط السير بقت بحث بالكتابة، فلازم النص يتعبّى مع المعرّف */
+                _f.PortSearch          = _ports.FirstOrDefault(x => x.Id == _f.PortId)?.Label ?? "";
+                _f.DestSearch          = _destinations.FirstOrDefault(x => x.Id == _f.DestinationId)?.Label ?? "";
+                _f.TahteeqSearch       = _ports.FirstOrDefault(x => x.Id == _f.TahteeqPortId)?.Label ?? "";
                 _f.Date                = string.IsNullOrEmpty(b.RequestedDate) ? _f.Date : b.RequestedDate[..10];
                 _f.GuaranteeSupplierId = b.GuaranteeSupplierId;
                 _f.Notes               = b.Notes;
@@ -1649,6 +2261,7 @@
 
                 _lines = bk.Lines.Select(l => new LineRow
                 {
+                    LineId          = l.BookingContainerLineId,
                     ContainerTypeId = l.ContainerTypeId,
                     Qty             = l.RequestedQty,
                     WeightKg        = l.WeightKg,
@@ -1668,11 +2281,14 @@
                     }).ToList()
                 }).ToList();
                 if (_lines.Count == 0) _lines.Add(new());
-                _linesLocked = bk.Lines.Any(l => l.ContainerDetails.Count > 0);
+                /* #82 — مفيش قفل للسطور. السيرفر بقى بيعمل مقارنة (تحديث/إضافة/حذف)
+                   بدل مسح السطور كلها، فتفاصيل الحاويات بتفضل سليمة */
+                /* #82 — بيانات الرحلة المسجّلة تظهر جوه سطر الحاوية بتاعها (1:1) */
+                MapTripsToLines();
+                SyncRevContainerTypes();   /* #99 — الحاويات وصلت، نعبّي نوعها على السطور */
             }
 
-            var first = _loadedRevLines.FirstOrDefault();
-            if (first is not null) _f.UnitPrice = first.UnitPrice;
+            /* #83 — مفيش سعر واحد في راس الطلب؛ العبرة بسطور الإيراد */
         }
         catch (Exception ex) { _msg = "فشل التحميل: " + ex.Message; }
         finally { _loading = false; }
@@ -1680,43 +2296,34 @@
 
     private void GoBack() => Nav.NavigateTo("/transport-requests");
 
+    /* #83 — اقتراح السعر لكل السطور (طلب صريح ⇒ بيتجاهل الحماية) */
     private async Task SuggestAsync()
     {
-        if (_f.CustomerId <= 0 || _f.ServiceId is null) return;
-        var url = $"api/operations/price-suggest?customerId={_f.CustomerId}&serviceId={_f.ServiceId}" +
-                  (_f.PortId is not null ? $"&portId={_f.PortId}" : "") +
-                  (_f.DestinationId is not null ? $"&destinationId={_f.DestinationId}" : "") +
-                  (_f.TahteeqPortId is not null ? $"&tahteeqPortId={_f.TahteeqPortId}" : "") +
-                  (_f.TripTypeId is not null ? $"&tripTypeId={_f.TripTypeId}" : "") +
-                  (_lines.FirstOrDefault()?.ContainerTypeId > 0 ? $"&containerTypeId={_lines[0].ContainerTypeId}" : "") +
-                  $"&date={_f.Date}";
-        try
-        {
-            var s = await Http.GetFromJsonAsync<Suggestion>(url);
-            if (s is not null) { _f.UnitPrice = s.UnitPrice; _suggestHint = $"المصدر: {s.Source}"; }
-        }
-        catch { _suggestHint = "مفيش اقتراح متاح — دخل السعر يدوي"; }
+        if (_f.CustomerId <= 0 || _loadedRevLines.Count == 0) return;
+        _suggestHint = null;
+        foreach (var rl in _loadedRevLines) await SuggestForLineAsync(rl, true);
     }
 
     private async Task SaveAsync()
     {
         _triedSave = true;
         if (_f.CustomerId <= 0) { _ok = false; _msg = "اختر العميل"; _activeTab = 0; return; }
-        if (string.IsNullOrWhiteSpace(_f.BookingReference)) { _ok = false; _msg = "رقم البوكينج الرسمي مطلوب"; _activeTab = 1; return; }
+        /* #82 — رقم البوكينج انتقل لتاب «بيانات العميل» ⇒ التحقق يودّيه هناك */
+        if (string.IsNullOrWhiteSpace(_f.BookingReference)) { _ok = false; _msg = "رقم البوكينج الرسمي مطلوب"; _activeTab = 0; return; }
 
-        /* سعر سطر الإيراد إجباري لمن يضبط التسعير/المالية */
-        if (CanViewFinancials && (_f.UnitPrice is null or <= 0))
-        { _ok = false; _msg = "سجّل سعر سطر الإيراد (سعر البيع للعميل) أولًا"; _activeTab = 1; return; }
+        /* #83 — قاعدة واحدة للإنشاء والتعديل: سطر إيراد واحد على الأقل بسعر */
+        if (CanViewFinancials && !_loadedRevLines.Any(l => l.UnitPrice > 0))
+        { _ok = false; _msg = "سجّل سعر واحد على الأقل في سطور الإيراد"; _activeTab = 1; return; }
 
         /* نولون العربية إجباري لكل رحلة متعيّنة */
         {
-            foreach (var r in _tripRows)
+            foreach (var r in _lines.Select(l => l.Trip))
             {
                 var partial = (r.DriverId > 0) != (r.VehicleId > 0);
                 if (partial)
-                { _ok = false; _msg = "توجد رحلة غير مكتملة: اختر السائق والسيارة معًا أو احذف الرحلة"; _activeTab = 2; return; }
-                if (r.DriverId > 0 && r.VehicleId > 0 && (r.Freight is null or <= 0))
-                { _ok = false; _msg = "سجّل نولون السيارة لكل رحلة مُسندة قبل الحفظ"; _activeTab = 2; return; }
+                { _ok = false; _msg = "توجد رحلة غير مكتملة: اختر السائق والسيارة معًا أو امسح بيانات الرحلة من السطر"; _activeTab = 2; return; }
+                if (r.DriverId > 0 && r.VehicleId > 0 && r.FreightTotal <= 0)
+                { _ok = false; _msg = "سجّل نولون السيارة (أو المبيت/التحويلة) لكل رحلة مُسندة قبل الحفظ"; _activeTab = 2; return; }
             }
         }
 
@@ -1750,9 +2357,11 @@
             date                = _f.Date,
             guaranteeSupplierId = _f.GuaranteeSupplierId,
             notes               = _f.Notes,
-            unitPrice           = _f.UnitPrice,
+            /* #83 — السعر بقى في سطور الإيراد؛ quick-create بيسجلها كلها */
+            unitPrice           = (decimal?)null,
+            revenueLines        = BuildRevLines(),
             lines = _lines.Where(l => l.ContainerTypeId > 0 && l.Qty >= 1)
-                          .Select(l => new { containerTypeId = l.ContainerTypeId, requestedQty = l.Qty, guaranteePerContainer = l.Guarantee, weightKg = l.WeightKg, notes = l.Notes })
+                          .Select(l => new { bookingContainerLineId = l.LineId, containerTypeId = l.ContainerTypeId, requestedQty = l.Qty, guaranteePerContainer = l.Guarantee, weightKg = l.WeightKg, notes = l.Notes })
                           .ToList(),
             containerDetails = _lines.Where(l => l.ContainerTypeId > 0 && l.Qty >= 1)
                           .SelectMany((l, li) => l.Details.Select(d => new
@@ -1769,14 +2378,23 @@
                               lineIndex                = li
                           }))
                           .ToList(),
-            trips = _tripRows.Where(t => t.DriverId > 0 && t.VehicleId > 0)
+            /* #82 — كل سطر حاويات وليه رحلته (1:1) */
+            trips = _lines.Select(l => l.Trip)
+                          .Where(t => t.DriverId > 0 && t.VehicleId > 0)
                           .Select(t => new
                           {
                               driverId       = t.DriverId,
                               vehicleId      = t.VehicleId,
                               trailerId      = t.TrailerId,
-                              freightAmount  = t.Freight,
-                              plannedStartAt = t.PlannedStartAt?.ToString("yyyy-MM-ddTHH:mm")
+                              /* النولون الكلي = نولون + مبيت + تحويله — التقارير بتقرأ المجموع */
+                              freightAmount  = t.FreightTotal,
+                              overnightAmount = t.Overnight,
+                              transferAmount  = t.Transfer,
+                              plannedStartAt = t.PlannedStartAt?.ToString("yyyy-MM-ddTHH:mm"),
+                              /* #78 — خط سير الرحلة نفسها */
+                              portId         = t.PortId,
+                              destinationId  = t.DestinationId,
+                              tahteeqPortId  = t.TahteeqPortId
                           })
                           .ToList()
         };
@@ -1797,14 +2415,14 @@
 
     private async Task EditAsync()
     {
-        object? bkLines = null;
-        object? bkDetails = null;
-        if (!_linesLocked)
-        {
-            bkLines = _lines.Where(l => l.ContainerTypeId > 0 && l.Qty >= 1)
-                .Select(l => new { containerTypeId = l.ContainerTypeId, requestedQty = l.Qty, weightKg = l.WeightKg, notes = l.Notes, guaranteePerContainer = l.Guarantee })
-                .ToList();
-        }
+        object? bkDetails;
+        /* #82 — السطور بتتبعت دايماً ومعها معرّفها؛ السيرفر بيعدّل الموجود
+           وبيضيف الجديد وبيمسح اللي اتشال (لو ملوش حاويات فعلية) */
+        var bkLines = _lines.Where(l => l.ContainerTypeId > 0 && l.Qty >= 1)
+            .Select(l => new { bookingContainerLineId = l.LineId, containerTypeId = l.ContainerTypeId,
+                               requestedQty = l.Qty, weightKg = l.WeightKg, notes = l.Notes,
+                               guaranteePerContainer = l.Guarantee })
+            .ToList();
         // دائماً أرسل تفاصيل الحاويات (حتى لو السطور مقفولة) عشان تعديل/إضافة رقم الحاوية يشتغل بعد الحفظ
         bkDetails = _lines.Where(l => l.ContainerTypeId > 0 && l.Qty >= 1)
             .SelectMany((l, li) => l.Details.Select(d => new
@@ -1849,34 +2467,8 @@
             else { _ok = false; _msg = "تعديل الحجز فشل: " + m1; Snackbar.Add(_msg, Severity.Error); return; }
         }
 
-        var revLines = _loadedRevLines.Select(l => new
-        {
-            serviceId   = l.ServiceId,
-            description = l.Description,
-            quantity    = l.Quantity,
-            unitPrice   = l.UnitPrice,
-            discount    = l.Discount,
-            taxRateId   = l.TaxRateId,
-            priceRuleId = l.PriceRuleId
-        }).ToList<object>();
-        if (revLines.Count > 0 && _f.UnitPrice is > 0)
-        {
-            var l0 = _loadedRevLines[0];
-            revLines[0] = new
-            {
-                serviceId   = l0.ServiceId, description = l0.Description, quantity = l0.Quantity,
-                unitPrice   = _f.UnitPrice.Value, discount = l0.Discount,
-                taxRateId   = l0.TaxRateId, priceRuleId = l0.PriceRuleId
-            };
-        }
-        else if (revLines.Count == 0 && _f.UnitPrice is > 0 && _f.ServiceId is not null)
-        {
-            revLines.Add(new
-            {
-                serviceId   = _f.ServiceId.Value, description = (string?)null, quantity = 1m,
-                unitPrice   = _f.UnitPrice.Value, discount = 0m, taxRateId = (int?)null, priceRuleId = (long?)null
-            });
-        }
+        /* #83 — السطور زي ما المستخدم ظبطها، وبأبعادها (مسار + نوع رحلة) */
+        var revLines = BuildRevLines();
 
         var opPayload = new
         {
@@ -1913,6 +2505,7 @@
                 _msg = "تم الحفظ جزئيًا، لكن توجد رحلات لم تُحفظ: " + string.Join(" · ", tripErrors) + detailMsg;
                 Snackbar.Add(_msg, Severity.Warning);
                 _existingTrips = await SafeGetList<ExistingTrip>($"api/operations/{OperationId}/trips");
+                MapTripsToLines();
             }
         }
         else { _msg = (bookingLocked ? "فشل تعديل العملية: " : "تم تعديل الحجز لكن فشل تعديل العملية: ") + _msg; Snackbar.Add(_msg, Severity.Error); }
@@ -1933,11 +2526,19 @@
                 tripTypeId     = t.TripTypeId ?? _f.TripTypeId,
                 plannedStartAt = t.PlannedStartAt?.ToString("yyyy-MM-ddTHH:mm"),
                 notes          = (string?)null,
-                freightAmount  = t.FreightAmount,
-                portId         = (int?)null,
-                destinationId  = (int?)null,
-                tahteeqPortId  = (int?)null,
-                operations     = new[] { new { operationId = OperationId.Value, sequenceNo = 1, pickupAt = (string?)null, deliveryAt = (string?)null, notes = (string?)null } }
+                /* #82 — النولون الكلي = نولون + مبيت + تحويله (التقارير بتقرأ المجموع) */
+                freightAmount  = (t.FreightBase ?? 0) + (t.OvernightAmount ?? 0) + (t.TransferAmount ?? 0),
+                overnightAmount = t.OvernightAmount,
+                transferAmount  = t.TransferAmount,
+                /* #79 — خط سير الرحلة الحقيقي. كان (int?)null → السيرفر بيسنده على طول
+                   (TripsController L304-306) فكان أي تعديل بيمسح مسار الرحلة. */
+                portId         = t.PortId,
+                destinationId  = t.DestinationId,
+                tahteeqPortId  = t.TahteeqPortId,
+                /* #79 — null = «سيب ربط الرحلة بالعمليات زي ما هو».
+                   السيرفر بيتجاهل القسم ده لو null (TripsController L317).
+                   لو بعتنا قائمة، أي عملية مش فيها بتتفصل وترجع Pending (L321-332). */
+                operations     = (object?)null
             };
             try
             {
@@ -1954,10 +2555,44 @@
     {
         var errors = new List<string>();
         if (OperationId is null || !CanTripCreate) return errors;
-        var rows = _tripRows.Where(r => r.DriverId > 0 && r.VehicleId > 0).ToList();
+        var rows = _lines.Select(l => l.Trip).Where(r => r.DriverId > 0 && r.VehicleId > 0).ToList();
         var seq = _existingTrips.Count;
         foreach (var r in rows)
         {
+            /* #82 — الرحلة اللي جوه السطر دي مسجّلة أصلًا ⇒ بنعدّلها.
+               قبل كده كان أي حفظ في وضع التعديل بيعمل رحلة تانية مكررة. */
+            if (r.TripId is long tid)
+            {
+                if (!CanEditTrips) continue;
+                /* رحلة مقفولة — الحفظ ما يرجّعهاش للحياة */
+                if (r.Status is "Completed" or "Cancelled" or "Closed") continue;
+                var put = new
+                {
+                    driverId        = r.DriverId,
+                    vehicleId       = r.VehicleId,
+                    trailerId       = r.TrailerId,
+                    tripTypeId      = _f.TripTypeId,
+                    plannedStartAt  = r.PlannedStartAt?.ToString("yyyy-MM-ddTHH:mm"),
+                    notes           = (string?)null,
+                    freightAmount   = r.FreightTotal,
+                    overnightAmount = r.Overnight,
+                    transferAmount  = r.Transfer,
+                    portId          = r.PortId        ?? _f.PortId,
+                    destinationId   = r.DestinationId ?? _f.DestinationId,
+                    tahteeqPortId   = r.TahteeqPortId ?? _f.TahteeqPortId,
+                    /* null = سيب ربط الرحلة بالعمليات زي ما هو (لو بعتنا قائمة بتتفصل) */
+                    operations      = (object?)null
+                };
+                try
+                {
+                    var r1 = await Http.PutAsJsonAsync($"api/trips/{tid}", put);
+                    if (!r1.IsSuccessStatusCode) errors.Add($"رحلة {r.TripNumber}: " + await MsgOf(r1));
+                }
+                catch (Exception ex) { errors.Add($"رحلة {r.TripNumber}: " + ex.Message); }
+                continue;
+            }
+
+            if (!CanTripCreate) continue;
             var payload = new
             {
                 driverId       = r.DriverId,
@@ -1966,16 +2601,23 @@
                 tripTypeId     = _f.TripTypeId,
                 plannedStartAt = r.PlannedStartAt?.ToString("yyyy-MM-ddTHH:mm"),
                 notes          = (string?)null,
-                freightAmount  = r.Freight,
-                portId         = (int?)null,
-                destinationId  = (int?)null,
-                tahteeqPortId  = (int?)null,
+                /* #82 — النولون الكلي = نولون + مبيت + تحويله */
+                freightAmount  = r.FreightTotal,
+                overnightAmount = r.Overnight,
+                transferAmount  = r.Transfer,
+                /* #79 — الرحلة الجديدة في وضع التعديل كانت بتتعمل من غير مسار.
+                   هنا بنورّث من الطلب لو المستخدم محدّدش (زي ما quick-create بيعمل).
+                   ملحوظة: operations لازم تفضل مبعوتة — دي رحلة جديدة لازم تتربط. */
+                portId         = r.PortId        ?? _f.PortId,
+                destinationId  = r.DestinationId ?? _f.DestinationId,
+                tahteeqPortId  = r.TahteeqPortId ?? _f.TahteeqPortId,
                 operations     = new[] { new { operationId = OperationId.Value, sequenceNo = ++seq, pickupAt = (string?)null, deliveryAt = (string?)null, notes = (string?)null } }
             };
             try
             {
                 var res = await Http.PostAsJsonAsync("api/trips", payload);
-                if (res.IsSuccessStatusCode) _tripRows.Remove(r);
+                /* #82 — الرحلة اتعملت: نمسح بياناتها من السطر عشان ما تتعملش تاني */
+                if (res.IsSuccessStatusCode) { r.DriverId = 0; r.VehicleId = 0; }
                 else errors.Add(await MsgOf(res));
             }
             catch (Exception ex) { errors.Add(ex.Message); }
@@ -2314,7 +2956,6 @@
     .tab-section-icon.amber { background: var(--fc-amber-lt); color: var(--fc-amber); border: 1px solid #f0d070; }
 
     .tab-section-title { font-size: 15px; font-weight: 800; color: #1c2b43; line-height: 1.2; }
-    .tab-section-sub   { font-size: 11px; font-weight: 500; color: var(--fc-muted); margin-top: 3px; }
 
     /* ================================================================
        FORM
@@ -2450,6 +3091,21 @@
     .bk-add-line-btn.mt-10 { margin-top: 10px; }
 
     .bk-container-cards { display: flex; flex-direction: column; gap: 12px; }
+
+    /* #80ب — أعمدة سطر الإيراد */
+    /* #84 — سطر واحد لحد الخصم (الكمية أصغر)، والبيان في سطر لوحده وجنبه زرار */
+    /* #99 — نوع الحاوية بقى عمود سادس ⇒ الشبكة 9 أعمدة بدل 8.
+       الكمية (.58fr) والخصم (.58fr) ضيّقين عشان التسعة يقعدوا في سطر واحد،
+       والبيان ياخد السطر اللي تحته كله (1 / 9) وجنبه زرار اقتراح السعر (9). */
+    .bk-cc-body.rf-rev-body {
+        grid-template-columns: 1.2fr 1fr 1fr 1fr 1fr 1fr .58fr .8fr .58fr;
+    }
+
+    .rf-rev-desc { grid-column: 1 / 9; }
+
+    .rf-rev-act { grid-column: 9; display: flex; align-items: flex-end; }
+
+    .rf-rev-act .rf-btn { width: 100%; justify-content: center; }
 
     .bk-container-card {
         border: 1px solid #e4edf8; border-radius: 12px;
@@ -2645,6 +3301,11 @@
     }
 
     /* ── أزرار عمليات الرحلات المسجلة ── */
+    /* #78 — شارة خط سير الرحلة */
+    .rf-trip-route { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:8px; background:#eef4ff; border:1px solid #d5e3ff; color:#1d4f9c; font-size:11.5px; font-weight:700; white-space:nowrap; }
+    .rf-trip-route svg { flex:none; opacity:.75; }
+    @@media (max-width: 680px) { .rf-trip-route { white-space:normal; } }
+
     .rf-trip-act { display:inline-flex; align-items:center; gap:5px; border-radius:8px; padding:4px 10px; font-family:inherit; font-size:12px; font-weight:800; cursor:pointer; border:1px solid transparent; }
     .rf-trip-start { background:#16a35b; color:#fff; }
     .rf-trip-start:hover { background:#15803d; }
@@ -2864,11 +3525,170 @@
     }
 
     /* ================================================================
+       #84 — عائلة أزرار موحّدة + شريط إجراءات الرحلة
+    ================================================================ */
+    .rf-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        border: 1px solid #D7E1EC;
+        background: #fff;
+        color: #33475B;
+        font-size: 12px;
+        font-weight: 800;
+        border-radius: 9px;
+        padding: 7px 13px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background .15s ease, color .15s ease, border-color .15s ease;
+    }
+
+    .rf-btn:hover { background: #F1F5F9; border-color: #B9C7D6; }
+
+    .rf-btn-primary { border-color: #1e6ef5; color: #0B56DF; background: rgba(30, 110, 245, .06); }
+    .rf-btn-primary:hover { background: #1e6ef5; border-color: #1e6ef5; color: #fff; }
+
+    .rf-btn-go { border-color: #0e9f6e; color: #0e9f6e; background: rgba(14, 159, 110, .06); }
+    .rf-btn-go:hover { background: #0e9f6e; border-color: #0e9f6e; color: #fff; }
+
+    .rf-btn-danger { border-color: #e02424; color: #e02424; background: rgba(224, 36, 36, .05); }
+    .rf-btn-danger:hover { background: #e02424; border-color: #e02424; color: #fff; }
+
+    /* #101 — رحلة السطر: **6 أعمدة** بدل 5، عشان «إجراءات الرحلة» تقعد
+       **جنب ميعاد التحرك** بدل ما تنزل سطر لوحدها.
+       الترتيب: سائق · عربية · سحب · وجهة · تعتيق · نولون
+                مبيت · تحويلة · حساب السيارة · ميعاد التحرك · [إجراءات = عمودين]
+       ‏10 حقول + 2 للإجراءات = 12 خانة = سطرين بالظبط. */
+    .bk-cc-body.rf-trip-body {
+        grid-template-columns: 1.15fr 1fr 1fr 1fr 1fr .85fr;
+    }
+
+    .bk-cc-body.rf-trip-body .rf-lt-actions {
+        grid-column: span 2;
+        margin-top: 0;
+    }
+
+    /* شريط إجراءات الرحلة — بياخد عرض الشبكة كله تحت ميعاد التحرك */
+    .rf-lt-actions {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 4px;
+        padding: 10px 12px;
+        border: 1px dashed #D7E1EC;
+        border-radius: 10px;
+        background: #fff;
+    }
+
+    .rf-lt-actions-k {
+        font-size: 11.5px;
+        font-weight: 800;
+        color: #64748B;
+        margin-inline-end: 4px;
+    }
+
+    /* ================================================================
+       #82 — رحلة السطر (الحاويات والرحلات مدموجة 1:1)
+    ================================================================ */
+    .rf-line-trip {
+        margin: 10px -2px 0;
+        padding: 12px 12px 14px;
+        border: 1px solid #E3E9F0;
+        border-inline-start: 3px solid #1e6ef5;
+        border-radius: 10px;
+        background: #F8FAFD;
+    }
+
+    .rf-lt-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+        font-size: 13px;
+        font-weight: 800;
+        color: #0A1B3B;
+    }
+
+    .rf-lt-head svg { color: #1e6ef5; flex: none; }
+
+    .rf-lt-ready {
+        font-size: 11.5px;
+        font-weight: 800;
+        color: #0e9f6e;
+        background: rgba(14, 159, 110, .1);
+        border-radius: 999px;
+        padding: 2px 9px;
+    }
+
+    .rf-lt-empty {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: #64748B;
+    }
+
+    /* #82 — رقم الرحلة وحالتها + أزرارها جوه قسم السطر */
+    .rf-lt-num {
+        font-size: 11.5px;
+        font-weight: 800;
+        color: #0A1B3B;
+        background: rgba(30, 110, 245, .1);
+        border-radius: 999px;
+        padding: 2px 9px;
+    }
+
+    .rf-lt-status {
+        font-size: 11.5px;
+        font-weight: 700;
+        color: #64748B;
+        background: #EEF2F7;
+        border-radius: 999px;
+        padding: 2px 9px;
+    }
+
+    /* التحذير: ينبّه ولا يمنع */
+    .rf-lt-warn {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin-bottom: 10px;
+        padding: 9px 11px;
+        border: 1px solid rgba(232, 163, 23, .45);
+        border-radius: 9px;
+        background: rgba(255, 128, 21, .09);
+        color: #8A5A00;
+        font-size: 12.5px;
+        font-weight: 700;
+        line-height: 1.6;
+    }
+
+    .rf-lt-warn svg { flex: none; margin-top: 2px; color: #E8A317; }
+
+    .rf-lt-total {
+        padding: 9px 12px;
+        border: 1px solid #E3E9F0;
+        border-radius: 9px;
+        background: #fff;
+        color: #0A1B3B;
+        font-size: 14px;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* ================================================================
        RESPONSIVE
     ================================================================ */
     @@media (max-width: 900px) {
         .bk-form-grid { grid-template-columns: 1fr; }
         .bk-cc-body   { grid-template-columns: 1fr 1fr; }
+        .bk-cc-body.rf-rev-body { grid-template-columns: 1fr 1fr; }
+        /* #101 — رحلة السطر كمان */
+        .bk-cc-body.rf-trip-body { grid-template-columns: 1fr 1fr; }
+        .bk-cc-body.rf-trip-body .rf-lt-actions { grid-column: 1 / -1; }
+        .rf-rev-desc, .rf-rev-act { grid-column: 1 / -1; }
         .bk-cc-notes  { grid-column: 1 / -1; }
         .bk-cc-detail-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .tab-section { padding: 18px 16px 22px; }
@@ -2885,10 +3705,16 @@
         .bk-body { padding: 10px 12px 88px; }
         .glow-fab-wrap { left: 18px; bottom: 18px; }
         .bk-cc-body { grid-template-columns: 1fr; }
+        /* #99 — .bk-cc-body.rf-rev-body أعلى specificity، فلازم ننصّ عليه هنا
+           وإلا فضل عمودين على الموبايل */
+        .bk-cc-body.rf-rev-body { grid-template-columns: 1fr; }
+        .bk-cc-body.rf-trip-body { grid-template-columns: 1fr; }   /* #101 */
         .bk-cc-notes { grid-column: 1; }
         .bk-notes-action-row { flex-wrap: wrap; }
         .bk-notes-action-row .field-input { flex: 1 1 100%; }
         .bk-add-detail-inline-btn { width: 100%; justify-content: center; }
+        .rf-lt-actions { flex-direction: column; align-items: stretch; }
+        .rf-btn { width: 100%; }
         .bk-cc-details { padding: 0 12px 12px; }
         .bk-cc-detail-row { grid-template-columns: 1fr; }
         .bk-cc-detail-del { width: 100%; }

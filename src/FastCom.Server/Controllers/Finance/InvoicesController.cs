@@ -75,17 +75,24 @@ public class InvoicesController : ControllerBase
         decimal TaxTotal, decimal GrandTotal, decimal PaidAmount, decimal Due,
         string Status, string PaymentStatus, int ItemsCount, int OperationsCount);
 
+    /* #102 — += خط سير البند (تحميل/وجهة/تعتيق). ‏`InvoiceItem` مفيهوش أعمدة المسار،
+       فالمرجع هو `OperationRevenueItem` المطابق لنفس (العملية + الخدمة). */
     public record LineOut(long InvoiceItemId, long? OperationId, string? OperationNumber,
         int? ServiceId, string Description, decimal Quantity, decimal UnitPrice, decimal Discount,
         int? TaxRateId, decimal TaxRate, decimal LineSubtotal, decimal LineTax, decimal LineTotal,
-        long? ExpenseId);
+        long? ExpenseId, string? PortName, string? DestinationName, string? TahteeqName,
+        /* #103 — اسم الخدمة نفسه. البيان (Description) بقى متعبّى بخط السير من #95،
+           فالطباعة محتاجة اسم الخدمة من مصدر مستقل. */
+        string? ServiceName);
 
     public record Detail(long InvoiceId, string InvoiceNumber, string DocumentTypeCode,
         string InvoiceType, int CustomerId, string CustomerName, string? CustomerTaxNumber,
         string? DisplayCustomerName, string? InvoiceDate, string? DueDate, decimal SubTotal, decimal DiscountTotal,
         decimal TaxTotal, decimal GrandTotal, decimal PaidAmount, decimal Due,
         string Status, string PaymentStatus, string? Notes, string? OriginalInvoiceNumber,
-        DateTime? IssuedAt, string CurrencyCode);
+        DateTime? IssuedAt, string CurrencyCode,
+        /* #102 — أرقام الحجوزات المرتبطة بالفاتورة (عن طريق العمليات) — بتظهر في الطباعة */
+        string? BookingNumbers);
 
     public record OpRef(long OperationId, string OperationNumber, string CustomerName,
         decimal RevenueNet, string? InvoiceNumber);
@@ -149,15 +156,50 @@ public class InvoicesController : ControllerBase
             .Select(c => new { c.NameAr, c.TaxNumber })
             .FirstOrDefaultAsync(ct);
 
-        var items = await _db.InvoiceItems.AsNoTracking()
+        var items = (await _db.InvoiceItems.AsNoTracking()
             .Where(x => x.InvoiceId == id)
             .OrderBy(x => x.InvoiceItemId)
             .Select(x => new LineOut(x.InvoiceItemId, x.OperationId,
                 x.Operation != null ? x.Operation.OperationNumber : null,
                 x.ServiceId, x.Description, x.Quantity, x.UnitPrice, x.Discount,
                 x.TaxRateId, x.TaxRate,
-                x.LineSubtotal ?? 0, x.LineTax ?? 0, x.LineTotal ?? 0, x.ExpenseId))
-            .ToListAsync(ct);
+                x.LineSubtotal ?? 0, x.LineTax ?? 0, x.LineTotal ?? 0, x.ExpenseId,
+                null, null, null,
+                x.Service != null ? x.Service.NameAr : null))
+            .ToListAsync(ct));
+
+        /* #102 — خط سير كل بند: من `OperationRevenueItems` بتاعة العمليات المرتبطة.
+           المطابقة على (العملية + الخدمة). بنجيبها في استعلام واحد مستقل عشان
+           EF ما يترجمش subquery جوه Select الرئيسي. */
+        var routeOpIds = items.Where(x => x.OperationId is not null)
+                              .Select(x => x.OperationId!.Value).Distinct().ToList();
+        if (routeOpIds.Count > 0)
+        {
+            var routeRows = await _db.OperationRevenueItems.AsNoTracking()
+                .Where(r => routeOpIds.Contains(r.OperationId))
+                .OrderBy(r => r.OperationRevenueItemId)
+                .Select(r => new
+                {
+                    r.OperationId,
+                    r.ServiceId,
+                    PortName = r.Port != null ? r.Port.NameAr : null,
+                    DestName = r.Destination != null ? r.Destination.NameAr : null,
+                    TahName  = r.TahteeqPort != null ? r.TahteeqPort.NameAr : null
+                })
+                .ToListAsync(ct);
+
+            var routeMap = new Dictionary<(long, int), (string?, string?, string?)>();
+            foreach (var r in routeRows)
+            {
+                var key = (r.OperationId, r.ServiceId);
+                if (!routeMap.ContainsKey(key)) routeMap[key] = (r.PortName, r.DestName, r.TahName);
+            }
+
+            items = items.Select(x =>
+                x.OperationId is long oid && x.ServiceId is int sid && routeMap.TryGetValue((oid, sid), out var rt)
+                    ? x with { PortName = rt.Item1, DestinationName = rt.Item2, TahteeqName = rt.Item3 }
+                    : x).ToList();
+        }
 
         var ops = await _db.InvoiceOperations.AsNoTracking()
             .Where(x => x.InvoiceId == id)
@@ -187,12 +229,27 @@ public class InvoicesController : ControllerBase
         }
         displayCustomerName ??= cust?.NameAr ?? "—";
 
+        /* #102 — أرقام الحجوزات: الفاتورة ← عمليات ← حجز. ‏Distinct لأن أكتر من
+           عملية ممكن تكون على نفس الحجز. */
+        string? bookingNumbers = null;
+        if (invOpIds.Count > 0)
+        {
+            var bkList = await _db.Operations.AsNoTracking()
+                .Where(o => invOpIds.Contains(o.OperationId) && o.BookingId != null)
+                .Select(o => o.Booking!.BookingNumber)
+                .Distinct()
+                .OrderBy(x => x)
+                .ToListAsync(ct);
+            if (bkList.Count > 0) bookingNumbers = string.Join(" · ", bkList);
+        }
+
         var detail = new Detail(i.InvoiceId, i.InvoiceNumber, i.DocumentTypeCode, i.InvoiceType,
             i.CustomerId, cust?.NameAr ?? "—", cust?.TaxNumber,
             displayCustomerName,
             Iso(i.InvoiceDate), IsoN(i.DueDate), i.SubTotal, i.DiscountTotal, i.TaxTotal,
             i.GrandTotal, i.PaidAmount, i.GrandTotal - i.PaidAmount,
-            i.Status, i.PaymentStatus, i.Notes, originalNo, i.IssuedAt, i.CurrencyCode);
+            i.Status, i.PaymentStatus, i.Notes, originalNo, i.IssuedAt, i.CurrencyCode,
+            bookingNumbers);
 
         return Ok(new
         {
