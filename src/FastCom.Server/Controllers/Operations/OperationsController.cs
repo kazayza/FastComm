@@ -914,7 +914,7 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
        تعرف توزّع سطور الإيراد على الوجهات المختلفة */
     /* #79 — DriverId اتضاف عشان المصروف السريع يعرف يربط المصروف بسائق الرحلة */
     /* #82 — المبيت والتحويلة بيتقرأوا مع الرحلة عشان التعديل ما يمسحهمش */
-    public record OpTripLine(long TripId, string TripNumber, int DriverId, string DriverName, string VehiclePlate,
+    public record OpTripLine(long TripId, string TripNumber, int DriverId, string DriverName, int VehicleId, string VehiclePlate,
         string Status, DateTime? PlannedStartAt, decimal? FreightAmount, int SequenceNo,
         int? PortId, int? DestinationId, int? TahteeqPortId,
         string? PortName, string? DestName, string? TahteeqName,
@@ -930,7 +930,7 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
             .Where(to => to.OperationId == id)
             .OrderBy(to => to.SequenceNo)
             .Select(to => new OpTripLine(
-                to.Trip.TripId, to.Trip.TripNumber, to.Trip.DriverId, to.Trip.Driver.FullName, to.Trip.Vehicle.PlateNumber,
+                to.Trip.TripId, to.Trip.TripNumber, to.Trip.DriverId, to.Trip.Driver.FullName, to.Trip.VehicleId, to.Trip.Vehicle.PlateNumber,
                 to.Trip.Status, to.Trip.PlannedStartAt,
                 hasFin ? to.Trip.FreightAmount : null, to.SequenceNo,
                 to.Trip.PortId, to.Trip.DestinationId, to.Trip.TahteeqPortId,
