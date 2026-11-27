@@ -1,0 +1,209 @@
+From 10b5d1e2ee208bc8d910b6f5135cd2fda26d8fa0 Mon Sep 17 00:00:00 2001
+From: FastCom Dev <dev@fastcom.local>
+Date: Fri, 27 Nov 2026 03:50:33 +0200
+Subject: [PATCH] Fix six: custody-first quick expense, working treasury pay
+ call, expense link keeps operation, revenue-line dimensions round-trip in
+ operation file, request-form line completion after booking load, quick-create
+ fallback line carries route
+
+---
+ src/FastCom.Client/Pages/OperationFile.razor  | 67 +++++++++++++------
+ src/FastCom.Client/Pages/RequestForm.razor    | 32 +++++----
+ .../Operations/OperationsController.cs        |  4 +-
+ 3 files changed, 69 insertions(+), 34 deletions(-)
+
+diff --git a/src/FastCom.Client/Pages/OperationFile.razor b/src/FastCom.Client/Pages/OperationFile.razor
+index 9e6925b..8b4b2fe 100644
+--- a/src/FastCom.Client/Pages/OperationFile.razor
++++ b/src/FastCom.Client/Pages/OperationFile.razor
+@@ -553,7 +553,7 @@
+                             <div class="opf-sec-sub">مصروفات التشغيل المربوطة بالعملية</div>
+                         </div>
+                     </div>
+-                    <a class="doc-btn" href="/expenses/new">مصروف جديد (شاشة كاملة)</a>
++                    <a class="doc-btn" href="@($"/expenses/new?operationId={Id}")">مصروف جديد (شاشة كاملة)</a>
+                 </div>
+ 
+                 @if (CanExpenseCreate && !IsClosed)
+@@ -848,7 +848,9 @@
+         public int TypeId { get; set; } public decimal Amount { get; set; }
+         public decimal? Billable { get; set; } public string? Description { get; set; }
+         public int? ReceiptTypeId { get; set; } public string? ReceiptNumber { get; set; }
+-        public string Source { get; set; } = "Treasury"; public long? CustodyId { get; set; }
++        /* #102 — الافتراضي «من عهدة»: ده مسار الشغل الفعلي عند المالك،
++           والخزينة اختيار يدوي — عشان مصروف ما يخرجش بلا عهدة بالنسيان */
++        public string Source { get; set; } = "Custody"; public long? CustodyId { get; set; }
+         /* التاريخ كان DateTime.Today ثابت في الـ payload — بقى خانة في الفورم،
+            وافتراضيًا النهارده. السيرفر بيقبله زي ما هو (ExpensesController:39 Dt()). */
+         public string Date { get; set; } = DateTime.Today.ToString("yyyy-MM-dd");
+@@ -962,7 +964,12 @@
+                 Discount    = _newRevDisc,
+                 Description = _newRevDesc ?? "",
+                 TaxRateId   = _newRevTaxRateId,
+-                PriceRuleId = _newRevRuleId
++                PriceRuleId = _newRevRuleId,
++                /* #102 — سطر جديد يرث أبعاد العملية بدل ما يولد فاضي */
++                PortId        = _d?.PortId,
++                DestinationId = _d?.DestinationId,
++                TahteeqPortId = _d?.TahteeqPortId,
++                TripTypeId    = _d?.TripTypeId
+             });
+             _newRevPrice = 0;
+             _newRevQty = 0;
+@@ -979,12 +986,17 @@
+         var last = _lines.Last();
+         _lines.Add(new RevLine
+         {
+-            ServiceId   = last.ServiceId,
+-            ServiceName = last.ServiceName,
+-            Quantity    = last.Quantity,
+-            UnitPrice   = last.UnitPrice,
+-            Discount    = last.Discount,
+-            Description = last.Description
++            ServiceId     = last.ServiceId,
++            ServiceName   = last.ServiceName,
++            Quantity      = last.Quantity,
++            UnitPrice     = last.UnitPrice,
++            Discount      = last.Discount,
++            Description   = last.Description,
++            /* #102 — النسخ بينسخ أبعاد السطر كمان، وإلا ضاعت عند الحفظ */
++            PortId        = last.PortId,
++            DestinationId = last.DestinationId,
++            TahteeqPortId = last.TahteeqPortId,
++            TripTypeId    = last.TripTypeId
+         });
+         _newRevServiceId = last.ServiceId;
+         _newRevPrice = last.UnitPrice;
+@@ -1047,10 +1059,15 @@
+         {
+             var ln = new RevLine
+             {
+-                ServiceId   = svcId,
+-                ServiceName = svcName,
+-                Quantity    = g.Count,
+-                Description = g.Route
++                ServiceId     = svcId,
++                ServiceName   = svcName,
++                Quantity      = g.Count,
++                Description   = g.Route,
++                /* #102 — البند مولود من مجموعة خط سير بعينها: أبعادها بتتحفظ معاه */
++                PortId        = g.PortId,
++                DestinationId = g.DestinationId,
++                TahteeqPortId = g.TahteeqPortId,
++                TripTypeId    = _d.TripTypeId
+             };
+             await SuggestForRouteAsync(ln, g);
+             built.Add(ln);
+@@ -1102,13 +1119,17 @@
+                 notes         = _d.Notes,
+                 revenueLines  = _lines.Select(l => new
+                 {
+-                    serviceId   = l.ServiceId,
+-                    description = l.Description,
+-                    quantity    = l.Quantity,
+-                    unitPrice   = l.UnitPrice,
+-                    discount    = l.Discount,
+-                    taxRateId   = l.TaxRateId,
+-                    priceRuleId = l.PriceRuleId
++                    serviceId     = l.ServiceId,
++                    description   = l.Description,
++                    quantity      = l.Quantity,
++                    unitPrice     = l.UnitPrice,
++                    discount      = l.Discount,
++                    taxRateId     = l.TaxRateId,
++                    priceRuleId   = l.PriceRuleId,
++                    portId        = l.PortId,
++                    destinationId = l.DestinationId,
++                    tahteeqPortId = l.TahteeqPortId,
++                    tripTypeId    = l.TripTypeId
+                 }).ToList()
+             };
+             var res = await Http.PutAsJsonAsync($"api/operations/{Id}", payload);
+@@ -1201,7 +1222,7 @@
+             var created = await res.Content.ReadFromJsonAsync<CreatedRes>();
+             if (_qe.Source == "Treasury" && created is not null && created.Id > 0)
+             {
+-                var payRes = await Http.PostAsJsonAsync($"api/expenses/{created.Id}/set-paid", new { to = "Paid" });
++                var payRes = await Http.PostAsJsonAsync($"api/expenses/{created.Id}/pay", new { to = "Paid" });
+                 if (!payRes.IsSuccessStatusCode)
+                 {
+                     Snackbar.Add("أُنشئ المصروف، لكن تعليمه مدفوعًا من الخزينة فشل: " + await MsgOf(payRes), Severity.Warning);
+@@ -1308,6 +1329,10 @@
+         public decimal Quantity { get; set; } public decimal UnitPrice { get; set; } public decimal Discount { get; set; }
+         public int? TaxRateId { get; set; } public long? PriceRuleId { get; set; }
+         public decimal LineNet { get; set; }
++        /* #102 — أبعاد السطر (مسار + نوع رحلة): الخادم بيرجعها وبيحفظها،
++           وغيابها هنا كان بيمسحها من القاعدة عند أي حفظ إيراد من الملف */
++        public int? PortId { get; set; } public int? DestinationId { get; set; } public int? TahteeqPortId { get; set; }
++        public int? TripTypeId { get; set; }
+     }
+     public class DetailResponse { public Detail Operation { get; set; } = new(); public List<RevLine> RevenueLines { get; set; } = new(); }
+ 
+diff --git a/src/FastCom.Client/Pages/RequestForm.razor b/src/FastCom.Client/Pages/RequestForm.razor
+index 8a1a2f4..1ae11bf 100644
+--- a/src/FastCom.Client/Pages/RequestForm.razor
++++ b/src/FastCom.Client/Pages/RequestForm.razor
+@@ -2227,18 +2227,10 @@
+             _bookingId = op.Operation.BookingId;
+             _loadedEstimatedCost = op.Operation.EstimatedCost;
+             _loadedRevLines = op.RevenueLines;
+-            /* #83 — الأبعاد بقت محفوظة في السطر نفسه؛ بنكمّل الناقص من راس الطلب.
+-               والسعر المحفوظ قيمة حقيقية ⇒ الاقتراح التلقائي ما يستبدلهاش */
+-            foreach (var _rl in _loadedRevLines)
+-            {
+-                _rl.PortId        ??= _f.PortId;
+-                _rl.DestinationId ??= _f.DestinationId;
+-                _rl.TahteeqPortId ??= _f.TahteeqPortId;
+-                _rl.PortSearch     = PortLabel(_rl.PortId);
+-                _rl.DestSearch     = DestLabel(_rl.DestinationId);
+-                _rl.TahteeqSearch  = PortLabel(_rl.TahteeqPortId);
+-                if (_rl.UnitPrice > 0) _rl.PriceTouched = true;
+-            }
++            /* #102 — إكمال أبعاد السطور من راس الطلب اتنقل لآخر التحميل
++               (بعد ما الحجز يملأ الرأس فعلًا) — كان بيتحسب هنا والرأس فاضية
++               فما كانش بيكمّل حاجة. السعر المحفوظ قيمة حقيقية ⇒ الاقتراح
++               التلقائي ما يستبدلهاش (PriceTouched بتتظبط في الإكمال نفسه) */
+             SyncHeaderFromLines();
+ 
+             /* الحجز والرحلات مش مرتبطين ببعض — بيتجابوا متوازيين */
+@@ -2308,6 +2300,22 @@
+                 SyncRevContainerTypes();   /* #99 — الحاويات وصلت، نعبّي نوعها على السطور */
+             }
+ 
++            /* #102 — إكمال أبعاد سطور الإيراد من راس الطلب — هنا، بعد ما
++               الحجز اتحمّل وملأ الرأس. أي بُعد ناقص في السطر (سطور قديمة
++               اتحفظت قبل ما الأبعاد تتحفظ في السطر، أو اتمسحت بحفظ قديم)
++               بياخد قيمة الرأس، ونوع الرحلة بقى مشمول في الإكمال أخيرًا */
++            foreach (var _rl in _loadedRevLines)
++            {
++                _rl.PortId        ??= _f.PortId;
++                _rl.DestinationId ??= _f.DestinationId;
++                _rl.TahteeqPortId ??= _f.TahteeqPortId;
++                _rl.TripTypeId    ??= _f.TripTypeId;
++                _rl.PortSearch     = PortLabel(_rl.PortId);
++                _rl.DestSearch     = DestLabel(_rl.DestinationId);
++                _rl.TahteeqSearch  = PortLabel(_rl.TahteeqPortId);
++                if (_rl.UnitPrice > 0) _rl.PriceTouched = true;
++            }
++
+             /* #83 — مفيش سعر واحد في راس الطلب؛ العبرة بسطور الإيراد */
+         }
+         catch (Exception ex) { _msg = "فشل التحميل: " + ex.Message; }
+diff --git a/src/FastCom.Server/Controllers/Operations/OperationsController.cs b/src/FastCom.Server/Controllers/Operations/OperationsController.cs
+index 5a12beb..fff5cc6 100644
+--- a/src/FastCom.Server/Controllers/Operations/OperationsController.cs
++++ b/src/FastCom.Server/Controllers/Operations/OperationsController.cs
+@@ -796,7 +796,9 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
+                     var svcTax = await _db.Services.AsNoTracking()
+                         .Where(s => s.ServiceId == svcId).Select(s => s.TaxRateId).FirstOrDefaultAsync(ct);
+                     AddRevenueLines(o.OperationId,
+-                        new List<RevenueLineDto> { new(svcId, desc, 1, req.UnitPrice.Value, 0, svcTax, null) },
++                        /* #102 — أبعاد الطلب بتتمرر للسطر الاحتياطي، كان بيولد فاضي */
++                        new List<RevenueLineDto> { new(svcId, desc, 1, req.UnitPrice.Value, 0, svcTax, null,
++                            req.PortId, req.DestinationId, req.TahteeqPortId, req.TripTypeId) },
+                         CurrentUserId());
+                 }
+                 /* TaxRate snapshot لازم يتملأ قبل الحفظ، والـ trigger بيعيد حساب الإيراد */
+-- 
+2.43.0
+

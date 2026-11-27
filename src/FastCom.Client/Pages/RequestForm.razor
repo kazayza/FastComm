@@ -2227,18 +2227,10 @@
             _bookingId = op.Operation.BookingId;
             _loadedEstimatedCost = op.Operation.EstimatedCost;
             _loadedRevLines = op.RevenueLines;
-            /* #83 — الأبعاد بقت محفوظة في السطر نفسه؛ بنكمّل الناقص من راس الطلب.
-               والسعر المحفوظ قيمة حقيقية ⇒ الاقتراح التلقائي ما يستبدلهاش */
-            foreach (var _rl in _loadedRevLines)
-            {
-                _rl.PortId        ??= _f.PortId;
-                _rl.DestinationId ??= _f.DestinationId;
-                _rl.TahteeqPortId ??= _f.TahteeqPortId;
-                _rl.PortSearch     = PortLabel(_rl.PortId);
-                _rl.DestSearch     = DestLabel(_rl.DestinationId);
-                _rl.TahteeqSearch  = PortLabel(_rl.TahteeqPortId);
-                if (_rl.UnitPrice > 0) _rl.PriceTouched = true;
-            }
+            /* #102 — إكمال أبعاد السطور من راس الطلب اتنقل لآخر التحميل
+               (بعد ما الحجز يملأ الرأس فعلًا) — كان بيتحسب هنا والرأس فاضية
+               فما كانش بيكمّل حاجة. السعر المحفوظ قيمة حقيقية ⇒ الاقتراح
+               التلقائي ما يستبدلهاش (PriceTouched بتتظبط في الإكمال نفسه) */
             SyncHeaderFromLines();
 
             /* الحجز والرحلات مش مرتبطين ببعض — بيتجابوا متوازيين */
@@ -2306,6 +2298,22 @@
                 /* #82 — بيانات الرحلة المسجّلة تظهر جوه سطر الحاوية بتاعها (1:1) */
                 MapTripsToLines();
                 SyncRevContainerTypes();   /* #99 — الحاويات وصلت، نعبّي نوعها على السطور */
+            }
+
+            /* #102 — إكمال أبعاد سطور الإيراد من راس الطلب — هنا، بعد ما
+               الحجز اتحمّل وملأ الرأس. أي بُعد ناقص في السطر (سطور قديمة
+               اتحفظت قبل ما الأبعاد تتحفظ في السطر، أو اتمسحت بحفظ قديم)
+               بياخد قيمة الرأس، ونوع الرحلة بقى مشمول في الإكمال أخيرًا */
+            foreach (var _rl in _loadedRevLines)
+            {
+                _rl.PortId        ??= _f.PortId;
+                _rl.DestinationId ??= _f.DestinationId;
+                _rl.TahteeqPortId ??= _f.TahteeqPortId;
+                _rl.TripTypeId    ??= _f.TripTypeId;
+                _rl.PortSearch     = PortLabel(_rl.PortId);
+                _rl.DestSearch     = DestLabel(_rl.DestinationId);
+                _rl.TahteeqSearch  = PortLabel(_rl.TahteeqPortId);
+                if (_rl.UnitPrice > 0) _rl.PriceTouched = true;
             }
 
             /* #83 — مفيش سعر واحد في راس الطلب؛ العبرة بسطور الإيراد */

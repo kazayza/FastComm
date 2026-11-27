@@ -796,7 +796,9 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
                     var svcTax = await _db.Services.AsNoTracking()
                         .Where(s => s.ServiceId == svcId).Select(s => s.TaxRateId).FirstOrDefaultAsync(ct);
                     AddRevenueLines(o.OperationId,
-                        new List<RevenueLineDto> { new(svcId, desc, 1, req.UnitPrice.Value, 0, svcTax, null) },
+                        /* #102 — أبعاد الطلب بتتمرر للسطر الاحتياطي، كان بيولد فاضي */
+                        new List<RevenueLineDto> { new(svcId, desc, 1, req.UnitPrice.Value, 0, svcTax, null,
+                            req.PortId, req.DestinationId, req.TahteeqPortId, req.TripTypeId) },
                         CurrentUserId());
                 }
                 /* TaxRate snapshot لازم يتملأ قبل الحفظ، والـ trigger بيعيد حساب الإيراد */

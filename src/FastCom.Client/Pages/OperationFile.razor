@@ -553,7 +553,7 @@
                             <div class="opf-sec-sub">مصروفات التشغيل المربوطة بالعملية</div>
                         </div>
                     </div>
-                    <a class="doc-btn" href="/expenses/new">مصروف جديد (شاشة كاملة)</a>
+                    <a class="doc-btn" href="@($"/expenses/new?operationId={Id}")">مصروف جديد (شاشة كاملة)</a>
                 </div>
 
                 @if (CanExpenseCreate && !IsClosed)
@@ -848,7 +848,9 @@
         public int TypeId { get; set; } public decimal Amount { get; set; }
         public decimal? Billable { get; set; } public string? Description { get; set; }
         public int? ReceiptTypeId { get; set; } public string? ReceiptNumber { get; set; }
-        public string Source { get; set; } = "Treasury"; public long? CustodyId { get; set; }
+        /* #102 — الافتراضي «من عهدة»: ده مسار الشغل الفعلي عند المالك،
+           والخزينة اختيار يدوي — عشان مصروف ما يخرجش بلا عهدة بالنسيان */
+        public string Source { get; set; } = "Custody"; public long? CustodyId { get; set; }
         /* التاريخ كان DateTime.Today ثابت في الـ payload — بقى خانة في الفورم،
            وافتراضيًا النهارده. السيرفر بيقبله زي ما هو (ExpensesController:39 Dt()). */
         public string Date { get; set; } = DateTime.Today.ToString("yyyy-MM-dd");
@@ -962,7 +964,12 @@
                 Discount    = _newRevDisc,
                 Description = _newRevDesc ?? "",
                 TaxRateId   = _newRevTaxRateId,
-                PriceRuleId = _newRevRuleId
+                PriceRuleId = _newRevRuleId,
+                /* #102 — سطر جديد يرث أبعاد العملية بدل ما يولد فاضي */
+                PortId        = _d?.PortId,
+                DestinationId = _d?.DestinationId,
+                TahteeqPortId = _d?.TahteeqPortId,
+                TripTypeId    = _d?.TripTypeId
             });
             _newRevPrice = 0;
             _newRevQty = 0;
@@ -979,12 +986,17 @@
         var last = _lines.Last();
         _lines.Add(new RevLine
         {
-            ServiceId   = last.ServiceId,
-            ServiceName = last.ServiceName,
-            Quantity    = last.Quantity,
-            UnitPrice   = last.UnitPrice,
-            Discount    = last.Discount,
-            Description = last.Description
+            ServiceId     = last.ServiceId,
+            ServiceName   = last.ServiceName,
+            Quantity      = last.Quantity,
+            UnitPrice     = last.UnitPrice,
+            Discount      = last.Discount,
+            Description   = last.Description,
+            /* #102 — النسخ بينسخ أبعاد السطر كمان، وإلا ضاعت عند الحفظ */
+            PortId        = last.PortId,
+            DestinationId = last.DestinationId,
+            TahteeqPortId = last.TahteeqPortId,
+            TripTypeId    = last.TripTypeId
         });
         _newRevServiceId = last.ServiceId;
         _newRevPrice = last.UnitPrice;
@@ -1047,10 +1059,15 @@
         {
             var ln = new RevLine
             {
-                ServiceId   = svcId,
-                ServiceName = svcName,
-                Quantity    = g.Count,
-                Description = g.Route
+                ServiceId     = svcId,
+                ServiceName   = svcName,
+                Quantity      = g.Count,
+                Description   = g.Route,
+                /* #102 — البند مولود من مجموعة خط سير بعينها: أبعادها بتتحفظ معاه */
+                PortId        = g.PortId,
+                DestinationId = g.DestinationId,
+                TahteeqPortId = g.TahteeqPortId,
+                TripTypeId    = _d.TripTypeId
             };
             await SuggestForRouteAsync(ln, g);
             built.Add(ln);
@@ -1102,13 +1119,17 @@
                 notes         = _d.Notes,
                 revenueLines  = _lines.Select(l => new
                 {
-                    serviceId   = l.ServiceId,
-                    description = l.Description,
-                    quantity    = l.Quantity,
-                    unitPrice   = l.UnitPrice,
-                    discount    = l.Discount,
-                    taxRateId   = l.TaxRateId,
-                    priceRuleId = l.PriceRuleId
+                    serviceId     = l.ServiceId,
+                    description   = l.Description,
+                    quantity      = l.Quantity,
+                    unitPrice     = l.UnitPrice,
+                    discount      = l.Discount,
+                    taxRateId     = l.TaxRateId,
+                    priceRuleId   = l.PriceRuleId,
+                    portId        = l.PortId,
+                    destinationId = l.DestinationId,
+                    tahteeqPortId = l.TahteeqPortId,
+                    tripTypeId    = l.TripTypeId
                 }).ToList()
             };
             var res = await Http.PutAsJsonAsync($"api/operations/{Id}", payload);
@@ -1201,7 +1222,7 @@
             var created = await res.Content.ReadFromJsonAsync<CreatedRes>();
             if (_qe.Source == "Treasury" && created is not null && created.Id > 0)
             {
-                var payRes = await Http.PostAsJsonAsync($"api/expenses/{created.Id}/set-paid", new { to = "Paid" });
+                var payRes = await Http.PostAsJsonAsync($"api/expenses/{created.Id}/pay", new { to = "Paid" });
                 if (!payRes.IsSuccessStatusCode)
                 {
                     Snackbar.Add("أُنشئ المصروف، لكن تعليمه مدفوعًا من الخزينة فشل: " + await MsgOf(payRes), Severity.Warning);
@@ -1308,6 +1329,10 @@
         public decimal Quantity { get; set; } public decimal UnitPrice { get; set; } public decimal Discount { get; set; }
         public int? TaxRateId { get; set; } public long? PriceRuleId { get; set; }
         public decimal LineNet { get; set; }
+        /* #102 — أبعاد السطر (مسار + نوع رحلة): الخادم بيرجعها وبيحفظها،
+           وغيابها هنا كان بيمسحها من القاعدة عند أي حفظ إيراد من الملف */
+        public int? PortId { get; set; } public int? DestinationId { get; set; } public int? TahteeqPortId { get; set; }
+        public int? TripTypeId { get; set; }
     }
     public class DetailResponse { public Detail Operation { get; set; } = new(); public List<RevLine> RevenueLines { get; set; } = new(); }
 
