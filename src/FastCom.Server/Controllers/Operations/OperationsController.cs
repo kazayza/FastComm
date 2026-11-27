@@ -914,11 +914,16 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
        تعرف توزّع سطور الإيراد على الوجهات المختلفة */
     /* #79 — DriverId اتضاف عشان المصروف السريع يعرف يربط المصروف بسائق الرحلة */
     /* #82 — المبيت والتحويلة بيتقرأوا مع الرحلة عشان التعديل ما يمسحهمش */
+    /* #102 — المقطورة ونوع الرحلة وملاحظاتها بييجوا مع الرحلة لنفس السبب:
+       أي حقل بيتبعت في تحديث الرحلة ومش بييجي في الرد بيتمسح عند أي حفظ.
+       والترتيب بقى (SequenceNo ثم TripId) عشان تعادل التسلسل ما يبدّلش
+       ترتيب رجوع الرحلات بين تحميل وآخر فيتلخبط إقرانها بسطور الحاويات */
     public record OpTripLine(long TripId, string TripNumber, int DriverId, string DriverName, int VehicleId, string VehiclePlate,
         string Status, DateTime? PlannedStartAt, decimal? FreightAmount, int SequenceNo,
         int? PortId, int? DestinationId, int? TahteeqPortId,
         string? PortName, string? DestName, string? TahteeqName,
-        decimal? OvernightAmount = null, decimal? TransferAmount = null);
+        decimal? OvernightAmount = null, decimal? TransferAmount = null,
+        int? TrailerId = null, int? TripTypeId = null, string? Notes = null);
 
     [HttpGet("{id:long}/trips")]
     [Authorize(Policy = "PERM:OPERATION.VIEW")]
@@ -929,6 +934,7 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
         var rows = await _db.TripOperations.AsNoTracking()
             .Where(to => to.OperationId == id)
             .OrderBy(to => to.SequenceNo)
+            .ThenBy(to => to.TripId)
             .Select(to => new OpTripLine(
                 to.Trip.TripId, to.Trip.TripNumber, to.Trip.DriverId, to.Trip.Driver.FullName, to.Trip.VehicleId, to.Trip.Vehicle.PlateNumber,
                 to.Trip.Status, to.Trip.PlannedStartAt,
@@ -937,7 +943,8 @@ _db.TripOperations.Count(to => to.OperationId == o.OperationId && to.Status != "
                 to.Trip.Port        != null ? to.Trip.Port.NameAr        : null,
                 to.Trip.Destination != null ? to.Trip.Destination.NameAr : null,
                 to.Trip.TahteeqPort != null ? to.Trip.TahteeqPort.NameAr : null,
-                to.Trip.OvernightAmount, to.Trip.TransferAmount))
+                to.Trip.OvernightAmount, to.Trip.TransferAmount,
+                to.Trip.TrailerId, to.Trip.TripTypeId, to.Trip.Notes))
             .ToListAsync(ct);
         return Ok(rows);
     }

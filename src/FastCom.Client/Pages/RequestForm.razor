@@ -1176,6 +1176,12 @@
         public long? TripId { get; set; }
         public string TripNumber { get; set; } = "";
         public string Status { get; set; } = "";
+        /* #102 — نوع رحلة السطر نفسه وملاحظاته (كانا بيضيعوا: النوع بيتبعت
+           من نوع الحجز والملاحظات بتتبعت فاضية في أي حفظ) */
+        public int? TripTypeId { get; set; }
+        public string? Notes { get; set; }
+        /* #102 — بصمة القيم وقت التحميل: الحفظ ما بيكتبش رحلة بصمتها ما اتغيرتش */
+        public string? LoadedKey { get; set; }
         public decimal? Freight { get; set; }
         public DateTime? PlannedStartAt { get; set; }
 
@@ -1452,6 +1458,13 @@
     /* #82 — وضع التعديل: كل رحلة مسجّلة بتروح جوه سطر الحاوية بتاعها (1:1 بالترتيب)،
        فبيانات الرحلة تظهر في نفس القسم بدل ما تكون فاضية.
        الرحلة اللي اتوزّعت على سطر بتتشال من قسم «الرحلات والتعيين» عشان ما تتكررش. */
+    /* #102 — بصمة القيم القابلة للتعديل في رحلة السطر: بتتحسب وقت التحميل
+       ووقت الحفظ، وتساويها معناه إن الرحلة ما اتلمستش فما تتكتبش من أصله */
+    private static string TripKeyOf(TripRow r) => string.Join("|",
+        r.DriverId, r.VehicleId, r.TrailerId, r.TripTypeId,
+        r.PlannedStartAt?.Ticks, r.Freight, r.Overnight, r.Transfer,
+        r.PortId, r.DestinationId, r.TahteeqPortId, r.Notes);
+
     private void MapTripsToLines()
     {
         var mapped = new List<ExistingTrip>();
@@ -1465,6 +1478,8 @@
             ln.Trip.DriverId       = t.DriverId;
             ln.Trip.VehicleId      = t.VehicleId;
             ln.Trip.TrailerId      = t.TrailerId;
+            ln.Trip.TripTypeId     = t.TripTypeId;
+            ln.Trip.Notes          = t.Notes;
             ln.Trip.PlannedStartAt = t.PlannedStartAt;
             ln.Trip.PortId         = t.PortId         ?? _f.PortId;
             ln.Trip.DestinationId  = t.DestinationId  ?? _f.DestinationId;
@@ -1479,6 +1494,9 @@
             ln.TahteeqSearch       = t.TahteeqName  ?? PortLabel(ln.Trip.TahteeqPortId);
             /* النولون المحفوظ قيمة حقيقية — الاقتراح التلقائي ما يستبدلهاش */
             ln.FreightTouched      = true;
+            /* #102 — بصمة ما اتحمّل: أي حفظ بعد كده ما بيكتبش الرحلة دي
+               إلا لو المستخدم غيّر فيها حاجة فعلًا */
+            ln.Trip.LoadedKey      = TripKeyOf(ln.Trip);
             mapped.Add(t);
         }
         _mappedTrips = mapped.Count;
@@ -1850,6 +1868,8 @@
             set => _freightBaseSet = value;
         }
         public DateTime? PlannedStartAt { get; set; } public int? TripTypeId { get; set; }
+        /* #102 — ملاحظات الرحلة: بتتحمّل وبتتبعت زي ما هي عشان الحفظ ما يمسحهاش */
+        public string? Notes { get; set; }
         /* #78 — خط سير الرحلة نفسها */
         public int? PortId { get; set; } public int? DestinationId { get; set; } public int? TahteeqPortId { get; set; }
         public string? PortName { get; set; } public string? DestName { get; set; } public string? TahteeqName { get; set; }
@@ -2466,6 +2486,19 @@
             if (m1.Contains("لا تسمح بالتعديل")) bookingLocked = true;
             else { _ok = false; _msg = "تعديل الحجز فشل: " + m1; Snackbar.Add(_msg, Severity.Error); return; }
         }
+        /* #102 — سطور لها تفاصيل حاويات مسجلة بيمنع الخادم حذفها وبيبقيها؛
+           لازم المستخدم يعرف إن حذفها ما تمش بدل ما يكتشفه عند إعادة الفتح */
+        var keptLines = 0;
+        if (res1.IsSuccessStatusCode)
+        {
+            try
+            {
+                var b1 = await res1.Content.ReadAsStringAsync();
+                var d1 = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(b1);
+                if (d1.TryGetProperty("keptLinesWithDetails", out var k1)) keptLines = k1.GetInt32();
+            }
+            catch { /* الرد بلا الحقل — نسخة خادم أقدم */ }
+        }
 
         /* #83 — السطور زي ما المستخدم ظبطها، وبأبعادها (مسار + نوع رحلة) */
         var revLines = BuildRevLines();
@@ -2494,6 +2527,8 @@
             var tripErrors = await CreateAddedTripsAsync();
             tripErrors.AddRange(await UpdateExistingTripsAsync());
             var detailMsg = bookingLocked ? " · (بيانات الحجز الأساسية مقفولة بعد التعيين، وتم حفظ تفاصيل الحاويات/العملية والرحلات)" : "";
+            if (keptLines > 0)
+                detailMsg += $" · تنبيه: {keptLines} سطر حاويات له تفاصيل مسجلة لم يُحذف وبقي كما هو — حذف سطر له حاويات فعلية يتم من ملف العملية";
             if (tripErrors.Count == 0)
             {
                 Snackbar.Add("✅ تم الحفظ" + detailMsg, bookingLocked ? Severity.Warning : Severity.Success);
@@ -2525,7 +2560,7 @@
                 trailerId      = t.TrailerId,
                 tripTypeId     = t.TripTypeId ?? _f.TripTypeId,
                 plannedStartAt = t.PlannedStartAt?.ToString("yyyy-MM-ddTHH:mm"),
-                notes          = (string?)null,
+                notes          = t.Notes,
                 /* #82 — النولون الكلي = نولون + مبيت + تحويله (التقارير بتقرأ المجموع) */
                 freightAmount  = (t.FreightBase ?? 0) + (t.OvernightAmount ?? 0) + (t.TransferAmount ?? 0),
                 overnightAmount = t.OvernightAmount,
@@ -2566,14 +2601,18 @@
                 if (!CanEditTrips) continue;
                 /* رحلة مقفولة — الحفظ ما يرجّعهاش للحياة */
                 if (r.Status is "Completed" or "Cancelled" or "Closed") continue;
+                /* #102 — رحلة ما اتغيرتش من ساعة التحميل: ما نكتبهاش خالص.
+                   إعادة كتابتها بلا داعٍ كانت بتمسح أي حقل مش محمّل وبتفشل
+                   الحفظ كله لو حصل تعارض موارد على رحلة ما اتلمستش */
+                if (r.LoadedKey is not null && TripKeyOf(r) == r.LoadedKey) continue;
                 var put = new
                 {
                     driverId        = r.DriverId,
                     vehicleId       = r.VehicleId,
                     trailerId       = r.TrailerId,
-                    tripTypeId      = _f.TripTypeId,
+                    tripTypeId      = r.TripTypeId ?? _f.TripTypeId,
                     plannedStartAt  = r.PlannedStartAt?.ToString("yyyy-MM-ddTHH:mm"),
-                    notes           = (string?)null,
+                    notes           = r.Notes,
                     freightAmount   = r.FreightTotal,
                     overnightAmount = r.Overnight,
                     transferAmount  = r.Transfer,
@@ -2586,7 +2625,8 @@
                 try
                 {
                     var r1 = await Http.PutAsJsonAsync($"api/trips/{tid}", put);
-                    if (!r1.IsSuccessStatusCode) errors.Add($"رحلة {r.TripNumber}: " + await MsgOf(r1));
+                    if (r1.IsSuccessStatusCode) r.LoadedKey = TripKeyOf(r);
+                    else errors.Add($"رحلة {r.TripNumber}: " + await MsgOf(r1));
                 }
                 catch (Exception ex) { errors.Add($"رحلة {r.TripNumber}: " + ex.Message); }
                 continue;

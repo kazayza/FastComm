@@ -338,12 +338,13 @@ public class BookingsController : ControllerBase
            بنعمل مقارنة: الموجود بيتحدّث، الجديد بيتضاف، والمحذوف بيتشال بس لو ملوش تفاصيل. */
 
         // 🔴 Atomicity
+        var keptLinesWithDetails = 0;
         await _db.Database.BeginTransactionAsync(ct);
         try
         {
             if (req.Lines is not null)
             {
-                var map = DiffLines(id, req.Lines, checkLines, linesWithDetails, CurrentUserId());
+                var map = DiffLines(id, req.Lines, checkLines, linesWithDetails, CurrentUserId(), out keptLinesWithDetails);
                 await _db.SaveChangesAsync(ct);   // عشان السطور الجديدة تاخد معرّفها
 
                 /* #82 — Upsert مش Add: السطور بقت بتفضل موجودة بعد التعديل،
@@ -368,7 +369,7 @@ public class BookingsController : ControllerBase
             throw;
         }
 
-        return Ok(new { message = "تم حفظ التعديل" });
+        return Ok(new { message = "تم حفظ التعديل", keptLinesWithDetails });
     }
 
     /* #82 — مقارنة السطور بدل مسحها وإعادة إنشائها.
@@ -376,8 +377,9 @@ public class BookingsController : ControllerBase
        عشان تفاصيل الحاويات تتربط بسطرها الصح في الحالتين. */
     private List<(int ReqIndex, BookingContainerLine Line)> DiffLines(
         long bookingId, List<BookingLineDto> reqLines, List<BookingContainerLine> existing,
-        HashSet<long> linesWithDetails, int userId)
+        HashSet<long> linesWithDetails, int userId, out int keptWithDetails)
     {
+        keptWithDetails = 0;
         var map   = new List<(int, BookingContainerLine)>();
         var byId  = existing.ToDictionary(l => l.BookingContainerLineId);
         var seen  = new HashSet<long>();
@@ -426,7 +428,8 @@ public class BookingsController : ControllerBase
         foreach (var old in existing.Where(l => !seen.Contains(l.BookingContainerLineId)))
         {
             // لو السطر له حاويات فعلية → ملحوط، مش هنيتّم تفاصيله
-            if (linesWithDetails.Contains(old.BookingContainerLineId)) continue;
+            // #102 — بس بنعدّه عشان الرد يقول للمستخدم إنه باقي، بدل ما يختفي الحذف بصمت
+            if (linesWithDetails.Contains(old.BookingContainerLineId)) { keptWithDetails++; continue; }
             _db.BookingContainerLines.Remove(old);
         }
         return map;
